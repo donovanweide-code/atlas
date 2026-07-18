@@ -1,25 +1,25 @@
-# Mission & Vision
+## Onze missie
 
-## Waarom bestaat We Build and Design?
+Wij bouwen websites die meer zijn dan een online visitekaartje.
 
-We Build and Design is ontstaan vanuit praktijkervaring.
+We combineren strategie, techniek, SEO en gebruiksvriendelijkheid om digitale oplossingen te bouwen die bedrijven helpen groeien.
 
-Niet vanuit een opleiding.
-Niet vanuit een cursus.
-Maar vanuit bijna twee decennia ervaring in e-commerce, online groei en digitale ontwikkeling.
+Niet bouwen om te bouwen.
 
-Tijdens mijn werk aan Sportpaleis.nl heb ik van dichtbij meegemaakt hoe een succesvolle webshop wordt opgebouwd, uitgebreid en continu verbeterd.
+Maar bouwen met een doel.
 
-Ik werkte samen met developers, marketeers, SEO-specialisten en softwareleveranciers.
+---
 
-Daardoor leerde ik niet alleen hoe een website gebouwd wordt, maar vooral waarom bepaalde keuzes gemaakt worden.
+## Onze visie
 
-Na verloop van tijd begonnen ondernemers mij dezelfde vraag te stellen:
+Wij geloven dat een goede website moet kunnen meegroeien met een onderneming.
 
-"Kun jij ook een website voor ons bouwen?"
+Daarom bouwen we vanuit een sterk technisch fundament, met aandacht voor snelheid, onderhoudbaarheid, vindbaarheid en schaalbaarheid.
 
-Die vraag werd steeds vaker gesteld.
+Vandaag een website.
 
-Toen ontdekte ik dat ik niet alleen plezier haalde uit het verbeteren van websites, maar ook uit het bouwen ervan.
+Morgen een klantportaal.
 
-Zo ontstond We Build and Design.
+Later automatisering en nieuwe digitale diensten.
+
+Altijd vanuit hetzelfde fundament.
