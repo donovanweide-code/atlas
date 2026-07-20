@@ -1,0 +1,675 @@
+/* Public Atlas routes — one continuous studio landscape beyond the homepage. */
+
+.site-nav a,
+.site-footer nav a {
+  position: relative;
+}
+
+.site-nav a::after,
+.site-footer nav a::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -0.55rem;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0.25);
+  transition: opacity 300ms ease, transform 400ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.site-nav a:hover::after,
+.site-nav a[aria-current="page"]::after,
+.site-footer nav a:hover::after {
+  opacity: 0.55;
+  transform: scaleX(1);
+}
+
+.site-menu {
+  display: none;
+}
+
+.route-page {
+  --route-paper: #efe9dc;
+  --route-ink: #17231f;
+  --route-muted: rgba(23, 35, 31, 0.66);
+  --route-gold: #d1a561;
+  min-height: 100vh;
+  overflow: clip;
+  color: var(--route-ink);
+  background: #e9e6dc;
+}
+
+.route-page::before {
+  z-index: 0;
+  background: url("../assets/atlas-world.svg") center top / min(118%, 1700px) auto repeat-y;
+  opacity: 0.34;
+  filter: none;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.18), #000 18% 84%, rgba(0, 0, 0, 0.4));
+}
+
+.route-page::after {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background:
+    radial-gradient(ellipse at 18% 16%, rgba(90, 151, 130, 0.12), transparent 26%),
+    radial-gradient(ellipse at 82% 72%, rgba(230, 190, 119, 0.18), transparent 30%);
+  filter: none;
+  opacity: 1;
+  animation: routeAtmosphere 22s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.route-page > * {
+  position: relative;
+  z-index: 2;
+}
+
+.route-page .site-header {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: auto;
+  left: 50%;
+  margin-inline: 0;
+  transform: translateX(-50%);
+  color: #f8f3e8;
+}
+
+.route-page .site-nav a,
+.route-page .site-header__cta {
+  color: inherit;
+}
+
+.route-page .site-header__cta {
+  border-color: rgba(247, 241, 227, 0.46);
+  background: rgba(8, 23, 29, 0.32);
+  backdrop-filter: blur(12px);
+}
+
+.route-story {
+  position: relative;
+  isolation: isolate;
+}
+
+.route-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100svh;
+  align-items: flex-end;
+  overflow: hidden;
+  padding: clamp(11rem, 17vh, 15rem) max(5vw, calc((100vw - 1440px) / 2)) clamp(6rem, 10vh, 9rem);
+  color: #f7f2e8;
+  background: #0b1821;
+}
+
+.route-hero__image,
+.route-hero__veil,
+.route-hero__world {
+  position: absolute;
+  inset: 0;
+}
+
+.route-hero__image {
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--route-image-position, center);
+  filter: saturate(0.72) contrast(1.03) brightness(0.76);
+  transform: scale(1.015);
+  animation: routeImageBreathe 20s ease-in-out infinite alternate;
+}
+
+.route-hero__world {
+  z-index: 1;
+  background:
+    url("../assets/atlas-world.svg") 76% 46% / min(92%, 1380px) auto no-repeat,
+    radial-gradient(ellipse at 72% 24%, rgba(95, 181, 153, 0.18), transparent 31%);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  mask-image: linear-gradient(90deg, transparent, #000 34% 100%);
+}
+
+.route-hero__veil {
+  z-index: 2;
+  background:
+    linear-gradient(90deg, rgba(5, 16, 23, 0.92) 0%, rgba(6, 19, 26, 0.72) 31%, rgba(7, 21, 28, 0.14) 72%),
+    linear-gradient(180deg, rgba(4, 14, 21, 0.26) 0%, transparent 30% 61%, rgba(10, 24, 29, 0.82) 100%),
+    radial-gradient(ellipse at 72% 18%, rgba(231, 196, 130, 0.18), transparent 26%);
+}
+
+.route-hero__content {
+  position: relative;
+  z-index: 3;
+  width: min(46rem, 60vw);
+  text-shadow: 0 0.2rem 2rem rgba(0, 7, 12, 0.4);
+}
+
+.route-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 clamp(2.5rem, 6vh, 4.5rem);
+  color: rgba(239, 207, 150, 0.82);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.route-kicker span {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border: 1px solid rgba(229, 190, 119, 0.42);
+  border-radius: 50%;
+  font-size: 0.58rem;
+}
+
+.route-hero h1,
+.route-next h2,
+.route-missing h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.route-hero h1 {
+  max-width: 11ch;
+  font-size: clamp(3.8rem, 7.2vw, 8rem);
+  line-height: 0.92;
+}
+
+.route-hero__content > p:not(.route-kicker) {
+  max-width: 35rem;
+  margin: clamp(2rem, 4vw, 3.5rem) 0 0;
+  color: rgba(245, 239, 226, 0.72);
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.route-hero__step,
+.route-next > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.15rem;
+  margin-top: clamp(2rem, 5vh, 3.5rem);
+  color: #e5bd77;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.route-hero__step i,
+.route-next > a i {
+  position: relative;
+  display: block;
+  width: 4.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(222, 179, 104, 0.3), #deb46d);
+  transition: width 400ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.route-hero__step i::after,
+.route-next > a i::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 0.38rem;
+  height: 0.38rem;
+  border: 1px solid #dfb56d;
+  border-radius: 50%;
+  background: #112a30;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 1rem rgba(222, 180, 109, 0.35);
+}
+
+.route-hero__step:hover i,
+.route-next > a:hover i {
+  width: 6rem;
+}
+
+.route-continuum {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(9rem, 14vw, 15rem) max(5vw, calc((100vw - 1440px) / 2)) clamp(10rem, 16vw, 17rem);
+  background:
+    radial-gradient(ellipse at 86% 16%, rgba(107, 157, 142, 0.2), transparent 25%),
+    radial-gradient(ellipse at 14% 71%, rgba(229, 190, 119, 0.16), transparent 27%),
+    linear-gradient(180deg, #cfd5ce 0%, #e0e1d8 21%, #ece6da 58%, #e8e2d5 100%);
+}
+
+.route-continuum::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    url("../assets/atlas-world.svg") center 16% / min(115%, 1680px) auto repeat-y,
+    linear-gradient(105deg, transparent 0 58%, rgba(255, 251, 240, 0.35) 72%, transparent 92%);
+  opacity: 0.34;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), #000 18% 78%, transparent 100%);
+  pointer-events: none;
+}
+
+.route-continuum::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -18%;
+  bottom: 10%;
+  width: 72%;
+  height: 32%;
+  border-radius: 50%;
+  background: rgba(247, 239, 219, 0.5);
+  filter: blur(5rem);
+  pointer-events: none;
+}
+
+.route-line {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: url("../assets/atlas-golden-route.svg") 50% 8% / min(116%, 1650px) 92% no-repeat;
+  opacity: 0.72;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 8% 34%, rgba(0, 0, 0, 0.16) 47%, #000 60% 92%, transparent 100%);
+}
+
+.route-line i {
+  position: absolute;
+  width: 0.48rem;
+  height: 0.48rem;
+  border: 1px solid rgba(177, 133, 72, 0.75);
+  border-radius: 50%;
+  background: #ede6d8;
+  box-shadow: 0 0 0 0.7rem rgba(206, 162, 95, 0.06);
+}
+
+.route-line i:nth-child(1) { top: 18%; left: 47%; }
+.route-line i:nth-child(2) { top: 50%; left: 72%; }
+.route-line i:nth-child(3) { top: 79%; left: 35%; }
+
+.route-chapters,
+.route-reflection,
+.route-next {
+  position: relative;
+  z-index: 2;
+}
+
+.route-chapters {
+  display: grid;
+  gap: clamp(8rem, 15vw, 16rem);
+}
+
+.route-chapter {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.35fr) minmax(0, 1fr);
+  gap: clamp(2rem, 7vw, 8rem);
+  width: min(100%, 69rem);
+  align-items: start;
+}
+
+.route-chapter:nth-child(even) {
+  margin-left: auto;
+}
+
+.route-chapter__number {
+  margin: 0.75rem 0 0;
+  color: rgba(64, 92, 76, 0.58);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.route-chapter h2 {
+  max-width: 16ch;
+  margin: 0;
+  color: #18251f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 4.8vw, 5rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.route-chapter div > p {
+  max-width: 37rem;
+  margin: clamp(1.5rem, 3vw, 2.5rem) 0 0;
+  color: var(--route-muted);
+  font-size: clamp(1rem, 1.25vw, 1.17rem);
+  line-height: 1.85;
+}
+
+.route-reflection {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  width: min(100%, 64rem);
+  align-items: start;
+  margin: clamp(12rem, 20vw, 21rem) auto 0;
+  padding-top: clamp(2.5rem, 5vw, 4.5rem);
+  border-top: 1px solid rgba(62, 88, 73, 0.18);
+}
+
+.route-reflection span {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: 0.65rem;
+  border: 1px solid rgba(177, 133, 72, 0.8);
+  border-radius: 50%;
+  background: #eee7d9;
+  box-shadow: 0 0 0 0.8rem rgba(206, 162, 95, 0.06);
+}
+
+.route-reflection p {
+  max-width: 19ch;
+  margin: 0;
+  color: #28362f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1.14;
+  text-wrap: balance;
+}
+
+.route-next {
+  width: min(100%, 68rem);
+  margin: clamp(13rem, 22vw, 23rem) auto 0;
+  padding: clamp(4rem, 8vw, 8rem) 0 0;
+  border-top: 1px solid rgba(62, 88, 73, 0.18);
+  text-align: center;
+}
+
+.route-next > p {
+  margin: 0 0 1.5rem;
+  color: rgba(55, 84, 68, 0.62);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.route-next h2 {
+  max-width: 16ch;
+  margin-inline: auto;
+  font-size: clamp(2.8rem, 5.5vw, 6rem);
+  line-height: 1;
+}
+
+.route-next > a {
+  color: #9b6f37;
+}
+
+.route-next > a i::after {
+  background: #ece5d7;
+}
+
+.route-page .site-footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(2rem, 6vw, 7rem);
+  width: min(calc(100% - 10vw), 1440px);
+  align-items: end;
+  margin: 0 auto;
+  padding: 4rem 0;
+  border-top: 1px solid rgba(51, 76, 63, 0.14);
+  color: rgba(31, 49, 40, 0.68);
+}
+
+.route-page .site-footer p {
+  max-width: 29rem;
+  margin: 0;
+  line-height: 1.65;
+}
+
+.route-page .site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1.25rem 2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+[data-page-reveal] {
+  opacity: 0;
+  transform: translateY(2rem);
+  transition: opacity 1.15s ease, transform 1.15s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+[data-page-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.route-page--aurora .route-continuum {
+  background:
+    radial-gradient(ellipse at 78% 18%, rgba(76, 145, 125, 0.22), transparent 28%),
+    radial-gradient(ellipse at 15% 72%, rgba(220, 184, 119, 0.14), transparent 29%),
+    linear-gradient(180deg, #bfcac4 0%, #d6dcd4 24%, #ebe6da 63%, #e8e2d5 100%);
+}
+
+.route-page--horizon .route-continuum,
+.route-page--summit .route-continuum {
+  background:
+    radial-gradient(ellipse at 78% 17%, rgba(239, 201, 133, 0.28), transparent 30%),
+    radial-gradient(ellipse at 16% 68%, rgba(118, 159, 139, 0.13), transparent 29%),
+    linear-gradient(180deg, #d6d8cf 0%, #e6e2d7 30%, #f0e9dc 67%, #e9e3d7 100%);
+}
+
+.route-missing {
+  display: flex;
+  min-height: calc(100svh - 7rem);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12rem max(5vw, calc((100vw - 1440px) / 2)) 7rem;
+  background:
+    linear-gradient(90deg, rgba(5, 18, 25, 0.92), rgba(7, 24, 30, 0.48)),
+    url("../assets/images/atlas/landscapes/atlas-landscape-summit-v01.webp") center / cover;
+  color: #f7f2e8;
+}
+
+.route-missing h1 {
+  max-width: 10ch;
+  font-size: clamp(3.6rem, 7vw, 7.4rem);
+  line-height: 0.95;
+}
+
+.route-missing > p:not(.route-kicker) {
+  max-width: 34rem;
+  margin: 2rem 0;
+  color: rgba(247, 242, 232, 0.72);
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+@keyframes routeImageBreathe {
+  from { transform: scale(1.015); }
+  to { transform: scale(1.035) translate3d(-0.25%, -0.2%, 0); }
+}
+
+@keyframes routeAtmosphere {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0.5rem, -0.4rem, 0); }
+}
+
+@media (max-width: 1000px) {
+  .site-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .site-nav,
+  .site-header__cta {
+    display: none;
+  }
+
+  .site-menu {
+    position: relative;
+    display: block;
+  }
+
+  .site-menu summary {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    place-content: center;
+    gap: 0.42rem;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .site-menu summary::-webkit-details-marker { display: none; }
+
+  .site-menu summary span {
+    display: block;
+    width: 1rem;
+    height: 1px;
+    background: currentColor;
+    transition: transform 250ms ease;
+  }
+
+  .site-menu[open] summary span:first-child { transform: translateY(0.23rem) rotate(45deg); }
+  .site-menu[open] summary span:last-child { transform: translateY(-0.23rem) rotate(-45deg); }
+
+  .site-menu nav {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: 0;
+    display: grid;
+    width: min(18rem, calc(100vw - 2.5rem));
+    padding: 1rem;
+    border: 1px solid rgba(238, 231, 216, 0.18);
+    border-radius: 0.5rem;
+    background: rgba(8, 23, 29, 0.94);
+    box-shadow: 0 1.5rem 4rem rgba(0, 8, 13, 0.24);
+    backdrop-filter: blur(18px);
+  }
+
+  .site-menu nav a {
+    padding: 0.9rem 0.75rem;
+    color: #f4efe4;
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .site-menu nav a[aria-current="page"] { color: #e4ba72; }
+
+  .route-page .site-footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .route-page .site-footer nav {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .route-page .site-header {
+    width: min(calc(100% - 2.5rem), 1440px);
+    min-height: 5.5rem;
+  }
+
+  .route-hero {
+    min-height: 100svh;
+    padding: 9rem 1.25rem 4.5rem;
+  }
+
+  .route-hero__image { object-position: var(--route-image-position, 62% center); }
+  .route-hero__world { background-position: 54% 48%; background-size: auto 92%; }
+  .route-hero__veil {
+    background:
+      linear-gradient(180deg, rgba(4, 14, 21, 0.28), transparent 27%, rgba(5, 18, 25, 0.88) 79%),
+      linear-gradient(90deg, rgba(4, 14, 21, 0.68), transparent 86%);
+  }
+
+  .route-hero__content { width: 100%; }
+  .route-hero h1 { max-width: 9.5ch; font-size: clamp(3.25rem, 15vw, 5.2rem); }
+  .route-hero__content > p:not(.route-kicker) { font-size: 1rem; line-height: 1.65; }
+
+  .route-continuum {
+    padding: 8rem 1.25rem 10rem;
+  }
+
+  .route-line {
+    left: -44%;
+    width: 180%;
+    background-size: auto 90%;
+    opacity: 0.48;
+  }
+
+  .route-line i:nth-child(1) { left: 52%; }
+  .route-line i:nth-child(2) { left: 69%; }
+  .route-line i:nth-child(3) { left: 44%; }
+
+  .route-chapters { gap: 8rem; }
+
+  .route-chapter {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .route-chapter__number { margin: 0; }
+  .route-chapter h2 { max-width: 13ch; font-size: clamp(2.35rem, 11vw, 3.8rem); }
+  .route-chapter div > p { line-height: 1.75; }
+
+  .route-reflection {
+    gap: 1.25rem;
+    margin-top: 10rem;
+  }
+
+  .route-reflection p { max-width: 15ch; }
+
+  .route-next { margin-top: 11rem; padding-top: 4rem; }
+  .route-next h2 { font-size: clamp(2.7rem, 12vw, 4.4rem); }
+
+  .route-page .site-footer {
+    grid-template-columns: 1fr;
+    width: calc(100% - 2.5rem);
+    gap: 1.6rem;
+    padding: 3rem 0;
+  }
+
+  .route-page .site-footer nav { grid-column: auto; gap: 1rem 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .route-page::after,
+  .route-hero__image {
+    animation: none !important;
+    transform: none;
+  }
+
+  [data-page-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .route-hero__step i,
+  .route-next > a i,
+  .site-nav a::after,
+  .site-footer nav a::after,
+  .site-menu summary span {
+    transition: none;
+  }
+}

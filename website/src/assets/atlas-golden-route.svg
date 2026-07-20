@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 7200" preserveAspectRatio="none" fill="none">
+  <defs>
+    <linearGradient id="routeGold" x1="720" y1="420" x2="720" y2="6900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B99859" stop-opacity=".34"/>
+      <stop offset=".24" stop-color="#B99859" stop-opacity=".42"/>
+      <stop offset=".38" stop-color="#C6A465" stop-opacity=".56"/>
+      <stop offset=".64" stop-color="#C9A461" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#B88943" stop-opacity=".86"/>
+    </linearGradient>
+    <linearGradient id="clarity" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="white" stop-opacity="0"/>
+      <stop offset=".28" stop-color="white" stop-opacity=".05"/>
+      <stop offset=".48" stop-color="white" stop-opacity=".62"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <mask id="clarityMask">
+      <rect width="1440" height="7200" fill="url(#clarity)"/>
+    </mask>
+    <filter id="routeGlow" x="-30%" y="-8%" width="160%" height="116%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <!-- One route: tentative at the start, increasingly clear towards the horizon. -->
+  <path d="M950 110C838 174 681 286 540 500 424 676 520 914 716 1100S1084 1690 1028 2150 620 2740 690 3190 1160 3700 1025 4200 470 4690 548 5200 1002 5660 936 6140 1074 6500 1225 6850"
+    stroke="#F2CB7E" stroke-opacity=".32" stroke-width="10" stroke-linecap="round" filter="url(#routeGlow)"/>
+  <path d="M950 110C838 174 681 286 540 500 424 676 520 914 716 1100S1084 1690 1028 2150 620 2740 690 3190 1160 3700 1025 4200 470 4690 548 5200 1002 5660 936 6140 1074 6500 1225 6850"
+    stroke="url(#routeGold)" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="3 11"/>
+  <path d="M950 110C838 174 681 286 540 500 424 676 520 914 716 1100S1084 1690 1028 2150 620 2740 690 3190 1160 3700 1025 4200 470 4690 548 5200 1002 5660 936 6140 1074 6500 1225 6850"
+    stroke="#E0B464" stroke-opacity=".92" stroke-width="2" stroke-linecap="round" mask="url(#clarityMask)"/>
+
+  <g stroke="#B88C47">
+    <g transform="translate(950 110)">
+      <circle r="18" stroke-opacity=".22"/>
+      <circle r="4.5" fill="#F4E4C2" stroke-opacity=".72"/>
+    </g>
+    <g transform="translate(1028 2150)">
+      <circle r="22" stroke-opacity=".26"/>
+      <circle r="5" fill="#F0D9AA" stroke-opacity=".78"/>
+    </g>
+    <g transform="translate(690 3190)">
+      <circle r="20" stroke-opacity=".24"/>
+      <circle r="5" fill="#F3DEB5" stroke-opacity=".78"/>
+    </g>
+    <g transform="translate(1025 4200)">
+      <circle r="21" stroke-opacity=".24"/>
+      <circle r="5" fill="#F3DEB5" stroke-opacity=".8"/>
+    </g>
+    <g transform="translate(1074 6500)">
+      <circle r="23" stroke-opacity=".28"/>
+      <circle r="5.5" fill="#F5E3BE" stroke-opacity=".84"/>
+    </g>
+  </g>
+</svg>

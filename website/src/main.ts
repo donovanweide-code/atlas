@@ -1,290 +1,356 @@
 import "./styles/main.css";
-import heroImage from "./assets/images/hero.webp";
+import "./styles/atlas-expedition.css";
+import "./styles/public-pages.css";
+import { renderSceneWorld } from "./atlas-scenes";
+import {
+  enablePageReveals,
+  renderPublicPage,
+} from "./public-pages";
 
-document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
-  <main class="page">
-    <header class="site-header">
-      <a class="brand" href="#">
-        <span class="brand__mark">WBD.</span>
-        <span class="brand__name">We Build and Design</span>
-      </a>
+const app = document.querySelector<HTMLDivElement>("#app")!;
+const route = window.location.pathname.replace(/\/+$/, "") || "/";
 
-      <nav class="site-nav" aria-label="Hoofdnavigatie">
-        <a href="#">Diensten</a>
-        <a href="#">Werkwijze</a>
-        <a href="#">Projecten</a>
-        <a href="#">Over ons</a>
-      </nav>
+if (route === "/atlas") {
+  void import("./atlas-workspace").then(({ renderAtlasWorkspace }) =>
+    renderAtlasWorkspace(app),
+  );
+} else if (route === "/atlas-lab") {
+  void import("./atlas-lab").then(({ renderAtlasLab }) => renderAtlasLab(app));
+} else if (route === "/") {
+  app.innerHTML = `
+    <main class="page">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="We Build and Design — home">
+          <span class="brand__mark">WBD.</span>
+          <span class="brand__name">We Build and Design</span>
+        </a>
 
-      <a class="button button--primary site-header__cta" href="#">
-        Plan een kennismaking
-      </a>
-    </header>
+        <nav class="site-nav" aria-label="Hoofdnavigatie">
+          <a href="/diensten">Diensten</a>
+          <a href="/werkwijze">Werkwijze</a>
+          <a href="/projecten">Projecten</a>
+          <a href="/over-ons">Over ons</a>
+        </nav>
 
-    <section class="hero">
-      <div class="hero__content hero__content--animate">
-        <p class="hero__eyebrow">Strategie. Design. Technologie.</p>
+        <a class="button button--primary site-header__cta" href="/contact">
+          Plan een kennismaking
+        </a>
 
-        <h1 class="hero__title">
-          Wij bouwen digitale fundamenten voor ondernemers met visie.
-        </h1>
+        <details class="site-menu">
+          <summary aria-label="Open navigatie"><span></span><span></span></summary>
+          <nav aria-label="Mobiele navigatie">
+            <a href="/diensten">Diensten</a>
+            <a href="/werkwijze">Werkwijze</a>
+            <a href="/projecten">Projecten</a>
+            <a href="/over-ons">Over ons</a>
+            <a href="/contact">Kennismaken</a>
+          </nav>
+        </details>
+      </header>
 
-        <p class="hero__text">
-          We combineren strategie, design en technologie om digitale oplossingen
-          te bouwen die jouw bedrijf laten groeien.
+      <section class="hero atlas-scene" data-scene="scene-001" aria-labelledby="hero-title">
+        ${renderSceneWorld("scene-001")}
+        <div class="hero__content" data-home-reveal>
+          <p class="route-label"><span>01</span> Overzicht</p>
+          <p class="hero__eyebrow">Strategie. Design. Technologie.</p>
+
+          <h1 class="hero__title" id="hero-title">Je bedrijf is klaar voor wat volgt.</h1>
+
+          <p class="hero__text">
+            Je zoekt geen nieuwe droom.<br>
+            Je zoekt overzicht, richting en vertrouwen.
+          </p>
+
+          <a class="hero__step" href="#begrijpen">
+            <span>Bekijk hoe we bouwen</span>
+            <i aria-hidden="true"></i>
+          </a>
+        </div>
+
+      </section>
+
+      <section class="understand atlas-scene" data-scene="scene-002" id="begrijpen" aria-labelledby="understand-title">
+        ${renderSceneWorld("scene-002")}
+        <div class="understand__inner">
+          <header class="understand__intro" data-home-reveal>
+            <p class="understand__label"><span>ROUTE 02</span> WERKWIJZE</p>
+            <h2 class="understand__title" id="understand-title">
+              We beginnen bij wat je hebt gebouwd. Daarna maken we helder wat volgt.
+            </h2>
+          </header>
+
+          <div class="understand__experience">
+            <div class="understand__thoughts" data-home-reveal>
+              <p>Je bedrijf groeit.</p>
+              <p>De keuzes worden groter.</p>
+              <p>Losse oplossingen geven geen overzicht.</p>
+            </div>
+
+            <div class="understand__insight" data-home-reveal>
+              <p class="understand__realisation">
+                <span>Niet méér beweging.</span>
+                <strong>Een heldere richting.</strong>
+              </p>
+
+              <div class="understand__belief">
+                <p>
+                  Daarom onderzoeken we eerst.<br>
+                  <strong>Strategie vóór uitvoering.</strong>
+                </p>
+                <p>
+                  Daarna maken we zichtbaar<br>
+                  <strong>wat de volgende stap nodig heeft.</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="orientation-waypoint" aria-hidden="true">
+            <span class="orientation-waypoint__ring"></span>
+            <span class="orientation-waypoint__axis"></span>
+            <span class="orientation-waypoint__label">02 / RICHTING</span>
+          </div>
+
+        </div>
+      </section>
+
+      <div class="route-transition atlas-scene scene-crossing" data-scene="scene-003" aria-hidden="true">
+        ${renderSceneWorld("scene-003")}
+        <span class="scene-waypoint scene-waypoint--crossing"></span>
+      </div>
+
+      <section class="why atlas-scene" data-scene="scene-004" aria-labelledby="why-title">
+        ${renderSceneWorld("scene-004")}
+
+        <div class="why__intro" data-home-reveal>
+          <p class="section-label">03 / Digitaal fundament</p>
+
+          <h2 class="why__title" id="why-title">
+            Wat je hebt opgebouwd verdient een digitaal fundament dat zorgvuldig verder groeit.
+          </h2>
+
+          <p class="why__lead">
+            We brengen strategie, ontwerp en technologie samen rond één heldere volgende stap.
+          </p>
+        </div>
+
+        <div class="why__grid" data-home-reveal>
+          <article class="why-principle">
+            <span class="why-principle__number">01</span>
+            <h3>Eerst begrijpen</h3>
+            <p>
+              We onderzoeken waar je bedrijf staat, wat al werkt en waar groei begint te knellen.
+            </p>
+          </article>
+
+          <article class="why-principle">
+            <span class="why-principle__number">02</span>
+            <h3>Samenhang ontwerpen</h3>
+            <p>
+              Strategie, merk, website en processen krijgen één logische richting.
+            </p>
+          </article>
+
+          <article class="why-principle">
+            <span class="why-principle__number">03</span>
+            <h3>Zorgvuldig doorbouwen</h3>
+            <p>
+              We bouwen wat nu nodig is en houden ruimte voor de volgende fase.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="vision atlas-scene" data-scene="scene-005" aria-labelledby="vision-title">
+        ${renderSceneWorld("scene-005")}
+        <div class="vision__content">
+
+          <header class="vision__intro" data-home-reveal>
+            <p class="vision__eyebrow">04 / Van inzicht naar uitvoering</p>
+
+            <h2 class="vision__title" id="vision-title">
+              Richting wordt waardevol wanneer je haar zorgvuldig kunt bouwen.
+            </h2>
+
+            <p class="vision__text">
+              Daarom maken we keuzes zichtbaar voordat ze code worden. In strategiekaarten,
+              UX-structuren, ontwerpen en een plan dat past bij je organisatie.
+            </p>
+          </header>
+
+      <div class="vision__steps" data-home-reveal>
+
+        <article class="vision-step">
+          <span class="vision-step__number">01</span>
+
+          <h3>Analyseren</h3>
+
+          <p>
+            We brengen doelen, klanten, processen en het bestaande digitale fundament samen.
+          </p>
+        </article>
+
+        <article class="vision-step">
+          <span class="vision-step__number">02</span>
+
+          <h3>Richting bepalen</h3>
+
+          <p>
+            We kiezen welke ingreep nu het meeste waarde toevoegt en wat bewust later kan.
+          </p>
+        </article>
+
+        <article class="vision-step">
+          <span class="vision-step__number">03</span>
+
+          <h3>Realiseren</h3>
+
+          <p>
+            We ontwerpen, ontwikkelen, testen en verbeteren in een beheersbaar tempo.
+          </p>
+        </article>
+
+      </div>
+      <div class="vision__quote" data-home-reveal>
+
+        <h2>
+          Overzicht maakt keuzes kleiner.<br>
+          Goede keuzes maken groei beheersbaar.
+        </h2>
+
+        <p>
+          Wat we vandaag bouwen moet direct bruikbaar zijn en morgen verder kunnen groeien.
         </p>
 
-       <div class="hero__actions">
-  <a class="button button--primary" href="#">
-    Plan een kennismaking
-  </a>
-
-  <a class="button button--secondary" href="#">
-    Bekijk projecten
-  </a>
-</div>
-<div class="scroll-indicator" aria-hidden="true">
-  <span class="scroll-indicator__arrow">↓</span>
-  <span>Scroll verder</span>
-</div>
       </div>
-<div class="hero__visual hero__visual--animate">
-  <img
-    class="hero__image"
-    src="${heroImage}"
-    alt="Ondernemer die werkt aan de volgende digitale stap"
-  />
-</div>
-   
-    </section>
-    <section class="why">
-  <div class="why__intro">
-    <p class="section-label">Waarom WBD</p>
+        </div>
+      </section>
+      <section class="challenges atlas-scene" data-scene="scene-006" aria-labelledby="challenges-title">
+        ${renderSceneWorld("scene-006")}
+        <div class="scene-waypoint-moment" data-scene="scene-007" aria-hidden="true">
+          <span class="scene-waypoint scene-waypoint--insight"></span>
+        </div>
 
-    <h2 class="why__title">
-      Geen losse website. Een digitaal fundament dat met je bedrijf meegroeit.
-    </h2>
-  </div>
+        <div class="container">
 
-  <div class="why__grid">
-    <article class="why-card">
-      <span class="why-card__number">01</span>
-      <h3>Strategie vóór design</h3>
-      <p>
-        We beginnen niet bij kleuren of templates, maar bij jouw doelen,
-        klanten en toekomst.
+          <p class="section-eyebrow" data-home-reveal>
+            05 / Waar groei begint te knellen
+          </p>
+
+          <h2 class="section-title" id="challenges-title" data-home-reveal>
+            Je bedrijf beweegt verder. Je digitale fundament moet mee kunnen bewegen.
+          </h2>
+
+          <p class="section-intro" data-home-reveal>
+            Vaak is niet méér nodig, maar meer samenhang tussen wat je al hebt.
+          </p>
+
+          <div class="challenge-grid" data-home-reveal>
+
+            <article class="challenge-card">
+              <span>01</span>
+              <h3>Zichtbaarheid blijft achter</h3>
+             <p>
+      Je expertise is sterk, maar dat wordt online nog niet overtuigend zichtbaar.
       </p>
-    </article>
+      <p class="challenge-outcome">Merk, verhaal en klantreis opnieuw uitlijnen.</p>
+            </article>
 
-    <article class="why-card">
-      <span class="why-card__number">02</span>
-      <h3>Technologie die helpt</h3>
-      <p>
-        Slimme oplossingen verminderen handmatig werk en maken ruimte voor
-        groei, aandacht en betere keuzes.
+            <article class="challenge-card">
+              <span>02</span>
+              <h3>Systemen werken los</h3>
+             <p>
+      Marketing, website en processen werken los van elkaar.
       </p>
-    </article>
+      <p class="challenge-outcome">Eén richting voor kanalen, content en techniek.</p>
+            </article>
 
-    <article class="why-card">
-      <span class="why-card__number">03</span>
-      <h3>Blijven ontwikkelen</h3>
-      <p>
-        Na de lancering stopt het niet. We blijven meten, verbeteren en
-        doorbouwen wanneer jouw bedrijf daar klaar voor is.
+            <article class="challenge-card">
+              <span>03</span>
+              <h3>Handwerk remt</h3>
+              <p>
+      Handmatig werk kost iedere week uren die je liever
+      aan je bedrijf besteedt.
       </p>
-    </article>
-  </div>
-</section>
+      <p class="challenge-outcome">Processen vereenvoudigen waar technologie echt helpt.</p>
+            </article>
 
-<section class="vision">
-  <div class="vision__content">
-
-    <p class="vision__eyebrow">
-      Onze visie
-    </p>
-
-    <h2 class="vision__title">
-      Niet nóg een website.
-      Een digitaal fundament.
-    </h2>
-
-    <p class="vision__text">
-      Veel ondernemers zoeken een nieuwe website.
-      Maar een mooie website zonder strategie levert
-      zelden nieuwe klanten op.
-    </p>
-
-    <p class="vision__text">
-      Daarom begint Atlas niet met design.
-      Wij beginnen met begrijpen.
-      Pas daarna ontwerpen en bouwen we oplossingen
-      die jarenlang mee kunnen groeien.
-    </p>
-<div class="vision__steps">
-
-  <article class="vision-step">
-    <span class="vision-step__number">01</span>
-
-    <h3>Analyseren</h3>
-
-    <p>
-      We beginnen niet met bouwen.
-      We beginnen met begrijpen.
-      Jouw bedrijf vormt altijd het vertrekpunt.
-    </p>
-  </article>
-
-  <article class="vision-step">
-    <span class="vision-step__number">02</span>
-
-    <h3>Strategie</h3>
-
-    <p>
-      Vanuit de analyse bepalen we samen
-      welke digitale oplossing het meeste
-      rendement oplevert.
-    </p>
-  </article>
-
-  <article class="vision-step">
-    <span class="vision-step__number">03</span>
-
-    <h3>Realiseren</h3>
-
-    <p>
-      Daarna ontwerpen, ontwikkelen
-      en blijven we verbeteren zodat
-      jouw bedrijf kan doorgroeien.
-    </p>
-  </article>
-
-</div>
-<div class="vision__quote">
-
-  <h2>
-    Wij verkopen geen websites.
-    Wij bouwen groeiplatformen.
-  </h2>
-
-  <p>
-    Iedere keuze die wij maken moet bijdragen aan één doel:
-    jouw onderneming digitaal sterker maken.
-    Niet vandaag, maar ook over vijf jaar.
-  </p>
-
-</div>
-  </div>
-</section>
-<section class="challenges">
-
-  <div class="container">
-
-    <p class="section-eyebrow">
-      Digitale uitdagingen
-    </p>
-
-    <h2 class="section-title">
-      Groei begint met het herkennen
-      van de juiste uitdaging.
-    </h2>
-
-    <p class="section-intro">
-      Veel ondernemers lopen tegen dezelfde digitale obstakels aan.
-      Niet omdat ze niet willen groeien, maar omdat de juiste
-      strategie ontbreekt.
-    </p>
-
-    <div class="challenge-grid">
-
-      <article class="challenge-card">
-        <span>01</span>
-        <h3>Niet zichtbaar</h3>
-       <p>
-Je website bestaat, maar levert nauwelijks bezoekers,
-aanvragen of nieuwe klanten op.
-</p>
-<a class="challenge-link" href="#">
-  Dat hoeft niet zo te blijven →
-</a>
-</a>
-      </article>
-
-      <article class="challenge-card">
-        <span>02</span>
-        <h3>Geen strategie</h3>
-       <p>
-Marketing, website en processen werken los van elkaar.
-</p>
-<a href="#">
-Alles begint met één duidelijke richting →
-
-</a>
-      </article>
-
-      <article class="challenge-card">
-        <span>03</span>
-        <h3>Tijdverlies</h3>
-        <p>
-Handmatig werk kost iedere week uren die je liever
-aan je bedrijf besteedt.
-</p>
-
-<a class="challenge-link" href="#">
-  Slimmer werken begint vandaag →
-</a>
-      </article>
-
-      <article class="challenge-card">
-        <span>04</span>
-        <h3>Klaar voor groei</h3>
-        <p>
-Je onderneming groeit sneller dan je digitale fundament.
-</p>
-
-<a class="challenge-link" href="#">
-  Bouw mee aan de volgende stap →
-</a>
-      </article>
-
-    </div>
-
-  </div>
-
-</section>
-<section class="connection">
-
-  <div class="container">
-
-    <p class="section-eyebrow">
-      Misschien herken je dit
-    </p>
-
-    <h2 class="section-title">
-      Je hoeft vandaag nog niet te weten
-      wat de beste oplossing is.
-    </h2>
-
-    <p class="section-intro">
-      De meeste ondernemers weten dat er iets moet gebeuren.
-      Maar niet waar ze moeten beginnen.
-      En eerlijk?
-      Dat hoeft ook niet.
-    </p>
-
-    <div class="connection-message">
-
-      <p>
-        Wij beginnen niet met techniek.
+            <article class="challenge-card">
+              <span>04</span>
+              <h3>Het fundament groeit niet mee</h3>
+              <p>
+      Je onderneming groeit sneller dan je digitale fundament.
       </p>
+      <p class="challenge-outcome">Doorbouwen zonder opnieuw vanaf nul te beginnen.</p>
+            </article>
 
-      <p>
-        Wij beginnen met jouw onderneming.
-      </p>
+          </div>
 
-    </div>
+        </div>
 
-  </div>
+      </section>
+      <section class="connection atlas-scene" data-scene="scene-008" aria-labelledby="connection-title">
+        ${renderSceneWorld("scene-008")}
+        ${renderSceneWorld("scene-009")}
+        ${renderSceneWorld("scene-010")}
 
-</section>
-  </main>
-`;
+        <div class="container">
+
+          <p class="section-eyebrow" data-home-reveal>
+            06 / De volgende horizon
+          </p>
+
+          <h2 class="section-title" id="connection-title" data-home-reveal>
+            Je hoeft de oplossing niet vooraf te kennen.
+          </h2>
+
+          <p class="section-intro" data-home-reveal>
+            Wel wat een goede volgende stap voor je bedrijf moet opleveren.
+            Wij brengen de keuzes terug tot een richting die past bij wat je al hebt opgebouwd.
+          </p>
+
+          <div class="connection-message" data-home-reveal>
+
+            <p>
+              Eerst ontstaat overzicht.
+            </p>
+
+            <p>
+              Vanuit overzicht ontstaat vertrouwen om te bewegen.
+            </p>
+
+          </div>
+
+          <div class="compass-moment" data-scene="scene-009" aria-hidden="true">
+            <span class="compass-moment__north">N</span>
+            <i class="compass-moment__needle"></i>
+            <i class="compass-moment__relief"></i>
+          </div>
+
+          <div class="next-horizon" data-home-reveal>
+            <p>Je volgende stap hoeft niet groter te zijn. Wel scherper.</p>
+            <h3>Maak helder wat jouw bedrijf nu nodig heeft.</h3>
+            <a class="button button--primary" href="/contact">
+              Plan een verkenning
+            </a>
+          </div>
+
+        </div>
+
+        <footer class="site-footer">
+          <a class="brand" href="/" aria-label="We Build and Design — home">
+            <span class="brand__mark">WBD.</span>
+            <span class="brand__name">We Build and Design</span>
+          </a>
+          <p>Strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
+        </footer>
+
+      </section>
+    </main>
+  `;
+
+  enablePageReveals("[data-home-reveal]");
+} else {
+  app.innerHTML = renderPublicPage(route);
+  enablePageReveals();
+}

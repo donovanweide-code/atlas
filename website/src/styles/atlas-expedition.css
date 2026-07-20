@@ -1,0 +1,2797 @@
+/* Atlas World Engine — First Expedition */
+
+.page {
+  --world-ground: #f0e6d2;
+  --world-ink: #17221f;
+  --world-gold: #b88a45;
+  --world-mist: rgba(240, 230, 210, 0.9);
+  background:
+    radial-gradient(ellipse at 12% 15%, rgba(247, 244, 238, 0.9), transparent 27%),
+    radial-gradient(ellipse at 84% 34%, rgba(123, 171, 157, 0.18), transparent 32%),
+    radial-gradient(ellipse at 20% 68%, rgba(223, 204, 164, 0.2), transparent 36%),
+    radial-gradient(ellipse at 78% 92%, rgba(250, 238, 210, 0.7), transparent 42%),
+    var(--world-ground);
+}
+
+.page::after {
+  width: 90vw;
+  height: 90vw;
+  opacity: 0.52;
+  filter: blur(70px);
+}
+
+.page::before {
+  background: url("../assets/atlas-golden-route.svg") center top / 100% 100% no-repeat;
+  opacity: 0.72;
+  mix-blend-mode: multiply;
+  animation: expedition-route-arrive 3.6s ease-out both;
+}
+
+.atlas-scene {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+
+.scene-world {
+  position: absolute;
+  z-index: -3;
+  inset: -12%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.scene-world__layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.scene-world__layer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.76) contrast(0.92);
+}
+
+.scene-world__layer--atmosphere,
+.scene-world__layer--water {
+  animation: expedition-atmosphere 28s ease-in-out infinite alternate;
+}
+
+/* Old ticket-specific pseudo landscapes are superseded by scene media. */
+.hero::after,
+.understand::after,
+.why::after,
+.vision::after,
+.challenges::after,
+.connection::after,
+.route-transition::before {
+  content: none !important;
+  animation: none !important;
+}
+
+.understand::before,
+.why::before,
+.vision::before,
+.challenges::before,
+.connection::before {
+  opacity: 0.28;
+  filter: blur(70px);
+}
+
+.hero__visual::before,
+.hero__visual::after {
+  display: none !important;
+}
+
+/* Scene 001 — The First Horizon */
+.hero > .scene-world {
+  inset: 18% -14% -16%;
+}
+
+.hero > .scene-world .scene-world__layer--horizon {
+  inset: 26% -4% -4%;
+  opacity: 0.68;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 68%, transparent 100%);
+}
+
+.hero > .scene-world .scene-world__layer--horizon img {
+  object-position: 54% 76%;
+}
+
+.hero__content,
+.hero__visual {
+  z-index: 2;
+}
+
+.hero__image-frame {
+  box-shadow: 0 42px 110px rgba(35, 56, 48, 0.14);
+}
+
+/* Scene 002 — The Hidden Path */
+.understand {
+  min-height: 118vh;
+  padding-block: clamp(9rem, 13vw, 14rem);
+}
+
+.understand > .scene-world {
+  inset: -4% -8% -8%;
+}
+
+.understand .scene-world__layer--atmosphere {
+  inset: 0;
+  opacity: 0.5;
+  -webkit-mask-image: radial-gradient(ellipse 48% 44% at 76% 48%, #000 0 50%, rgba(0, 0, 0, 0.58) 74%, transparent 100%);
+  mask-image: radial-gradient(ellipse 48% 44% at 76% 48%, #000 0 50%, rgba(0, 0, 0, 0.58) 74%, transparent 100%);
+}
+
+.understand .scene-world__layer--forest {
+  inset: 0;
+  opacity: 0.58;
+  -webkit-mask-image: radial-gradient(ellipse 28% 44% at 84% 58%, #000 0 48%, rgba(0, 0, 0, 0.55) 72%, transparent 100%);
+  mask-image: radial-gradient(ellipse 28% 44% at 84% 58%, #000 0 48%, rgba(0, 0, 0, 0.55) 72%, transparent 100%);
+}
+
+.understand .scene-world__layer--forest img {
+  object-position: 86% 56%;
+}
+
+.understand > .scene-world::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  background: linear-gradient(90deg, var(--world-ground) 0 24%, rgba(240, 230, 210, 0.9) 46%, rgba(240, 230, 210, 0.28) 72%, transparent 100%);
+}
+
+.understand__inner {
+  position: relative;
+  z-index: 2;
+}
+
+/* Scene 003 — The First Crossing */
+.route-transition.scene-crossing {
+  height: clamp(17rem, 29vw, 28rem);
+  margin: clamp(-6rem, -5vw, -3rem) 0 clamp(-5rem, -4vw, -2rem);
+  z-index: 1;
+}
+
+.scene-crossing > .scene-world {
+  inset: -38% -8% -34%;
+}
+
+.scene-crossing .scene-world__layer--water {
+  opacity: 0.46;
+  -webkit-mask-image: radial-gradient(ellipse 38% 40% at 30% 52%, #000 0 50%, rgba(0, 0, 0, 0.52) 74%, transparent 100%);
+  mask-image: radial-gradient(ellipse 38% 40% at 30% 52%, #000 0 50%, rgba(0, 0, 0, 0.52) 74%, transparent 100%);
+}
+
+.scene-crossing .scene-world__layer--water img {
+  object-position: 18% 58%;
+}
+
+.scene-crossing::after,
+.why > .scene-world::after,
+.vision > .scene-world::after,
+.challenges > .scene-world::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: -1px;
+  pointer-events: none;
+}
+
+.scene-crossing::after {
+  z-index: -2;
+  background: linear-gradient(180deg, var(--world-ground), transparent 30% 66%, var(--world-ground));
+}
+
+.scene-waypoint {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  width: 0.7rem;
+  aspect-ratio: 1;
+  border: 1px solid rgba(151, 108, 44, 0.84);
+  border-radius: 50%;
+  background: #f5e4bd;
+  box-shadow: 0 0 0 0.9rem rgba(190, 145, 75, 0.08), 0 0 2.2rem rgba(196, 151, 81, 0.28);
+}
+
+.scene-waypoint--crossing {
+  left: 39%;
+  top: 52%;
+}
+
+/* Scene 004 — The Quiet Water */
+.why {
+  min-height: 120vh;
+  padding-block: clamp(10rem, 14vw, 15rem);
+}
+
+.why > .scene-world {
+  inset: -6% -12% -10%;
+}
+
+.why .scene-world__layer--water {
+  inset: 0;
+  opacity: 0.56;
+  -webkit-mask-image: radial-gradient(ellipse 34% 42% at 82% 48%, #000 0 50%, rgba(0, 0, 0, 0.56) 74%, transparent 100%);
+  mask-image: radial-gradient(ellipse 34% 42% at 82% 48%, #000 0 50%, rgba(0, 0, 0, 0.56) 74%, transparent 100%);
+}
+
+.why .scene-world__layer--water img {
+  object-position: 86% 48%;
+}
+
+.why > .scene-world::after {
+  background:
+    linear-gradient(180deg, var(--world-ground), transparent 28% 68%, var(--world-ground)),
+    linear-gradient(90deg, var(--world-ground) 0 30%, transparent 68%);
+}
+
+.why__intro,
+.why__grid {
+  position: relative;
+  z-index: 2;
+}
+
+.why__grid,
+.why-card {
+  border-color: rgba(62, 89, 73, 0.12);
+}
+
+.why-card {
+  background: transparent;
+}
+
+/* Scene 005 — The Living Map */
+.vision {
+  min-height: 148vh;
+  padding-block: clamp(12rem, 16vw, 18rem);
+}
+
+.vision > .scene-world {
+  inset: -2% -10% -8%;
+}
+
+.vision .scene-world__layer--material {
+  inset: 0;
+  opacity: 0.12;
+  mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(ellipse 72% 54% at 38% 48%, #000 0 50%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 54% at 38% 48%, #000 0 50%, transparent 100%);
+}
+
+.vision .scene-world__layer--cartography {
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(ellipse 60% 64% at 62% 52%, #000 0 48%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 64% at 62% 52%, #000 0 48%, transparent 100%);
+}
+
+.vision .scene-world__layer--space {
+  inset: 0;
+  opacity: 0.14;
+  -webkit-mask-image: radial-gradient(ellipse 62% 58% at 62% 54%, #000 0 46%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 58% at 62% 54%, #000 0 46%, transparent 100%);
+}
+
+.vision > .scene-world::after {
+  background:
+    linear-gradient(180deg, var(--world-ground), rgba(240, 230, 210, 0.34) 26%, rgba(240, 230, 210, 0.26) 72%, var(--world-ground)),
+    linear-gradient(90deg, rgba(240, 230, 210, 0.82) 0 26%, transparent 64%);
+}
+
+.vision__content {
+  position: relative;
+  z-index: 2;
+}
+
+.vision-step {
+  border-color: rgba(73, 94, 76, 0.18);
+  background: transparent;
+}
+
+/* Scenes 006–007 — Valley of Work / First Waypoint */
+.challenges {
+  min-height: 142vh;
+  padding-block: clamp(12rem, 16vw, 18rem);
+}
+
+.challenges > .scene-world {
+  inset: -8% -10%;
+}
+
+.challenges .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.5;
+  -webkit-mask-image: radial-gradient(ellipse 64% 68% at 68% 50%, #000 0 48%, rgba(0, 0, 0, 0.54) 72%, transparent 100%);
+  mask-image: radial-gradient(ellipse 64% 68% at 68% 50%, #000 0 48%, rgba(0, 0, 0, 0.54) 72%, transparent 100%);
+}
+
+.challenges > .scene-world::after {
+  background:
+    linear-gradient(180deg, var(--world-ground), transparent 24% 72%, var(--world-ground)),
+    linear-gradient(90deg, rgba(240, 230, 210, 0.72) 0 22%, transparent 62%);
+}
+
+.challenges .container {
+  position: relative;
+  z-index: 2;
+}
+
+.challenge-grid {
+  gap: 0;
+  border-top: 1px solid rgba(64, 87, 70, 0.14);
+}
+
+.challenge-card {
+  min-height: 19rem;
+  border: 0;
+  border-bottom: 1px solid rgba(64, 87, 70, 0.13);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.challenge-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.scene-waypoint-moment {
+  position: absolute;
+  z-index: 3;
+  right: 20%;
+  bottom: 13%;
+  width: 8rem;
+  height: 8rem;
+}
+
+.scene-waypoint--insight {
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Scenes 008–010 — Perspective, Compass, Next Horizon */
+.connection {
+  min-height: 152vh;
+  padding: clamp(13rem, 17vw, 19rem) 0 clamp(24rem, 30vw, 34rem);
+  text-align: left;
+}
+
+.connection > .container {
+  position: relative;
+  z-index: 3;
+}
+
+.connection > [data-world-for="scene-008"] {
+  inset: -8% -12% 18%;
+}
+
+.connection [data-world-for="scene-008"] .scene-world__layer--traveler {
+  inset: 0;
+  opacity: 0.68;
+  -webkit-mask-image: radial-gradient(ellipse 55% 62% at 62% 54%, #000 0 46%, rgba(0, 0, 0, 0.58) 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse 55% 62% at 62% 54%, #000 0 46%, rgba(0, 0, 0, 0.58) 70%, transparent 100%);
+}
+
+.connection > [data-world-for="scene-008"]::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: -1px;
+  background: linear-gradient(180deg, var(--world-ground), transparent 28% 62%, var(--world-ground));
+}
+
+.connection > [data-world-for="scene-009"] {
+  inset: 46% 45% -8% -12%;
+}
+
+.connection [data-world-for="scene-009"] .scene-world__layer--material {
+  inset: 0;
+  opacity: 0.08;
+  mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(ellipse 68% 62% at 42% 56%, #000 0 48%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 62% at 42% 56%, #000 0 48%, transparent 100%);
+}
+
+.connection > [data-world-for="scene-010"] {
+  inset: 44% -12% -14% 28%;
+}
+
+.connection [data-world-for="scene-010"] .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.52;
+  -webkit-mask-image: radial-gradient(ellipse 66% 66% at 70% 54%, #000 0 46%, rgba(0, 0, 0, 0.54) 72%, transparent 100%);
+  mask-image: radial-gradient(ellipse 66% 66% at 70% 54%, #000 0 46%, rgba(0, 0, 0, 0.54) 72%, transparent 100%);
+}
+
+.connection .section-title,
+.connection .section-intro,
+.connection-message {
+  max-width: 760px;
+}
+
+.connection-message {
+  align-items: flex-start;
+  border-top: 1px solid rgba(82, 96, 72, 0.16);
+  padding-top: 2.5rem;
+}
+
+.compass-moment {
+  position: absolute;
+  z-index: 4;
+  right: clamp(1rem, 10vw, 9rem);
+  bottom: clamp(-18rem, -22vw, -10rem);
+  width: clamp(8rem, 13vw, 12rem);
+  aspect-ratio: 1;
+  border: 1px solid rgba(145, 100, 37, 0.52);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 245, 218, 0.36), rgba(184, 138, 69, 0.08) 48%, transparent 70%),
+    repeating-radial-gradient(circle, transparent 0 23%, rgba(132, 94, 38, 0.12) 24% 24.5%, transparent 25% 34%);
+  box-shadow: inset 0 0 0 0.55rem rgba(129, 91, 36, 0.05), 0 1.4rem 4rem rgba(77, 59, 31, 0.12);
+  color: rgba(113, 76, 28, 0.84);
+  backdrop-filter: blur(4px);
+}
+
+.compass-moment::before,
+.compass-moment::after {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border: 1px solid rgba(145, 100, 37, 0.22);
+  border-radius: 50%;
+}
+
+.compass-moment::after {
+  inset: 19%;
+  border-style: dotted;
+}
+
+.compass-moment__north {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.compass-moment__needle {
+  position: absolute;
+  z-index: 2;
+  top: 22%;
+  left: 50%;
+  width: 1px;
+  height: 56%;
+  background: linear-gradient(to bottom, #a36f2d 0 48%, rgba(45, 84, 73, 0.66) 49% 100%);
+  transform: translateX(-50%) rotate(31deg);
+  transform-origin: center;
+  animation: compass-orient 2.8s 0.8s cubic-bezier(0.25, 0.7, 0.2, 1) both;
+}
+
+.compass-moment__needle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.55rem;
+  aspect-ratio: 1;
+  border: 1px solid rgba(135, 92, 31, 0.72);
+  border-radius: 50%;
+  background: #ebd7a9;
+  transform: translate(-50%, -50%);
+}
+
+.compass-moment__relief {
+  position: absolute;
+  inset: 47% -52% auto 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgba(158, 112, 44, 0.48), transparent);
+}
+
+@keyframes expedition-route-arrive {
+  from { opacity: 0.18; }
+  to { opacity: 0.72; }
+}
+
+@keyframes expedition-atmosphere {
+  from { transform: translate3d(0, 0, 0) scale(1.01); }
+  to { transform: translate3d(-0.35%, 0.2%, 0) scale(1.018); }
+}
+
+@keyframes compass-orient {
+  from { transform: translateX(-50%) rotate(18deg); }
+  to { transform: translateX(-50%) rotate(31deg); }
+}
+
+@media (max-width: 900px) {
+  .page::before {
+    background-size: auto 100%;
+    background-position: 52% top;
+    opacity: 0.64;
+  }
+
+  .understand { min-height: auto; }
+  .understand .scene-world__layer--atmosphere { left: 4%; opacity: 0.4; }
+  .understand .scene-world__layer--forest { inset: 34% -10% -4% 52%; opacity: 0.46; }
+
+  .scene-crossing > .scene-world { inset-right: 20%; }
+
+  .why { min-height: auto; }
+  .why .scene-world__layer--water { left: 34%; opacity: 0.43; }
+
+  .vision { min-height: auto; }
+  .vision .scene-world__layer--material { inset-right: 4%; }
+  .vision .scene-world__layer--cartography,
+  .vision .scene-world__layer--space { opacity: 0.22; }
+
+  .challenges { min-height: auto; }
+  .challenges .scene-world__layer--horizon { left: 22%; opacity: 0.38; }
+
+  .connection { min-height: 132vh; padding-bottom: 24rem; }
+  .connection [data-world-for="scene-008"] .scene-world__layer--traveler { left: 28%; opacity: 0.5; }
+  .compass-moment { right: 1rem; }
+}
+
+@media (max-width: 520px) {
+  .page::before { opacity: 0.5; }
+
+  .hero > .scene-world { inset-inline: -55%; }
+  .hero > .scene-world .scene-world__layer--horizon { opacity: 0.5; }
+
+  .understand .scene-world__layer--atmosphere { inset: 8% -54% 12% 6%; opacity: 0.32; }
+  .understand .scene-world__layer--forest { inset: 48% -32% -6% 36%; opacity: 0.4; }
+
+  .route-transition.scene-crossing { height: 15rem; }
+  .scene-crossing > .scene-world { inset: -30% 2% -30% -42%; }
+
+  .why .scene-world__layer--water { inset: 12% -46% 0 16%; opacity: 0.34; }
+
+  .vision .scene-world__layer--material { inset: 4% -24% 58% -30%; opacity: 0.2; }
+  .vision .scene-world__layer--cartography { inset: 34% -38% 18% 16%; opacity: 0.22; }
+  .vision .scene-world__layer--space { display: none; }
+
+  .challenges .scene-world__layer--horizon { inset: 8% -42% 0 8%; opacity: 0.3; }
+  .challenge-grid { grid-template-columns: 1fr; }
+
+  .connection {
+    min-height: 145vh;
+    padding-bottom: 25rem;
+  }
+
+  .connection [data-world-for="scene-008"] .scene-world__layer--traveler { inset: 10% -48% 0 4%; opacity: 0.38; }
+  .connection > [data-world-for="scene-010"] { left: -10%; }
+  .connection [data-world-for="scene-010"] .scene-world__layer--horizon { opacity: 0.34; }
+  .connection [data-world-for="scene-010"] .scene-world__layer--space { display: none; }
+
+  .compass-moment {
+    right: auto;
+    left: 1rem;
+    bottom: -17rem;
+    width: 8rem;
+  }
+}
+
+/* Homepage completion — final cascade authority for the continued scenes. */
+.page .why {
+  min-height: 108svh;
+  padding: clamp(10rem, 14vw, 14rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  background:
+    radial-gradient(ellipse at 78% 42%, rgba(126, 163, 153, 0.22), transparent 38%),
+    linear-gradient(180deg, #d4d8cf 0%, #e1e2d9 48%, #e8e5db 100%);
+}
+
+.page .why > .scene-world {
+  inset: -10% -6% -12% 34%;
+  -webkit-mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+}
+
+.page .why .scene-world__layer--water {
+  inset: 0;
+  opacity: 0.46;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .vision {
+  min-height: 150svh;
+  padding: clamp(12rem, 16vw, 17rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  color: #f5f1e7;
+  background: #152429;
+}
+
+.page .vision > .scene-world {
+  inset: -3%;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+}
+
+.page .vision .scene-world__layer--space {
+  inset: 0;
+  display: block;
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .vision > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(10, 27, 34, 0.96) 0 24%, rgba(12, 31, 37, 0.72) 44%, rgba(12, 31, 37, 0.08) 76%),
+    linear-gradient(180deg, #182c31 0%, transparent 14% 76%, rgba(20, 38, 42, 0.92) 100%);
+}
+
+.page .challenges {
+  min-height: 118svh;
+  padding: clamp(11rem, 15vw, 16rem) 0 clamp(12rem, 16vw, 18rem);
+  background:
+    radial-gradient(ellipse at 76% 36%, rgba(163, 188, 174, 0.28), transparent 42%),
+    linear-gradient(180deg, #d7dcd5 0%, #e4e5dc 56%, #ebe6d9 100%);
+}
+
+.page .challenges > .scene-world {
+  inset: -8% -6% -10% 38%;
+  -webkit-mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+}
+
+.page .challenges .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.58;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .connection {
+  min-height: 178svh;
+  padding: clamp(13rem, 18vw, 20rem) 0 15rem;
+  background:
+    radial-gradient(ellipse at 76% 28%, rgba(236, 193, 119, 0.28), transparent 38%),
+    linear-gradient(180deg, #ebe6d9 0%, #eee9df 54%, #dcd8cc 100%);
+}
+
+.page .connection > [data-world-for="scene-008"] {
+  inset: -5% -7% 34% 30%;
+}
+
+.page .connection > [data-world-for="scene-010"] {
+  inset: 47% -5% -8% 28%;
+}
+
+.page .compass-moment {
+  right: clamp(2rem, 10vw, 9rem);
+  bottom: -6rem;
+  left: auto;
+  width: clamp(9rem, 13vw, 12rem);
+  opacity: 0.66;
+}
+
+@media (max-width: 900px) {
+  .page .vision {
+    min-height: auto;
+  }
+
+  .page .connection {
+    min-height: 160svh;
+  }
+}
+
+@media (max-width: 520px) {
+  .page .why {
+    min-height: auto;
+    padding: 8rem 1.25rem 10rem;
+  }
+
+  .page .why > .scene-world {
+    inset: 8% -50% 28% 10%;
+  }
+
+  .page .vision {
+    padding: 9rem 1.25rem 10rem;
+  }
+
+  .page .vision > .scene-world {
+    inset: 0 -64% 0 -18%;
+  }
+
+  .page .challenges {
+    min-height: auto;
+    padding-block: 9rem 12rem;
+  }
+
+  .page .challenges > .scene-world {
+    inset: 12% -68% 22% 6%;
+  }
+
+  .page .connection {
+    min-height: 170svh;
+    padding: 10rem 0 13rem;
+  }
+
+  .page .connection > [data-world-for="scene-008"] {
+    inset: 4% -82% 44% 6%;
+  }
+
+  .page .connection > [data-world-for="scene-010"] {
+    inset: 56% -72% -2% -10%;
+  }
+
+  .page .compass-moment {
+    right: 0;
+    bottom: -7rem;
+    left: auto;
+    width: 8rem;
+  }
+}
+
+/* Complete homepage sprint — Scene 004–010 continue the Atlas Studio world. */
+.page {
+  --world-ground: #e4e5dc;
+  --world-ink: #172521;
+  --world-gold: #bd8d46;
+  background:
+    radial-gradient(ellipse at 82% 66%, rgba(239, 211, 163, 0.2), transparent 34%),
+    radial-gradient(ellipse at 18% 48%, rgba(137, 174, 160, 0.16), transparent 38%),
+    var(--world-ground);
+}
+
+.why,
+.vision,
+.challenges,
+.connection {
+  overflow: clip;
+  color: var(--world-ink);
+}
+
+.why {
+  min-height: 108svh;
+  padding: clamp(10rem, 14vw, 14rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  background:
+    radial-gradient(ellipse at 78% 42%, rgba(126, 163, 153, 0.22), transparent 38%),
+    linear-gradient(180deg, #d4d8cf 0%, #e1e2d9 48%, #e8e5db 100%);
+}
+
+.why > .scene-world {
+  inset: -10% -6% -12% 34%;
+  -webkit-mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+}
+
+.why .scene-world__layer--water {
+  inset: 0;
+  opacity: 0.46;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.why .scene-world__layer--water img {
+  object-position: 58% 52%;
+  filter: saturate(0.62) contrast(1.02) brightness(1.04);
+}
+
+.why > .scene-world::after {
+  background:
+    linear-gradient(90deg, #d9ddd4 0 22%, rgba(217, 221, 212, 0.88) 37%, transparent 72%),
+    linear-gradient(180deg, #d4d8cf 0%, transparent 18% 72%, #e8e5db 100%);
+}
+
+.why__intro,
+.why__grid {
+  width: min(100%, 1280px);
+  max-width: none;
+  margin-inline: auto;
+}
+
+.why__intro {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.42fr) minmax(0, 1.58fr);
+  gap: clamp(2rem, 6vw, 7rem);
+  margin-bottom: clamp(7rem, 11vw, 11rem);
+}
+
+.why__intro .section-label {
+  padding-top: 0.75rem;
+  color: rgba(55, 84, 73, 0.7);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.why__title {
+  max-width: 18ch;
+  color: #14231f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.2rem, 6.3vw, 7rem);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.why__lead {
+  grid-column: 2;
+  max-width: 38rem;
+  margin: 1.75rem 0 0;
+  color: rgba(23, 37, 33, 0.68);
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.why__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0 clamp(1.5rem, 3vw, 3.5rem);
+  border: 0;
+}
+
+.why-principle {
+  position: relative;
+  grid-column: span 4;
+  min-height: 15rem;
+  padding: 2rem 0 0;
+  border-top: 1px solid rgba(55, 84, 73, 0.2);
+}
+
+.why-principle:nth-child(2) {
+  transform: translateY(3.5rem);
+}
+
+.why-principle__number {
+  display: block;
+  margin-bottom: 3.5rem;
+  color: #8a6a39;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+}
+
+.why-principle h3 {
+  margin: 0 0 1rem;
+  color: #172521;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.why-principle p {
+  max-width: 20rem;
+  margin: 0;
+  color: rgba(23, 37, 33, 0.66);
+  line-height: 1.75;
+}
+
+.vision {
+  min-height: 150svh;
+  padding: clamp(12rem, 16vw, 17rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  color: #f5f1e7;
+  background: #152429;
+}
+
+.vision > .scene-world {
+  inset: -3%;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+}
+
+.vision .scene-world__layer--space {
+  inset: 0;
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.vision .scene-world__layer--space img {
+  object-position: 54% center;
+  filter: saturate(0.72) contrast(1.04) brightness(0.7);
+}
+
+.vision .scene-world__layer--material {
+  inset: 44% -4% -10% 26%;
+  opacity: 0.12;
+  mix-blend-mode: soft-light;
+}
+
+.vision .scene-world__layer--cartography {
+  inset: 8% 44% 28% -12%;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+}
+
+.vision > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(10, 27, 34, 0.96) 0 24%, rgba(12, 31, 37, 0.72) 44%, rgba(12, 31, 37, 0.08) 76%),
+    linear-gradient(180deg, #182c31 0%, transparent 14% 76%, rgba(20, 38, 42, 0.92) 100%);
+}
+
+.vision__content {
+  width: min(100%, 1280px);
+  max-width: none;
+  margin-inline: auto;
+}
+
+.vision__intro {
+  width: min(44rem, 52%);
+}
+
+.vision__eyebrow {
+  margin: 0 0 2rem;
+  color: rgba(222, 189, 128, 0.86);
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+}
+
+.vision__title {
+  max-width: 15ch;
+  margin: 0 0 2rem;
+  color: #f8f2e5;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.2rem, 5.8vw, 6.5rem);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.vision__text {
+  max-width: 38rem;
+  margin: 0;
+  color: rgba(239, 240, 230, 0.7);
+  font-size: clamp(1rem, 1.25vw, 1.16rem);
+  line-height: 1.8;
+}
+
+.vision__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 3rem);
+  margin-top: clamp(11rem, 18vw, 19rem);
+  border-top: 1px solid rgba(229, 220, 198, 0.22);
+}
+
+.vision-step {
+  min-height: 17rem;
+  padding: 2rem 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.vision-step__number {
+  position: static;
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-bottom: 3.75rem;
+  place-items: center;
+  border: 1px solid rgba(222, 189, 128, 0.46);
+  border-radius: 50%;
+  background: rgba(10, 28, 34, 0.3);
+  box-shadow: none;
+  color: #e5c27d;
+}
+
+.vision-step h3 {
+  color: #f7f1e4;
+  font-size: clamp(1.3rem, 1.8vw, 1.7rem);
+}
+
+.vision-step p {
+  max-width: 21rem;
+  color: rgba(239, 240, 230, 0.66);
+  line-height: 1.75;
+}
+
+.vision__quote {
+  width: min(52rem, 74%);
+  margin: clamp(7rem, 10vw, 10rem) 0 0 auto;
+  padding-top: 2.5rem;
+  border-top: 1px solid rgba(229, 220, 198, 0.24);
+}
+
+.vision__quote h2 {
+  margin: 0 0 1.5rem;
+  color: #f7f1e4;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.2rem, 4vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.vision__quote p {
+  max-width: 36rem;
+  color: rgba(239, 240, 230, 0.66);
+  line-height: 1.75;
+}
+
+.challenges {
+  min-height: 118svh;
+  padding: clamp(11rem, 15vw, 16rem) 0 clamp(12rem, 16vw, 18rem);
+  background:
+    radial-gradient(ellipse at 76% 36%, rgba(163, 188, 174, 0.28), transparent 42%),
+    linear-gradient(180deg, #d7dcd5 0%, #e4e5dc 56%, #ebe6d9 100%);
+}
+
+.challenges > .scene-world {
+  inset: -8% -6% -10% 38%;
+  -webkit-mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+}
+
+.challenges .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.58;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.challenges .scene-world__layer--horizon img {
+  object-position: 58% center;
+  filter: saturate(0.66) contrast(0.98) brightness(1.04);
+}
+
+.challenges > .scene-world::after {
+  background:
+    linear-gradient(90deg, #d9ddd6 0 28%, rgba(217, 221, 214, 0.82) 47%, transparent 78%),
+    linear-gradient(180deg, #d7dcd5 0%, transparent 18% 78%, #ebe6d9 100%);
+}
+
+.challenges .container {
+  width: min(calc(100% - clamp(4rem, 14vw, 16rem)), 1280px);
+}
+
+.challenges .section-eyebrow,
+.connection .section-eyebrow {
+  color: #85663a;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+}
+
+.challenges .section-title {
+  max-width: 15ch;
+  margin-top: 1.5rem;
+  color: #172521;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.2rem, 6vw, 6.6rem);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.challenges .section-intro {
+  max-width: 34rem;
+  color: rgba(23, 37, 33, 0.66);
+  font-size: 1.08rem;
+  line-height: 1.75;
+}
+
+.challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(1.25rem, 2.5vw, 2.75rem);
+  margin-top: clamp(8rem, 12vw, 12rem);
+  border: 0;
+}
+
+.challenge-card {
+  min-height: 20rem;
+  padding: 2rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(55, 84, 73, 0.2);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.challenge-card:nth-child(even) {
+  transform: translateY(3.5rem);
+}
+
+.challenge-card:hover,
+.challenge-card:nth-child(even):hover {
+  background: transparent;
+  transform: translateY(0.5rem);
+}
+
+.challenge-card span {
+  margin-bottom: 4rem;
+  color: #85663a;
+  font-size: 0.68rem;
+}
+
+.challenge-card h3 {
+  color: #172521;
+  font-size: clamp(1.35rem, 1.9vw, 1.75rem);
+  line-height: 1.18;
+}
+
+.challenge-card p {
+  color: rgba(23, 37, 33, 0.66);
+  line-height: 1.72;
+}
+
+.challenge-card .challenge-outcome {
+  margin-top: 2rem;
+  color: #4f6b5d;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.scene-waypoint-moment {
+  right: 12%;
+  bottom: 18%;
+}
+
+.connection {
+  min-height: 178svh;
+  padding: clamp(13rem, 18vw, 20rem) 0 15rem;
+  background:
+    radial-gradient(ellipse at 76% 28%, rgba(236, 193, 119, 0.28), transparent 38%),
+    linear-gradient(180deg, #ebe6d9 0%, #eee9df 54%, #dcd8cc 100%);
+}
+
+.connection > [data-world-for="scene-008"] {
+  inset: -5% -7% 34% 30%;
+}
+
+.connection [data-world-for="scene-008"] .scene-world__layer--traveler {
+  inset: 0;
+  opacity: 0.66;
+  -webkit-mask-image: radial-gradient(ellipse 76% 72% at 68% 45%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 76% 72% at 68% 45%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+}
+
+.connection [data-world-for="scene-008"] .scene-world__layer--traveler img {
+  object-position: 58% center;
+  filter: saturate(0.7) contrast(1.01) brightness(1.03);
+}
+
+.connection > [data-world-for="scene-008"]::after {
+  background:
+    linear-gradient(90deg, #ebe6d9 0 24%, rgba(235, 230, 217, 0.78) 43%, transparent 78%),
+    linear-gradient(180deg, #ebe6d9 0%, transparent 18% 72%, rgba(238, 233, 223, 0.96) 100%);
+}
+
+.connection > [data-world-for="scene-010"] {
+  inset: 47% -5% -8% 28%;
+}
+
+.connection [data-world-for="scene-010"] .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.56;
+}
+
+.connection [data-world-for="scene-010"] .scene-world__layer--horizon img {
+  object-position: 60% 48%;
+  filter: saturate(0.72) contrast(0.98) brightness(1.04);
+}
+
+.connection > .container {
+  width: min(calc(100% - clamp(4rem, 14vw, 16rem)), 1280px);
+}
+
+.connection .section-title {
+  max-width: 13ch;
+  margin: 1.5rem 0 2rem;
+  color: #172521;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.4rem, 6.4vw, 7rem);
+  font-weight: 400;
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.connection .section-intro {
+  max-width: 38rem;
+  color: rgba(23, 37, 33, 0.68);
+  font-size: clamp(1rem, 1.3vw, 1.16rem);
+  line-height: 1.8;
+}
+
+.connection-message {
+  max-width: 38rem;
+  margin-top: clamp(5rem, 8vw, 8rem);
+  padding-top: 2rem;
+  border-color: rgba(55, 84, 73, 0.2);
+}
+
+.connection-message p {
+  color: rgba(23, 37, 33, 0.66);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.45rem, 2.2vw, 2.15rem);
+  line-height: 1.35;
+}
+
+.connection-message p:last-child {
+  color: #365d4f;
+}
+
+.compass-moment {
+  right: clamp(2rem, 10vw, 9rem);
+  bottom: -6rem;
+  width: clamp(9rem, 13vw, 12rem);
+  opacity: 0.66;
+  background:
+    radial-gradient(circle, rgba(255, 245, 218, 0.26), rgba(184, 138, 69, 0.06) 48%, transparent 70%),
+    repeating-radial-gradient(circle, transparent 0 23%, rgba(132, 94, 38, 0.11) 24% 24.5%, transparent 25% 34%);
+  backdrop-filter: none;
+  mix-blend-mode: multiply;
+}
+
+.next-horizon {
+  width: min(52rem, 72%);
+  margin: clamp(19rem, 32vw, 34rem) 0 0 auto;
+  padding-top: 2.5rem;
+  border-top: 1px solid rgba(55, 84, 73, 0.2);
+}
+
+.next-horizon > p {
+  margin: 0 0 1.25rem;
+  color: #85663a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.next-horizon h3 {
+  max-width: 14ch;
+  margin: 0 0 2.5rem;
+  color: #172521;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.5rem, 4.6vw, 5rem);
+  font-weight: 400;
+  line-height: 1.02;
+}
+
+.next-horizon .button {
+  border-color: rgba(128, 91, 39, 0.34);
+  background: rgba(31, 52, 45, 0.9);
+  color: #f7f0df;
+}
+
+.site-footer {
+  position: absolute;
+  z-index: 6;
+  right: clamp(2rem, 7vw, 8rem);
+  bottom: 3.5rem;
+  left: clamp(2rem, 7vw, 8rem);
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(55, 84, 73, 0.2);
+}
+
+.site-footer .brand {
+  color: #172521;
+}
+
+.site-footer .brand__name {
+  color: rgba(23, 37, 33, 0.6);
+}
+
+.site-footer > p {
+  max-width: 31rem;
+  margin: 0;
+  color: rgba(23, 37, 33, 0.58);
+  line-height: 1.6;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .why__intro {
+    grid-template-columns: 1fr;
+  }
+
+  .why__lead {
+    grid-column: 1;
+  }
+
+  .why-principle {
+    grid-column: span 6;
+  }
+
+  .why-principle:last-child {
+    grid-column: 4 / span 6;
+    margin-top: 4rem;
+  }
+
+  .vision {
+    min-height: auto;
+  }
+
+  .vision__intro {
+    width: min(42rem, 76%);
+  }
+
+  .vision__steps {
+    margin-top: 13rem;
+  }
+
+  .challenge-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .challenge-card:nth-child(even) {
+    transform: translateY(2.5rem);
+  }
+
+  .connection {
+    min-height: 160svh;
+  }
+
+  .next-horizon {
+    width: min(40rem, 78%);
+  }
+}
+
+@media (max-width: 520px) {
+  .why,
+  .vision {
+    padding-inline: 1.25rem;
+  }
+
+  .why {
+    padding-block: 8rem 10rem;
+  }
+
+  .why > .scene-world {
+    inset: 8% -50% 28% 10%;
+    opacity: 0.42;
+  }
+
+  .why__intro {
+    gap: 1.5rem;
+    margin-bottom: 6rem;
+  }
+
+  .why__title {
+    font-size: clamp(2.9rem, 13vw, 4.2rem);
+  }
+
+  .why__grid {
+    display: block;
+  }
+
+  .why-principle,
+  .why-principle:nth-child(2),
+  .why-principle:last-child {
+    min-height: 0;
+    margin: 0 0 4rem;
+    padding-top: 1.5rem;
+    transform: none;
+  }
+
+  .why-principle__number {
+    margin-bottom: 2rem;
+  }
+
+  .vision {
+    padding-block: 9rem 10rem;
+  }
+
+  .vision > .scene-world {
+    inset: 0 -64% 0 -18%;
+  }
+
+  .vision .scene-world__layer--space img {
+    object-position: 68% center;
+    filter: saturate(0.68) contrast(1.04) brightness(0.48);
+  }
+
+  .vision__intro {
+    width: 100%;
+  }
+
+  .vision__title {
+    font-size: clamp(2.9rem, 13vw, 4.3rem);
+  }
+
+  .vision__steps {
+    grid-template-columns: 1fr;
+    gap: 3.5rem;
+    margin-top: 9rem;
+  }
+
+  .vision-step {
+    min-height: 0;
+  }
+
+  .vision-step__number {
+    margin-bottom: 2rem;
+  }
+
+  .vision__quote {
+    width: 100%;
+    margin-top: 7rem;
+  }
+
+  .challenges {
+    padding-block: 9rem 12rem;
+  }
+
+  .challenges .container,
+  .connection > .container {
+    width: calc(100% - 2.5rem);
+  }
+
+  .challenges > .scene-world {
+    inset: 12% -68% 22% 6%;
+    opacity: 0.34;
+  }
+
+  .challenges .section-title,
+  .connection .section-title {
+    font-size: clamp(2.9rem, 13vw, 4.3rem);
+  }
+
+  .challenge-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-top: 7rem;
+  }
+
+  .challenge-card,
+  .challenge-card:nth-child(even) {
+    min-height: 0;
+    margin-bottom: 4rem;
+    transform: none;
+  }
+
+  .challenge-card span {
+    margin-bottom: 2.5rem;
+  }
+
+  .connection {
+    min-height: 170svh;
+    padding: 10rem 0 13rem;
+  }
+
+  .connection > [data-world-for="scene-008"] {
+    inset: 4% -82% 44% 6%;
+    opacity: 0.5;
+  }
+
+  .connection > [data-world-for="scene-010"] {
+    inset: 56% -72% -2% -10%;
+    opacity: 0.44;
+  }
+
+  .connection-message {
+    margin-top: 5rem;
+  }
+
+  .compass-moment {
+    right: 0;
+    bottom: -7rem;
+    left: auto;
+    width: 8rem;
+  }
+
+  .next-horizon {
+    width: 100%;
+    margin-top: 20rem;
+  }
+
+  .site-footer {
+    right: 1.25rem;
+    bottom: 2.5rem;
+    left: 1.25rem;
+    display: block;
+  }
+
+  .site-footer > p {
+    margin-top: 1.5rem;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .why-principle:nth-child(2),
+  .challenge-card:nth-child(even) {
+    transform: none;
+  }
+}
+
+/* Creative Direction Sprint — Atlas Continuous World */
+.page::before {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0 23%,
+    rgba(0, 0, 0, 0.28) 27%,
+    transparent 31% 34%,
+    rgba(0, 0, 0, 0.72) 39%,
+    #000 46% 61%,
+    transparent 67% 70%,
+    #000 77% 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0 23%,
+    rgba(0, 0, 0, 0.28) 27%,
+    transparent 31% 34%,
+    rgba(0, 0, 0, 0.72) 39%,
+    #000 46% 61%,
+    transparent 67% 70%,
+    #000 77% 100%
+  );
+}
+
+/* Hero and Studio overlap like two positions in one camera move. */
+.hero {
+  padding-bottom: clamp(7rem, 13vh, 10rem);
+  overflow: visible;
+}
+
+.hero > .scene-world {
+  bottom: -16svh;
+}
+
+.hero > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(4, 13, 22, 0.92) 0%, rgba(5, 16, 26, 0.72) 28%, rgba(6, 18, 28, 0.24) 49%, transparent 70%),
+    linear-gradient(180deg, rgba(3, 12, 20, 0.28) 0%, transparent 30% 70%, #071722 100%),
+    radial-gradient(ellipse at 42% 18%, rgba(80, 164, 137, 0.12), transparent 32%);
+}
+
+.understand {
+  z-index: 2;
+  margin-top: -12svh;
+  padding-top: calc(clamp(9rem, 14vw, 15rem) + 12svh);
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0,
+      rgba(7, 23, 34, 0.82) 9svh,
+      #0a2029 32%,
+      #18363a 74%,
+      #354c4b 100%
+    );
+}
+
+.understand > .scene-world {
+  inset: -12svh -3% -3%;
+}
+
+.understand .scene-world__layer--space {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.42) 11%, #000 24% 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.42) 11%, #000 24% 100%);
+}
+
+.understand > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(5, 17, 24, 0.94) 0 28%, rgba(6, 20, 27, 0.72) 44%, rgba(7, 22, 28, 0.14) 69%),
+    linear-gradient(180deg, transparent 0, rgba(7, 23, 34, 0.72) 14%, transparent 28% 70%, rgba(53, 76, 75, 0.88) 86%, #354c4b 100%);
+}
+
+/* The studio dissolves into a crossing through mist, not a light divider. */
+.route-transition.scene-crossing {
+  height: clamp(25rem, 38vw, 36rem);
+  margin: -1px 0;
+  background:
+    radial-gradient(ellipse at 32% 46%, rgba(232, 231, 218, 0.26), transparent 38%),
+    linear-gradient(180deg, #354c4b 0%, #6f817c 30%, #c8c6b6 66%, var(--world-ground) 100%);
+}
+
+.scene-crossing > .scene-world {
+  inset: -26% -8% -22%;
+}
+
+.scene-crossing .scene-world__layer--water {
+  opacity: 0.48;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24% 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24% 68%, transparent 100%);
+}
+
+.scene-crossing::after {
+  z-index: 4;
+  background:
+    linear-gradient(180deg, #354c4b 0%, transparent 26% 60%, rgba(240, 230, 210, 0.78) 84%, var(--world-ground) 100%),
+    radial-gradient(ellipse at 70% 56%, rgba(247, 242, 226, 0.32), transparent 48%);
+}
+
+/* Later scenes keep one ground and change only density, material and light. */
+.why {
+  min-height: auto;
+  margin-top: -1px;
+  padding-block: clamp(9rem, 12vw, 12rem) clamp(7rem, 9vw, 9rem);
+}
+
+.why > .scene-world {
+  inset: -16% -12% -20%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0 18%, #000 34%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0 18%, #000 34%, #000 78%, transparent 100%);
+}
+
+.why .scene-world__layer--water {
+  opacity: 0.44;
+  -webkit-mask-image: radial-gradient(ellipse 48% 58% at 78% 48%, #000 0 42%, rgba(0, 0, 0, 0.48) 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse 48% 58% at 78% 48%, #000 0 42%, rgba(0, 0, 0, 0.48) 70%, transparent 100%);
+}
+
+.why > .scene-world::after {
+  background:
+    linear-gradient(180deg, var(--world-ground), transparent 22% 76%, rgba(236, 227, 208, 0.72)),
+    linear-gradient(90deg, var(--world-ground) 0 23%, transparent 62%);
+}
+
+.vision {
+  min-height: auto;
+  margin-top: -1px;
+  padding-block: clamp(10rem, 13vw, 14rem);
+  background:
+    radial-gradient(ellipse at 78% 26%, rgba(122, 144, 128, 0.1), transparent 36%),
+    linear-gradient(180deg, rgba(236, 227, 208, 0.32), transparent 18% 84%, rgba(225, 218, 199, 0.28));
+}
+
+.vision > .scene-world {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0 7%, #000 19%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0 7%, #000 19%, #000 84%, transparent 100%);
+}
+
+.vision .scene-world__layer--material {
+  opacity: 0.2;
+}
+
+.vision .scene-world__layer--cartography {
+  opacity: 0.18;
+}
+
+.vision .scene-world__layer--space {
+  opacity: 0.24;
+}
+
+.vision > .scene-world::after {
+  background:
+    linear-gradient(180deg, rgba(236, 227, 208, 0.72), transparent 18% 82%, rgba(230, 223, 205, 0.7)),
+    linear-gradient(90deg, rgba(240, 230, 210, 0.74) 0 21%, transparent 62%);
+}
+
+.challenges {
+  min-height: auto;
+  margin-top: -1px;
+  padding-block: clamp(10rem, 13vw, 14rem);
+  background:
+    radial-gradient(ellipse at 70% 42%, rgba(131, 157, 143, 0.1), transparent 40%),
+    linear-gradient(180deg, rgba(230, 223, 205, 0.2), transparent 16% 84%, rgba(232, 222, 200, 0.34));
+}
+
+.challenges > .scene-world {
+  inset: -14% -10% -18%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0 16%, #000 30%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0 16%, #000 30%, #000 82%, transparent 100%);
+}
+
+.challenges .scene-world__layer--horizon {
+  opacity: 0.42;
+  -webkit-mask-image: radial-gradient(ellipse 76% 74% at 68% 52%, #000 0 44%, rgba(0, 0, 0, 0.48) 73%, transparent 100%);
+  mask-image: radial-gradient(ellipse 76% 74% at 68% 52%, #000 0 44%, rgba(0, 0, 0, 0.48) 73%, transparent 100%);
+}
+
+.challenges > .scene-world::after {
+  background:
+    linear-gradient(180deg, rgba(230, 223, 205, 0.62), transparent 20% 82%, rgba(232, 222, 200, 0.6)),
+    linear-gradient(90deg, rgba(240, 230, 210, 0.62) 0 18%, transparent 60%);
+}
+
+.connection {
+  margin-top: -1px;
+  background:
+    linear-gradient(180deg, rgba(232, 222, 200, 0.34), transparent 22%),
+    radial-gradient(ellipse at 72% 55%, rgba(228, 181, 112, 0.13), transparent 48%);
+}
+
+.connection > [data-world-for="scene-008"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0 14%, #000 29%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0 14%, #000 29%, #000 86%, transparent 100%);
+}
+
+.connection > [data-world-for="scene-008"]::after {
+  background: linear-gradient(180deg, rgba(232, 222, 200, 0.78), transparent 24% 72%, rgba(240, 230, 210, 0.76));
+}
+
+.compass-moment {
+  opacity: 0.62;
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 0 0 0.55rem rgba(129, 91, 36, 0.035), 0 1.4rem 4rem rgba(77, 59, 31, 0.07);
+}
+
+.why__grid,
+.challenge-grid,
+.connection-message,
+.vision-step {
+  border-color: rgba(64, 87, 70, 0.08);
+}
+
+@media (max-width: 900px) {
+  .understand {
+    margin-top: -8svh;
+    padding-top: calc(9rem + 8svh);
+  }
+
+  .understand > .scene-world {
+    top: -8svh;
+  }
+
+  .route-transition.scene-crossing {
+    height: clamp(22rem, 56vw, 30rem);
+  }
+}
+
+@media (max-width: 520px) {
+  .understand {
+    margin-top: -6svh;
+    padding-top: calc(8rem + 6svh);
+  }
+
+  .understand > .scene-world {
+    top: -6svh;
+  }
+
+  .route-transition.scene-crossing {
+    height: 22rem;
+  }
+
+  .hero > .scene-world {
+    bottom: -10svh;
+  }
+
+  .why,
+  .vision,
+  .challenges {
+    padding-block: 8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page::before,
+  .scene-world__layer,
+  .compass-moment__needle,
+  .scene-waypoint {
+    animation: none !important;
+    transition: none !important;
+    transform: none;
+  }
+
+  .compass-moment__needle {
+    transform: translateX(-50%) rotate(31deg);
+  }
+}
+
+/* Visual correction sprint — Scene 001 and Scene 002 */
+.page::before {
+  z-index: 3;
+  opacity: 0.9;
+  mix-blend-mode: normal;
+  filter: drop-shadow(0 0 0.55rem rgba(231, 188, 111, 0.24));
+  animation: none;
+}
+
+.page > .site-header,
+.atlas-scene > :not(.scene-world) {
+  position: relative;
+  z-index: 4;
+}
+
+.page > .site-header {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 50%;
+  color: #f7f1e7;
+  transform: translateX(-50%);
+}
+
+.site-header .brand__name,
+.site-nav a {
+  color: rgba(247, 241, 231, 0.72);
+}
+
+.site-header__cta {
+  border-color: rgba(233, 198, 133, 0.42);
+  color: #f8ead1;
+  background: rgba(5, 17, 28, 0.32);
+  backdrop-filter: blur(12px);
+}
+
+/* Scene 001 — cinematic night, aurora and first light. */
+.hero {
+  width: 100%;
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  margin: 0;
+  padding: clamp(8.5rem, 15vh, 11rem) clamp(2rem, 7vw, 8rem) clamp(5rem, 10vh, 7rem);
+  overflow: hidden;
+  color: #f7f1e7;
+  background: #07131f;
+}
+
+.hero::before {
+  content: none;
+}
+
+.hero > .scene-world {
+  z-index: -1;
+  inset: 0;
+}
+
+.hero > .scene-world .scene-world__layer--horizon {
+  z-index: 0;
+  inset: 0;
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.hero > .scene-world .scene-world__layer--horizon img {
+  object-position: 58% 52%;
+  filter: saturate(0.88) contrast(1.12) brightness(0.83);
+  transform: scale(1.025);
+}
+
+.hero > .scene-world .scene-world__layer--atmosphere {
+  z-index: 1;
+  inset: -10% 34% 5% -12%;
+  opacity: 0.94;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(ellipse 68% 72% at 46% 42%, #000 0 44%, rgba(0, 0, 0, 0.7) 67%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 72% at 46% 42%, #000 0 44%, rgba(0, 0, 0, 0.7) 67%, transparent 100%);
+}
+
+.hero > .scene-world .scene-world__layer--atmosphere img {
+  object-position: 58% 40%;
+  filter: saturate(1.35) contrast(1.08) brightness(0.92);
+}
+
+.hero > .scene-world::before,
+.hero > .scene-world::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero > .scene-world::before {
+  z-index: 2;
+  inset: 34% -8% -10% 14%;
+  background: url("../assets/atlas-world.svg") 62% 54% / 118% auto no-repeat;
+  opacity: 0.3;
+  mix-blend-mode: screen;
+  transform: perspective(900px) rotateX(58deg) scale(1.18);
+  transform-origin: center bottom;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 34%, #000 82%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 34%, #000 82%, transparent);
+}
+
+.hero > .scene-world::after {
+  z-index: 3;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(4, 14, 25, 0.94) 0%, rgba(4, 16, 28, 0.72) 31%, rgba(5, 18, 29, 0.2) 58%, rgba(10, 20, 29, 0.04) 78%),
+    linear-gradient(180deg, rgba(2, 11, 20, 0.48) 0%, transparent 32%, transparent 67%, rgba(5, 18, 27, 0.78) 100%),
+    radial-gradient(ellipse at 27% 18%, rgba(72, 185, 147, 0.2), transparent 31%),
+    radial-gradient(circle at 84% 43%, rgba(236, 175, 86, 0.28), transparent 22%);
+}
+
+.hero__content {
+  max-width: min(46rem, 58vw);
+  text-shadow: 0 0.2rem 2.2rem rgba(0, 8, 16, 0.44);
+}
+
+.hero .route-label {
+  margin-bottom: clamp(2.4rem, 5vh, 4rem);
+  color: rgba(241, 207, 145, 0.82);
+}
+
+.hero .route-label span {
+  border-color: rgba(230, 190, 116, 0.46);
+}
+
+.hero__eyebrow {
+  color: rgba(166, 213, 195, 0.84);
+}
+
+.hero__title {
+  max-width: 9.5ch;
+  color: #fffaf0;
+  font-size: clamp(4rem, 7.1vw, 7.8rem);
+  line-height: 0.92;
+  text-wrap: balance;
+}
+
+.hero__text {
+  max-width: 25rem;
+  margin: clamp(2rem, 4vh, 3.2rem) 0 0;
+  color: rgba(244, 238, 224, 0.72);
+  font-size: clamp(0.95rem, 1.15vw, 1.08rem);
+}
+
+.hero__step {
+  margin: clamp(2rem, 4vh, 3rem) 0 0;
+  color: rgba(245, 218, 167, 0.88);
+}
+
+.hero__step i {
+  background: linear-gradient(90deg, rgba(221, 177, 98, 0.28), #deb46d);
+}
+
+.hero__step i::after {
+  border-color: #e1b76f;
+  background: #0b2030;
+  box-shadow: 0 0 1rem rgba(225, 183, 111, 0.65);
+}
+
+/* Scene 002 — the same valley closes in and becomes orientation. */
+.understand {
+  min-height: 116svh;
+  padding-block: clamp(9rem, 14vw, 15rem) clamp(13rem, 17vw, 19rem);
+  color: #edf1e8;
+  background:
+    linear-gradient(180deg, #071722 0%, #0b2530 34%, #12343a 72%, #d8d8c8 100%);
+}
+
+.understand > .scene-world {
+  z-index: -1;
+  inset: -8% -6% -4%;
+}
+
+.understand .scene-world__layer--atmosphere {
+  inset: -4% 16% 24% -20%;
+  opacity: 0.64;
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(120deg, #000 0 35%, rgba(0, 0, 0, 0.5) 64%, transparent 88%);
+  mask-image: linear-gradient(120deg, #000 0 35%, rgba(0, 0, 0, 0.5) 64%, transparent 88%);
+}
+
+.understand .scene-world__layer--forest {
+  inset: 0;
+  opacity: 0.92;
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.22), #000 40% 100%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.22), #000 40% 100%);
+}
+
+.understand .scene-world__layer--forest img {
+  object-position: 72% 54%;
+  filter: saturate(0.78) contrast(1.16) brightness(0.58);
+  transform: scale(1.08);
+}
+
+.understand > .scene-world::before,
+.understand > .scene-world::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.understand > .scene-world::before {
+  z-index: 2;
+  inset: 18% -12% -8% 26%;
+  background: url("../assets/atlas-world.svg") 72% 50% / 112% auto no-repeat;
+  opacity: 0.32;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(ellipse 70% 68% at 68% 54%, #000 0 52%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 68% at 68% 54%, #000 0 52%, transparent 100%);
+}
+
+.understand > .scene-world::after {
+  z-index: 3;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(6, 22, 31, 0.94) 0 28%, rgba(8, 28, 38, 0.66) 48%, rgba(7, 24, 33, 0.2) 76%),
+    linear-gradient(180deg, #071722 0%, transparent 18% 68%, var(--world-ground) 100%),
+    radial-gradient(circle at 78% 48%, rgba(87, 167, 144, 0.22), transparent 28%);
+}
+
+.understand__inner {
+  position: relative;
+}
+
+.understand__intro {
+  grid-template-columns: minmax(8rem, 0.36fr) minmax(0, 1.25fr);
+}
+
+.understand__label {
+  color: rgba(195, 220, 205, 0.72);
+}
+
+.understand__label span {
+  border-color: rgba(222, 182, 108, 0.48);
+  color: #e2bd78;
+  background: rgba(4, 18, 26, 0.3);
+}
+
+.understand__title {
+  max-width: 17ch;
+  color: #f5f1e7;
+  font-size: clamp(2.7rem, 4.7vw, 5.2rem);
+  text-shadow: 0 0.2rem 2.2rem rgba(0, 8, 14, 0.42);
+}
+
+.understand__experience {
+  margin-top: clamp(5rem, 9vw, 9rem);
+}
+
+.understand__thoughts {
+  max-width: 31rem;
+}
+
+.understand__thoughts p {
+  border-color: rgba(192, 218, 207, 0.16);
+  color: rgba(234, 239, 229, 0.72);
+}
+
+.understand__realisation span {
+  color: rgba(229, 235, 224, 0.56);
+}
+
+.understand__realisation strong {
+  color: #e2bd78;
+}
+
+.understand__belief {
+  border-color: rgba(211, 225, 213, 0.18);
+}
+
+.understand__belief p {
+  color: rgba(232, 237, 226, 0.7);
+}
+
+.understand__belief strong {
+  color: #f7f0df;
+}
+
+.orientation-waypoint {
+  position: absolute;
+  right: clamp(1rem, 6vw, 7rem);
+  bottom: clamp(-9rem, -7vw, -4rem);
+  width: clamp(9rem, 14vw, 13rem);
+  aspect-ratio: 1;
+  color: #e1b66c;
+}
+
+.orientation-waypoint__ring,
+.orientation-waypoint__axis {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+}
+
+.orientation-waypoint__ring {
+  width: 38%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(225, 182, 108, 0.82);
+  border-radius: 50%;
+  background: radial-gradient(circle, #f1cf8e 0 6%, transparent 8%);
+  box-shadow: 0 0 0 1.25rem rgba(221, 177, 97, 0.06), 0 0 2.5rem rgba(107, 201, 172, 0.2);
+}
+
+.orientation-waypoint__axis {
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(90deg, transparent 49.7%, rgba(222, 181, 108, 0.28) 50%, transparent 50.3%),
+    linear-gradient(0deg, transparent 49.7%, rgba(222, 181, 108, 0.28) 50%, transparent 50.3%);
+}
+
+.orientation-waypoint__label {
+  position: absolute;
+  top: 52%;
+  left: 68%;
+  width: max-content;
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+}
+
+@media (max-width: 900px) {
+  .site-header { width: min(calc(100% - 2.5rem), 1540px); }
+
+  .hero {
+    width: 100%;
+    min-height: 100svh;
+    padding: 8rem 1.5rem 4rem;
+  }
+
+  .hero__content { max-width: min(42rem, 76vw); }
+  .hero__title { font-size: clamp(4rem, 12vw, 7rem); }
+  .hero__text,
+  .hero__step { margin-left: 0; }
+
+  .understand { min-height: 118svh; padding-inline: 2rem; }
+  .understand__intro { grid-template-columns: 1fr; }
+  .understand__experience { grid-template-columns: 1fr 1.15fr; gap: 3rem; }
+}
+
+@media (max-width: 520px) {
+  .page::before {
+    background-size: auto 100%;
+    background-position: 42% top;
+    opacity: 0.78;
+  }
+
+  .hero {
+    min-height: 100svh;
+    align-items: end;
+    padding: 8rem 1.25rem 4.5rem;
+  }
+
+  .hero > .scene-world { inset: 0; }
+  .hero > .scene-world .scene-world__layer--horizon { opacity: 1; }
+  .hero > .scene-world .scene-world__layer--horizon img { object-position: 45% 50%; }
+  .hero > .scene-world .scene-world__layer--atmosphere { inset: -5% 5% 28% -54%; opacity: 0.56; }
+  .hero > .scene-world::before { inset: 42% -52% -14% -2%; opacity: 0.22; }
+  .hero > .scene-world::after {
+    background:
+      linear-gradient(180deg, rgba(3, 13, 23, 0.42), transparent 26%, rgba(4, 16, 27, 0.18) 48%, rgba(4, 15, 25, 0.94) 100%),
+      linear-gradient(90deg, rgba(4, 14, 25, 0.72), transparent 82%);
+  }
+
+  .hero__content { max-width: 100%; }
+  .hero .route-label { margin-bottom: 1.8rem; }
+  .hero__title { max-width: 8.8ch; font-size: clamp(3.5rem, 17vw, 5rem); }
+  .hero__text { margin-top: 1.6rem; line-height: 1.6; }
+  .hero__step { margin-top: 1.8rem; }
+
+  .understand {
+    min-height: auto;
+    padding: 8rem 1.25rem 13rem;
+  }
+
+  .understand .scene-world__layer--atmosphere { inset: -2% -38% 54% -38%; opacity: 0.48; }
+  .understand .scene-world__layer--forest { inset: 0 -36% 0 -10%; opacity: 0.88; }
+  .understand .scene-world__layer--forest img { object-position: 70% center; }
+  .understand > .scene-world::before { inset: 24% -50% 8% -2%; opacity: 0.24; }
+  .understand > .scene-world::after {
+    background:
+      linear-gradient(90deg, rgba(6, 22, 31, 0.88), rgba(7, 25, 34, 0.38)),
+      linear-gradient(180deg, #071722 0%, transparent 18% 72%, var(--world-ground) 100%);
+  }
+
+  .understand__experience { grid-template-columns: 1fr; gap: 4.5rem; }
+  .understand__title { font-size: clamp(2.6rem, 12vw, 4rem); }
+  .understand__belief { grid-template-columns: 1fr; }
+
+  .orientation-waypoint {
+    right: 1rem;
+    bottom: -9rem;
+    width: 8.5rem;
+  }
+
+  .orientation-waypoint__label { left: auto; right: 62%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero > .scene-world::before,
+  .hero > .scene-world .scene-world__layer--horizon img,
+  .understand .scene-world__layer--forest img {
+    animation: none !important;
+    transform: none;
+  }
+}
+
+/* Creative Direction Sprint — Atlas Studio */
+.page::before {
+  opacity: 0.72;
+  filter: drop-shadow(0 0 0.3rem rgba(231, 188, 111, 0.16));
+}
+
+.hero > .scene-world .scene-world__layer--horizon img {
+  object-position: 50% 52%;
+  filter: saturate(0.76) contrast(1.06) brightness(0.86);
+  transform: scale(1.012);
+}
+
+.hero > .scene-world .scene-world__layer--atmosphere {
+  inset: -18% 48% 16% -22%;
+  opacity: 0.28;
+  mix-blend-mode: screen;
+}
+
+.hero > .scene-world .scene-world__layer--atmosphere img {
+  filter: saturate(0.92) contrast(1.02) brightness(0.68);
+}
+
+.hero > .scene-world::before {
+  inset: 38% -4% -12% 18%;
+  opacity: 0.22;
+}
+
+.hero > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(4, 13, 22, 0.92) 0%, rgba(5, 16, 26, 0.72) 28%, rgba(6, 18, 28, 0.24) 49%, transparent 70%),
+    linear-gradient(180deg, rgba(3, 12, 20, 0.28) 0%, transparent 30% 70%, rgba(4, 15, 24, 0.68) 100%),
+    radial-gradient(ellipse at 42% 18%, rgba(80, 164, 137, 0.12), transparent 32%);
+}
+
+.hero__content {
+  max-width: min(39rem, 48vw);
+}
+
+.hero__title {
+  max-width: 9.8ch;
+  font-size: clamp(3.8rem, 6.2vw, 7rem);
+  line-height: 0.94;
+}
+
+.hero__text {
+  max-width: 30rem;
+}
+
+.understand {
+  min-height: 124svh;
+  padding-inline: clamp(2rem, 7vw, 8rem);
+  background:
+    linear-gradient(180deg, #071722 0%, #0a2029 42%, #18363a 76%, var(--world-ground) 100%);
+}
+
+.understand > .scene-world {
+  inset: -3% -3% -3%;
+}
+
+.understand .scene-world__layer--space {
+  z-index: 0;
+  inset: 0;
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.understand .scene-world__layer--space img {
+  object-position: 54% 50%;
+  filter: saturate(0.72) contrast(1.07) brightness(0.72);
+  transform: scale(1.025);
+}
+
+.understand .scene-world__layer--atmosphere {
+  z-index: 1;
+  inset: -12% 56% 34% -24%;
+  opacity: 0.2;
+  mix-blend-mode: screen;
+}
+
+.understand > .scene-world::before {
+  z-index: 2;
+  inset: 30% -12% -10% 28%;
+  opacity: 0.2;
+}
+
+.understand > .scene-world::after {
+  z-index: 3;
+  background:
+    linear-gradient(90deg, rgba(5, 17, 24, 0.94) 0 28%, rgba(6, 20, 27, 0.72) 44%, rgba(7, 22, 28, 0.14) 69%),
+    linear-gradient(180deg, #071722 0%, transparent 17% 72%, var(--world-ground) 100%);
+}
+
+.understand__intro,
+.understand__experience {
+  width: min(42rem, 46vw);
+}
+
+.understand__intro {
+  display: block;
+}
+
+.understand__label {
+  margin: 0 0 2rem;
+}
+
+.understand__title {
+  max-width: 13ch;
+  font-size: clamp(2.8rem, 4.4vw, 4.9rem);
+  line-height: 1;
+}
+
+.understand__experience {
+  display: block;
+  margin-top: clamp(4rem, 7vw, 7rem);
+}
+
+.understand__thoughts {
+  max-width: 29rem;
+}
+
+.understand__thoughts p {
+  padding: 0.8rem 0;
+  font-size: clamp(0.98rem, 1.25vw, 1.14rem);
+}
+
+.understand__insight {
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+.understand__realisation {
+  font-size: clamp(1.7rem, 2.6vw, 2.7rem);
+}
+
+.understand__belief {
+  gap: 1.75rem;
+  margin-top: clamp(2.5rem, 4vw, 4rem);
+}
+
+.orientation-waypoint {
+  right: clamp(2rem, 8vw, 9rem);
+  bottom: clamp(-8rem, -6vw, -4rem);
+}
+
+@media (max-width: 900px) {
+  .hero__content { max-width: min(39rem, 70vw); }
+
+  .understand__intro,
+  .understand__experience {
+    width: min(38rem, 62vw);
+  }
+}
+
+@media (max-width: 520px) {
+  .hero > .scene-world .scene-world__layer--horizon img {
+    object-position: 72% 50%;
+  }
+
+  .hero > .scene-world .scene-world__layer--atmosphere {
+    inset: -8% 22% 42% -58%;
+    opacity: 0.2;
+  }
+
+  .hero > .scene-world::after {
+    background:
+      linear-gradient(180deg, rgba(3, 12, 20, 0.36), transparent 24%, rgba(3, 13, 21, 0.18) 44%, rgba(4, 15, 24, 0.96) 100%),
+      linear-gradient(90deg, rgba(4, 14, 23, 0.64), transparent 90%);
+  }
+
+  .hero__content { max-width: 100%; }
+  .hero__title { max-width: 8.5ch; font-size: clamp(3.25rem, 15.6vw, 4.8rem); }
+
+  .understand {
+    padding-inline: 1.25rem;
+  }
+
+  .understand .scene-world__layer--space img {
+    object-position: 61% center;
+    filter: saturate(0.68) contrast(1.06) brightness(0.58);
+  }
+
+  .understand > .scene-world::after {
+    background:
+      linear-gradient(90deg, rgba(5, 18, 25, 0.88), rgba(6, 21, 28, 0.44)),
+      linear-gradient(180deg, #071722 0%, transparent 18% 73%, var(--world-ground) 100%);
+  }
+
+  .understand__intro,
+  .understand__experience {
+    width: 100%;
+  }
+
+  .understand__title {
+    max-width: 12ch;
+    font-size: clamp(2.5rem, 11.5vw, 3.8rem);
+  }
+}
+
+/* Continuous World — atmospheric overlaps hide the remaining section seams. */
+.page::before {
+  z-index: 5;
+}
+
+.atlas-scene > :not(.scene-world) {
+  z-index: 6;
+}
+
+.page > .site-header {
+  z-index: 7;
+}
+
+.hero::after,
+.understand::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  pointer-events: none;
+}
+
+.hero {
+  z-index: 3;
+  overflow: visible;
+}
+
+.hero::after {
+  bottom: -6rem;
+  height: clamp(16rem, 32svh, 22rem);
+  background: linear-gradient(180deg, transparent, rgba(7, 23, 34, 0.72) 48%, #071722 78% 100%);
+}
+
+.understand::after {
+  height: clamp(8rem, 16vw, 13rem);
+  background: linear-gradient(180deg, transparent, rgba(53, 76, 75, 0.72) 64%, #354c4b 100%);
+}
+
+.understand::before {
+  content: "" !important;
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: clamp(12rem, 24svh, 18rem);
+  border-radius: 0;
+  background: linear-gradient(180deg, #071722 0 12%, rgba(7, 23, 34, 0.88) 38%, transparent 100%);
+  opacity: 1;
+  filter: none;
+  pointer-events: none;
+}
+
+.scene-crossing::after {
+  box-shadow: 0 4rem 7rem var(--world-ground);
+}
+
+.why::before,
+.vision::before,
+.challenges::before,
+.connection::before {
+  content: "" !important;
+  position: absolute;
+  z-index: 3;
+  top: -6rem;
+  left: -4%;
+  width: 108%;
+  height: 12rem;
+  border-radius: 0;
+  opacity: 1;
+  filter: blur(1.15rem);
+  pointer-events: none;
+}
+
+.why::before {
+  background: linear-gradient(180deg, transparent, var(--world-ground) 46% 62%, transparent);
+}
+
+.vision::before {
+  background: linear-gradient(180deg, transparent, rgba(236, 227, 208, 0.94) 46% 62%, transparent);
+}
+
+.challenges::before {
+  background: linear-gradient(180deg, transparent, rgba(230, 223, 205, 0.92) 46% 62%, transparent);
+}
+
+.connection::before {
+  background: linear-gradient(180deg, transparent, rgba(232, 222, 200, 0.9) 46% 62%, transparent);
+}
+
+@media (max-width: 520px) {
+  .hero::after {
+    bottom: -4rem;
+    height: 13rem;
+  }
+
+  .understand::after {
+    height: 8rem;
+  }
+
+  .understand::before {
+    height: 11rem;
+  }
+
+  .why::before,
+  .vision::before,
+  .challenges::before,
+  .connection::before {
+    top: -4rem;
+    height: 8rem;
+    filter: blur(0.85rem);
+  }
+}
+
+/* Homepage completion — final cascade authority. */
+.page .why {
+  min-height: 108svh;
+  padding: clamp(10rem, 14vw, 14rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  background: radial-gradient(ellipse at 78% 42%, rgba(126, 163, 153, 0.22), transparent 38%), linear-gradient(180deg, #d4d8cf 0%, #e1e2d9 48%, #e8e5db 100%);
+}
+
+.page .why > .scene-world {
+  inset: -10% -6% -12% 34%;
+  -webkit-mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 62% at 66% 46%, #000 0 54%, rgba(0, 0, 0, 0.5) 76%, transparent 100%);
+}
+
+.page .why .scene-world__layer--water {
+  inset: 0;
+  opacity: 0.46;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .vision {
+  min-height: 150svh;
+  padding: clamp(12rem, 16vw, 17rem) clamp(2rem, 7vw, 8rem) clamp(11rem, 15vw, 16rem);
+  color: #f5f1e7;
+  background: #152429;
+}
+
+.page .vision > .scene-world {
+  inset: -3%;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 11%, #000 88%, transparent 100%);
+}
+
+.page .vision .scene-world__layer--space {
+  inset: 0;
+  display: block;
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .vision > .scene-world::after {
+  background: linear-gradient(90deg, rgba(10, 27, 34, 0.96) 0 24%, rgba(12, 31, 37, 0.72) 44%, rgba(12, 31, 37, 0.08) 76%), linear-gradient(180deg, #182c31 0%, transparent 14% 76%, rgba(20, 38, 42, 0.92) 100%);
+}
+
+.page .challenges {
+  min-height: 118svh;
+  padding: clamp(11rem, 15vw, 16rem) 0 clamp(12rem, 16vw, 18rem);
+  background: radial-gradient(ellipse at 76% 36%, rgba(163, 188, 174, 0.28), transparent 42%), linear-gradient(180deg, #d7dcd5 0%, #e4e5dc 56%, #ebe6d9 100%);
+}
+
+.page .challenges > .scene-world {
+  inset: -8% -6% -10% 38%;
+  -webkit-mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 76% at 68% 48%, #000 0 54%, rgba(0, 0, 0, 0.48) 76%, transparent 100%);
+}
+
+.page .challenges .scene-world__layer--horizon {
+  inset: 0;
+  opacity: 0.58;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .connection {
+  min-height: 178svh;
+  padding: clamp(13rem, 18vw, 20rem) 0 15rem;
+  background: radial-gradient(ellipse at 76% 28%, rgba(236, 193, 119, 0.28), transparent 38%), linear-gradient(180deg, #ebe6d9 0%, #eee9df 54%, #dcd8cc 100%);
+}
+
+.page .connection > [data-world-for="scene-008"] { inset: -5% -7% 34% 30%; }
+.page .connection > [data-world-for="scene-010"] { inset: 47% -5% -8% 28%; }
+
+.page .compass-moment {
+  right: clamp(2rem, 10vw, 9rem);
+  bottom: -6rem;
+  left: auto;
+  width: clamp(9rem, 13vw, 12rem);
+  opacity: 0.66;
+}
+
+@media (max-width: 900px) {
+  .page .vision { min-height: auto; }
+  .page .connection { min-height: 160svh; }
+}
+
+@media (max-width: 520px) {
+  .page .why { min-height: auto; padding: 8rem 1.25rem 10rem; }
+  .page .why > .scene-world { inset: 8% -50% 28% 10%; }
+  .page .vision { padding: 9rem 1.25rem 10rem; }
+  .page .vision > .scene-world { inset: 0 -64% 0 -18%; }
+  .page .challenges { min-height: auto; padding-block: 9rem 12rem; }
+  .page .challenges > .scene-world { inset: 12% -68% 22% 6%; }
+  .page .connection { min-height: 170svh; padding: 10rem 0 13rem; }
+  .page .connection > [data-world-for="scene-008"] { inset: 4% -82% 44% 6%; }
+  .page .connection > [data-world-for="scene-010"] { inset: 56% -72% -2% -10%; }
+  .page .compass-moment { right: 0; bottom: -7rem; left: auto; width: 8rem; }
+}
+
+.page .vision::before,
+.page .challenges::before {
+  content: "" !important;
+  position: absolute;
+  z-index: 3;
+  right: -4%;
+  left: -4%;
+  width: 108%;
+  border-radius: 0;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.page .vision::before {
+  top: -10rem;
+  height: 20rem;
+  background: linear-gradient(180deg, rgba(232, 229, 219, 0.96), rgba(21, 36, 41, 0.72) 58%, transparent);
+  filter: blur(1.8rem);
+}
+
+.page .challenges::before {
+  top: -20rem;
+  height: 40rem;
+  background: linear-gradient(180deg, rgba(21, 36, 41, 0.98), rgba(69, 87, 82, 0.66) 34%, rgba(167, 178, 170, 0.42) 63%, transparent 88%);
+  filter: blur(3rem);
+}
+
+.page .site-footer {
+  position: absolute;
+  right: clamp(2rem, 7vw, 8rem);
+  bottom: 3.5rem;
+  left: clamp(2rem, 7vw, 8rem);
+  width: auto;
+}
+
+.page .connection > .container {
+  margin-inline: auto;
+}
+
+@media (max-width: 520px) {
+  .page .vision::before {
+    top: -6rem;
+    height: 12rem;
+  }
+
+  .page .challenges::before {
+    top: -10rem;
+    height: 20rem;
+  }
+
+  .page .site-footer {
+    right: 1.25rem;
+    bottom: 2.5rem;
+    left: 1.25rem;
+  }
+}
+
+.page .vision,
+.page .challenges {
+  overflow: visible;
+}
+
+.page .challenges {
+  margin-top: -18rem;
+  padding-top: calc(clamp(11rem, 15vw, 16rem) + 18rem);
+  background: linear-gradient(180deg, transparent 0, rgba(139, 154, 147, 0.44) 8rem, #d7dcd5 18rem, #e4e5dc 58%, #ebe6d9 100%);
+}
+
+.page .challenges::before {
+  content: none !important;
+}
+
+@media (max-width: 520px) {
+  .page .challenges {
+    margin-top: -10rem;
+    padding-top: 19rem;
+    background: linear-gradient(180deg, transparent 0, rgba(139, 154, 147, 0.42) 4rem, #d7dcd5 10rem, #e4e5dc 58%, #ebe6d9 100%);
+  }
+}
+
+/* Sprint 2 — Route 03 visual refinement. Scope: Scene 004 only. */
+.page .why {
+  min-height: 112svh;
+  margin-top: -1px;
+  padding-block: clamp(10rem, 13vw, 14rem) clamp(9rem, 12vw, 12rem);
+  background:
+    radial-gradient(ellipse at 78% 36%, rgba(255, 247, 228, 0.46), transparent 34%),
+    radial-gradient(ellipse at 18% 68%, rgba(126, 157, 141, 0.12), transparent 32%),
+    linear-gradient(180deg, var(--world-ground) 0%, #e5e6dd 42%, #ece5d8 100%);
+}
+
+.page .why::before {
+  top: -7rem;
+  left: -4%;
+  width: 108%;
+  height: 14rem;
+  background: linear-gradient(180deg, transparent, rgba(228, 229, 220, 0.94) 48% 66%, transparent);
+  filter: blur(1.35rem);
+}
+
+.page .why > .scene-world {
+  inset: -4% -5% -8% 28%;
+  opacity: 1;
+  -webkit-mask-image:
+    linear-gradient(180deg, transparent 0%, #000 13% 82%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.46) 19%, #000 44% 100%);
+  mask-image:
+    linear-gradient(180deg, transparent 0%, #000 13% 82%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.46) 19%, #000 44% 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.page .why .scene-world__layer--space {
+  inset: 0;
+  opacity: 0.96;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page .why .scene-world__layer--space img {
+  object-position: 64% 50%;
+  filter: saturate(0.76) contrast(1.025) brightness(1.035);
+  transform: scale(1.012);
+  animation: routeThreeBreathe 22s ease-in-out infinite alternate;
+}
+
+.page .why > .scene-world::after {
+  background:
+    linear-gradient(90deg, #e3e5dc 0 18%, rgba(227, 229, 220, 0.92) 29%, rgba(227, 229, 220, 0.38) 48%, transparent 70%),
+    linear-gradient(180deg, var(--world-ground) 0%, transparent 18% 74%, #ece5d8 100%),
+    radial-gradient(ellipse at 76% 31%, rgba(255, 248, 231, 0.28), transparent 32%);
+}
+
+.page .why__intro,
+.page .why__grid {
+  position: relative;
+  z-index: 6;
+}
+
+.page .why-principle {
+  border-color: rgba(55, 84, 73, 0.17);
+}
+
+@keyframes routeThreeBreathe {
+  from { transform: scale(1.012) translate3d(0, 0, 0); }
+  to { transform: scale(1.026) translate3d(-0.2%, -0.16%, 0); }
+}
+
+@media (max-width: 900px) {
+  .page .why {
+    min-height: auto;
+  }
+
+  .page .why > .scene-world {
+    inset: 4% -30% 14% 18%;
+    opacity: 0.82;
+  }
+
+  .page .why .scene-world__layer--space img {
+    object-position: 68% center;
+  }
+
+  .page .why > .scene-world::after {
+    background:
+      linear-gradient(90deg, #e3e5dc 0 25%, rgba(227, 229, 220, 0.84) 45%, transparent 78%),
+      linear-gradient(180deg, var(--world-ground) 0%, transparent 17% 70%, #ece5d8 100%);
+  }
+}
+
+@media (max-width: 520px) {
+  .page .why {
+    padding: 8rem 1.25rem 9rem;
+    background:
+      radial-gradient(ellipse at 90% 40%, rgba(255, 247, 228, 0.38), transparent 42%),
+      linear-gradient(180deg, var(--world-ground), #e8e5db 58%, #ece5d8);
+  }
+
+  .page .why > .scene-world {
+    inset: 14% -74% 32% 14%;
+    opacity: 0.66;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18% 76%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 18% 76%, transparent 100%);
+  }
+
+  .page .why .scene-world__layer--space img {
+    object-position: 72% center;
+    filter: saturate(0.7) contrast(1.015) brightness(1.04);
+  }
+
+  .page .why > .scene-world::after {
+    background:
+      linear-gradient(90deg, rgba(229, 230, 221, 0.96) 0 18%, rgba(229, 230, 221, 0.56) 56%, transparent),
+      linear-gradient(180deg, var(--world-ground) 0%, transparent 20% 64%, #ece5d8 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page .why .scene-world__layer--space img {
+    animation: none !important;
+    transform: none;
+  }
+}

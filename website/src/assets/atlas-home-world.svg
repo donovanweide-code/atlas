@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 7200" preserveAspectRatio="none" fill="none">
+  <defs>
+    <linearGradient id="atmosphere" x1="720" y1="0" x2="720" y2="7200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5E9D4" stop-opacity=".16"/>
+      <stop offset=".18" stop-color="#B9D8D3" stop-opacity=".2"/>
+      <stop offset=".38" stop-color="#274B51" stop-opacity=".26"/>
+      <stop offset=".59" stop-color="#A8CFC6" stop-opacity=".18"/>
+      <stop offset=".78" stop-color="#E8C99E" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#F7E8C8" stop-opacity=".12"/>
+    </linearGradient>
+    <linearGradient id="ridgeNight" x1="720" y1="900" x2="720" y2="2850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17383E" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#102B32" stop-opacity=".42"/>
+    </linearGradient>
+    <linearGradient id="ridgeAurora" x1="720" y1="2100" x2="720" y2="4300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#477A79" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#9EC6B9" stop-opacity=".26"/>
+    </linearGradient>
+    <linearGradient id="ridgeWarm" x1="720" y1="4100" x2="720" y2="7100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8BAFA5" stop-opacity=".16"/>
+      <stop offset=".55" stop-color="#D6B888" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#E8D2AB" stop-opacity=".12"/>
+    </linearGradient>
+    <linearGradient id="route" x1="1080" y1="620" x2="1020" y2="6810" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4E827E" stop-opacity=".74"/>
+      <stop offset=".2" stop-color="#557D75" stop-opacity=".38"/>
+      <stop offset=".32" stop-color="#B79A63" stop-opacity=".09"/>
+      <stop offset=".43" stop-color="#B79A63" stop-opacity=".46"/>
+      <stop offset=".7" stop-color="#C3A66B" stop-opacity=".62"/>
+      <stop offset="1" stop-color="#B58C48" stop-opacity=".74"/>
+    </linearGradient>
+    <radialGradient id="dawn">
+      <stop stop-color="#F3D49F" stop-opacity=".58"/>
+      <stop offset=".5" stop-color="#D6C7AB" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#D6C7AB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="river" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#DCEDEA" stop-opacity=".2"/>
+      <stop offset=".48" stop-color="#A8D6D1" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#F4D8A7" stop-opacity=".62"/>
+    </linearGradient>
+    <linearGradient id="auroraVeil" x1="240" y1="180" x2="1130" y2="1680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FD9C0" stop-opacity="0"/>
+      <stop offset=".42" stop-color="#79C9B5" stop-opacity=".22"/>
+      <stop offset=".72" stop-color="#C7D9B9" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#F1D39A" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="blur32" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="32"/>
+    </filter>
+    <filter id="blur64" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="64"/>
+    </filter>
+  </defs>
+
+  <rect width="1440" height="7200" fill="url(#atmosphere)" opacity=".22"/>
+  <path d="M100 60c332 346 255 758 586 1010 222 168 453 101 650 422" stroke="url(#auroraVeil)" stroke-width="190" stroke-linecap="round" filter="url(#blur64)" opacity=".7"/>
+
+  <!-- The first horizon: distant, quiet and open around the hero. -->
+  <ellipse cx="1060" cy="770" rx="500" ry="360" fill="url(#dawn)" filter="url(#blur64)"/>
+  <path d="M0 1150 180 1016l142 76 190-198 176 142 202-268 174 196 154-116 322 250v430H0Z" fill="url(#ridgeNight)" opacity=".34"/>
+  <path d="M0 1340 196 1205l184 96 218-151 206 123 166-114 210 136 260-118v420H0Z" fill="#A7C2B9" opacity=".17"/>
+  <path d="M0 1268c134-47 228-101 343-190 82-63 163-70 243-27 86 47 143 31 220-54 103-113 189-135 279-55 91 82 182 85 355-17v580H0Z" fill="#638B83" opacity=".13"/>
+  <path d="M-120 1390c306-78 543-22 739-18 248 4 448-93 934-178" stroke="#EEF1E6" stroke-opacity=".36" stroke-width="74" filter="url(#blur32)"/>
+  <path d="M-40 1460C260 1340 500 1410 745 1374c234-35 424-173 755-90" stroke="#476E6C" stroke-opacity=".25" stroke-width="2"/>
+  <path d="M-60 1512c304-112 547-41 796-76 232-33 420-159 771-72" stroke="#476E6C" stroke-opacity=".15"/>
+
+  <!-- Route 02: a denser valley with cool depth and suspended mist. -->
+  <ellipse cx="340" cy="2300" rx="560" ry="680" fill="#48787B" fill-opacity=".21" filter="url(#blur64)"/>
+  <ellipse cx="1110" cy="2640" rx="490" ry="520" fill="#8BC1AD" fill-opacity=".16" filter="url(#blur64)"/>
+  <path d="M0 2840 174 2480l172 166 238-416 204 354 213-490 176 382 263-290v1050H0Z" fill="url(#ridgeNight)" opacity=".58"/>
+  <path d="M0 3100 224 2750l186 258 204-310 220 296 166-267 210 308 230-176v610H0Z" fill="url(#ridgeAurora)" opacity=".52"/>
+  <path d="M0 3178c142-112 267-174 374-184 115-11 200 37 299 69 118 38 230 32 326-36 112-80 219-99 441-11v430H0Z" fill="#789B91" opacity=".2"/>
+  <path d="M-120 2842c270-170 466-124 653-70 230 67 441 50 620-111 104-93 217-105 407-34" stroke="#A6CEC0" stroke-opacity=".23" stroke-width="2"/>
+  <path d="M-90 2910c279-157 472-108 659-54 224 65 420 43 602-108 118-98 236-93 421-13" stroke="#A6CEC0" stroke-opacity=".15"/>
+  <path d="M-100 3060c332-105 554 75 824 10 259-62 415-302 792-201" stroke="#D8E2D9" stroke-opacity=".15" stroke-width="55" filter="url(#blur32)"/>
+
+  <!-- Water appears when the mist opens and becomes the natural guide. -->
+  <path d="M846 1850c-94 290-303 410-249 686 48 246 315 287 279 565-35 268-316 405-277 715 30 240 238 326 238 580 0 285-254 480-230 815 21 291 224 424 192 742-22 220-155 369-220 526" stroke="#EAF4EF" stroke-opacity=".2" stroke-width="46" stroke-linecap="round" filter="url(#blur32)"/>
+  <path d="M846 1850c-94 290-303 410-249 686 48 246 315 287 279 565-35 268-316 405-277 715 30 240 238 326 238 580 0 285-254 480-230 815 21 291 224 424 192 742-22 220-155 369-220 526" stroke="url(#river)" stroke-width="13" stroke-linecap="round" opacity=".76"/>
+  <path d="M846 1850c-94 290-303 410-249 686 48 246 315 287 279 565-35 268-316 405-277 715 30 240 238 326 238 580 0 285-254 480-230 815 21 291 224 424 192 742-22 220-155 369-220 526" stroke="#F4F1DE" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- The world opens: longer sightlines and warmer, receding valleys. -->
+  <path d="M0 4200 162 3960l190 143 226-314 199 260 212-385 184 296 267-207v825H0Z" fill="url(#ridgeAurora)" opacity=".4"/>
+  <path d="M0 4550 232 4250l210 210 198-254 235 244 173-210 203 244 189-121v500H0Z" fill="#B6CABD" opacity=".18"/>
+  <path d="M0 4685c166-143 287-211 401-205 103 5 171 71 274 79 115 8 188-65 288-137 123-90 252-99 477-4v510H0Z" fill="#91AA9C" opacity=".16"/>
+  <ellipse cx="1120" cy="4780" rx="640" ry="410" fill="url(#dawn)" filter="url(#blur64)" opacity=".72"/>
+  <path d="M-50 4930c269-127 504-113 711-42 252 86 472 74 829-88" stroke="#6C928A" stroke-opacity=".2" stroke-width="2"/>
+  <path d="M-75 4990c297-118 511-86 722-25 260 75 485 58 884-117" stroke="#6C928A" stroke-opacity=".12"/>
+
+  <!-- Horizon and summit: warm clarity, without becoming a separate scene. -->
+  <path d="M0 5890 178 5690l182 128 230-260 198 236 205-304 185 247 262-176v790H0Z" fill="url(#ridgeWarm)" opacity=".45"/>
+  <path d="M0 6260 215 6040l210 161 225-188 213 188 178-151 210 172 189-106v520H0Z" fill="#D9C5A2" opacity=".2"/>
+  <path d="M0 6440c177-119 329-158 474-99 107 43 207 46 307-9 132-72 263-88 392-27 81 38 159 43 267 2v414H0Z" fill="#CEB98F" opacity=".16"/>
+  <ellipse cx="1000" cy="6320" rx="680" ry="490" fill="url(#dawn)" filter="url(#blur64)" opacity=".85"/>
+  <path d="M-50 6510c318-90 526-24 747-4 244 21 470-13 798-164" stroke="#AE955F" stroke-opacity=".2" stroke-width="2"/>
+  <path d="M-70 6570c316-76 530-8 759 9 255 19 484-23 843-185" stroke="#AE955F" stroke-opacity=".12"/>
+
+  <!-- One route through the full world: visible, lost in mist, then recovered. -->
+  <path d="M1110 610C1012 870 1173 1070 1019 1332 870 1584 596 1703 518 1995c-88 330 240 492 162 824-69 294-348 387-294 724 48 300 346 357 422 650 85 329-212 527-124 856 76 285 384 343 419 654 34 305-231 469-179 760 34 193 175 291 286 404" stroke="#F4E8CE" stroke-opacity=".22" stroke-width="5" filter="url(#blur32)"/>
+  <path d="M1110 610C1012 870 1173 1070 1019 1332 870 1584 596 1703 518 1995c-88 330 240 492 162 824-69 294-348 387-294 724 48 300 346 357 422 650 85 329-212 527-124 856 76 285 384 343 419 654 34 305-231 469-179 760 34 193 175 291 286 404" stroke="url(#route)" stroke-width="1.75" stroke-linecap="round" stroke-dasharray="2 15"/>
+
+  <g stroke="#557E77">
+    <circle cx="1110" cy="610" r="22" stroke-opacity=".18"/>
+    <circle cx="1110" cy="610" r="6" fill="#F3E4C4" fill-opacity=".9" stroke-opacity=".76"/>
+  </g>
+  <g stroke="#B2955D">
+    <circle cx="680" cy="2819" r="24" stroke-opacity=".2"/>
+    <circle cx="680" cy="2819" r="6" fill="#E7D2A9" fill-opacity=".92" stroke-opacity=".7"/>
+    <circle cx="808" cy="4193" r="25" stroke-opacity=".2"/>
+    <circle cx="808" cy="4193" r="6" fill="#F0DCB5" fill-opacity=".92" stroke-opacity=".72"/>
+    <circle cx="1103" cy="5703" r="27" stroke-opacity=".22"/>
+    <circle cx="1103" cy="5703" r="7" fill="#F3DEB5" fill-opacity=".94" stroke-opacity=".76"/>
+  </g>
+</svg>

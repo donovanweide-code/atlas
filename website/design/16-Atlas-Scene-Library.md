@@ -1,0 +1,415 @@
+# Atlas Scene Library
+
+## Gebruik
+
+Iedere scène gebruikt exact dezelfde datastructuur. De library beschrijft de wereld vóór de interface en kan later rechtstreeks als basis voor configuratiegestuurde implementatie dienen.
+
+## Scene 001 — The First Horizon
+
+- **ID:** `scene-001`
+- **Titel:** The First Horizon
+- **Journey phase:** Aankomst
+- **Doel:** Rust en nieuwsgierigheid openen zonder Atlas uit te leggen.
+- **Dominante emotie:** Verwondering
+- **Secundaire emotie:** Veiligheid
+- **Landschap:** Breed merenlandschap met zachte ruggen, niet één dominante berg.
+- **Compositieschaal:** Groot panorama
+- **Camerahoogte:** Menselijk ooghoogte
+- **Horizon:** Laag-midden, ver en warm
+- **Voorgrond:** Zachte mist, steen en randvegetatie
+- **Middengrond:** Water en open terrein
+- **Achtergrond:** Meerdere lichte horizonnen
+- **Licht:** Diffuus ochtendlicht van rechtsvoor
+- **Atmosfeer:** Ochtendmist en groot luchtruim
+- **Water:** Breed, vrijwel stil water
+- **Vegetatie:** Lage grassen en enkele donkere bomen
+- **Architectuur:** Geen
+- **Materialen:** Steen en linnenkleurige atmosfeer
+- **Cartografie:** Nauwelijks zichtbare hoogtelijnen
+- **Reiziger:** Bestaande menselijke hero, observerend en werkend
+- **Menselijke schaal:** Mens aanwezig; wereld loopt ruim buiten beeld
+- **Gouden route:** Ontstaat zacht en onvolledig
+- **Waypoint:** Startpunt, geen bereikt inzicht
+- **Kompasstatus:** Afwezig
+- **Beweging:** Mist en licht ademen langzaam
+- **Detailniveau:** Laag
+- **Visuele dichtheid:** Laag
+- **Tempo:** Ruim en langzaam
+- **Overgang vanaf vorige scène:** Eerste toegang tot de wereld
+- **Overgang naar volgende scène:** Route verdwijnt in koeler, besloten terrein
+- **Interfacefunctie:** Hero en eerste stap
+- **Contentfunctie:** Belofte “Wij geven ideeën richting.”
+- **Toegankelijkheidsaandacht:** Tekstcontrast en stabiel heroportret
+- **Responsive vertaling:** Horizon blijft breed; beeld en copy stapelen zonder verlies van route
+- **Benodigde assets:** Journey panorama, hero.webp, gouden route
+- **Technische implementatienotities:** Hero-landschap als gemaskeerde laag; route als globale SVG
+- **Atlas World Laws-check:** Mens geeft schaal; natuur en horizon leiden; interface blijft kleiner
+
+## Scene 002 — The Hidden Path
+
+- **ID:** `scene-002`
+- **Titel:** The Hidden Path
+- **Journey phase:** Vertraging
+- **Doel:** De bezoeker laten herkennen dat begrip vóór actie komt.
+- **Dominante emotie:** Herkenning
+- **Secundaire emotie:** Nieuwsgierigheid
+- **Landschap:** Beboste waterdoorgang met mos en besloten zicht.
+- **Compositieschaal:** Middel, ingekaderd door natuur
+- **Camerahoogte:** Ooghoogte op het pad
+- **Horizon:** Grotendeels verborgen, licht voelbaar in de verte
+- **Voorgrond:** Donkere rots, mos en takken
+- **Middengrond:** Beek en natuurlijk pad
+- **Achtergrond:** Koele opening en zachte aurora
+- **Licht:** Diffuus licht door mist en bomen
+- **Atmosfeer:** Koele nevel, vochtig en veilig
+- **Water:** Smalle beek als richting
+- **Vegetatie:** Dennen, mos, varens en lage struiken
+- **Architectuur:** Geen
+- **Materialen:** Natte steen en verweerd hout
+- **Cartografie:** Contouren vallen samen met terrein
+- **Reiziger:** Niet zichtbaar; bezoeker neemt camerastandpunt in
+- **Menselijke schaal:** Padbreedte en bomen geven schaal
+- **Gouden route:** Verdwijnt gedeeltelijk in mist
+- **Waypoint:** Afwezig
+- **Kompasstatus:** Afwezig
+- **Beweging:** Waterstroom en lichte mistverschuiving
+- **Detailniveau:** Middel
+- **Visuele dichtheid:** Middel
+- **Tempo:** Vertraagd
+- **Overgang vanaf vorige scène:** Open horizon sluit zich via mist en vegetatie
+- **Overgang naar volgende scène:** Water wordt hoorbaar en krijgt een duidelijke crossing
+- **Interfacefunctie:** Route 02 — herkenning
+- **Contentfunctie:** Begrijpen vóór bouwen
+- **Toegankelijkheidsaandacht:** Koel beeld blijft achter text-safe overlay
+- **Responsive vertaling:** Bos en beek worden verticale zichtlijn rechts van tekst
+- **Benodigde assets:** Forest crossing, auroralandschap, topografie
+- **Technische implementatienotities:** Twee dieptelagen met zachte masks; geen rechthoekige fotokaders
+- **Atlas World Laws-check:** Besloten natuur leidt; content staat in dezelfde wereld
+
+## Scene 003 — The First Crossing
+
+- **ID:** `scene-003`
+- **Titel:** The First Crossing
+- **Journey phase:** Eerste bewuste stap
+- **Doel:** De overgang van herkenning naar handelen voelbaar maken.
+- **Dominante emotie:** Moed
+- **Secundaire emotie:** Helderheid
+- **Landschap:** Beek, kleine waterval en natuurlijke stenen crossing.
+- **Compositieschaal:** Nabij en tactiel
+- **Camerahoogte:** Laag, dicht bij water en steen
+- **Horizon:** Niet zichtbaar; lichtopening geeft richting
+- **Voorgrond:** Natte steen en stromend water
+- **Middengrond:** Crossing en eerste waypoint
+- **Achtergrond:** Bospad dat opent
+- **Licht:** Zacht gereflecteerd waterlicht
+- **Atmosfeer:** Vocht, nevel en koele lucht
+- **Water:** Stromend en gelaagd
+- **Vegetatie:** Mos, varens en dennen
+- **Architectuur:** Natuurlijke of ingetogen stenen oversteek
+- **Materialen:** Steen, hout, water en messingdetail
+- **Cartografie:** Eén schaalmarkering bij het waypoint
+- **Reiziger:** Impliciet, aan de rand van de stap
+- **Menselijke schaal:** Crossing is beloopbaar en nabij
+- **Gouden route:** Kruist het water en duikt achter steen
+- **Waypoint:** Eerste stap bereikt
+- **Kompasstatus:** Afwezig
+- **Beweging:** Stroming; waypoint licht eenmaal zacht op
+- **Detailniveau:** Hoog
+- **Visuele dichtheid:** Middel-hoog
+- **Tempo:** Kort en bewust
+- **Overgang vanaf vorige scène:** Verborgen beek komt op de voorgrond
+- **Overgang naar volgende scène:** Stroming vertraagt en opent naar stil water
+- **Interfacefunctie:** Atmosferische overgang zonder extra navigatie
+- **Contentfunctie:** Verbindt inzicht met een eerste stap
+- **Toegankelijkheidsaandacht:** Decoratieve laag is aria-hidden; geen motion nodig voor betekenis
+- **Responsive vertaling:** Verticale watervallijn blijft naast, niet achter, hoofdtekst
+- **Benodigde assets:** Forest crossing, gouden route, waypoint
+- **Technische implementatienotities:** Bestaande route-transition wordt één scène-overgang zonder tweede routelijn
+- **Atlas World Laws-check:** Natuur vormt de overgang; waypoint heeft inhoudelijke betekenis
+
+## Scene 004 — The Quiet Water
+
+- **ID:** `scene-004`
+- **Titel:** The Quiet Water
+- **Journey phase:** Reflectie
+- **Doel:** Ruimte geven om het eerste inzicht te laten landen.
+- **Dominante emotie:** Rust
+- **Secundaire emotie:** Hoop
+- **Landschap:** Stil meer met zachte reflectie en brede lucht.
+- **Compositieschaal:** Middel-breed
+- **Camerahoogte:** Laag boven waterniveau
+- **Horizon:** Midden, zacht en gelaagd
+- **Voorgrond:** Donkere oever en subtiele rimpeling
+- **Middengrond:** Reflecterend water
+- **Achtergrond:** Ochtendlicht en verre ruggen
+- **Licht:** Warm laag licht weerspiegeld in water
+- **Atmosfeer:** Dunne nevel
+- **Water:** Dominant, stil en reflecterend
+- **Vegetatie:** Schaarse oeverbomen
+- **Architectuur:** Geen
+- **Materialen:** Water, steen en linnenkleur
+- **Cartografie:** Route weerspiegelt als bijna onleesbare lijn
+- **Reiziger:** Afwezig; stilte is dominant
+- **Menselijke schaal:** Oeverdetail en verre bomen
+- **Gouden route:** Slechts als reflectiefragment zichtbaar
+- **Waypoint:** Afwezig
+- **Kompasstatus:** Afwezig
+- **Beweging:** Minimale waterrimpeling en lichtverschuiving
+- **Detailniveau:** Laag
+- **Visuele dichtheid:** Laag
+- **Tempo:** Zeer langzaam
+- **Overgang vanaf vorige scène:** Stromend water wordt stil
+- **Overgang naar volgende scène:** Reflectielijn verandert in gravure op papier
+- **Interfacefunctie:** Ademruimte rond bestaande Waarom-content
+- **Contentfunctie:** Inzicht laten bezinken vóór uitleg
+- **Toegankelijkheidsaandacht:** Geen tekst over donkerste waterdeel
+- **Responsive vertaling:** Water wordt verticale achtergrondlaag met behouden horizon
+- **Benodigde assets:** Quiet water crop
+- **Technische implementatienotities:** Lazy-loaded image met zachte radiale mask
+- **Atlas World Laws-check:** Stilte functioneert; interface vult de ruimte niet op
+
+## Scene 005 — The Living Map
+
+- **ID:** `scene-005`
+- **Titel:** The Living Map
+- **Journey phase:** Verdieping
+- **Doel:** Laten zien hoe losse informatie samenhang krijgt.
+- **Dominante emotie:** Ontdekking
+- **Secundaire emotie:** Begrip
+- **Landschap:** Landschap, kaart en materiaal vloeien samen.
+- **Compositieschaal:** Detail naar middel
+- **Camerahoogte:** Boven materiaal, daarna ooghoogte naar horizon
+- **Horizon:** Eerst gravure, daarna voelbaar als lichtlijn
+- **Voorgrond:** Papier, linnen, steen en messing
+- **Middengrond:** Reliëf en topografische route
+- **Achtergrond:** Licht landschap door een opening
+- **Licht:** Schuine, warme lichtbaan over reliëf
+- **Atmosfeer:** Droog, tactiel en rustig
+- **Water:** Als gegraveerde rivierlijn
+- **Vegetatie:** Alleen als kaarttextuur en verre tuin
+- **Architectuur:** Observatieruimte of tafelrand
+- **Materialen:** Papier, linnen, steen, hout en messing
+- **Cartografie:** Dominant maar fysiek ingebed
+- **Reiziger:** Handeling impliciet; geen zichtbare stockhand
+- **Menselijke schaal:** Object- en tafelmaat
+- **Gouden route:** Wordt leesbaar als gegraveerde lijn
+- **Waypoint:** Eén inzichtmarkering in reliëf
+- **Kompasstatus:** Afwezig
+- **Beweging:** Licht schuift nauwelijks; route onthult statisch of langzaam
+- **Detailniveau:** Hoog
+- **Visuele dichtheid:** Hoog maar lokaal
+- **Tempo:** Onderzoekend
+- **Overgang vanaf vorige scène:** Waterreflectie wordt kaartlijn
+- **Overgang naar volgende scène:** Reliëf groeit uit tot echte vallei
+- **Interfacefunctie:** Bestaande visie en processtappen
+- **Contentfunctie:** Begrip krijgt structuur
+- **Toegankelijkheidsaandacht:** Cartografie blijft decoratief en hindert leesvolgorde niet
+- **Responsive vertaling:** Materiaal als brede strook; kaartdetail verschuift naast tekst
+- **Benodigde assets:** Natural materials, route landscape, observatory space
+- **Technische implementatienotities:** Mix-blend en masks; geen los kaartblok
+- **Atlas World Laws-check:** Cartografie ontstaat uit materiaal en wereld
+
+## Scene 006 — The Valley of Work
+
+- **ID:** `scene-006`
+- **Titel:** The Valley of Work
+- **Journey phase:** Herkenning van complexiteit
+- **Doel:** Verschillende uitdagingen als delen van één landschap tonen.
+- **Dominante emotie:** Herkenning
+- **Secundaire emotie:** Mogelijkheid
+- **Landschap:** Gelaagde vallei met water, bos, open vlakte en meerdere routes.
+- **Compositieschaal:** Groot en gelaagd
+- **Camerahoogte:** Verhoogd maar niet summit-hoog
+- **Horizon:** Warm, nog gedeeltelijk in mist
+- **Voorgrond:** Steen en lage heide
+- **Middengrond:** Verschillende gebieden en rivierbochten
+- **Achtergrond:** Open horizon
+- **Licht:** First Light over delen van de vallei
+- **Atmosfeer:** Mistbanken scheiden gebieden
+- **Water:** Rivier verbindt uitdagingen
+- **Vegetatie:** Bosranden, gras en heide
+- **Architectuur:** Enkele kleine markeringen, geen stad
+- **Materialen:** Steen en aarde
+- **Cartografie:** Contouren volgen werkelijk reliëf
+- **Reiziger:** Niet dominant
+- **Menselijke schaal:** Kleine paden en markeringen
+- **Gouden route:** Eén route door meerdere gebieden
+- **Waypoint:** Nog niet; complexiteit wordt eerst gezien
+- **Kompasstatus:** Afwezig
+- **Beweging:** Mist opent langzaam een zichtlijn
+- **Detailniveau:** Middel
+- **Visuele dichtheid:** Middel-hoog
+- **Tempo:** Verkennend
+- **Overgang vanaf vorige scène:** Kaartreliëf wordt echt terrein
+- **Overgang naar volgende scène:** Eén route wordt helderder dan de alternatieven
+- **Interfacefunctie:** Uitdagingen structureren zonder dashboardcards
+- **Contentfunctie:** Problemen als samenhangend systeem laten herkennen
+- **Toegankelijkheidsaandacht:** Items blijven semantische artikelen met duidelijke focusstijlen
+- **Responsive vertaling:** Vallei wordt langgerekte verticale route; items blijven leesbaar
+- **Benodigde assets:** Horizon landscape, golden route
+- **Technische implementatienotities:** Transparante contentvelden; geen donkere kaarten
+- **Atlas World Laws-check:** Wereld draagt complexiteit; interface wordt geen raster boven het landschap
+
+## Scene 007 — The First Waypoint
+
+- **ID:** `scene-007`
+- **Titel:** The First Waypoint
+- **Journey phase:** Inzicht
+- **Doel:** Markeren dat samenhang en richting zichtbaar zijn geworden.
+- **Dominante emotie:** Helderheid
+- **Secundaire emotie:** Vertrouwen
+- **Landschap:** Open plek in dezelfde vallei.
+- **Compositieschaal:** Klein focal point binnen groot landschap
+- **Camerahoogte:** Ooghoogte
+- **Horizon:** Zichtbaar achter het waypoint
+- **Voorgrond:** Gegraveerde steenmarkering
+- **Middengrond:** Waypoint op route
+- **Achtergrond:** Warme zichtlijn
+- **Licht:** Eén zachte gouden lichtvlek
+- **Atmosfeer:** Mist wijkt lokaal
+- **Water:** Rivier blijft in de verte zichtbaar
+- **Vegetatie:** Lage grassen rond markering
+- **Architectuur:** Kleine stenen route-markering
+- **Materialen:** Steen en messing
+- **Cartografie:** Coördinaat en schaalmarkering, zeer subtiel
+- **Reiziger:** Impliciet nabij
+- **Menselijke schaal:** Markering op kniehoogte
+- **Gouden route:** Duidelijker bij het waypoint, daarna weer zacht
+- **Waypoint:** Inzicht bereikt
+- **Kompasstatus:** Afwezig
+- **Beweging:** Eenmalige rustige lichtpuls
+- **Detailniveau:** Hoog op één punt
+- **Visuele dichtheid:** Laag rondom focal point
+- **Tempo:** Pauze
+- **Overgang vanaf vorige scène:** Meerdere gebieden convergeren visueel
+- **Overgang naar volgende scène:** Route klimt naar open hoogte
+- **Interfacefunctie:** Betekenisvolle scheiding binnen uitdagingen
+- **Contentfunctie:** Van probleemherkenning naar perspectief
+- **Toegankelijkheidsaandacht:** Betekenis is ook tekstueel aanwezig; puls niet noodzakelijk
+- **Responsive vertaling:** Waypoint blijft naast content en minimaal 44px visueel rustig gebied
+- **Benodigde assets:** Golden route, CSS/SVG waypoint
+- **Technische implementatienotities:** Waypoint is onderdeel van globale route, geen tweede lijn
+- **Atlas World Laws-check:** Symbool heeft inhoudelijke reden en blijft ondergeschikt
+
+## Scene 008 — The Ridge of Perspective
+
+- **ID:** `scene-008`
+- **Titel:** The Ridge of Perspective
+- **Journey phase:** Overzicht
+- **Doel:** Na complexiteit opnieuw ruimte en menselijke schaal geven.
+- **Dominante emotie:** Perspectief
+- **Secundaire emotie:** Hoop
+- **Landschap:** Open plateau/heide boven rivierdal.
+- **Compositieschaal:** Groot panorama
+- **Camerahoogte:** Net achter de reiziger
+- **Horizon:** Hoog en zeer ver
+- **Voorgrond:** Pad, heide en reiziger
+- **Middengrond:** Rivierdal en open vlaktes
+- **Achtergrond:** Warme verre horizon
+- **Licht:** Tegenlicht bij gouden uur
+- **Atmosfeer:** Warme luchtlagen
+- **Water:** Rivier als leidende lijn
+- **Vegetatie:** Lage heide, gras en struiken
+- **Architectuur:** Geen
+- **Materialen:** Aarde en steen
+- **Cartografie:** Nauwelijks zichtbaar
+- **Reiziger:** Klein, rug naar camera, vooruitkijkend
+- **Menselijke schaal:** Expliciet schaalanker
+- **Gouden route:** Loopt vanaf reiziger naar verte
+- **Waypoint:** Vorige markering blijft achter
+- **Kompasstatus:** Nog afwezig
+- **Beweging:** Wind in gras en kleding, zeer subtiel
+- **Detailniveau:** Laag
+- **Visuele dichtheid:** Laag
+- **Tempo:** Ruim en langzaam
+- **Overgang vanaf vorige scène:** Route stijgt uit vallei
+- **Overgang naar volgende scène:** Voorgrond wordt tactiel en kompasbaar
+- **Interfacefunctie:** Bestaande connection-intro openen
+- **Contentfunctie:** Bezoeker hoeft oplossing nog niet te kennen
+- **Toegankelijkheidsaandacht:** Reizigersbeeld heeft beschrijvende alt; tekst blijft buiten felste licht
+- **Responsive vertaling:** Reiziger blijft zichtbaar maar klein, horizon centraal
+- **Benodigde assets:** Traveler horizon
+- **Technische implementatienotities:** Lazy loaded, organisch gemaskeerd, geen los portret
+- **Atlas World Laws-check:** Mens geeft schaal en kijkt vooruit; horizon domineert
+
+## Scene 009 — The Compass Moment
+
+- **ID:** `scene-009`
+- **Titel:** The Compass Moment
+- **Journey phase:** Oriëntatie en keuze
+- **Doel:** Het eerste en enige kompas laten verschijnen wanneer keuze logisch voelt.
+- **Dominante emotie:** Vertrouwen
+- **Secundaire emotie:** Focus
+- **Landschap:** Tactiele voorgrond aan rand van open horizon.
+- **Compositieschaal:** Nabij detail in grote wereld
+- **Camerahoogte:** Laag boven gegraveerde steen of kaart
+- **Horizon:** Nog zichtbaar achter of door het detail
+- **Voorgrond:** Messing kompasring en gegraveerde markering
+- **Middengrond:** Reiziger en route
+- **Achtergrond:** Open horizon
+- **Licht:** Schuin warm licht over reliëf
+- **Atmosfeer:** Helder met zachte stofdeeltjes
+- **Water:** Rivier blijft als verre richting
+- **Vegetatie:** Lage heide en gras
+- **Architectuur:** Observatiepunt of stenen rand
+- **Materialen:** Messing, koper, goud, steen en gravure
+- **Cartografie:** Coördinaat, kompasroos en reliëf
+- **Reiziger:** Staat verderop, niet bij camera poserend
+- **Menselijke schaal:** Kompas is een fysiek detail; wereld blijft zichtbaar
+- **Gouden route:** Kruist kompasrichting en loopt door
+- **Waypoint:** Keuze voorbereid
+- **Kompasstatus:** Eenmalig en actief
+- **Beweging:** Naald oriënteert één keer langzaam
+- **Detailniveau:** Hoog
+- **Visuele dichtheid:** Middel, geconcentreerd
+- **Tempo:** Bewuste pauze
+- **Overgang vanaf vorige scène:** Open uitzicht brengt behoefte aan richting
+- **Overgang naar volgende scène:** Naald en lichtlijn wijzen buiten het kader
+- **Interfacefunctie:** Late oriëntatiemarkering, geen navigatiemenu
+- **Contentfunctie:** Vertrouwen in de volgende stap
+- **Toegankelijkheidsaandacht:** Decoratief aria-hidden; keuze blijft in tekst begrijpelijk
+- **Responsive vertaling:** Kompas schaalt maar blijft naast tekst en nooit fixed
+- **Benodigde assets:** CSS/SVG compass, materiaaltextuur
+- **Technische implementatienotities:** Eén DOM-element, geen canvas of library
+- **Atlas World Laws-check:** Kompas is verdiend, materieel en ondergeschikt aan wereld
+
+## Scene 010 — The Next Horizon
+
+- **ID:** `scene-010`
+- **Titel:** The Next Horizon
+- **Journey phase:** Vertrouwen en voortzetting
+- **Doel:** Tonen dat richting geen eindpunt maar een volgende mogelijkheid opent.
+- **Dominante emotie:** Vertrouwen
+- **Secundaire emotie:** Vrijheid
+- **Landschap:** Open daglicht met verre ecosystemen en grote lucht.
+- **Compositieschaal:** Zeer groot panorama
+- **Camerahoogte:** Verdiend verhoogd overzicht
+- **Horizon:** Zeer ver, warm en gedeeltelijk verborgen
+- **Voorgrond:** Observatierand, steen en lage vegetatie
+- **Middengrond:** Water, vlaktes en nieuwe paden
+- **Achtergrond:** Meerdere horizonnen buiten beeld
+- **Licht:** Warm daglicht, geen witte climax
+- **Atmosfeer:** Helder met zachte luchtperspectieven
+- **Water:** Verre rivier of kustlijn
+- **Vegetatie:** Afwisselende bosranden en open gras
+- **Architectuur:** Klein observatiepunt
+- **Materialen:** Steen, hout en messingaccent
+- **Cartografie:** Rijker maar nog onvolledig
+- **Reiziger:** Vooruitkijkend, klein in de wereld
+- **Menselijke schaal:** Mens en observatiepunt tonen enorme afstand
+- **Gouden route:** Loopt door naar buiten het scherm
+- **Waypoint:** Volgende bestemming nog niet bereikt
+- **Kompasstatus:** Gepasseerd; niet opnieuw getoond
+- **Beweging:** Licht en verre mist bewegen nauwelijks
+- **Detailniveau:** Laag in lucht, middel in voorgrond
+- **Visuele dichtheid:** Laag
+- **Tempo:** Open en blijvend
+- **Overgang vanaf vorige scène:** Kompasrichting opent de horizon
+- **Overgang naar volgende scène:** Wereld blijft buiten beeld doorgaan
+- **Interfacefunctie:** Bestaande afsluitende uitnodiging
+- **Contentfunctie:** Verder willen reizen zonder harde verkoopdruk
+- **Toegankelijkheidsaandacht:** Leesbare afsluiting, geen motion-afhankelijkheid
+- **Responsive vertaling:** Horizon en route blijven zichtbaar; observatiepunt wordt subtieler
+- **Benodigde assets:** Summit landscape, observatory space, golden route
+- **Technische implementatienotities:** Laatste scene-layer loopt voorbij section bounds
+- **Atlas World Laws-check:** Wereld eindigt niet bij interface; natuur en horizon blijven dominant
