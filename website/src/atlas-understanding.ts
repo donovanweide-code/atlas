@@ -449,6 +449,45 @@ export function reviewUnderstanding(store: UnderstandingStore, caseId: Understan
   };
 }
 
+export function understandingRecommendation(store: UnderstandingStore, caseId: UnderstandingCaseId): { title: string; reason: string } {
+  const items = store.items
+    .filter((item) => item.caseId === caseId && item.status !== "superseded")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const nextStep = items.find((item) => item.kind === "next-step");
+  if (nextStep) {
+    return {
+      title: `Begin met: ${nextStep.text}`,
+      reason: "Dit is de meest recente betekenisvolle stap die door een herleidbaar inzicht wordt gedragen.",
+    };
+  }
+  const insight = items.find((item) => item.kind === "insight");
+  if (insight) {
+    return {
+      title: insight.text,
+      reason: "Dit is het sterkste huidige inzicht. Een volgende stap verdient pas ruimte wanneer dit inzicht haar rechtvaardigt.",
+    };
+  }
+  const openQuestion = reviewUnderstanding(store, caseId).openQuestions[0];
+  if (openQuestion) {
+    return {
+      title: "Vorm nog geen conclusie.",
+      reason: `Atlas ziet waar het begrip stopt. Eerst is bewijs nodig voor deze vraag: ${openQuestion.text}`,
+    };
+  }
+  if (caseId === "0002" && items.length === 0) {
+    return {
+      title: "Laat AquaFlask vandaag bewust open.",
+      reason: "Het bekende beeld staat en het risico is begrensd. Zonder concrete herhaling is geen aanvullende conclusie of wijziging gerechtvaardigd.",
+    };
+  }
+  return {
+    title: "Bewaar het bekende beeld; voeg nu niets toe.",
+    reason: items.length
+      ? "Er is materiaal, maar nog geen herleidbaar inzicht dat een nieuwe conclusie of stap rechtvaardigt."
+      : "Er is nog geen bevestigd materiaal voor een verantwoord oordeel.",
+  };
+}
+
 export function kindLabel(kind: UnderstandingKind): string {
   return understandingKinds.find((entry) => entry.id === kind)?.label ?? kind;
 }

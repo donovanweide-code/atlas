@@ -37,6 +37,7 @@ import {
   reviseUnderstandingItem,
   saveUnderstanding,
   statusLabel,
+  understandingRecommendation,
   understandingKinds,
   understandingStatuses,
 } from "./atlas-understanding";
@@ -131,6 +132,17 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const priorOpenItems = priorDate ? (focusStore.days[priorDate] ?? []).filter((item) => !item.completed) : [];
 
   app.innerHTML = `<main class="atlas-workspace">
+    <section class="workspace-opening" id="overzicht" aria-labelledby="guidance-title">
+      <div class="workspace-opening__inner">
+        <p class="workspace-opening__greeting">Goedemorgen, Donovan.</p>
+        <h1 id="guidance-title" data-advice-title></h1>
+        <p class="workspace-opening__message"><span data-advice-reason></span> <span data-guidance-prepared></span></p>
+        <a class="workspace-opening__action" data-guidance-action href="/"><strong data-guidance-action-label></strong><i aria-hidden="true">→</i></a>
+      </div>
+      ${compass()}
+    </section>
+
+    <div class="workspace-shell">
     <aside class="workspace-sidebar">
       <a class="workspace-brand" href="#overzicht" aria-label="Atlas Workspace"><span class="workspace-brand__mark">A</span><span><strong>Atlas</strong><small>Workspace</small></span></a>
       <nav class="workspace-nav" aria-label="Workspace navigatie">
@@ -140,15 +152,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     </aside>
 
     <div class="workspace-main">
-      <header class="workspace-header"><div><p class="workspace-kicker">Werkdag</p><h1>Goedemorgen, Donovan.</h1></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
+      <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>Workspace</h2></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
-
-      <section class="workspace-compass-card" id="overzicht" aria-labelledby="compass-title">
-        <div class="workspace-compass-card__copy"><p class="workspace-label">Het kompas</p><h2 id="compass-title">Helpt dit de ondernemer vandaag écht verder?</h2>
-          <div class="workspace-advice"><span>Atlas adviseert</span><strong data-advice-title></strong><p data-advice-reason></p></div>
-          <a class="workspace-observing-glance" href="#waarnemen"><span>Waarnemen</span><strong data-observing-glance></strong><small data-observing-glance-detail></small></a>
-        </div>${compass()}
-      </section>
 
       <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Waarnemen</p><h2 id="observing-title">Bewaar wat je ervaart, vóór je het beoordeelt.</h2></div><p data-observing-summary></p></header>
@@ -174,14 +179,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       </section>
 
       <section class="workspace-section workspace-focus" id="focus" aria-labelledby="focus-title">
-        <header class="workspace-section__header"><div><p class="workspace-label">Vandaag</p><h2 id="focus-title">Maximaal drie betekenisvolle stappen.</h2></div><span data-focus-count></span></header>
-        <div class="workspace-focus__list" data-focus-list></div>
-        <form class="workspace-focus-form" data-focus-form>
-          <label>Nieuwe stap<input name="text" required maxlength="160" placeholder="Wat verdient vandaag aandacht?"></label>
-          <label>Case<select name="caseId">${caseOptions("")}</select></label>
-          <button type="submit">Voeg toe</button>
-        </form>
-        <details class="workspace-history"><summary>Eerdere dagen</summary><div data-focus-history></div></details>
+        <header class="workspace-section__header"><div><p class="workspace-label">Atlas heeft afgewogen</p><h2 id="focus-title" data-today-decision></h2></div><p data-today-reason></p></header>
+        <a class="workspace-screen-action" data-today-action href="/"><strong data-today-action-label></strong><i aria-hidden="true">→</i></a>
+        <details class="workspace-screen-tools" data-focus-tools>
+          <summary><span>Dag organiseren</span><small data-focus-count></small></summary>
+          <div class="workspace-focus__list" data-focus-list></div>
+          <form class="workspace-focus-form" data-focus-form>
+            <label>Nieuwe stap<input name="text" required maxlength="160" placeholder="Wat verdient vandaag aandacht?"></label>
+            <label>Case<select name="caseId">${caseOptions("")}</select></label>
+            <button type="submit">Voeg toe</button>
+          </form>
+          <details class="workspace-history"><summary>Eerdere dagen</summary><div data-focus-history></div></details>
+        </details>
       </section>
 
       <section class="workspace-section" id="cases" aria-labelledby="cases-title">
@@ -247,8 +256,10 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       </section>
 
       <section class="workspace-section workspace-understanding" id="understanding" aria-labelledby="understanding-title">
-        <header class="workspace-section__header"><div><p class="workspace-label">Understanding</p><h2 id="understanding-title">Eerst zien wat er werkelijk speelt.</h2></div><p>Bewaar het verschil tussen wat je weet, vermoedt en nog moet vragen.</p></header>
-        <div class="understanding-case-tabs" role="tablist" aria-label="Kies een case">
+        <header class="workspace-section__header"><div><p class="workspace-label">Atlas begrenst het begrip</p><h2 id="understanding-title" data-understanding-decision></h2></div><p data-understanding-reason></p></header>
+        <details class="workspace-screen-tools" data-understanding-tools>
+          <summary><span>Bekijk de onderbouwing en werk verder</span><i aria-hidden="true">→</i></summary>
+          <div class="understanding-case-tabs" role="tablist" aria-label="Kies een case">
           <button type="button" class="is-current" data-understanding-case="0001" role="tab" aria-selected="true">0001 · We Build And Design</button>
           <button type="button" data-understanding-case="0002" role="tab" aria-selected="false">0002 · AquaFlask</button>
         </div>
@@ -278,7 +289,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
             <form class="understanding-derived-form" data-insight-form hidden><p class="workspace-label">Menselijke duiding</p><h3>Welk inzicht ontstaat uit de selectie?</h3><textarea name="text" required maxlength="1600" rows="4"></textarea><div><button type="submit">Bewaar herleidbaar inzicht</button><button type="button" data-cancel-insight>Annuleren</button></div></form>
             <form class="understanding-derived-form" data-next-step-form hidden><p class="workspace-label">Van inzicht naar handelen</p><h3>Welke kleine volgende stap wordt hierdoor gerechtvaardigd?</h3><input type="hidden" name="insightId"><textarea name="text" required maxlength="1600" rows="3"></textarea><div><button type="submit">Bewaar volgende stap</button><button type="button" data-cancel-next-step>Annuleren</button></div></form>
           </aside>
-        </div>
+          </div>
+        </details>
       </section>
 
       <section class="workspace-section" id="ideeen" aria-labelledby="ideas-title">
@@ -292,6 +304,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
         <form class="workspace-log-form" data-log-form><label for="log-entry">Wat moet Atlas onthouden?</label><textarea id="log-entry" name="entry" required maxlength="360" rows="3" placeholder="Vandaag werd duidelijk dat…"></textarea><button type="submit">Voeg toe</button></form><div class="workspace-log-list" data-log-list></div>
       </section>
     </div>
+    </div>
 
     <dialog class="workspace-revision" data-revision-dialog><form data-revision-form><input type="hidden" name="itemId"><p class="workspace-label">Interpretatie verfijnen</p><h2>Bewaar de eerdere betekenis.</h2><label>Inhoud<textarea name="text" required maxlength="1600" rows="5"></textarea></label><div class="understanding-form-row"><label>Soort<select name="kind">${understandingKindOptions("observation")}</select></label><label>Status<select name="status">${understandingStatusOptions("observed")}</select></label></div><label>Reden voor wijziging<input name="reason" required maxlength="240" placeholder="Wat is er geleerd of opnieuw geclassificeerd?"></label><div><button type="submit">Bewaar revisie</button><button type="button" data-close-revision>Annuleren</button></div></form></dialog>
     <dialog class="workspace-day-start" data-day-start><form method="dialog"><p class="workspace-label">Nieuwe werkdag</p><h2>Hoe wil je vandaag beginnen?</h2><p>Gisteren bleven ${priorOpenItems.length} ${priorOpenItems.length === 1 ? "stap" : "stappen"} openstaan. Niets wordt stilzwijgend meegenomen.</p><div><button value="carry" ${priorOpenItems.length ? "" : "disabled"}>Neem onafgeronde stappen over</button><button value="empty">Begin leeg</button></div></form></dialog>
@@ -302,6 +315,53 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     notice.textContent = message; notice.hidden = false; notice.classList.toggle("is-error", error);
     window.setTimeout(() => { notice.hidden = true; }, 3200);
   };
+  const currentItems = () => focusStore.days[today] ??= [];
+  const adviceTitle = app.querySelector<HTMLElement>("[data-advice-title]")!;
+  const adviceReason = app.querySelector<HTMLElement>("[data-advice-reason]")!;
+  const guidanceAction = app.querySelector<HTMLAnchorElement>("[data-guidance-action]")!;
+  const guidanceActionLabel = app.querySelector<HTMLElement>("[data-guidance-action-label]")!;
+  const guidancePrepared = app.querySelector<HTMLElement>("[data-guidance-prepared]")!;
+  const todayDecision = app.querySelector<HTMLElement>("[data-today-decision]")!;
+  const todayReason = app.querySelector<HTMLElement>("[data-today-reason]")!;
+  const todayAction = app.querySelector<HTMLAnchorElement>("[data-today-action]")!;
+  const todayActionLabel = app.querySelector<HTMLElement>("[data-today-action-label]")!;
+  const focusTools = app.querySelector<HTMLDetailsElement>("[data-focus-tools]")!;
+  let adviceKind: ReturnType<typeof focusRecommendation>["kind"] = "wbd-first-minute";
+  const paintAdvice = () => {
+    const advice = focusRecommendation(currentItems(), aquaFlask);
+    adviceKind = advice.kind;
+    adviceTitle.textContent = advice.title;
+    adviceReason.textContent = advice.reason;
+    todayDecision.textContent = advice.title;
+    todayReason.textContent = advice.reason;
+    if (advice.kind === "day-focus") {
+      guidanceAction.href = "#focus";
+      guidanceActionLabel.textContent = "Open je eerste stap";
+      guidancePrepared.textContent = "Ik heb je eerste onafgeronde stap klaargezet.";
+      todayAction.href = "#focus";
+      todayActionLabel.textContent = "Begin met deze stap";
+      return;
+    }
+    if (advice.kind === "aquaflask") {
+      guidanceAction.href = "#cases";
+      guidanceActionLabel.textContent = "Open AquaFlask";
+      guidancePrepared.textContent = "Ik heb de case voor je klaargezet.";
+      todayAction.href = "#cases";
+      todayActionLabel.textContent = "Open AquaFlask";
+      return;
+    }
+    guidanceAction.href = observingContext ? "/" : "#waarnemen";
+    guidanceActionLabel.textContent = observingContext
+      ? "Open de publieke eerste minuut"
+      : "Activeer Waarnemen om te beginnen";
+    todayAction.href = observingContext ? "/" : "#waarnemen";
+    todayActionLabel.textContent = observingContext
+      ? "Open de publieke eerste minuut"
+      : "Activeer Waarnemen om te beginnen";
+    guidancePrepared.textContent = observingContext
+      ? "Ik heb Waarnemen alvast klaargezet."
+      : "Activeer Waarnemen één keer; daarna ligt de publieke minuut direct klaar.";
+  };
   const observingForm = app.querySelector<HTMLFormElement>("[data-observing-form]")!;
   const observingStart = app.querySelector<HTMLButtonElement>("[data-observing-start]")!;
   const observingStop = app.querySelector<HTMLButtonElement>("[data-observing-stop]")!;
@@ -310,8 +370,6 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const observingSprint = app.querySelector<HTMLElement>("[data-observing-sprint]")!;
   const observingIndicator = app.querySelector<HTMLElement>("[data-observing-indicator]")!;
   const observingSummary = app.querySelector<HTMLElement>("[data-observing-summary]")!;
-  const observingGlance = app.querySelector<HTMLElement>("[data-observing-glance]")!;
-  const observingGlanceDetail = app.querySelector<HTMLElement>("[data-observing-glance-detail]")!;
   const observationList = app.querySelector<HTMLElement>("[data-observation-list]")!;
 
   const observationMoment = (observation: Observation) => new Intl.DateTimeFormat("nl-NL", {
@@ -331,8 +389,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     observingSummary.textContent = count
       ? `${count} ${count === 1 ? "waarneming wacht" : "waarnemingen wachten"} op menselijke beoordeling.`
       : "Nog geen waarnemingen. Atlas houdt de betekenis bewust open.";
-    observingGlance.textContent = observingContext ? "Actief" : "Beschikbaar";
-    observingGlanceDetail.textContent = `${observingContext ? `Case 0001 · Sprint ${observingContext.sprintId}` : "Activeer voor Case 0001"} · ${count} ${count === 1 ? "waarneming" : "waarnemingen"}`;
+    paintAdvice();
     observationList.innerHTML = count ? observationStore.observations.map((observation) => `<article class="workspace-observation">
       <div class="workspace-observation__meaning"><span>Nog niet beoordeeld</span><blockquote>${escapeHtml(observation.text)}</blockquote><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></div>
       <dl>
@@ -370,10 +427,6 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   [focusLoad.warning, aquaLoad.warning, ideasLoad.warning, logsLoad.warning, understandingLoad.warning].filter(Boolean).forEach((warning) => notify(warning, true));
 
   const persistFocus = () => save(localStorage, storageKeys.focus, focusStore) ? notify("Dagfocus opgeslagen.") : notify("Dagfocus kon niet lokaal worden opgeslagen.", true);
-  const currentItems = () => focusStore.days[today] ?? [];
-  const adviceTitle = app.querySelector<HTMLElement>("[data-advice-title]")!;
-  const adviceReason = app.querySelector<HTMLElement>("[data-advice-reason]")!;
-  const paintAdvice = () => { const advice = focusRecommendation(currentItems(), aquaFlask); adviceTitle.textContent = advice.title; adviceReason.textContent = advice.reason; };
 
   const focusList = app.querySelector<HTMLElement>("[data-focus-list]")!;
   const focusForm = app.querySelector<HTMLFormElement>("[data-focus-form]")!;
@@ -392,12 +445,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   };
 
   const dayDialog = app.querySelector<HTMLDialogElement>("[data-day-start]")!;
-  if (priorDate) dayDialog.showModal();
+  let dayChoiceResolved = !priorDate;
+  focusTools.addEventListener("toggle", () => {
+    if (!focusTools.open || dayChoiceResolved) return;
+    focusTools.open = false;
+    dayDialog.showModal();
+  });
   dayDialog.addEventListener("cancel", (event) => event.preventDefault());
   dayDialog.addEventListener("close", () => {
+    dayChoiceResolved = true;
     focusStore.activeDate = today;
     focusStore.days[today] = dayDialog.returnValue === "carry" ? priorOpenItems.slice(0, 3).map((item) => ({ ...item, id: createId("focus"), completed: false })) : [];
-    persistFocus(); paintFocus();
+    persistFocus(); paintFocus(); focusTools.open = true;
   });
 
   focusForm.addEventListener("submit", (event) => {
@@ -435,6 +494,22 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   aquaTrigger.addEventListener("click", openAquaProfile);
   aquaTrigger.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openAquaProfile(); } });
   aquaCloseButton.addEventListener("click", () => { aquaDetail.hidden = true; aquaTrigger.setAttribute("aria-expanded", "false"); aquaTrigger.focus(); });
+  guidanceAction.addEventListener("click", (event) => {
+    if (adviceKind !== "aquaflask") return;
+    event.preventDefault();
+    openAquaProfile();
+  });
+  todayAction.addEventListener("click", (event) => {
+    if (adviceKind === "day-focus") {
+      event.preventDefault();
+      focusTools.open = true;
+      focusList.querySelector<HTMLInputElement>(".workspace-focus-item__text")?.focus();
+      return;
+    }
+    if (adviceKind !== "aquaflask") return;
+    event.preventDefault();
+    openAquaProfile();
+  });
   aquaForm.addEventListener("submit", (event) => {
     event.preventDefault(); const data = new FormData(aquaForm);
     aquaFlask = { version: 1, problem: String(data.get("problem") ?? "").trim(), nextQuestion: String(data.get("nextQuestion") ?? "").trim(), nextStep: String(data.get("nextStep") ?? "").trim(), notes: String(data.get("notes") ?? "").trim(), lessons: String(data.get("lessons") ?? "").trim(), updatedAt: new Date().toISOString() };
@@ -463,6 +538,9 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   });
 
   const understandingSection = app.querySelector<HTMLElement>("#understanding")!;
+  const understandingTools = app.querySelector<HTMLDetailsElement>("[data-understanding-tools]")!;
+  const understandingDecision = app.querySelector<HTMLElement>("[data-understanding-decision]")!;
+  const understandingReason = app.querySelector<HTMLElement>("[data-understanding-reason]")!;
   const understandingContext = app.querySelector<HTMLElement>("[data-understanding-context]")!;
   const understandingList = app.querySelector<HTMLElement>("[data-understanding-list]")!;
   const understandingForm = app.querySelector<HTMLFormElement>("[data-understanding-form]")!;
@@ -476,6 +554,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const understandingStatusFilter = app.querySelector<HTMLSelectElement>("[data-understanding-status-filter]")!;
   const selectionBar = app.querySelector<HTMLElement>("[data-understanding-selection]")!;
   const selectedLabel = app.querySelector<HTMLElement>("[data-understanding-selected]")!;
+
+  if (requestedUnderstandingItem) understandingTools.open = true;
 
   const persistUnderstanding = (message = "Understanding bijgewerkt.") => {
     saveUnderstanding(localStorage, understanding) ? notify(message) : notify("Understanding kon niet lokaal worden opgeslagen.", true);
@@ -501,6 +581,9 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
 
   const itemRelationships = (item: UnderstandingItem) => understanding.relationships.filter((relationship) => relationship.fromId === item.id || relationship.toId === item.id);
   const paintUnderstanding = () => {
+    const recommendation = understandingRecommendation(understanding, activeUnderstandingCase);
+    understandingDecision.textContent = recommendation.title;
+    understandingReason.textContent = recommendation.reason;
     app.querySelectorAll<HTMLButtonElement>("[data-understanding-case]").forEach((button) => {
       const current = button.dataset.understandingCase === activeUnderstandingCase;
       button.classList.toggle("is-current", current); button.setAttribute("aria-selected", String(current));

@@ -378,3 +378,47 @@ Niet-gemarkeerde publieke routes krijgen nog geen generieke of afgeleide ervarin
 ### Beste volgende vraag
 
 > Welke eerste werkelijk vastgelegde waarneming verandert na menselijke beoordeling aantoonbaar in beter begrip — en welke blijft terecht alleen waarneming?
+
+## Sprint 001F — Van Dashboard naar Collega
+
+- **Datum:** 2026-07-22
+- **Status:** Afgerond met GO.
+- **Case:** 0001 · We Build And Design.
+
+### Doel
+
+Atlas moet beginnen voordat Donovan begint. Bij het openen van de Workspace selecteert Atlas eerst wat vandaag aandacht verdient, waarom dat zo is en welke ene handeling logisch volgt. De interface voor organiseren en onderzoeken komt pas daarna.
+
+### Gedragsverandering
+
+- De Workspace opent met Atlas' actuele oordeel in plaats van met navigatie of een dashboard.
+- `Vandaag` vertaalt de bekende dagfocus, een concrete AquaFlask-stap of de prioriteit van We Build And Design naar één voorbereid beginpunt.
+- Dagorganisatie blijft beschikbaar, maar vraagt pas aandacht nadat Donovan er bewust voor kiest.
+- Een onafgeronde dagovergang onderbreekt de opening niet meer en verschijnt pas wanneer Donovan zijn dag wil organiseren.
+- `Understanding` kiest per case eerst de sterkste verantwoorde betekenis: een herleidbare volgende stap, een inzicht, een open bewijsvraag of bewuste terughoudendheid.
+- Filters, materiaal en invoer volgen pas wanneer Donovan de onderbouwing bewust opent.
+- Een directe route naar een specifiek Understanding-item opent de onderbouwing wel meteen, zodat bestaand handelingsgedrag intact blijft.
+
+### Grenzen
+
+- De publieke `Eerste Blik` blijft op `Toetsen`; er is geen interactieve analyse gebouwd.
+- Automatische analyse, vrije gesprekken, uitgebreide rapporten, AI-functionaliteit en overige automatisering blijven `Horizon`.
+- Er zijn geen nieuwe cases, claims, contactkanalen of databronnen toegevoegd.
+- Foundation en Decisions zijn niet gewijzigd.
+
+### Verificatie
+
+- Volledige testset: 18 van 18 geslaagd.
+- TypeScript-controle en Vite-productiebuild: geslaagd.
+- `git diff --check`: geslaagd.
+- Live gedragscontrole van `Vandaag` en `Understanding`: geslaagd.
+- Het case-afhankelijke Understanding-oordeel, de overgang naar de onderbouwing en de directe itemroute zijn werkend gecontroleerd.
+- Conform de reviewafspraak zijn geen nieuwe screenshots gemaakt.
+
+### Resultaat
+
+Sprint 001F heeft Atlas een fundamentele gedraging gegeven:
+
+> Atlas begint voordat Donovan begint.
+
+Atlas selecteert, weegt af en bereidt voor. Donovan kan direct beginnen of bewust een andere keuze maken. Met de verleende GO is deze sprint afgesloten; verdere verfijning of nieuwe functionaliteit valt buiten Sprint 001F.

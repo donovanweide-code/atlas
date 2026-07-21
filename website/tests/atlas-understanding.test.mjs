@@ -10,6 +10,7 @@ import {
   relateUnderstandingItems,
   reviseUnderstandingItem,
   saveUnderstanding,
+  understandingRecommendation,
   understandingStorageKey,
 } from "../src/atlas-understanding.ts";
 
@@ -30,6 +31,17 @@ test("de onafgeronde Understanding-startdata importeert nog geen AquaFlask-profi
   assert.ok(store.items.every((item) => item.sourceLabel.length > 0));
 });
 
+test("Atlas vormt een begrensd oordeel voordat Understanding om organisatie vraagt", () => {
+  const store = createInitialUnderstandingStore();
+  const wbd = understandingRecommendation(store, "0001");
+  assert.equal(wbd.title, "Vorm nog geen conclusie.");
+  assert.match(wbd.reason, /Eerst is bewijs nodig/);
+
+  const aqua = understandingRecommendation(store, "0002");
+  assert.equal(aqua.title, "Laat AquaFlask vandaag bewust open.");
+  assert.match(aqua.reason, /geen aanvullende conclusie of wijziging gerechtvaardigd/);
+});
+
 test("observaties en vragen kunnen expliciet aan elkaar worden gerelateerd", () => {
   const store = { version: 1, items: [], relationships: [], revisions: [] };
   const observation = addUnderstandingItem(store, { id: "observation", caseId: "0001", kind: "observation", text: "Een waarneming", createdAt: "2026-07-21T09:00:00.000Z" });
@@ -48,6 +60,7 @@ test("een inzicht en betekenisvolle volgende stap blijven naar hun bronnen herle
   assert.ok(lineage.some((item) => item.id === "u-0001-local-workspace"));
   assert.ok(lineage.some((item) => item.id === insight.id));
   assert.equal(store.relationships.find((relationship) => relationship.toId === step.id)?.type, "justifies");
+  assert.match(understandingRecommendation(store, "0001").title, /Observeer/);
 });
 
 test("herclassificatie bewaart de eerdere betekenis als revisie", () => {

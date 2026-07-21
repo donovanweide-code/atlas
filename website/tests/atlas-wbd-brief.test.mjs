@@ -23,6 +23,7 @@ test("het Kompas kiest zonder dagfocus de actieve WBD-prioriteit", () => {
   const recommendation = focusRecommendation([], emptyAquaFlask);
   assert.match(recommendation.title, /We Build And Design/);
   assert.match(recommendation.reason, /AquaFlask wacht terecht/);
+  assert.equal(recommendation.kind, "wbd-first-minute");
 });
 
 test("bevestigde dagfocus en concrete klantstappen blijven voorgaan", () => {
@@ -30,7 +31,9 @@ test("bevestigde dagfocus en concrete klantstappen blijven voorgaan", () => {
     { id: "focus-1", text: "Controleer de eerste minuut", caseId: "0001", completed: false },
   ], emptyAquaFlask);
   assert.match(focus.title, /Controleer de eerste minuut/);
+  assert.equal(focus.kind, "day-focus");
 
   const aqua = focusRecommendation([], { ...emptyAquaFlask, nextStep: "Bel de beheerder terug." });
-  assert.equal(aqua.title, "AquaFlask: Bel de beheerder terug.");
+  assert.equal(aqua.title, "Begin vandaag met AquaFlask: Bel de beheerder terug.");
+  assert.equal(aqua.kind, "aquaflask");
 });

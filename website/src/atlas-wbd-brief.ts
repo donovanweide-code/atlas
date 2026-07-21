@@ -17,7 +17,7 @@ export const wbdBrief = {
 export function focusRecommendation(
   items: FocusItem[],
   aquaFlask: AquaFlaskCase,
-): { title: string; reason: string } {
+): { kind: "day-focus" | "aquaflask" | "wbd-first-minute"; title: string; reason: string } {
   const next = items.find((item) => !item.completed);
   if (next) {
     const caseName = next.caseId === "0001"
@@ -26,7 +26,8 @@ export function focusRecommendation(
         ? "AquaFlask"
         : "je dagfocus";
     return {
-      title: `Begin met ${caseName}: ${next.text}`,
+      kind: "day-focus",
+      title: `Begin vandaag met ${caseName}: ${next.text}`,
       reason:
         "Deze stap staat als eerste onafgeronde keuze in je dagfocus. Atlas adviseert; jij bepaalt.",
     };
@@ -34,15 +35,17 @@ export function focusRecommendation(
 
   if (aquaFlask.nextStep.trim()) {
     return {
-      title: `AquaFlask: ${aquaFlask.nextStep}`,
+      kind: "aquaflask",
+      title: `Begin vandaag met AquaFlask: ${aquaFlask.nextStep}`,
       reason:
         "De klantcontext is aanwezig en er ligt een concrete, nog niet afgeronde vervolgstap.",
     };
   }
 
   return {
-    title: "We Build And Design: toets de eerste publieke minuut.",
+    kind: "wbd-first-minute",
+    title: "Begin vandaag bij de eerste publieke minuut van We Build And Design.",
     reason:
-      "De website heeft nu de hoogste prioriteit. AquaFlask wacht terecht op nieuw bewijs en vraagt vandaag geen aandacht.",
+      "De website heeft prioriteit; AquaFlask wacht terecht op nieuw bewijs.",
   };
 }
