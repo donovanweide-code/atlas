@@ -34,6 +34,10 @@ export interface LogEntry {
   id: string;
   text: string;
   date: string;
+  caseId?: Exclude<CaseId, "">;
+  understandingItemId?: string;
+  sourceItemIds?: string[];
+  type?: "note" | "insight" | "next-step";
 }
 
 export interface LoadResult<T> {
@@ -89,7 +93,14 @@ const isIdea = (value: unknown): value is Idea =>
   (value.status === "seed" || value.status === "growth" || value.status === "ready");
 
 const isLogEntry = (value: unknown): value is LogEntry =>
-  isRecord(value) && typeof value.id === "string" && typeof value.text === "string" && typeof value.date === "string";
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.text === "string" &&
+  typeof value.date === "string" &&
+  (value.caseId === undefined || value.caseId === "0001" || value.caseId === "0002") &&
+  (value.understandingItemId === undefined || typeof value.understandingItemId === "string") &&
+  (value.sourceItemIds === undefined || (Array.isArray(value.sourceItemIds) && value.sourceItemIds.every((item) => typeof item === "string"))) &&
+  (value.type === undefined || value.type === "note" || value.type === "insight" || value.type === "next-step");
 
 function load<T>(storage: Storage, key: string, fallback: T, validate: (value: unknown) => value is T): LoadResult<T> {
   try {
@@ -119,8 +130,8 @@ export function loadAquaFlask(storage: Storage): LoadResult<AquaFlaskCase> {
   return load(storage, storageKeys.aquaFlask, {
     version: 1,
     problem: "",
-    nextQuestion: "Welke verandering heeft AquaFlask nu werkelijk nodig?",
-    nextStep: "Plan een gesprek om doel, context en probleem in de woorden van AquaFlask vast te leggen.",
+    nextQuestion: "",
+    nextStep: "",
     notes: "",
     lessons: "",
     updatedAt: "",

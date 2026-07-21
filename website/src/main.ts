@@ -2,6 +2,7 @@ import "./styles/main.css";
 import "./styles/atlas-expedition.css";
 import "./styles/public-pages.css";
 import { renderSceneWorld } from "./atlas-scenes";
+import { understandingMethod } from "./atlas-understanding";
 import {
   enablePageReveals,
   renderPublicPage,
@@ -75,33 +76,34 @@ if (route === "/atlas") {
           <header class="understand__intro" data-home-reveal>
             <p class="understand__label"><span>ROUTE 02</span> WERKWIJZE</p>
             <h2 class="understand__title" id="understand-title">
-              We beginnen bij wat je hebt gebouwd. Daarna maken we helder wat volgt.
+              We luisteren voorbij het eerste antwoord.
             </h2>
           </header>
 
           <div class="understand__experience">
             <div class="understand__thoughts" data-home-reveal>
-              <p>Je bedrijf groeit.</p>
-              <p>De keuzes worden groter.</p>
-              <p>Losse oplossingen geven geen overzicht.</p>
+              <p>“De website moet vernieuwd.”</p>
+              <p>“We moeten meer automatiseren.”</p>
+              <p>“Ons verhaal moet scherper.”</p>
             </div>
 
             <div class="understand__insight" data-home-reveal>
               <p class="understand__realisation">
-                <span>Niet méér beweging.</span>
-                <strong>Een heldere richting.</strong>
+                <span>${understandingMethod.publicTruth}</span>
+                <strong>${understandingMethod.publicQuestion}</strong>
               </p>
 
               <div class="understand__belief">
                 <p>
-                  Daarom onderzoeken we eerst.<br>
-                  <strong>Strategie vóór uitvoering.</strong>
+                  Daarom blijft het antwoord nog even open.<br>
+                  <strong>Tot waarneming en bewijs een patroon laten zien.</strong>
                 </p>
                 <p>
-                  Daarna maken we zichtbaar<br>
-                  <strong>wat de volgende stap nodig heeft.</strong>
+                  Pas dan kiezen we samen<br>
+                  <strong>één betekenisvolle volgende stap.</strong>
                 </p>
               </div>
+              <a class="understand__next" href="#digitaal-fundament">Verder wanneer de vraag helder is <i aria-hidden="true">→</i></a>
             </div>
           </div>
 
@@ -119,7 +121,7 @@ if (route === "/atlas") {
         <span class="scene-waypoint scene-waypoint--crossing"></span>
       </div>
 
-      <section class="why atlas-scene" data-scene="scene-004" aria-labelledby="why-title">
+      <section class="why atlas-scene" data-scene="scene-004" id="digitaal-fundament" aria-labelledby="why-title">
         ${renderSceneWorld("scene-004")}
 
         <div class="why__intro" data-home-reveal>

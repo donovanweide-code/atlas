@@ -537,6 +537,25 @@
 .golden-compare__leading path { fill: none; stroke: #e4bd72; stroke-width: 1.5; stroke-linecap: round; }
 .golden-compare__leading circle { fill: #f4dfb4; stroke: #a97835; }
 
+.lab-room--understanding { background: #172825; color: #ece7db; }
+.lab-room--understanding .lab-room__number,.lab-room--understanding .lab-caption { color: rgba(236,231,219,.48); }
+.lab-understanding { display: grid; margin-top: clamp(70px,10vw,140px); grid-template-columns: repeat(2,minmax(0,1fr)); gap: clamp(24px,4vw,60px); }
+.lab-understanding article { padding-top: 22px; border-top: 1px solid rgba(236,231,219,.18); }
+.lab-understanding header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.lab-understanding header span,.lab-understanding__status { color: rgba(236,231,219,.48); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; }
+.lab-understanding h3 { margin: 0; font-family: Georgia,serif; font-size: clamp(1.6rem,3vw,3rem); font-weight: 400; }
+.lab-understanding__status { margin: 50px 0 18px; }
+.lab-understanding ul { margin: 0; padding: 0; list-style: none; }
+.lab-understanding li { padding: 22px 0; border-top: 1px solid rgba(236,231,219,.11); }
+.lab-understanding li span,.lab-understanding li small { color: #d4a86a; font-size: .56rem; letter-spacing: .11em; text-transform: uppercase; }
+.lab-understanding li p { margin: 10px 0; font-family: Georgia,serif; font-size: 1.05rem; line-height: 1.55; }
+.lab-understanding li small { color: rgba(236,231,219,.42); }
+.lab-understanding li a { display: block; width: fit-content; margin-top: 14px; color: #d4a86a; font-size: .58rem; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+.lab-understanding__empty { min-height: 270px; margin-top: 50px; padding: 36px; border: 1px dashed rgba(236,231,219,.2); }
+.lab-understanding__empty strong { font-family: Georgia,serif; font-size: 1.3rem; font-weight: 400; }
+.lab-understanding__empty p { max-width: 30rem; color: rgba(236,231,219,.55); line-height: 1.65; }
+.lab-room--understanding .lab-caption { margin-top: 60px; line-height: 1.7; }
+
 .lab-room--experiments .lab-room__thought { color: rgba(21,32,31,.65); }
 .experiment-index { margin-top: 100px; border-top: 1px solid var(--line-light); }
 .experiment-index > div { display: grid; grid-template-columns: 100px 1fr auto; align-items: center; min-height: 112px; border-bottom: 1px solid var(--line-light); }
@@ -574,6 +593,7 @@
   .compare-study--empty > div { height: 340px; }
   .compare-study img { height: auto; max-height: none; }
   .golden-system { grid-template-columns: 1fr; }
+  .lab-understanding { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {

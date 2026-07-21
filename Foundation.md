@@ -86,6 +86,8 @@ We leggen de vraag vast in de woorden van de ondernemer. We bepalen de gewenste 
 
 We luisteren, vragen door en onderzoeken bedrijf, klanten, ambitie, processen en bestaand digitaal fundament. Nieuwsgierigheid gaat vóór aannames.
 
+Understanding bewaart de weg naar betekenis: bron → waarneming → betere vraag → mogelijk patroon → inzicht → werkelijke vraag → betekenisvolle volgende stap. Feiten, aannames en onzekerheden blijven van elkaar onderscheiden. Een inzicht of vervolgstap is altijd herleidbaar en wordt door een mens bevestigd; Atlas helpt als tweede denker, maar beslist niet zelfstandig wat waar of belangrijk is.
+
 **Uitkomst:** de werkelijke vraag achter de eerste vraag.
 
 ### 3. Structuur
@@ -169,6 +171,48 @@ Iedere opdracht eindigt met het vastleggen van de beslissing, het resultaat en d
 17. **Beheers risico voordat je uitvoert.** Hoe groter de impact, hoe duidelijker context, test, goedkeuring, herstelbaarheid en verantwoordelijkheid moeten zijn.
 
 18. **Voeg niets toe zonder betekenis.** Wanneer een onderdeel geen rust, begrip, richting, vertrouwen of aantoonbare waarde brengt, wordt het weggelaten.
+
+19. **Iedere sprint is zichtbaar.** Een sprint is pas afgerond wanneer de ondernemer Atlas aantoonbaar anders kan ervaren. Architectuur, code en modellen tellen mee, maar krijgen altijd een merkbare menselijke uitkomst.
+
+20. **Sprintdoel vóór uitbreiding.** Iedere sprint bouwt uitsluitend het overeengekomen doel. Een grotere methode-, Foundation- of architectuurwijziging wordt eerst onderbouwd en voorgelegd; technische waarde geeft geen toestemming om de scope zelfstandig te verbreden.
+
+21. **Ontbrekende kennis blijft onbekend.** Repository, documentatie, eerdere cases, onderzoeken en besluiten worden vóór nieuw werk geïnspecteerd. Wat daarna niet bevestigd is, blijft herkenbaar onbekend en wordt nooit als klantwaarheid aangevuld.
+
+### Verantwoordelijkheid
+
+- **Donovan beslist.** Hij bepaalt methode, sprintscope, prioriteit en acceptatie.
+- **Atlas begrijpt en begeleidt.** Atlas bewaart context en betekenis, onderscheidt focus van horizon en bepaalt welke betekenisvolle volgende stap aandacht verdient.
+- **Codex onderzoekt en realiseert.** Codex onderzoekt bronnen, bouwt, test en documenteert. Codex mag verbeteringen actief signaleren en onderbouwen, maar verandert de methode, Foundation of sprintscope niet zonder besluit van Donovan.
+
+### Kennis, begrip en interface
+
+- **Kennis:** wat Atlas beschikbaar heeft uit repository, documentatie, onderzoek, historie, patronen en cases.
+- **Begrip:** welke betekenis Atlas daarin herkent, inclusief bewijs, onzekerheid, prioriteit en samenhang.
+- **Interface:** de kleinste betekenisvolle hoeveelheid kennis die Donovan vandaag nodig heeft.
+- **Focus:** wat nu aandacht verdient en daarom voorgrond krijgt.
+- **Horizon:** kansen, patronen en toekomstige mogelijkheden die Atlas bewaart voor het juiste moment.
+- **Stilte:** kennis die Atlas bewust vandaag niet toont, omdat aandacht schaars is.
+
+Kennis is niet automatisch interface. Meer weten moet leiden tot minder, maar relevantere informatie. Atlas bewaart kansen zonder de actuele focus te verstoren. De horizon blijft aanwezig, maar de aandacht ligt op de volgende betekenisvolle stap. Iedere interface is daarom een redactionele keuze en nooit een volledige weergave van alles wat Atlas weet.
+
+### Redactioneel oordeel
+
+De waarde van Atlas groeit niet wanneer hij meer kennis toont, maar wanneer hij meer kennis kan dragen zonder meer aandacht te vragen.
+
+Tussen kennis en interface ontstaat daarom een expliciete redactionele laag. Die hoeft niet automatisch te zijn. Een handmatig of controleerbaar actueel beeld per case bewaart betekenis, onzekerheid, de volgende betekenisvolle stap, de stille horizon en herleidbare bronnen. Atlas kiest wat vandaag aandacht verdient; Donovan neemt het besluit.
+
+Een redactioneel oordeel beantwoordt minimaal:
+
+- Waarom verdient deze case nu aandacht?
+- Wat weten we voldoende zeker?
+- Welke onzekerheid kan het besluit veranderen?
+- Wat is de kleinste betekenisvolle volgende stap?
+- Wat blijft bewust op de horizon?
+- Waarom is Stilte op dit moment de juiste keuze?
+
+Een advies blijft controleerbaar via feiten, waarnemingen, bronnen, interpretaties, risico's, eerdere besluiten en actuele onzekerheden. Niet alles hoeft zichtbaar te zijn, maar de weg naar het oordeel blijft herleidbaar.
+
+Atlas moet niet alleen nieuwe kennis kunnen verwerken, maar ook eerdere oordelen expliciet kunnen herzien. Bij een gewijzigd oordeel bewaart Atlas wat het eerdere oordeel was, waarom dat toen logisch was, welke nieuwe informatie beschikbaar kwam, waarom het actuele oordeel verandert en wat dat betekent voor de volgende stap. Atlas hoeft niet foutloos te lijken; Atlas moet zorgvuldig en controleerbaar kunnen leren.
 
 ---
 
@@ -273,6 +317,13 @@ Beantwoord deze vragen vóór iedere belangrijke ontwerp-, inhouds-, proces- of 
 - Is zonder uitleg voelbaar waar de ondernemer zich in de reis bevindt?
 - Geeft het ontwerp voldoende rust, ruimte en aandacht?
 - Heeft ieder beeld, symbool en beweging een betekenisvolle functie?
+- Brengt dit de bezoeker dichter bij helderheid en een betekenisvolle volgende stap?
+
+### Begeleiding en redactioneel oordeel
+
+- Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen?
+- Heeft Atlas al nagedacht voordat Donovan zelf hoeft na te denken?
+- Laat Atlas alleen zien wat nu helpt, terwijl kansen veilig aan de horizon bewaard blijven?
 
 ### Leren en hergebruiken
 

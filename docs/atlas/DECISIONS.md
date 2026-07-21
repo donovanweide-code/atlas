@@ -28,3 +28,27 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Datum:** 2026-07-20
 - **Keuze:** `/atlas` krijgt `noindex, nofollow` en geen link in de publieke navigatie.
 - **Waarom:** De Workspace is een interne voordeur, geen marketingpagina of klantportaal.
+
+## D-005 — Eén gedeeld Understanding-model
+
+- **Datum:** 2026-07-21
+- **Keuze:** Cases, Workspace, Logboek en Atlas Lab gebruiken hetzelfde versiegebonden domeinmodel voor bronnen, waarnemingen, bewijs, vragen, aannames, spanningen, patronen, inzichten, werkelijke vragen, vervolgstappen, relaties en revisies.
+- **Waarom:** Betekenis moet herleidbaar blijven en mag niet verdwijnen in losse notities of schermspecifieke modellen.
+- **Gevolg:** De publieke Experience gebruikt alleen de methodische taal; interne case-inhoud wordt nooit publiek gerenderd.
+
+## D-006 — Atlas stelt voor, de mens bevestigt
+
+- **Datum:** 2026-07-21
+- **Keuze:** Relaties, inzichten, werkelijke vragen en vervolgstappen worden alleen na menselijke bevestiging bewaard. Lab-signalen zijn expliciet voorstellen en schrijven niets terug.
+- **Waarom:** Understanding vereist ruimte voor onzekerheid en mag geen automatisch oordeel als waarheid presenteren.
+- **Gevolg:** Revisies bewaren de eerdere betekenis; AquaFlask gebruikt uitsluitend bestaande, bevestigde klantkennis en krijgt geen automatisch gegenereerde inhoud.
+
+## D-007 — Focus, Horizon en Stilte sturen de interface
+
+- **Datum:** 2026-07-21
+- **Status:** Besloten na de inhoudelijke GO op Sprint 001C; uitgangspunt voor toekomstig werk en geen uitbreiding van de afgesloten sprint.
+- **Keuze:** Atlas onderscheidt Kennis, Begrip en Interface. De interface toont vanuit Focus alleen wat vandaag helpt, bewaart kansen en patronen aan de Horizon en gebruikt Stilte om overige kennis bewust niet te tonen.
+- **Waarom:** De AquaFlask-review liet zien dat een volledig en zorgvuldig klantprofiel nog als dossier kan voelen wanneer alle beschikbare kennis tegelijk zichtbaar is. Atlas moet zich gedragen als een collega die al heeft nagedacht, niet als software die kennis opsomt.
+- **Gevolg:** Meer beschikbare kennis leidt niet automatisch tot meer interface. Nieuwe ontwerpen moeten aantonen waarom informatie nu aandacht verdient; open kansen concurreren nooit met de actieve case.
+- **Centrale toets:** Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen — en voelt het alsof Atlas al heeft nagedacht?
+- **Horizonverkenning:** [`Redactionele Intelligentie`](../ideas/005-Redactionele-Intelligentie.md) bewaart de toekomstige ontwerpvragen, schaalrisico's en trigger zonder ze aan Sprint 001C toe te voegen.

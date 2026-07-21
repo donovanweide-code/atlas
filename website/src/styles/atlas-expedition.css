@@ -1502,6 +1502,29 @@
   }
 }
 
+/* Understanding is experienced as a pause before direction, not as a product step. */
+.understand__next {
+  display: inline-flex;
+  margin-top: clamp(1.5rem, 3vw, 2.5rem);
+  align-items: center;
+  gap: 0.8rem;
+  color: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.understand__next i {
+  color: var(--world-horizon, #b78c50);
+  font-size: 1rem;
+  font-style: normal;
+  transition: transform 180ms ease;
+}
+
+.understand__next:hover i,
+.understand__next:focus-visible i { transform: translateX(0.3rem); }
+
 /* Creative Direction Sprint — Atlas Continuous World */
 .page::before {
   -webkit-mask-image: linear-gradient(

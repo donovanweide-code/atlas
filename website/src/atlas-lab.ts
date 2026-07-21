@@ -5,6 +5,9 @@ import journeyPanorama from "./assets/images/atlas/landscapes/atlas-landscape-jo
 import auroraLandscape from "./assets/images/atlas/atmosphere/atlas-landscape-aurora-v01.webp";
 import horizonLandscape from "./assets/images/atlas/landscapes/atlas-landscape-horizon-v01.webp";
 import routeLandscape from "./assets/images/atlas/navigation/atlas-route-landscape-v01.webp";
+import { kindLabel, loadUnderstanding, reviewUnderstanding, type UnderstandingCaseId, type UnderstandingItem } from "./atlas-understanding";
+
+const escapeHtml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
 const roomLabel = (number: string, title: string) => `
   <div class="lab-room__heading" data-reveal>
@@ -24,6 +27,13 @@ export function renderAtlasLab(app: HTMLDivElement) {
     document.head.append(robots);
   }
   robots.content = "noindex, nofollow";
+
+  const understanding = loadUnderstanding(localStorage).value;
+  const understandingCases: { id: UnderstandingCaseId; name: string }[] = [{ id: "0001", name: "We Build And Design" }, { id: "0002", name: "AquaFlask" }];
+  const proposedSignals = (caseId: UnderstandingCaseId): UnderstandingItem[] => {
+    const review = reviewUnderstanding(understanding, caseId);
+    return [...review.openQuestions, ...review.needsEvidence, ...review.tensions, ...review.emergingPatterns].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index);
+  };
 
   app.innerHTML = `
     <main class="atlas-lab">
@@ -194,6 +204,21 @@ export function renderAtlasLab(app: HTMLDivElement) {
             <figcaption><span>Leidend</span>Landschap met betekenisvolle route</figcaption>
           </figure>
         </div>
+      </section>
+
+      <section class="lab-room lab-room--understanding lab-shell" aria-labelledby="understanding-study-title">
+        ${roomLabel("10", "Understanding Study").replace("<h2>", '<h2 id="understanding-study-title">')}
+        <p class="lab-room__thought" data-reveal>De tweede denker signaleert. De mens bepaalt wat betekenis krijgt.</p>
+        <div class="lab-understanding" data-reveal>
+          ${understandingCases.map(({ id, name }) => {
+            const items = understanding.items.filter((item) => item.caseId === id);
+            const signals = proposedSignals(id);
+            return `<article><header><span>Case ${id}</span><h3>${name}</h3></header>${items.length === 0
+              ? '<div class="lab-understanding__empty"><strong>Het bekende beeld staat.</strong><p>De oorzaak van de productmelding blijft open. Atlas wacht op een concrete herhaling voordat nieuw begrip wordt toegevoegd.</p></div>'
+              : `<p class="lab-understanding__status">${signals.length} signaal${signals.length === 1 ? "" : "en"} voor menselijke beoordeling</p><ul>${signals.length ? signals.map((item) => `<li><span>${escapeHtml(kindLabel(item.kind))}</span><p>${escapeHtml(item.text)}</p><small>Signaal · geen conclusie</small><a href="/atlas?case=${id}&amp;item=${encodeURIComponent(item.id)}#understanding">Bevestig, pas aan of verwerp in Workspace →</a></li>`).join("") : '<li><p>Geen open signalen in de huidige gegevens.</p><small>Geen automatische conclusie</small></li>'}</ul>`}</article>`;
+          }).join("")}
+        </div>
+        <p class="lab-caption" data-reveal>Het Lab schrijft niets terug en trekt geen conclusie. Het maakt alleen vragen, ontbrekend bewijs, spanningen en beginnende patronen zichtbaar.</p>
       </section>
 
       <section class="lab-room lab-room--experiments lab-shell" aria-labelledby="experiments-title">
