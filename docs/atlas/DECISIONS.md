@@ -52,3 +52,22 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Gevolg:** Meer beschikbare kennis leidt niet automatisch tot meer interface. Nieuwe ontwerpen moeten aantonen waarom informatie nu aandacht verdient; open kansen concurreren nooit met de actieve case.
 - **Centrale toets:** Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen — en voelt het alsof Atlas al heeft nagedacht?
 - **Horizonverkenning:** [`Redactionele Intelligentie`](../ideas/005-Redactionele-Intelligentie.md) bewaart de toekomstige ontwerpvragen, schaalrisico's en trigger zonder ze aan Sprint 001C toe te voegen.
+
+## D-008 — Waarnemen vóór Review
+
+- **Datum:** 2026-07-21
+- **Status:** Besloten door Donovan tijdens het onderzoek naar een feedbackmodule na Sprint 001D.
+- **Aanleiding:** De eerste verkenning gebruikte de werktitel `Review Mode`. Die taal begon al bij beoordeling, terwijl Atlas methodisch eerst de werkelijkheid wil zien zonder direct betekenis, probleem of oordeel toe te voegen.
+- **Besluit:** De eerste laag heet `Waarnemen`. Een vastgelegde waarneming is een ervaring in een door Atlas herkende en door Donovan bevestigde context. Zij krijgt de status `Nog niet beoordeeld`. Review blijft uitsluitend de menselijke beoordelingsfase die daarna volgt.
+- **Reden:** Atlas vraagt eerst wat iemand waarneemt, voordat Atlas vraagt wat daarvan gevonden wordt. Daarmee blijven waarneming, context, beoordeling, Understanding, inzicht en vervolgstap herkenbaar van elkaar onderscheiden.
+- **Gevolg voor taal:** De methode gebruikt `Waarnemen`, `Waarneming`, `Atlas herkent de context`, `Donovan bevestigt de context` en `Nog niet beoordeeld`. Termen als review, feedback, probleem, issue of taak worden niet gebruikt voor de eerste vastleggingslaag.
+- **Gevolg voor methode:** Een waarneming wordt nooit automatisch waarheid, Understanding, inzicht of taak. Ook positieve ervaringen zijn geldige waarnemingen. Pas menselijke beoordeling bepaalt of de waarneming betekenis heeft en verder wordt gedragen.
+
+## D-009 — De website is de publieke ingang; Atlas blijft op de achtergrond
+
+- **Datum:** 2026-07-21
+- **Status:** Besloten bij de GO op Sprint 001D.
+- **Keuze:** De publieke Experience maakt concreet dat We Build And Design websites realiseert en laat de Atlas-methode ervaren zonder Atlas als product, AI of publieke propositie te introduceren.
+- **Waarom:** Klanten hoeven Atlas niet te kennen. Zij moeten ervaren dat We Build And Design hun bedrijf begrijpt. De bestaande herkenning als websitebouwer is daarom een waardevolle ingang, geen positionering die eerst moet verdwijnen.
+- **Gevolg:** De publieke eerste minuut benoemt websites expliciet, waarna begrip, ontwerp en technologie de differentiatie dragen. Publiek bewijs wordt alleen toegevoegd wanneer werk, context en toestemming bevestigd zijn. De bestaande contactroute blijft intact zolang geen bevestigd alternatief bestaat.
+- **Interne vertaling:** Case 0001 toont een actuele redactionele briefing. Een klantcase die terecht op bewijs wacht, verdringt zonder concrete vervolgstap niet langer de actieve WBD-prioriteit uit het Kompas.

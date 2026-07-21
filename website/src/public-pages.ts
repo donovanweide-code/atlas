@@ -25,6 +25,13 @@ interface PublicRoute {
   nextPath: string;
   nextLabel: string;
   nextTitle: string;
+  heroStepLabel?: string;
+  heroObservationBoundary?: "public.contact.exploration";
+  evidence?: {
+    label: string;
+    title: string;
+    text: string;
+  };
   tone: "midnight" | "aurora" | "first-light" | "horizon" | "summit";
 }
 
@@ -34,9 +41,9 @@ const publicRoutes: PublicRoute[] = [
     navLabel: "Diensten",
     index: "03",
     phase: "Van richting naar vorm",
-    title: "Wat je volgende stap nodig heeft, wordt eerst zichtbaar.",
+    title: "Een sterke website begint niet bij een pagina.",
     intro:
-      "We brengen strategie, ontwerp en technologie samen rond één vraag: wat helpt jouw bedrijf nu werkelijk verder?",
+      "We ontwerpen en bouwen websites vanuit één vraag: wat helpt jouw bedrijf nu werkelijk verder? Strategie, ontwerp en technologie volgen dezelfde richting.",
     heroAsset: studioCraftHorizon,
     heroAlt:
       "Een rustige ontwerpstudio met maquettes, schetsen en een open horizon.",
@@ -64,6 +71,7 @@ const publicRoutes: PublicRoute[] = [
     ],
     reflection:
       "Geen losse disciplines. Eén richting die zichtbaar, bruikbaar en verder uit te bouwen wordt.",
+    heroStepLabel: "Bekijk wat een website nodig heeft",
     nextPath: "/werkwijze",
     nextLabel: "Bekijk hoe we samenwerken",
     nextTitle: "Een goede oplossing begint met een zorgvuldig ritme.",
@@ -125,7 +133,7 @@ const publicRoutes: PublicRoute[] = [
       "Het maakt voelbaar welke beweging nodig was, welke keuzes richting gaven en waarom het resultaat bij het bedrijf past.",
     heroAsset: studioProjectReview,
     heroAlt:
-      "Een ondernemer en ontwerper beoordelen samen een uitgewerkt digitaal ontwerp, maquette en route in Atlas Studio.",
+      "Een ondernemer en ontwerper beoordelen samen een uitgewerkt digitaal ontwerp, maquette en route in een rustige ontwerpstudio.",
     heroPosition: "76% center",
     chapters: [
       {
@@ -146,6 +154,11 @@ const publicRoutes: PublicRoute[] = [
     ],
     reflection:
       "We delen projecten wanneer context, keuzes en betekenis samen verteld kunnen worden. Niet als etalage, maar als een eerlijk spoor van het werk.",
+    evidence: {
+      label: "Ruimte voor bevestigd werk",
+      title: "We delen alleen werk waarvan we het verhaal volledig kunnen dragen.",
+      text: "Nieuwe voorbeelden krijgen hier ruimte voor de uitgangssituatie, de belangrijkste keuze en wat daarna werkelijk veranderde. Tot die bronnen bevestigd zijn, blijft deze plek bewust open.",
+    },
     nextPath: "/over-ons",
     nextLabel: "Ontmoet de makers",
     nextTitle: "Achter iedere route staan mensen die zorgvuldig blijven kijken.",
@@ -161,7 +174,7 @@ const publicRoutes: PublicRoute[] = [
       "We Build And Design verbindt strategie, ontwerp en technologie in één studio. Niet om jouw bedrijf opnieuw uit te vinden, maar om helder te maken wat het al in zich heeft.",
     heroAsset: studioCollaboration,
     heroAlt:
-      "Een ondernemer en twee makers werken samen aan strategie, ontwerp en digitale structuur in Atlas Studio.",
+      "Een ondernemer en twee makers werken samen aan strategie, ontwerp en digitale structuur in een open ontwerpstudio.",
     heroPosition: "68% center",
     chapters: [
       {
@@ -201,7 +214,7 @@ const publicRoutes: PublicRoute[] = [
       "Een eerste gesprek gaat niet over een verkooppraatje. Het gaat over waar je bedrijf staat, wat er schuurt en welke beweging je voor je ziet.",
     heroAsset: studioThreshold,
     heroAlt:
-      "Een ondernemer staat bij een rustige gesprekstafel aan de drempel van Atlas Studio, met de route en horizon voor zich.",
+      "Een ondernemer staat bij een rustige gesprekstafel aan de drempel van een ontwerpstudio, met de route en horizon voor zich.",
     heroPosition: "74% center",
     chapters: [
       {
@@ -217,6 +230,8 @@ const publicRoutes: PublicRoute[] = [
     ],
     reflection:
       "Geen harde pitch. Wel een rustig gesprek over wat je hebt gebouwd en wat je nu verder wilt brengen.",
+    heroStepLabel: "Bekijk hoe de verkenning begint",
+    heroObservationBoundary: "public.contact.exploration",
     nextPath: "/",
     nextLabel: "Terug naar het begin",
     nextTitle: "Richting begint bij opnieuw helder kijken.",
@@ -274,7 +289,7 @@ export function renderSiteFooter(): string {
         <span class="brand__mark">WBD.</span>
         <span class="brand__name">We Build And Design</span>
       </a>
-      <p>Strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
+      <p>Websites, strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
       <nav aria-label="Voettekstnavigatie">
         <a href="/diensten">Diensten</a>
         <a href="/werkwijze">Werkwijze</a>
@@ -295,6 +310,19 @@ function renderChapter(chapter: RouteChapter): string {
     </section>`;
 }
 
+function renderEvidence(route: PublicRoute): string {
+  if (!route.evidence) return "";
+  return `
+    <section class="route-evidence" id="bevestigd-werk" data-atlas-observation="public.projects.confirmed-work" aria-labelledby="route-evidence-title" data-page-reveal>
+      <p>${route.evidence.label}</p>
+      <div>
+        <h2 id="route-evidence-title">${route.evidence.title}</h2>
+        <p>${route.evidence.text}</p>
+      </div>
+      <span aria-hidden="true">Bewuste ruimte</span>
+    </section>`;
+}
+
 function renderRoute(route: PublicRoute): string {
   document.title = `${route.navLabel ?? "Kennismaken"} — We Build And Design`;
 
@@ -303,7 +331,7 @@ function renderRoute(route: PublicRoute): string {
       ${renderSiteHeader(route.path)}
 
       <article class="route-story">
-        <header class="route-hero">
+        <header class="route-hero"${route.heroObservationBoundary ? ` id="contact-verkenning" data-atlas-observation="${route.heroObservationBoundary}"` : ""}>
           <div class="route-hero__world" aria-hidden="true"></div>
           <img
             class="route-hero__image"
@@ -319,7 +347,7 @@ function renderRoute(route: PublicRoute): string {
             <h1>${route.title}</h1>
             <p>${route.intro}</p>
             <a class="route-hero__step" href="#route-vervolg">
-              Loop verder <i aria-hidden="true"></i>
+              ${route.heroStepLabel ?? "Loop verder"} <i aria-hidden="true"></i>
             </a>
           </div>
         </header>
@@ -329,6 +357,8 @@ function renderRoute(route: PublicRoute): string {
           <div class="route-chapters">
             ${route.chapters.map(renderChapter).join("")}
           </div>
+
+          ${renderEvidence(route)}
 
           <aside class="route-reflection" data-page-reveal>
             <span aria-hidden="true"></span>

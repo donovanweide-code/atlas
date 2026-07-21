@@ -1,9 +1,15 @@
 import "./styles/atlas-workspace.css";
 import { aquaFlaskProfile } from "./atlas-aquaflask-profile";
+import { focusRecommendation, wbdBrief } from "./atlas-wbd-brief";
 import {
-  type AquaFlaskCase,
+  activateObserving,
+  deactivateObserving,
+  loadObservationStore,
+  loadObservingContext,
+  type Observation,
+} from "./atlas-observations";
+import {
   type CaseId,
-  type FocusItem,
   type Idea,
   type IdeaStatus,
   type LogEntry,
@@ -77,33 +83,6 @@ function compass(): string {
   </svg>`;
 }
 
-function focusRecommendation(items: FocusItem[], aquaFlask: AquaFlaskCase): { title: string; reason: string } {
-  const next = items.find((item) => !item.completed);
-  if (next) {
-    const caseName = next.caseId ? caseNames[next.caseId] : "je dagfocus";
-    return {
-      title: `Begin met ${caseName}: ${next.text}`,
-      reason: "Deze stap staat als eerste onafgeronde keuze in je dagfocus. Atlas adviseert; jij bepaalt.",
-    };
-  }
-  if (!aquaFlask.problem.trim() && !aquaFlask.nextStep.trim()) {
-    return {
-      title: `AquaFlask: ${aquaFlaskProfile.recommendation.title}`,
-      reason: "Eenvoudige productpublicatie werkte tijdens het onderzoek. De oorzaak blijft open; een concrete herhaling kan het ontbrekende bewijs opleveren.",
-    };
-  }
-  if (aquaFlask.nextStep.trim()) {
-    return {
-      title: `AquaFlask: ${aquaFlask.nextStep}`,
-      reason: "De klantcontext is aanwezig en er ligt een concrete, nog niet afgeronde vervolgstap.",
-    };
-  }
-  return {
-    title: "Bepaal de eerstvolgende stap voor We Build And Design.",
-    reason: "De hoofdcase blijft de plek waar Atlas dagelijks wordt bewezen.",
-  };
-}
-
 function caseOptions(selected: CaseId): string {
   return `<option value="" ${selected === "" ? "selected" : ""}>Geen case</option>
     <option value="0001" ${selected === "0001" ? "selected" : ""}>0001 · We Build And Design</option>
@@ -137,6 +116,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const ideasLoad = loadIdeas(localStorage);
   const logsLoad = loadLogs(localStorage);
   const understandingLoad = loadUnderstanding(localStorage);
+  let observationStore = loadObservationStore(localStorage);
+  let observingContext = loadObservingContext(localStorage);
   let focusStore = focusLoad.value;
   let aquaFlask = aquaLoad.value;
   let ideas: Idea[] = ideasLoad.value;
@@ -153,7 +134,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     <aside class="workspace-sidebar">
       <a class="workspace-brand" href="#overzicht" aria-label="Atlas Workspace"><span class="workspace-brand__mark">A</span><span><strong>Atlas</strong><small>Workspace</small></span></a>
       <nav class="workspace-nav" aria-label="Workspace navigatie">
-        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#focus"><span>02</span>Vandaag</a><a href="#cases"><span>03</span>Cases</a><a href="#understanding"><span>04</span>Understanding</a><a href="#ideeen"><span>05</span>Ideeën</a><a href="#logboek"><span>06</span>Logboek</a>
+        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#waarnemen"><span>02</span>Waarnemen</a><a href="#focus"><span>03</span>Vandaag</a><a href="#cases"><span>04</span>Cases</a><a href="#understanding"><span>05</span>Understanding</a><a href="#ideeen"><span>06</span>Ideeën</a><a href="#logboek"><span>07</span>Logboek</a>
       </nav>
       <div class="workspace-sidebar__footer"><p>We Build And Design</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
     </aside>
@@ -165,7 +146,31 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <section class="workspace-compass-card" id="overzicht" aria-labelledby="compass-title">
         <div class="workspace-compass-card__copy"><p class="workspace-label">Het kompas</p><h2 id="compass-title">Helpt dit de ondernemer vandaag écht verder?</h2>
           <div class="workspace-advice"><span>Atlas adviseert</span><strong data-advice-title></strong><p data-advice-reason></p></div>
+          <a class="workspace-observing-glance" href="#waarnemen"><span>Waarnemen</span><strong data-observing-glance></strong><small data-observing-glance-detail></small></a>
         </div>${compass()}
+      </section>
+
+      <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
+        <header class="workspace-section__header"><div><p class="workspace-label">Waarnemen</p><h2 id="observing-title">Bewaar wat je ervaart, vóór je het beoordeelt.</h2></div><p data-observing-summary></p></header>
+        <div class="workspace-observing__control">
+          <div class="workspace-observing__state">
+            <span data-observing-indicator aria-hidden="true"></span>
+            <div><p data-observing-status></p><small>Alleen actief in deze browser</small></div>
+          </div>
+          <dl><div><dt>Case</dt><dd>0001 · We Build And Design</dd></div><div><dt>Sprint</dt><dd data-observing-sprint></dd></div></dl>
+          <form data-observing-form>
+            <label>Bevestig sprint<input name="sprintId" value="${escapeHtml(observingContext?.sprintId ?? "001E")}" required maxlength="24"></label>
+            <button type="submit" data-observing-start>Activeer Waarnemen</button>
+          </form>
+          <div class="workspace-observing__actions">
+            <a href="/" data-observing-open>Open publieke Experience <span aria-hidden="true">↗</span></a>
+            <button type="button" data-observing-stop>Beëindig Waarnemen</button>
+          </div>
+        </div>
+        <div class="workspace-observations" aria-labelledby="observations-title">
+          <header><div><p class="workspace-label">Vastgelegde werkelijkheid</p><h3 id="observations-title">Waarnemingen</h3></div><p>Betekenis en vervolg ontstaan pas na menselijke beoordeling.</p></header>
+          <div data-observation-list></div>
+        </div>
       </section>
 
       <section class="workspace-section workspace-focus" id="focus" aria-labelledby="focus-title">
@@ -182,11 +187,27 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <section class="workspace-section" id="cases" aria-labelledby="cases-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Cases</p><h2 id="cases-title">Werk met betekenis en context.</h2></div><p>De hoofdcase bewijst Atlas. De klantcase laat Atlas leren.</p></header>
         <div class="workspace-cases">
-          <article class="workspace-case workspace-case--primary"><div class="workspace-case__meta"><span>0001 · Hoofdcase</span><small>Eigen bedrijf</small></div><h3>We Build And Design</h3>
-            <p>Hier wordt Atlas dagelijks bewezen: in de positionering, publieke ervaring en manier waarop strategie, ontwerp en technologie samenkomen.</p><footer><span>Eerstvolgende stap</span><strong>Beoordeel de publieke route als één complete ondernemersreis.</strong><button type="button" data-open-understanding-case="0001">Open Understanding <i aria-hidden="true">→</i></button></footer></article>
+          <article class="workspace-case workspace-case--primary"><div class="workspace-case__meta"><span>0001 · Hoofdcase</span><small>Focus · Website</small></div><h3>We Build And Design</h3>
+            <p>Atlas begeleidt de plek waar de methode dagelijks wordt bewezen. Vandaag verdient de eerste publieke minuut alle aandacht.</p><footer><span>Eerstvolgende toets</span><strong>Begrijpt een ondernemer binnen zestig seconden wat WBD realiseert?</strong><button type="button" data-open-wbd aria-controls="case-wbd" aria-expanded="false">Open actuele briefing <i aria-hidden="true">→</i></button></footer></article>
           <article class="workspace-case workspace-case--open" data-open-aqua role="button" tabindex="0" aria-controls="case-aquaflask" aria-expanded="false"><div class="workspace-case__meta"><span>0002 · Klant</span><small>Oorzaak open</small></div><h3>AquaFlask</h3>
             <p>Atlas kent de bestaande WooCommerce-omgeving, het onderzochte productincident en het verhoogde wijzigingsrisico.</p><footer><span>Onderzoek · 18 juli 2026</span><strong>Bekijk het bedrijfsprofiel <i aria-hidden="true">→</i></strong></footer></article>
         </div>
+      </section>
+
+      <section class="workspace-section workspace-case-detail workspace-wbd-brief" id="case-wbd" aria-labelledby="wbd-brief-title" tabindex="-1" hidden>
+        <header class="wbd-brief-hero">
+          <div><p class="workspace-label">Case 0001 · Actuele briefing</p><h2 id="wbd-brief-title">De website is vandaag de deur naar We Build And Design.</h2></div>
+          <p>Atlas toont niet de volledige geschiedenis, maar wat Donovan nu nodig heeft om te kunnen handelen.</p>
+          <button type="button" data-close-wbd aria-label="Sluit briefing van We Build And Design">Sluit briefing</button>
+        </header>
+        <div class="wbd-brief-grid">
+          <article class="wbd-brief-card wbd-brief-card--focus"><p class="workspace-label">Focus · Huidige werkelijkheid</p><h3>Wat vandaag waar is</h3><p>${escapeHtml(wbdBrief.currentReality)}</p></article>
+          <article class="wbd-brief-card"><p class="workspace-label">Begrip</p><h3>Wat Atlas hierin ziet</h3><p>${escapeHtml(wbdBrief.understanding)}</p></article>
+          <article class="wbd-brief-card wbd-brief-card--test"><p class="workspace-label">Direct bruikbare volgende stap</p><h3>De zestig-seconden-toets</h3><p>${escapeHtml(wbdBrief.nextTest)}</p><a href="/">Open de publieke eerste minuut <span aria-hidden="true">↗</span></a></article>
+          <article class="wbd-brief-card"><p class="workspace-label">Horizon</p><h3>Wat rustig voorbereid blijft</h3><p>${escapeHtml(wbdBrief.horizon)}</p></article>
+          <article class="wbd-brief-card wbd-brief-card--silence"><p class="workspace-label">Bewuste Stilte</p><h3>Wat Atlas niet invult</h3><p>${escapeHtml(wbdBrief.silence)}</p></article>
+        </div>
+        <footer class="wbd-brief-footer"><p><span>Herkomst</span>${escapeHtml(wbdBrief.source)}</p><button type="button" data-open-wbd-understanding>Bekijk herleidbare bronnen in Understanding <i aria-hidden="true">↓</i></button></footer>
       </section>
 
       <section class="workspace-section workspace-case-detail workspace-aqua-profile" id="case-aquaflask" aria-labelledby="aqua-title" tabindex="-1" hidden>
@@ -281,6 +302,71 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     notice.textContent = message; notice.hidden = false; notice.classList.toggle("is-error", error);
     window.setTimeout(() => { notice.hidden = true; }, 3200);
   };
+  const observingForm = app.querySelector<HTMLFormElement>("[data-observing-form]")!;
+  const observingStart = app.querySelector<HTMLButtonElement>("[data-observing-start]")!;
+  const observingStop = app.querySelector<HTMLButtonElement>("[data-observing-stop]")!;
+  const observingOpen = app.querySelector<HTMLAnchorElement>("[data-observing-open]")!;
+  const observingStatus = app.querySelector<HTMLElement>("[data-observing-status]")!;
+  const observingSprint = app.querySelector<HTMLElement>("[data-observing-sprint]")!;
+  const observingIndicator = app.querySelector<HTMLElement>("[data-observing-indicator]")!;
+  const observingSummary = app.querySelector<HTMLElement>("[data-observing-summary]")!;
+  const observingGlance = app.querySelector<HTMLElement>("[data-observing-glance]")!;
+  const observingGlanceDetail = app.querySelector<HTMLElement>("[data-observing-glance-detail]")!;
+  const observationList = app.querySelector<HTMLElement>("[data-observation-list]")!;
+
+  const observationMoment = (observation: Observation) => new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(new Date(observation.createdAt));
+
+  const paintObserving = () => {
+    observationStore = loadObservationStore(localStorage);
+    observingContext = loadObservingContext(localStorage);
+    const count = observationStore.observations.length;
+    observingStatus.textContent = observingContext ? "Waarnemen is actief" : "Waarnemen is beschikbaar";
+    observingSprint.textContent = observingContext?.sprintId ?? "Nog niet bevestigd";
+    observingIndicator.classList.toggle("is-active", Boolean(observingContext));
+    observingStart.textContent = observingContext ? "Bevestig opnieuw" : "Activeer Waarnemen";
+    observingStop.hidden = !observingContext;
+    observingOpen.hidden = !observingContext;
+    observingSummary.textContent = count
+      ? `${count} ${count === 1 ? "waarneming wacht" : "waarnemingen wachten"} op menselijke beoordeling.`
+      : "Nog geen waarnemingen. Atlas houdt de betekenis bewust open.";
+    observingGlance.textContent = observingContext ? "Actief" : "Beschikbaar";
+    observingGlanceDetail.textContent = `${observingContext ? `Case 0001 · Sprint ${observingContext.sprintId}` : "Activeer voor Case 0001"} · ${count} ${count === 1 ? "waarneming" : "waarnemingen"}`;
+    observationList.innerHTML = count ? observationStore.observations.map((observation) => `<article class="workspace-observation">
+      <div class="workspace-observation__meaning"><span>Nog niet beoordeeld</span><blockquote>${escapeHtml(observation.text)}</blockquote><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></div>
+      <dl>
+        <div><dt>Pagina</dt><dd>${escapeHtml(observation.context.pageLabel)}</dd></div>
+        <div><dt>Ervaringsgrens</dt><dd>${escapeHtml(observation.context.boundaryLabel)}</dd></div>
+        <div><dt>Context</dt><dd>Case ${escapeHtml(observation.context.caseId)} · Sprint ${escapeHtml(observation.context.sprintId)}</dd></div>
+        <div><dt>Viewport</dt><dd>${observation.context.viewport.width} × ${observation.context.viewport.height} px</dd></div>
+      </dl>
+      <a href="${escapeHtml(`${observation.context.path}${observation.context.hash}`)}">Open oorspronkelijke route <span aria-hidden="true">↗</span></a>
+    </article>`).join("") : '<p class="workspace-empty">Tijdens normaal gebruik kun je straks vastleggen wat je ziet of ervaart. Een waarneming blijft hier bewust nog zonder conclusie.</p>';
+  };
+
+  observingForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const sprintId = String(new FormData(observingForm).get("sprintId") ?? "").trim();
+    const activated = activateObserving(localStorage, sprintId);
+    if (!activated) {
+      notify("Waarnemen kon niet lokaal worden geactiveerd.", true);
+      return;
+    }
+    notify(`Waarnemen is actief voor Case 0001 · Sprint ${activated.sprintId}.`);
+    paintObserving();
+  });
+
+  observingStop.addEventListener("click", () => {
+    if (!deactivateObserving(localStorage)) {
+      notify("Waarnemen kon niet lokaal worden beëindigd.", true);
+      return;
+    }
+    notify("Waarnemen is in deze browser beëindigd.");
+    paintObserving();
+  });
+
+  paintObserving();
   [focusLoad.warning, aquaLoad.warning, ideasLoad.warning, logsLoad.warning, understandingLoad.warning].filter(Boolean).forEach((warning) => notify(warning, true));
 
   const persistFocus = () => save(localStorage, storageKeys.focus, focusStore) ? notify("Dagfocus opgeslagen.") : notify("Dagfocus kon niet lokaal worden opgeslagen.", true);
@@ -353,6 +439,27 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     event.preventDefault(); const data = new FormData(aquaForm);
     aquaFlask = { version: 1, problem: String(data.get("problem") ?? "").trim(), nextQuestion: String(data.get("nextQuestion") ?? "").trim(), nextStep: String(data.get("nextStep") ?? "").trim(), notes: String(data.get("notes") ?? "").trim(), lessons: String(data.get("lessons") ?? "").trim(), updatedAt: new Date().toISOString() };
     save(localStorage, storageKeys.aquaFlask, aquaFlask) ? notify("AquaFlask-case opgeslagen.") : notify("De case kon niet lokaal worden opgeslagen.", true); paintAqua();
+  });
+
+  const wbdDetail = app.querySelector<HTMLElement>("#case-wbd")!;
+  const wbdTrigger = app.querySelector<HTMLButtonElement>("[data-open-wbd]")!;
+  const wbdCloseButton = app.querySelector<HTMLButtonElement>("[data-close-wbd]")!;
+  const openWbdBrief = () => {
+    wbdDetail.hidden = false;
+    wbdTrigger.setAttribute("aria-expanded", "true");
+    wbdDetail.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    wbdCloseButton.focus({ preventScroll: true });
+  };
+  wbdTrigger.addEventListener("click", openWbdBrief);
+  wbdCloseButton.addEventListener("click", () => {
+    wbdDetail.hidden = true;
+    wbdTrigger.setAttribute("aria-expanded", "false");
+    wbdTrigger.focus();
+  });
+  app.querySelector<HTMLButtonElement>("[data-open-wbd-understanding]")?.addEventListener("click", () => {
+    wbdDetail.hidden = true;
+    wbdTrigger.setAttribute("aria-expanded", "false");
+    showUnderstandingCase("0001");
   });
 
   const understandingSection = app.querySelector<HTMLElement>("#understanding")!;

@@ -304,10 +304,63 @@
 .route-line i:nth-child(3) { top: 79%; left: 35%; }
 
 .route-chapters,
+.route-evidence,
 .route-reflection,
 .route-next {
   position: relative;
   z-index: 2;
+}
+
+.route-evidence {
+  display: grid;
+  grid-template-columns: minmax(8rem, .35fr) minmax(0, 1fr);
+  gap: clamp(2rem, 7vw, 8rem);
+  width: min(100%, 69rem);
+  min-height: clamp(26rem, 42vw, 38rem);
+  align-content: center;
+  margin: clamp(11rem, 18vw, 19rem) auto 0;
+  padding: clamp(2rem, 5vw, 5rem);
+  border: 1px solid rgba(62, 88, 73, .18);
+  border-radius: 48% 48% 1rem 1rem / 12% 12% 1rem 1rem;
+  background: linear-gradient(145deg, rgba(248, 243, 232, .5), rgba(204, 216, 208, .22));
+  box-shadow: inset 0 0 5rem rgba(255, 252, 244, .34);
+}
+
+.route-evidence > p,
+.route-evidence > span {
+  margin: .7rem 0 0;
+  color: rgba(55, 84, 68, .58);
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.route-evidence h2 {
+  max-width: 15ch;
+  margin: 0;
+  color: #18251f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 4.8vw, 5rem);
+  font-weight: 400;
+  letter-spacing: -.045em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.route-evidence div > p {
+  max-width: 36rem;
+  margin: 2rem 0 0;
+  color: var(--route-muted);
+  font-size: clamp(1rem, 1.25vw, 1.17rem);
+  line-height: 1.85;
+}
+
+.route-evidence > span {
+  grid-column: 2;
+  align-self: end;
+  padding-top: 4rem;
+  border-top: 1px solid rgba(62, 88, 73, .14);
 }
 
 .route-chapters {
@@ -625,6 +678,18 @@
     grid-template-columns: 1fr;
     gap: 1.25rem;
   }
+
+  .route-evidence {
+    min-height: 34rem;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-top: 10rem;
+    padding: 2rem 1.5rem;
+    border-radius: 8rem 8rem 1rem 1rem / 3rem 3rem 1rem 1rem;
+  }
+
+  .route-evidence h2 { font-size: clamp(2.35rem, 11vw, 3.8rem); }
+  .route-evidence > span { grid-column: 1; }
 
   .route-chapter__number { margin: 0; }
   .route-chapter h2 { max-width: 13ch; font-size: clamp(2.35rem, 11vw, 3.8rem); }

@@ -199,4 +199,182 @@ Deze beperkte afronding heropent Sprint 001C niet. AquaFlask Understanding spree
 
 De blijvende principes voor redactioneel oordeel, herleidbaarheid en herzienbaarheid zijn compact canoniek vastgelegd in `Foundation.md`. De toekomstige uitwerking, schaalrisico's, hoofdcase-observatie en herbeoordelingstrigger staan als Horizonverkenning in `docs/ideas/005-Redactionele-Intelligentie.md`; zij zijn geen Sprint 001C-functionaliteit.
 
-Na deze tekstuele verfijning slagen alle acht tests, de TypeScript- en Vite-productiebuild en `git diff --check`. De desktopweergave is inhoudelijk consistent. De visuele controle toont nog een bestaande responsieve spanning: rond 790 pixels breed raken de Understanding-filters en composer elkaar, omdat de tweekolomsindeling pas onder 720 pixels stapelt. Dit is niet binnen de toegestane tekstuele correctie gewijzigd en blijft vóór commit expliciet te beoordelen.
+Na deze tekstuele verfijning slaagden alle acht tests, de TypeScript- en Vite-productiebuild en `git diff --check`. De daarna goedgekeurde laatste responsieve correctie liet de Understanding-layout eerder naar één kolom schakelen en is binnen de definitieve Sprint 001C-commit afgerond.
+
+## Sprint 001D — De magie zichtbaar maken
+
+- **Datum:** 2026-07-21
+- **Status:** Implementatie gereed; visuele gebruikersreview nog vereist.
+- **Besluit door:** Donovan.
+
+### Analyse
+
+De publieke Experience droeg de Atlas-houding al sterk: rust, begrip vóór realisatie en de ondernemer als hoofdpersoon. Tegelijkertijd verborg zij bijna dat We Build And Design websites realiseert, legde zij de methode vaker uit dan zij die bewees en eindigde de route naar contact zonder een bevestigd kanaal dat in de repository verantwoord kon worden toegevoegd.
+
+De Workspace bevatte de juiste kennis, maar koos zonder dagfocus automatisch AquaFlask terwijl die case terecht op nieuw bewijs wacht. Case 0001 bezat rijke repositorycontext, maar opende als technisch Understanding-overzicht in plaats van als actueel redactioneel oordeel.
+
+### Nieuwe inzichten
+
+- Selecteren is verantwoordelijkheid: zodra Atlas bepaalt wat Donovan ziet, is interfacevolgorde geen neutrale vormgeving meer.
+- Een volgende stap is pas geleverd wanneer de ontvanger haar zonder aanvullende vertaalslag kan gebruiken.
+- Atlas moet ook semantisch onzichtbaar blijven; publieke alternatieve teksten noemen geen intern Atlas Studio-concept.
+- Een nieuwe positionering hoeft de bestaande ingang niet te vervangen. De website is de publieke deur; Atlas is de manier waarop WBD achter die deur begrijpt.
+- Consistentie is niet hetzelfde als volledigheid. Een rustige route kan nog steeds bewijs, mensen of handelingsperspectief missen.
+
+### Bevestigde aannames
+
+- De website is de natuurlijke eerste ingang voor We Build And Design.
+- De bestaande Presence draagt rust, vertrouwen en zorgvuldigheid en hoeft niet te worden vervangen.
+- Case 0001 is de juiste levende case om redactioneel oordeel handmatig te bewijzen.
+- Onvoldoende publiek bewijs moet als open ruimte worden behandeld, niet met fictieve cases, resultaten, cijfers of testimonials worden gevuld.
+
+### Ontkrachte aannames
+
+- Een samenhangende visuele reis is niet automatisch een complete ondernemersreis.
+- Een Kompas bovenaan de Workspace kiest niet vanzelf de juiste prioriteit.
+- Meer opgeslagen Understanding levert niet automatisch een betekenisvollere interface op.
+- Het herhalen van de methode over meerdere routes maakt haar niet vanzelf geloofwaardiger.
+
+### Implementatie
+
+- De publieke hero benoemt websites expliciet als concrete ingang en laat de volgende stap semantisch aansluiten op de Understanding-route.
+- Het digitale fundament wordt als samenhang achter de website gepositioneerd, zonder Atlas publiek te maken.
+- De Diensten-route begint bij de website en verbindt strategie, ontwerp en technologie als één richting.
+- De Projecten-route bevat een rustige, bewijs-klare structuur die expliciet leeg blijft totdat werk, context en uitkomst bevestigd zijn.
+- Publieke alt-teksten noemen niet langer het interne begrip `Atlas Studio`.
+- Het bestaande `/contact`-gedrag blijft ongewijzigd; er zijn geen contactgegevens, formulieren, agenda's of boekingslinks verzonnen of toegevoegd.
+- Het Workspace-Kompas kiest zonder bevestigde dagfocus of concrete AquaFlask-stap de eerste publieke minuut van We Build And Design.
+- Case 0001 opent met huidige werkelijkheid, Atlas' begrip, de zestig-seconden-toets, Horizon, Bewuste Stilte en herleidbare bronnen. Technisch Understanding blijft beschikbaar als tweede laag.
+
+### Open vragen
+
+- Welk bevestigd publiek werk kan als eerste werkelijk bewijs worden gedeeld?
+- Via welk reeds bestaand, bevestigd kanaal kan de publieke contactroute later werkelijk worden voltooid?
+- Begrijpt een echte ervaren ondernemer binnen zestig seconden dat de website de concrete ingang is en WBD eerst het bedrijf erachter probeert te begrijpen?
+- Welke mensen en welk vakmanschap mogen op termijn publiek zichtbaar worden zonder de ondernemer als hoofdpersoon te verdringen?
+
+### Bewuste Stilte
+
+- Geen nieuw contactkanaal, formulier, e-mailadres, telefoonnummer, WhatsApp-link of boekingssysteem.
+- Geen fictieve case, testimonial, resultaat, cijfer of afgeleide claim.
+- Geen automatische redactionele intelligentie; twee cases leveren daarvoor nog onvoldoende geschiedenis.
+- Geen brede responsive redesign, dienstenherpositionering, prijsstructuur, analytics-implementatie of schaalarchitectuur.
+
+### Aanbevelingen
+
+Gebruik de zestig-seconden-toets eerst met echte ondernemers voordat bredere copy, navigatie of bewijsstructuren worden uitgebreid. Voeg het eerste publieke bewijs pas toe wanneer uitgangssituatie, belangrijkste keuze, werkelijk resultaat en toestemming samen beschikbaar zijn.
+
+### Volgende sprint
+
+Begin niet met meer interface. Begin met één bevestigde publieke bron: een werkelijk WBD-project of een werkelijk contactkanaal. Kies daarna de kleinste toevoeging die de huidige route aantoonbaar beslisbaarder maakt zonder de bestaande Presence te verliezen.
+
+### Beste volgende vraag
+
+> Welk eerste bevestigde bewijsstuk laat een ondernemer ervaren dat We Build And Design al heeft gekeken, zonder meer uit te leggen dan verantwoord is?
+
+### Verificatie
+
+- Domein- en redactietests: 11 van 11 geslaagd.
+- TypeScript- en Vite-productiebuild: geslaagd.
+- `git diff --check`: geslaagd.
+- Lokale browserverificatie: nog niet verantwoord afgerond; de browserbeveiliging weigerde lokale navigatie en is niet omzeild.
+
+### Methodische aanscherping — Waarnemen vóór Review
+
+Tijdens het onderzoek naar een mogelijke feedbackmodule werd zichtbaar dat `Review Mode` methodisch te laat begon. Review veronderstelt al een menselijke beoordeling: iets wordt goedgekeurd, afgewezen, geprioriteerd of als probleem benoemd. Atlas hoort vóór die betekenisvorming eerst ruimte te maken voor wat iemand werkelijk ziet of ervaart.
+
+Daarom heet de eerste laag voortaan `Waarnemen`. Donovan legt een waarneming vast terwijl de ervaring nog aanwezig is. Atlas herkent de pagina, het betekenisvolle onderdeel, de case, sprint en technische context; Donovan bevestigt die context. De waarneming blijft daarna expliciet `Nog niet beoordeeld`.
+
+Deze ontdekking scherpt de Atlas-methode aan omdat zij een ontbrekende stap zichtbaar maakt tussen Werkelijkheid en Understanding. Een waarneming is geen waarheid, conclusie, probleem of taak. Ook een positieve ervaring is geldig. Pas menselijke beoordeling bepaalt of de waarneming betekenis heeft, bewust open blijft, wordt verworpen of na bevestiging naar Understanding mag worden gebracht.
+
+De vastgelegde volgorde is:
+
+**Werkelijkheid → Waarnemen → Waarneming → Atlas herkent de context → Donovan bevestigt de context → Nog niet beoordeeld → Menselijke beoordeling → Eventueel Understanding → Inzicht → Volgende stap**
+
+Er is in deze methodische stap geen Waarnemen-interface, Review Mode, opslagmodel of andere functionaliteit gebouwd. De methode wordt eerst beoordeeld voordat implementatie start.
+
+## Sprint 001E — Maak de groei van Atlas zichtbaar
+
+- **Datum:** 2026-07-21
+- **Status:** Gebouwd en technisch geverifieerd.
+- **Case:** 0001 · We Build And Design.
+
+### Doel
+
+Waarnemen zichtbaar en werkend maken als de kleinste volledige keten tussen een ervaring in de publieke We Build And Design Experience en een contextgebonden, nog niet beoordeelde waarneming in de Atlas Workspace.
+
+### Uitgangssituatie
+
+De methode `Waarnemen vóór Review` was in Foundation en D-008 vastgelegd, maar nog niet ervaarbaar. Donovan moest buiten Atlas screenshots maken, uploaden en context opnieuw uitleggen. De bestaande Workspace kende bovendien geen afgescheiden plek voor vastgelegde werkelijkheid die nog geen Understanding, oordeel of taak was.
+
+De goedgekeurde maar nog niet gecommitte Sprint 001D-verfijningen stonden in dezelfde werkboom. Sprint 001E bouwt daarop voort zonder die wijzigingen te overschrijven of buiten hun goedgekeurde scope uit te breiden.
+
+### Implementatiekeuzes
+
+- De Workspace toont Waarnemen direct onder het Kompas en als vaste navigatiestap. Het Kompas verwijst in één rustige regel naar beschikbaarheid, actieve context en het aantal waarnemingen.
+- Donovan activeert de keten lokaal voor de vaste Case 0001 en bevestigt expliciet de sprint; `001E` is alleen de voorgestelde beginwaarde.
+- Alleen bij een geldige lokale activering wordt de publieke Waarnemen-module dynamisch geladen.
+- De publieke knop blijft klein en vast staan, veroorzaakt geen layoutverschuiving en opent een compacte niet-modale invoerlaag.
+- Atlas toont pagina, voorgestelde ervaringsgrens, case, sprint, viewport en moment vóór opslag. Alleen de ervaringsgrens kan in deze eerste versie worden gecorrigeerd.
+- Vijf betekenisvolle grenzen gebruiken stabiele `data-atlas-observation`-ID's en eigen ankers; bestaande scene-ID's en willekeurige DOM-selectors bepalen geen betekenis.
+- De opgeslagen waarneming bewaart labels naast ID's en heropent de oorspronkelijke route bij de bevestigde ervaringsgrens.
+- De Workspace toont tekst, status, moment en volledige context zonder backlogtaal, classificatie of vervolgactie.
+
+### Methodische grenzen
+
+Het Waarnemen-domein importeert niets uit Understanding, Focus, Ideeën of Logboek en schrijft daar niet naar. Iedere opgeslagen waarneming blijft `Nog niet beoordeeld`. Atlas herkent context; Donovan bevestigt uitsluitend die context. Er ontstaat geen automatische waarheid, betekenis, diagnose, oplossing of sprintwijziging.
+
+### Toegankelijkheid en ervaring
+
+- De publieke invoer opent met focus in het tekstveld.
+- `Escape` sluit de laag en geeft focus terug aan `Waarnemen`.
+- Alle knoppen, het tekstveld en de contextcorrectie hebben zichtbare toetsenbordfocus.
+- De laag past op 390 × 844 pixels en veroorzaakt geen horizontale overflow.
+- Reduced motion wordt gerespecteerd.
+- Zonder lokale activering bestaat geen publieke Waarnemen-interface.
+
+### Tests en verificatie
+
+- Domeintests bewaken lege invoer, activering, beëindiging, herladen, beschadigde opslag, opslag, contextcorrectie, vaste status en canonieke heropenroute.
+- Volledige testset: 17 van 17 geslaagd.
+- TypeScript-controle en Vite-productiebuild: geslaagd.
+- Browserverificatie op 1280 × 720 en 390 × 844: geslaagd.
+- Publieke toestand zonder activering: geen Waarnemen-root aanwezig.
+- Toetsenbordopening en `Escape` met focusterugkeer: geslaagd.
+- De drie homepagegrenzen, de Projecten-grens en Contact-grens zijn aan de bedoelde bestaande delen gekoppeld.
+- Een contextgecorrigeerde waarneming is lokaal bewaard, na navigatie in de Workspace teruggevonden en via `/#digitaal-fundament` heropend.
+
+### Nieuwe inzichten
+
+- Context is pas bruikbaar wanneer zij niet alleen wordt herkend, maar ook een duurzame terugweg naar het ervaringsmoment bevat.
+- Lokale activering is niet alleen een technische privacygrens; zij voorkomt dat intern gereedschap deel wordt van de publieke propositie.
+- Zichtbare groei hoeft geen nieuw hoofdpaneel te worden. Eén nieuwe handelingsmogelijkheid en een rustige terugkomst in de bestaande volgorde zijn voldoende om Atlas anders te ervaren.
+
+### Bevestigde aannames
+
+- Een kleine vaste knop is rustiger en sneller dan een aparte modus.
+- Pagina, semantische grens, case, sprint, viewport en tijd nemen de aanvullende contextuitleg voor deze verticale keten weg.
+- Positieve en kritische ervaringen passen in hetzelfde vrije veld zonder sentimentlabel.
+- Een afzonderlijke lokale store houdt Waarnemen aantoonbaar los van bestaande betekenis- en uitvoeringsdomeinen.
+
+### Ontkrachte aannames
+
+- Een nieuwe navigatielink alleen maakt de groei niet overal onmiddellijk leesbaar; het Kompas heeft daarom een rustige actuele verwijzing naar Waarnemen.
+- Een technisch bestaand anker is niet automatisch een betekenisvolle context. Alleen de vijf expliciet benoemde ervaringsgrenzen worden gebruikt.
+
+### Bewuste Stilte
+
+Geen menselijke Review-workflow, beoordeling, promotie naar Understanding, taken, prioriteiten, eigenaarschap, comments, sentimentanalyse, AI-samenvatting, screenshots, video, willekeurige elementselectie, meerdere cases, database, accounts, cloudsync of externe integraties.
+
+Niet-gemarkeerde publieke routes krijgen nog geen generieke of afgeleide ervaringsgrens. Hun afwezigheid is een bekende grens, geen uitnodiging om betekenis te verzinnen.
+
+### Resterende grenzen
+
+- Alles blijft lokaal in één browser, zonder back-up of synchronisatie.
+- De vijf grenzen bewijzen de keten voor Case 0001, niet de schaalbaarheid naar meerdere cases of klantomgevingen.
+- De opgeslagen browserverificatie is testdata in de lokale browser en geen methodisch beoordeelde bron.
+- Werkelijk dagelijks gebruik moet nog bewijzen dat de normale handeling consequent binnen dertig seconden blijft en de juiste context voor Donovan oplevert.
+
+### Beste volgende vraag
+
+> Welke eerste werkelijk vastgelegde waarneming verandert na menselijke beoordeling aantoonbaar in beter begrip — en welke blijft terecht alleen waarneming?

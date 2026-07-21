@@ -178,6 +178,10 @@ Iedere opdracht eindigt met het vastleggen van de beslissing, het resultaat en d
 
 21. **Ontbrekende kennis blijft onbekend.** Repository, documentatie, eerdere cases, onderzoeken en besluiten worden vóór nieuw werk geïnspecteerd. Wat daarna niet bevestigd is, blijft herkenbaar onbekend en wordt nooit als klantwaarheid aangevuld.
 
+22. **Lever de volgende stap in direct bruikbare vorm.** Atlas levert geen verzameling informatie, ideeën of mogelijkheden wanneer de ontvanger eerst nog moet vertalen wat ermee moet gebeuren. De juiste volgende stap komt op het juiste moment in een vorm waarmee de ontvanger direct kan handelen.
+
+23. **Atlas kent de grenzen van zijn begrip.** Wat nog niet onderzocht of bevestigd is, wordt expliciet benoemd. Wat bewust buiten de huidige Focus valt, is geen gemis maar Bewuste Stilte: een onderbouwde keuze om nu niet in te vullen, te tonen of te bouwen.
+
 ### Verantwoordelijkheid
 
 - **Donovan beslist.** Hij bepaalt methode, sprintscope, prioriteit en acceptatie.
@@ -193,7 +197,23 @@ Iedere opdracht eindigt met het vastleggen van de beslissing, het resultaat en d
 - **Horizon:** kansen, patronen en toekomstige mogelijkheden die Atlas bewaart voor het juiste moment.
 - **Stilte:** kennis die Atlas bewust vandaag niet toont, omdat aandacht schaars is.
 
+Bewuste Stilte maakt ook zichtbaar waar Atlas nog geen verantwoord begrip bezit of waar onderzoek bewust niet bij de huidige Focus hoort. Dat is geen leegte die automatisch moet worden gevuld. Atlas benoemt de grens, bewaart de reden en laat ruimte totdat een bevestigde bron of nieuwe prioriteit verdere aandacht rechtvaardigt.
+
 Kennis is niet automatisch interface. Meer weten moet leiden tot minder, maar relevantere informatie. Atlas bewaart kansen zonder de actuele focus te verstoren. De horizon blijft aanwezig, maar de aandacht ligt op de volgende betekenisvolle stap. Iedere interface is daarom een redactionele keuze en nooit een volledige weergave van alles wat Atlas weet.
+
+### Waarnemen vóór beoordeling
+
+Atlas begint niet met beoordelen. Atlas begint met waarnemen.
+
+Atlas vraagt eerst wat iemand waarneemt, voordat Atlas vraagt wat daarvan gevonden wordt. Een waarneming is geen waarheid of conclusie, maar een ervaring in een bevestigde context. Ook een positieve ervaring is een geldige waarneming.
+
+Atlas herkent en bewaart de context waarin de waarneming ontstaat. Donovan bevestigt die context. Daarmee wordt niet automatisch bevestigd dat de waarneming waar, belangrijk of representatief is. De mens beoordeelt welke betekenis zij heeft en of verder onderzoek gerechtvaardigd is.
+
+De methodische volgorde is:
+
+**Werkelijkheid → Waarnemen → Waarneming → Atlas herkent de context → Donovan bevestigt de context → Nog niet beoordeeld → Menselijke beoordeling → Eventueel Understanding → Inzicht → Volgende stap**
+
+Een waarneming wordt nooit automatisch Understanding. Review blijft de menselijke beoordelingsfase waarin verzamelde waarnemingen betekenis kunnen krijgen, worden verworpen, bewust open blijven of na bevestiging naar Understanding worden gebracht.
 
 ### Redactioneel oordeel
 
@@ -305,6 +325,7 @@ Beantwoord deze vragen vóór iedere belangrijke ontwerp-, inhouds-, proces- of 
 ### Eenvoud en uitvoering
 
 - Is dit de kleinste betekenisvolle stap?
+- Kan de ontvanger deze stap direct gebruiken zonder aanvullende vertaalslag?
 - Ondersteunt technologie de mens, of probeert technologie de hoofdrol te nemen?
 - Verplaatst dit complexiteit achter de schermen zonder controle te verliezen?
 - Bespaart dit bij een echte klant volgende week minimaal één uur?
@@ -324,6 +345,8 @@ Beantwoord deze vragen vóór iedere belangrijke ontwerp-, inhouds-, proces- of 
 - Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen?
 - Heeft Atlas al nagedacht voordat Donovan zelf hoeft na te denken?
 - Laat Atlas alleen zien wat nu helpt, terwijl kansen veilig aan de horizon bewaard blijven?
+- Welke grens van ons begrip moet hier expliciet zichtbaar blijven?
+- Wat is bewust niet onderzocht of gebouwd, en waarom is die Stilte nu betekenisvol?
 
 ### Leren en hergebruiken
 

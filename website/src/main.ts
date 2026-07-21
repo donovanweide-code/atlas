@@ -49,28 +49,28 @@ if (route === "/atlas") {
         </details>
       </header>
 
-      <section class="hero atlas-scene" data-scene="scene-001" aria-labelledby="hero-title">
+      <section class="hero atlas-scene" data-scene="scene-001" data-atlas-observation="public.home.entry" id="eerste-publieke-minuut" aria-labelledby="hero-title">
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow">Strategie. Design. Technologie.</p>
+          <p class="hero__eyebrow">Websites. Strategie. Design. Technologie.</p>
 
           <h1 class="hero__title" id="hero-title">Je bedrijf is klaar voor wat volgt.</h1>
 
           <p class="hero__text">
-            Je zoekt geen nieuwe droom.<br>
-            Je zoekt overzicht, richting en vertrouwen.
+            We ontwerpen en bouwen websites voor ondernemers die al iets hebben opgebouwd.<br>
+            Eerst maken we helder wat jouw bedrijf nu werkelijk nodig heeft.
           </p>
 
           <a class="hero__step" href="#begrijpen">
-            <span>Bekijk hoe we bouwen</span>
+            <span>Zie hoe we eerst begrijpen</span>
             <i aria-hidden="true"></i>
           </a>
         </div>
 
       </section>
 
-      <section class="understand atlas-scene" data-scene="scene-002" id="begrijpen" aria-labelledby="understand-title">
+      <section class="understand atlas-scene" data-scene="scene-002" data-atlas-observation="public.home.understanding" id="begrijpen" aria-labelledby="understand-title">
         ${renderSceneWorld("scene-002")}
         <div class="understand__inner">
           <header class="understand__intro" data-home-reveal>
@@ -121,18 +121,18 @@ if (route === "/atlas") {
         <span class="scene-waypoint scene-waypoint--crossing"></span>
       </div>
 
-      <section class="why atlas-scene" data-scene="scene-004" id="digitaal-fundament" aria-labelledby="why-title">
+      <section class="why atlas-scene" data-scene="scene-004" data-atlas-observation="public.home.digital-foundation" id="digitaal-fundament" aria-labelledby="why-title">
         ${renderSceneWorld("scene-004")}
 
         <div class="why__intro" data-home-reveal>
           <p class="section-label">03 / Digitaal fundament</p>
 
           <h2 class="why__title" id="why-title">
-            Wat je hebt opgebouwd verdient een digitaal fundament dat zorgvuldig verder groeit.
+            Een website is vaak de eerste zichtbare stap. Het fundament erachter bepaalt hoe zij verder kan groeien.
           </h2>
 
           <p class="why__lead">
-            We brengen strategie, ontwerp en technologie samen rond één heldere volgende stap.
+            Daarom brengen we strategie, ontwerp en technologie samen voordat we bepalen wat er gebouwd moet worden.
           </p>
         </div>
 
@@ -331,9 +331,9 @@ if (route === "/atlas") {
 
           <div class="next-horizon" data-home-reveal>
             <p>Je volgende stap hoeft niet groter te zijn. Wel scherper.</p>
-            <h3>Maak helder wat jouw bedrijf nu nodig heeft.</h3>
+            <h3>Begin bij wat jouw website en bedrijf nu nodig hebben.</h3>
             <a class="button button--primary" href="/contact">
-              Plan een verkenning
+              Begin de verkenning
             </a>
           </div>
 
@@ -344,7 +344,7 @@ if (route === "/atlas") {
             <span class="brand__mark">WBD.</span>
             <span class="brand__name">We Build and Design</span>
           </a>
-          <p>Strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
+          <p>Websites, strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
         </footer>
 
       </section>
@@ -355,4 +355,16 @@ if (route === "/atlas") {
 } else {
   app.innerHTML = renderPublicPage(route);
   enablePageReveals();
+}
+
+if (route !== "/atlas" && route !== "/atlas-lab") {
+  try {
+    if (localStorage.getItem("atlas.workspace.observing-context.v1")) {
+      void import("./atlas-observe")
+        .then(({ mountObservationCapture }) => mountObservationCapture())
+        .catch(() => undefined);
+    }
+  } catch {
+    // Lokale opslag mag de publieke Experience nooit onderbreken.
+  }
 }
