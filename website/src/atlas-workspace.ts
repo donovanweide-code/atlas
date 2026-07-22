@@ -1,6 +1,7 @@
 import "./styles/atlas-workspace.css";
 import { aquaFlaskProfile } from "./atlas-aquaflask-profile";
-import { focusRecommendation, wbdBrief } from "./atlas-wbd-brief";
+import { focusRecommendation } from "./atlas-case-guidance";
+import { case0001SnapshotLoad } from "./atlas-case-snapshot-source";
 import {
   activateObserving,
   deactivateObserving,
@@ -71,6 +72,11 @@ function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function snapshotDate(value: string): string {
+  const date = value.length === 10 ? new Date(`${value}T12:00:00`) : new Date(value);
+  return new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -130,6 +136,13 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const selectedUnderstandingItems = new Set<string>();
   const priorDate = focusStore.activeDate !== today ? focusStore.activeDate : "";
   const priorOpenItems = priorDate ? (focusStore.days[priorDate] ?? []).filter((item) => !item.completed) : [];
+  const case0001 = case0001SnapshotLoad.state === "confirmed" ? case0001SnapshotLoad.snapshot : null;
+  const case0001Position = case0001?.position.text ?? "Actueel casebeeld vraagt herbevestiging. Atlas geeft voorlopig geen richting.";
+  const case0001Status = case0001?.status.label ?? "Herbevestiging nodig";
+  const case0001NextStep = case0001?.nextStep.text ?? "Herstel eerst een geldig bevestigd casebeeld; de eerdere briefing wordt niet als waarheid gebruikt.";
+  const case0001Uncertainty = case0001?.openUncertainties[0]?.text ?? "Atlas vormt geen nieuwe onzekerheid zonder bevestigd casebeeld.";
+  const case0001Boundary = case0001?.evidenceBoundary.join(" ") ?? "Atlas geeft geen inhoudelijk oordeel zolang de herleidbare momentopname ontbreekt.";
+  const case0001Sources = case0001?.sources.map((source) => `<li><code>${escapeHtml(source.path)}</code><span>${escapeHtml(source.locator)}</span></li>`).join("") ?? "";
 
   app.innerHTML = `<main class="atlas-workspace">
     <section class="workspace-opening" id="overzicht" aria-labelledby="guidance-title">
@@ -196,8 +209,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <section class="workspace-section" id="cases" aria-labelledby="cases-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Cases</p><h2 id="cases-title">Werk met betekenis en context.</h2></div><p>De hoofdcase bewijst Atlas. De klantcase laat Atlas leren.</p></header>
         <div class="workspace-cases">
-          <article class="workspace-case workspace-case--primary"><div class="workspace-case__meta"><span>0001 · Hoofdcase</span><small>Focus · Website</small></div><h3>We Build And Design</h3>
-            <p>Atlas begeleidt de plek waar de methode dagelijks wordt bewezen. Vandaag verdient de eerste publieke minuut alle aandacht.</p><footer><span>Eerstvolgende toets</span><strong>Begrijpt een ondernemer binnen zestig seconden wat WBD realiseert?</strong><button type="button" data-open-wbd aria-controls="case-wbd" aria-expanded="false">Open actuele briefing <i aria-hidden="true">→</i></button></footer></article>
+          <article class="workspace-case workspace-case--primary"><div class="workspace-case__meta"><span>0001 · Hoofdcase</span><small>${escapeHtml(case0001Status)}</small></div><h3>We Build And Design</h3>
+            <p>${escapeHtml(case0001Position)}</p><footer><span>Volgende stap</span><strong>${escapeHtml(case0001NextStep)}</strong><button type="button" data-open-wbd aria-controls="case-wbd" aria-expanded="false">${case0001 ? "Open bevestigd casebeeld" : "Bekijk Case 0001"} <i aria-hidden="true">→</i></button></footer></article>
           <article class="workspace-case workspace-case--open" data-open-aqua role="button" tabindex="0" aria-controls="case-aquaflask" aria-expanded="false"><div class="workspace-case__meta"><span>0002 · Klant</span><small>Oorzaak open</small></div><h3>AquaFlask</h3>
             <p>Atlas kent de bestaande WooCommerce-omgeving, het onderzochte productincident en het verhoogde wijzigingsrisico.</p><footer><span>Onderzoek · 18 juli 2026</span><strong>Bekijk het bedrijfsprofiel <i aria-hidden="true">→</i></strong></footer></article>
         </div>
@@ -205,18 +218,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
 
       <section class="workspace-section workspace-case-detail workspace-wbd-brief" id="case-wbd" aria-labelledby="wbd-brief-title" tabindex="-1" hidden>
         <header class="wbd-brief-hero">
-          <div><p class="workspace-label">Case 0001 · Actuele briefing</p><h2 id="wbd-brief-title">De website is vandaag de deur naar We Build And Design.</h2></div>
-          <p>Atlas toont niet de volledige geschiedenis, maar wat Donovan nu nodig heeft om te kunnen handelen.</p>
+          <div><p class="workspace-label">Case 0001 · Redactioneel bevestigd casebeeld</p><h2 id="wbd-brief-title">${escapeHtml(case0001?.priority.text ?? "Actueel casebeeld vraagt herbevestiging.")}</h2></div>
+          <p>${escapeHtml(case0001 ? "Atlas toont revision " + case0001.revision + ": één bewust bevestigde werkelijkheid, geen live kopie van de repository." : "Atlas toont geen eerdere briefing als actuele waarheid.")}</p>
           <button type="button" data-close-wbd aria-label="Sluit briefing van We Build And Design">Sluit briefing</button>
         </header>
         <div class="wbd-brief-grid">
-          <article class="wbd-brief-card wbd-brief-card--focus"><p class="workspace-label">Focus · Huidige werkelijkheid</p><h3>Wat vandaag waar is</h3><p>${escapeHtml(wbdBrief.currentReality)}</p></article>
-          <article class="wbd-brief-card"><p class="workspace-label">Begrip</p><h3>Wat Atlas hierin ziet</h3><p>${escapeHtml(wbdBrief.understanding)}</p></article>
-          <article class="wbd-brief-card wbd-brief-card--test"><p class="workspace-label">Direct bruikbare volgende stap</p><h3>De zestig-seconden-toets</h3><p>${escapeHtml(wbdBrief.nextTest)}</p><a href="/">Open de publieke eerste minuut <span aria-hidden="true">↗</span></a></article>
-          <article class="wbd-brief-card"><p class="workspace-label">Horizon</p><h3>Wat rustig voorbereid blijft</h3><p>${escapeHtml(wbdBrief.horizon)}</p></article>
-          <article class="wbd-brief-card wbd-brief-card--silence"><p class="workspace-label">Bewuste Stilte</p><h3>Wat Atlas niet invult</h3><p>${escapeHtml(wbdBrief.silence)}</p></article>
+          <article class="wbd-brief-card wbd-brief-card--focus"><p class="workspace-label">Positie · Laatst bevestigd</p><h3>Waar Case 0001 nu staat</h3><p>${escapeHtml(case0001Position)}</p></article>
+          <article class="wbd-brief-card"><p class="workspace-label">Betekenis</p><h3>Wat Atlas hierin ziet</h3><p>${escapeHtml(case0001?.meaning.text ?? case0001Boundary)}</p></article>
+          <article class="wbd-brief-card wbd-brief-card--test"><p class="workspace-label">Direct bruikbare volgende stap</p><h3>${escapeHtml(case0001?.status.label ?? "Eerst het casebeeld herstellen")}</h3><p>${escapeHtml(case0001NextStep)}</p></article>
+          <article class="wbd-brief-card"><p class="workspace-label">Open onzekerheid</p><h3>Wat het besluit nog kan verfijnen</h3><p>${escapeHtml(case0001Uncertainty)}</p></article>
+          <article class="wbd-brief-card wbd-brief-card--silence"><p class="workspace-label">Bewijsgrens · Bewuste Stilte</p><h3>Wat Atlas niet als zelfstandig geverifieerd presenteert</h3><p>${escapeHtml(case0001Boundary)}</p></article>
         </div>
-        <footer class="wbd-brief-footer"><p><span>Herkomst</span>${escapeHtml(wbdBrief.source)}</p><button type="button" data-open-wbd-understanding>Bekijk herleidbare bronnen in Understanding <i aria-hidden="true">↓</i></button></footer>
+        <footer class="wbd-brief-footer"><div class="wbd-brief-provenance">${case0001 ? `<p><span>Revision</span>${case0001.revision} · bevestigd ${escapeHtml(snapshotDate(case0001.lastConfirmedAt))} · redactioneel bevestigd</p><p><span>Eigenaarschap</span>Atlas stelt samen · Donovan bevestigt · Codex borgt</p><details><summary>${case0001.sources.length} herleidbare bronnen</summary><ul>${case0001Sources}</ul></details>` : '<p><span>Status</span>Geen geldige Confirmed revision beschikbaar</p>'}</div><button type="button" data-open-wbd-understanding>Bekijk Understanding <i aria-hidden="true">↓</i></button></footer>
       </section>
 
       <section class="workspace-section workspace-case-detail workspace-aqua-profile" id="case-aquaflask" aria-labelledby="aqua-title" tabindex="-1" hidden>
@@ -326,9 +339,9 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const todayAction = app.querySelector<HTMLAnchorElement>("[data-today-action]")!;
   const todayActionLabel = app.querySelector<HTMLElement>("[data-today-action-label]")!;
   const focusTools = app.querySelector<HTMLDetailsElement>("[data-focus-tools]")!;
-  let adviceKind: ReturnType<typeof focusRecommendation>["kind"] = "wbd-first-minute";
+  let adviceKind: ReturnType<typeof focusRecommendation>["kind"] = "wbd-unavailable";
   const paintAdvice = () => {
-    const advice = focusRecommendation(currentItems(), aquaFlask);
+    const advice = focusRecommendation(currentItems(), aquaFlask, case0001SnapshotLoad);
     adviceKind = advice.kind;
     adviceTitle.textContent = advice.title;
     adviceReason.textContent = advice.reason;
@@ -337,7 +350,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     if (advice.kind === "day-focus") {
       guidanceAction.href = "#focus";
       guidanceActionLabel.textContent = "Open je eerste stap";
-      guidancePrepared.textContent = "Ik heb je eerste onafgeronde stap klaargezet.";
+      guidancePrepared.textContent = advice.prepared;
       todayAction.href = "#focus";
       todayActionLabel.textContent = "Begin met deze stap";
       return;
@@ -345,22 +358,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     if (advice.kind === "aquaflask") {
       guidanceAction.href = "#cases";
       guidanceActionLabel.textContent = "Open AquaFlask";
-      guidancePrepared.textContent = "Ik heb de case voor je klaargezet.";
+      guidancePrepared.textContent = advice.prepared;
       todayAction.href = "#cases";
       todayActionLabel.textContent = "Open AquaFlask";
       return;
     }
-    guidanceAction.href = observingContext ? "/" : "#waarnemen";
-    guidanceActionLabel.textContent = observingContext
-      ? "Open de publieke eerste minuut"
-      : "Activeer Waarnemen om te beginnen";
-    todayAction.href = observingContext ? "/" : "#waarnemen";
-    todayActionLabel.textContent = observingContext
-      ? "Open de publieke eerste minuut"
-      : "Activeer Waarnemen om te beginnen";
-    guidancePrepared.textContent = observingContext
-      ? "Ik heb Waarnemen alvast klaargezet."
-      : "Activeer Waarnemen één keer; daarna ligt de publieke minuut direct klaar.";
+    guidanceAction.href = "#cases";
+    guidanceActionLabel.textContent = advice.kind === "wbd-snapshot"
+      ? "Open het bevestigde casebeeld"
+      : "Bekijk Case 0001";
+    todayAction.href = "#cases";
+    todayActionLabel.textContent = guidanceActionLabel.textContent;
+    guidancePrepared.textContent = advice.prepared;
   };
   const observingForm = app.querySelector<HTMLFormElement>("[data-observing-form]")!;
   const observingStart = app.querySelector<HTMLButtonElement>("[data-observing-start]")!;

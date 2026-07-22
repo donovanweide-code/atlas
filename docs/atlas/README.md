@@ -14,3 +14,9 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 
 De manifest-, principes- en Foundation-bestanden zijn korte toegangspunten tot de canonieke Foundation. Zij introduceren geen tweede filosofie.
+
+## Redactioneel bevestigd casebeeld
+
+Een `CASE-SNAPSHOT.json` naast het betreffende klantdossier is het redactioneel bevestigde casebeeld waarvoor Atlas op dat moment durft te staan. Alleen een revision met status `confirmed` mag de Workspace voeden. Nieuwe documenten, commits, observaties en onderzoeksresultaten wijzigen de Workspace niet automatisch; een nieuwe revision wordt pas actueel nadat Atlas het casebeeld heeft samengesteld, Donovan het heeft bevestigd en Codex de bronnen en technische geldigheid heeft geborgd.
+
+Een snapshot is geen volledige kopie van het dossier. Candidate-revisions blijven buiten de interface, superseded-revisions blijven via de repository herleidbaar en een withdrawn-revision levert geen oude inhoudelijke fallback op.

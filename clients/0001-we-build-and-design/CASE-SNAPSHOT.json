@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "caseId": "0001",
+  "revision": 1,
+  "lifecycleStatus": "confirmed",
+  "supersedesRevision": null,
+  "confirmationMode": "editorially-confirmed",
+  "editorialOwner": "atlas",
+  "confirmedBy": "donovan",
+  "preparedBy": "codex",
+  "lastConfirmedAt": "2026-07-22",
+  "lastConfirmedAtPrecision": "day",
+  "position": {
+    "text": "De lokale We Build And Design Experience is de beoogde publieke website. De huidige publieke productie draait nog als WordPress-omgeving op TransIP Webhosting onder /www.",
+    "claimIds": ["C-001", "C-002", "C-003"]
+  },
+  "meaning": {
+    "text": "De nieuwe Experience moet eerst geïsoleerd en controleerbaar worden bewezen. Een directe vervanging van de bestaande WordPress-omgeving zou de afgesproken herstelbaarheid voortijdig doorbreken.",
+    "claimIds": ["C-002", "C-004"]
+  },
+  "priority": {
+    "text": "Behoud de huidige productieomgeving; de geïsoleerde previewroute wacht op GO.",
+    "claimIds": ["C-004", "C-006"]
+  },
+  "nextStep": {
+    "text": "Voer nog geen hostingwijziging uit. Wacht op expliciete GO voor het aanmaken van een zelfstandige previewwebsite met een eigen DocumentRoot onder /subsites/.",
+    "claimIds": ["C-004", "C-005", "C-006"]
+  },
+  "status": {
+    "code": "awaiting-explicit-execution-go",
+    "label": "Technische voorwaarde bevestigd; uitvoering wacht op GO.",
+    "claimIds": ["C-005", "C-006"]
+  },
+  "claims": [
+    {
+      "id": "C-001",
+      "statement": "De lokale We Build And Design Experience is de beoogde publieke website.",
+      "sourceIds": ["S-001", "S-002"],
+      "confirmedAt": "2026-07-22",
+      "confirmedAtPrecision": "day",
+      "reliability": "high",
+      "reliabilityBasis": "owner-confirmed"
+    },
+    {
+      "id": "C-002",
+      "statement": "De bestaande WordPress-installatie is de huidige productietoestand en moet tijdens de voorbereiding herstelbaar blijven.",
+      "sourceIds": ["S-001", "S-002", "S-003"],
+      "confirmedAt": "2026-07-22",
+      "confirmedAtPrecision": "day",
+      "reliability": "high",
+      "reliabilityBasis": "owner-confirmed-and-publicly-observed"
+    },
+    {
+      "id": "C-003",
+      "statement": "Case 0001 gebruikt reguliere TransIP Webhosting met sitepad /www; WordPress Hosting en Managed WordPress zijn niet actief.",
+      "sourceIds": ["S-001", "S-004"],
+      "confirmedAt": "2026-07-22T06:52:00+02:00",
+      "confirmedAtPrecision": "minute",
+      "reliability": "high",
+      "reliabilityBasis": "owner-confirmed-from-dashboard"
+    },
+    {
+      "id": "C-004",
+      "statement": "Een zelfstandige previewwebsite met een eigen DocumentRoot onder /subsites/ is de bewezen voorkeursroute; /www en de WordPress-database blijven onaangeraakt.",
+      "sourceIds": ["S-003", "S-004"],
+      "confirmedAt": "2026-07-22T06:52:00+02:00",
+      "confirmedAtPrecision": "minute",
+      "reliability": "high",
+      "reliabilityBasis": "owner-context-and-official-product-documentation"
+    },
+    {
+      "id": "C-005",
+      "statement": "De optie + Website toevoegen is in het TransIP-dashboard aanwezig.",
+      "sourceIds": ["S-005"],
+      "confirmedAt": "2026-07-22",
+      "confirmedAtPrecision": "day",
+      "reliability": "high",
+      "reliabilityBasis": "owner-confirmed-from-dashboard"
+    },
+    {
+      "id": "C-006",
+      "statement": "Er is geen expliciete GO voor uitvoering gegeven en de productieomgeving blijft onaangeraakt.",
+      "sourceIds": ["S-001", "S-004", "S-005"],
+      "confirmedAt": "2026-07-22",
+      "confirmedAtPrecision": "day",
+      "reliability": "high",
+      "reliabilityBasis": "owner-decision-and-recorded-non-action"
+    }
+  ],
+  "sources": [
+    {
+      "id": "S-001",
+      "type": "repository-document",
+      "path": "clients/0001-we-build-and-design/CASE.md",
+      "locator": "Publieke intentie, Productiegrens, Hostingcontext en Eerstvolgende stap"
+    },
+    {
+      "id": "S-002",
+      "type": "repository-document",
+      "path": "docs/atlas/SPRINTS/Sprint-002.md",
+      "locator": "E-002-002 — Bedoelde publieke toestand en productiegrens"
+    },
+    {
+      "id": "S-003",
+      "type": "repository-document",
+      "path": "docs/atlas/SPRINTS/Sprint-002.md",
+      "locator": "E-002-003 — Veilige publicatieroute naast WordPress"
+    },
+    {
+      "id": "S-004",
+      "type": "repository-document",
+      "path": "docs/atlas/SPRINTS/Sprint-002.md",
+      "locator": "Herziening 1 — Reguliere Webhosting bevestigd"
+    },
+    {
+      "id": "S-005",
+      "type": "repository-document",
+      "path": "docs/atlas/SPRINTS/Sprint-002.md",
+      "locator": "Herziening 2 — Extra website beschikbaarheid bevestigd"
+    }
+  ],
+  "openUncertainties": [
+    {
+      "id": "U-001",
+      "text": "De definitieve previewhostnaam is nog niet als uitvoeringsbesluit vastgesteld; preview.webuildanddesign.nl is een voorbeeld.",
+      "impact": "low"
+    },
+    {
+      "id": "U-002",
+      "text": "Het definitieve sitepad binnen /subsites/ is nog niet gekozen of technisch aangemaakt.",
+      "impact": "medium"
+    },
+    {
+      "id": "U-003",
+      "text": "De gebouwde Experience is nog niet in de TransIP-previewomgeving gepubliceerd of daar getest.",
+      "impact": "high"
+    }
+  ],
+  "evidenceBoundary": [
+    "Atlas heeft geen zelfstandige toegang tot het ingelogde TransIP-dashboard; product- en accountinformatie is door Donovan bevestigd.",
+    "Er zijn geen bestanden geüpload, websites of subdomeinen aangemaakt, DNS-records gewijzigd of WordPress-gegevens aangepast.",
+    "De momentopname wordt uitsluitend redactioneel herzien en controleert de liveomgeving niet automatisch.",
+    "Wijzigingen in CASE.md, sprintdocumentatie, Git, observaties of andere bronnen veranderen deze momentopname niet automatisch."
+  ]
+}
