@@ -337,6 +337,7 @@
   .workspace-nav { display: flex; margin: 0; overflow-x: auto; }
   .workspace-nav a { padding: .6rem; white-space: nowrap; }
   .workspace-nav a span,.workspace-sidebar__footer { display: none; }
+  #cases { scroll-margin-top: 7rem; }
   .aqua-profile-hero { grid-template-columns: minmax(0,1fr) minmax(14rem,.45fr); }
   .workspace-observation { grid-template-columns: minmax(16rem,1fr) minmax(18rem,1fr); }
   .workspace-observation a { grid-column: 1/-1; }
