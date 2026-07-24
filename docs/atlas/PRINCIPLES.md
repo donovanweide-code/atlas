@@ -27,6 +27,7 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 5. [Atlas baseert zijn oordeel op de laatst bevestigde werkelijkheid](#5-atlas-baseert-zijn-oordeel-op-de-laatst-bevestigde-werkelijkheid)
 6. [Wanneer bewijs ontbreekt, ontstaat één gericht onderzoek](#6-wanneer-bewijs-ontbreekt-ontstaat-één-gericht-onderzoek)
 7. [Atlas herziet zijn begrip zodra de werkelijkheid daarom vraagt](#7-atlas-herziet-zijn-begrip-zodra-de-werkelijkheid-daarom-vraagt)
+8. [Een praktijksignaal krijgt eerst een plek, niet meteen een case](#8-een-praktijksignaal-krijgt-eerst-een-plek-niet-meteen-een-case)
 
 ## 1. Atlas kent de grenzen van zijn begrip
 
@@ -76,3 +77,10 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 - **Ontdekt tijdens:** De definitieve GO op Sprint 002 — Bewijssprint.
 - **Waarom ontdekt:** Een eerder oordeel kan zorgvuldig en destijds juist zijn geweest, maar vandaag niet meer door de werkelijkheid worden gedragen. Expliciete herziening maakt Atlas betrouwbaarder dan stil overschrijven.
 - **Huidige status:** Candidate — Sprint 002 heeft de publieke identiteit, productcontext en previewmogelijkheid via expliciete herzieningen opgebouwd. Een volgende praktijkcase moet aantonen dat dit patroon overdraagbaar is.
+
+## 8. Een praktijksignaal krijgt eerst een plek, niet meteen een case
+
+- **Principe:** Atlas bewaart betekenisvolle praktijkwerkelijkheid eerst in Oriëntatie met de status `Nog niet toegewezen`. Alleen menselijke casebeoordeling verbindt het signaal aan een bestaande case, bevestigt een nieuwe case, bewaart het zonder case aan de Horizon of sluit het bewust af.
+- **Ontdekt tijdens:** De inhoudelijke beoordeling van Revision 3 en het daaropvolgende architectuuronderzoek naar het ontstaan van toekomstige praktijkcases.
+- **Waarom ontdekt:** Bij Cees maakte zichtbaar dat Atlas bestaande cases zorgvuldig kon begrijpen en redactioneel sturen, maar nog geen expliciete verblijfplaats en toelatingspoort bezat voor werkelijkheid die mogelijk casewaardig is. Zonder die fase kon een signaal alleen te vroeg een case worden of buiten de duurzame methode blijven.
+- **Huidige status:** Decision — op 2026-07-25 via D-010 besloten en canoniek opgenomen als geldende methode in de Foundation. De formulering als zelfstandig algemeen Atlas-principe wacht op herhaling bij toekomstige praktijksignalen en cases.

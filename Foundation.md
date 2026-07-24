@@ -184,9 +184,9 @@ Iedere opdracht eindigt met het vastleggen van de beslissing, het resultaat en d
 
 ### Verantwoordelijkheid
 
-- **Donovan beslist.** Hij bepaalt methode, sprintscope, prioriteit en acceptatie.
-- **Atlas begrijpt en begeleidt.** Atlas bewaart context en betekenis, onderscheidt focus van horizon en bepaalt welke betekenisvolle volgende stap aandacht verdient.
-- **Codex onderzoekt en realiseert.** Codex onderzoekt bronnen, bouwt, test en documenteert. Codex mag verbeteringen actief signaleren en onderbouwen, maar verandert de methode, Foundation of sprintscope niet zonder besluit van Donovan.
+- **Donovan beslist.** Hij bevestigt voorlopige praktijkcontext, bepaalt case-identiteit, methode, sprintscope, prioriteit en acceptatie.
+- **Atlas begrijpt en begeleidt.** Atlas herkent mogelijke praktijksignalen, bewaart context en betekenis, onderscheidt Oriëntatie, Focus, Horizon en Stilte en bepaalt welke betekenisvolle volgende stap aandacht verdient.
+- **Codex denkt actief mee, onderzoekt en realiseert.** Codex onderzoekt bronnen en alternatieven, borgt herleidbaarheid, signaleert inconsistenties en risico's, stelt betere richtingen voor, bouwt, test en documenteert. Binnen de vastgestelde Foundation en scope mag Codex zelfstandig technische en redactionele keuzes voorbereiden. Fundamentele wijzigingen in visie, methode, prioriteit of verantwoordelijkheid worden nooit stilzwijgend uitgevoerd, maar eerst als Candidate met onderbouwing aan Donovan voorgelegd. Codex wijst geen case toe en neemt nooit het uiteindelijke ondernemersbesluit.
 
 ### Werkstromen en oordelen
 
@@ -222,6 +222,56 @@ De methodische volgorde is:
 **Werkelijkheid → Waarnemen → Waarneming → Atlas herkent de context → Donovan bevestigt de context → Nog niet beoordeeld → Menselijke beoordeling → Eventueel Understanding → Inzicht → Volgende stap**
 
 Een waarneming wordt nooit automatisch Understanding. Review blijft de menselijke beoordelingsfase waarin verzamelde waarnemingen betekenis kunnen krijgen, worden verworpen, bewust open blijven of na bevestiging naar Understanding worden gebracht.
+
+### Oriëntatie vóór case-identiteit
+
+Niet iedere ondernemer, waarneming, vraag of mogelijkheid is automatisch een case. De ondernemer is bovendien nooit zelf de case. Een case is een begrensde praktijksituatie rond een werkelijke vraag, gewenste verandering, spanning of verantwoordelijkheid.
+
+Wanneer een bron, gesprek, toezegging, verandering of waarneming mogelijk blijvende betekenis heeft, ontstaat een **praktijksignaal**. Het signaal is de inhoud die aandacht kan verdienen. **Oriëntatie** is de methodische fase waarin Atlas dat signaal duurzaam draagt zonder al te veronderstellen dat het een zelfstandige case wordt.
+
+Een signaal in Oriëntatie heeft de status **Nog niet toegewezen**. Daarmee blijft een ander vraagstuk open dan bij **Nog niet beoordeeld**:
+
+- **Nog niet beoordeeld:** de betekenis van een waarneming is nog open.
+- **Nog niet toegewezen:** de plaats van een praktijksignaal in het caselandschap is nog open.
+
+De methodische volgorde voor het ontstaan van een case is:
+
+**Werkelijkheid → Bron of waarneming → Praktijksignaal → Oriëntatie · Nog niet toegewezen → Menselijke casebeoordeling → Bestaande case, nieuwe case, Horizon zonder case of bewust afgesloten**
+
+Oriëntatie bewaart minimaal:
+
+- wat letterlijk is gezegd, gebeurd of waargenomen;
+- de bron en het moment;
+- de herkenbare ondernemer of praktijkcontext, voor zover bekend;
+- waarom het signaal mogelijk later betekenis kan hebben;
+- wat nog niet duidelijk is over de toewijzing;
+- wie de beoordeling draagt;
+- welk moment of welke gebeurtenis herbeoordeling activeert.
+
+Atlas mag een mogelijk praktijksignaal herkennen en voorstellen. Donovan bevestigt eerst of de voorlopige context zorgvuldig is vastgelegd. Daarna bepaalt Donovan één van vier bestemmingen:
+
+1. het signaal wordt verbonden aan een bestaande case;
+2. het signaal rechtvaardigt een zelfstandige nieuwe case;
+3. het signaal blijft zonder case aan de Horizon bewaard met een terugkeertrigger;
+4. het signaal wordt bewust afgesloten, met behoud van de reden.
+
+Geen signaal wordt stilzwijgend een case en geen signaal blijft zonder bestemming of herbeoordeling onbeperkt in Oriëntatie. Een betekenisvolle ondernemersinteractie en een sprintafsluiting eindigen daarom met een korte signaalcontrole: is nieuwe praktijkwerkelijkheid ontstaan die moet worden toegewezen, samengevoegd, bewust bewaard of afgesloten?
+
+**Case-identiteit.** Een case krijgt een uniek en blijvend case-ID zodra Donovan bevestigt dat er een echte ondernemer of onderneming, een concrete huidige situatie of gewenste verandering en een verantwoordelijkheid voor WBD bestaan; de context over meerdere momenten bewaard moet blijven; en de situatie niet logisch binnen een bestaande case valt. Het ID bevestigt alleen identiteit. Het bewijst geen rijpheid, prioriteit, oplossing of succes en wordt na afsluiting nooit hergebruikt.
+
+**Case-rijpheid.** Na registratie groeit de case via Intake en Understanding. Een eerste `CASE-SNAPSHOT` ontstaat pas wanneer Atlas voldoende grond heeft om positie, betekenis, zekerheid, beslissende onzekerheid, volgende stap, Horizon en bewijsgrens herleidbaar samen te stellen. De eerste revision is Candidate. Alleen een door Donovan redactioneel bevestigde en door Codex op bronnen en geldigheid geborgde Confirmed revision mag als actueel casebeeld gelden.
+
+**Aandacht.** Het bestaan van een case bepaalt niet hoeveel aandacht zij krijgt. Vanaf registratie moet haar bestaan en werkelijke fase vindbaar blijven; inhoudelijk richtinggevend wordt zij pas wanneer voldoende bevestigd begrip aanwezig is. Focus, Horizon en Bewuste Stilte blijven afzonderlijke redactionele keuzes.
+
+Een case wordt alleen leidend in het Kompas wanneer zij geregistreerd is, een expliciet actueel focusbesluit draagt, Atlas kan uitleggen waarom juist nu aandacht nodig is en één verantwoord bruikbare volgende stap bestaat. Tijdens vroege of urgente Intake mag die stap uitsluitend gericht zijn op begrijpen of bewijs verzamelen. Een inhoudelijke conclusie vereist een Confirmed casebeeld. Nieuwheid, hoeveelheid opgeslagen kennis of een oude vervolgstap bepalen nooit zelfstandig de prioriteit.
+
+Een case blijft aan de Horizon of in Bewuste Stilte wanneer wachten, ontbrekend bewijs, afwezige verantwoordelijkheid of een sterkere actuele prioriteit dat rechtvaardigt. Die plaatsing bewaart altijd de reden en een terugkeertrigger. Zonder reden en terugkeertrigger is Stilte geen redactionele keuze, maar vergeten.
+
+Een case wordt afgesloten wanneer de gewenste verandering is bereikt, afgewezen of bewust beëindigd en de uitkomst, resterende risico's en relevante lessen zijn vastgelegd. Case-ID en geschiedenis blijven bestaan. Nieuwe werkelijkheid kan dezelfde case heropenen of, na menselijke beoordeling, een nieuwe case rechtvaardigen.
+
+De volledige ordening is:
+
+**Werkelijkheid → Waarneming of bron → Praktijksignaal → Oriëntatie → Case-identiteit → Case-rijpheid → Redactionele aandacht → Resultaat, herziening of afsluiting**
 
 ### Redactioneel oordeel
 
@@ -350,6 +400,7 @@ Beantwoord deze vragen vóór iedere belangrijke ontwerp-, inhouds-, proces- of 
 
 ### Begeleiding en redactioneel oordeel
 
+- Is nieuwe praktijkwerkelijkheid een waarneming, een nog niet toegewezen praktijksignaal of al onderdeel van een bevestigde case?
 - Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen?
 - Heeft Atlas al nagedacht voordat Donovan zelf hoeft na te denken?
 - Laat Atlas alleen zien wat nu helpt, terwijl kansen veilig aan de horizon bewaard blijven?

@@ -32,3 +32,12 @@ Het Logboek bewaart betekenis, niet iedere activiteit. Voeg een notitie toe wann
 - **Betekenis:** Sprint 001C bereikt het doel “Atlas kent deze klant” voldoende en wordt inhoudelijk afgesloten. De zichtbare sprint heeft tegelijk aangetoond dat meer kennis niet automatisch meer interface mag betekenen.
 - **Volgende stap:** Geen nieuwe wijziging toevoegen aan Sprint 001C. Gebruik Kennis, Begrip, Interface, Focus, Horizon en Stilte als redactioneel uitgangspunt voor toekomstig werk.
 - **Herbruikbare les:** Iedere sprint moet zichtbaar zijn én binnen het afgesproken doel blijven. Atlas wordt een betere collega wanneer het minder toont, maar beter kiest wat nu betekenis heeft.
+
+### 2026-07-25 — Oriëntatie wordt onderdeel van de Atlas-methode
+
+- **Type:** beslissing en les
+- **Case:** Intern — Atlas
+- **Context:** De inhoudelijke beoordeling van Revision 3 liet zien dat de Workspace de repository correct weerspiegelde, terwijl bekende praktijkwerkelijkheid nog buiten de formele caselevenscyclus kon blijven. Het daaropvolgende architectuuronderzoek onderscheidde praktijkoriëntatie, case-identiteit, case-rijpheid en redactionele aandacht.
+- **Betekenis:** Een betekenisvol praktijksignaal hoeft niet langer te vroeg een case te worden of buiten Atlas te blijven. Oriëntatie bewaart het signaal neutraal als `Nog niet toegewezen` totdat Donovan een expliciete bestemming bevestigt.
+- **Volgende stap:** Toets een volgend werkelijk praktijksignaal aan de nieuwe methode voordat een case-ID, snapshot, Workspace-plaatsing of Kompasprioriteit wordt bepaald.
+- **Herbruikbare les:** Een methode voorkomt vergeten niet door alles direct te structureren, maar door werkelijkheid eerst een neutrale, herleidbare verblijfplaats en een menselijke beslispoort te geven.

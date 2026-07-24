@@ -71,3 +71,23 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Waarom:** Klanten hoeven Atlas niet te kennen. Zij moeten ervaren dat We Build And Design hun bedrijf begrijpt. De bestaande herkenning als websitebouwer is daarom een waardevolle ingang, geen positionering die eerst moet verdwijnen.
 - **Gevolg:** De publieke eerste minuut benoemt websites expliciet, waarna begrip, ontwerp en technologie de differentiatie dragen. Publiek bewijs wordt alleen toegevoegd wanneer werk, context en toestemming bevestigd zijn. De bestaande contactroute blijft intact zolang geen bevestigd alternatief bestaat.
 - **Interne vertaling:** Case 0001 toont een actuele redactionele briefing. Een klantcase die terecht op bewijs wacht, verdringt zonder concrete vervolgstap niet langer de actieve WBD-prioriteit uit het Kompas.
+
+## D-010 — Oriëntatie vóór case-identiteit
+
+- **Datum:** 2026-07-25
+- **Status:** Besloten met expliciete GO na het architectuuronderzoek dat volgde op de inhoudelijke beoordeling van Revision 3.
+- **Aanleiding:** Revision 3 weerspiegelde de repository correct, maar de repository droeg nog niet alle bekende praktijkwerkelijkheid. Bij Cees maakte zichtbaar dat Atlas wel een levenscyclus voor bestaande cases bezat, maar geen neutrale methodische verblijfplaats en menselijke toelatingspoort voor een betekenisvol signaal voordat case-identiteit ontstaat.
+- **Keuze:** Atlas introduceert **Oriëntatie** als methodische fase voor een werkelijk praktijksignaal met de status **Nog niet toegewezen**. Het signaal blijft daar neutraal totdat Donovan het aan een bestaande case verbindt, als zelfstandige nieuwe case bevestigt, zonder case aan de Horizon bewaart of bewust afsluit.
+- **Architectuur:** Praktijkoriëntatie, case-identiteit, case-rijpheid en redactionele aandacht zijn afzonderlijke lagen. Een case-ID bevestigt identiteit; een Confirmed `CASE-SNAPSHOT` bevestigt het actuele redactionele casebeeld; Focus, Horizon en Stilte bepalen afzonderlijk hoeveel aandacht de case nu verdient.
+- **Menselijke grens:** Atlas en Codex mogen een mogelijk praktijksignaal, voorlopige context en samenhang voorstellen. Donovan bevestigt de context en beslist over toewijzing, case-identiteit, prioriteit en afsluiting.
+- **Gevolg:** Ieder betekenisvol praktijksignaal krijgt een expliciete bestemming of herbeoordelingstrigger. Nieuwheid, hoeveelheid kennis of een lokaal opgeslagen vervolgstap maken een case nooit zelfstandig leidend in het Kompas.
+- **Scopegrens:** Dit besluit legt de generieke methode vast. Het registreert Bij Cees niet als case, kent geen case-ID toe, maakt geen `CASE-SNAPSHOT` en wijzigt geen Workspace, opslagmodel of interface. Die toepassing en uitvoering vragen afzonderlijke beoordeling en besluitvorming.
+
+## D-011 — Codex als actieve denk- en uitvoeringspartner
+
+- **Datum:** 2026-07-25
+- **Status:** Expliciet bevestigd door Donovan bij de canonieke vastlegging van Oriëntatie en de caselevenscyclus.
+- **Keuze:** Codex is niet alleen technisch uitvoerder. Codex denkt actief mee, onderzoekt alternatieven, signaleert inconsistenties, benoemt risico's en mag betere richtingen voorstellen.
+- **Mandaat:** Binnen een vastgestelde Foundation en expliciete scope mag Codex zelfstandig technische en redactionele keuzes voorbereiden en onderbouwen. Realisatie volgt binnen de verleende opdracht; fundamentele wijzigingen in visie, methode, prioriteit of verantwoordelijkheid vallen daar nooit stilzwijgend onder.
+- **Grens:** Een fundamentele wijziging wordt nooit stilzwijgend uitgevoerd. Codex legt haar eerst als Candidate met bronnen, gevolgen, risico's en een voorstel aan Donovan voor. Donovan houdt het uiteindelijke besluit.
+- **Gevolg:** Kritisch meedenken en begrensd initiatief zijn onderdeel van goed Codex-werk; methodische of strategische autonomie zonder menselijke bevestiging niet.
