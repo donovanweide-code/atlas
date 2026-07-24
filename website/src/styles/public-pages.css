@@ -305,6 +305,7 @@
 
 .route-chapters,
 .route-evidence,
+.route-contact,
 .route-reflection,
 .route-next {
   position: relative;
@@ -406,6 +407,90 @@
   color: var(--route-muted);
   font-size: clamp(1rem, 1.25vw, 1.17rem);
   line-height: 1.85;
+}
+
+.route-contact {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.45fr) minmax(0, 1.35fr) minmax(12rem, 0.55fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  width: min(100%, 75rem);
+  align-items: start;
+  margin: clamp(11rem, 18vw, 19rem) auto 0;
+  padding: clamp(2.5rem, 5vw, 5rem);
+  border: 1px solid rgba(62, 88, 73, 0.18);
+  background: rgba(247, 241, 229, 0.44);
+  box-shadow: inset 0 0 5rem rgba(255, 252, 244, 0.3);
+}
+
+.route-contact__identity {
+  display: grid;
+  gap: 1rem;
+}
+
+.route-contact__logo {
+  color: #21332a;
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.07em;
+  line-height: 1;
+}
+
+.route-contact__identity p,
+.route-contact__eyebrow {
+  margin: 0;
+  color: rgba(55, 84, 68, 0.62);
+  font-size: 0.67rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.route-contact__conversation h2 {
+  max-width: 14ch;
+  margin: 1.25rem 0 0;
+  color: #18251f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 4.8vw, 4.8rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.route-contact__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 2.5rem;
+}
+
+.route-contact__email {
+  margin: 1.4rem 0 0;
+  color: rgba(42, 64, 53, 0.72);
+  font-size: 0.92rem;
+}
+
+.route-contact__email a {
+  text-decoration: underline;
+  text-decoration-color: rgba(155, 111, 55, 0.46);
+  text-underline-offset: 0.3em;
+}
+
+.route-contact__details {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  color: rgba(42, 64, 53, 0.68);
+  font-size: 0.82rem;
+  font-style: normal;
+  line-height: 1.65;
+}
+
+.route-contact__details strong {
+  margin-bottom: 0.35rem;
+  color: #21332a;
 }
 
 .route-reflection {
@@ -632,6 +717,14 @@
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+
+  .route-contact {
+    grid-template-columns: minmax(8rem, 0.4fr) minmax(0, 1fr);
+  }
+
+  .route-contact__details {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 720px) {
@@ -694,6 +787,17 @@
   .route-chapter__number { margin: 0; }
   .route-chapter h2 { max-width: 13ch; font-size: clamp(2.35rem, 11vw, 3.8rem); }
   .route-chapter div > p { line-height: 1.75; }
+
+  .route-contact {
+    grid-template-columns: 1fr;
+    padding: 2rem 1.5rem;
+  }
+
+  .route-contact__details {
+    grid-column: 1;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(62, 88, 73, 0.14);
+  }
 
   .route-reflection {
     gap: 1.25rem;

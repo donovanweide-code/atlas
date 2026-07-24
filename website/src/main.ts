@@ -2,7 +2,7 @@ import "./styles/main.css";
 import "./styles/atlas-expedition.css";
 import "./styles/public-pages.css";
 import { renderSceneWorld } from "./atlas-scenes";
-import { understandingMethod } from "./atlas-understanding";
+import { publicMethod } from "./public-method";
 import {
   enablePageReveals,
   renderPublicPage,
@@ -11,13 +11,7 @@ import {
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const route = window.location.pathname.replace(/\/+$/, "") || "/";
 
-if (route === "/atlas") {
-  void import("./atlas-workspace").then(({ renderAtlasWorkspace }) =>
-    renderAtlasWorkspace(app),
-  );
-} else if (route === "/atlas-lab") {
-  void import("./atlas-lab").then(({ renderAtlasLab }) => renderAtlasLab(app));
-} else if (route === "/") {
+if (route === "/") {
   app.innerHTML = `
     <main class="page">
       <header class="site-header">
@@ -34,7 +28,7 @@ if (route === "/atlas") {
         </nav>
 
         <a class="button button--primary site-header__cta" href="/contact">
-          Plan een kennismaking
+          Bespreek je website
         </a>
 
         <details class="site-menu">
@@ -44,66 +38,66 @@ if (route === "/atlas") {
             <a href="/werkwijze">Werkwijze</a>
             <a href="/projecten">Projecten</a>
             <a href="/over-ons">Over ons</a>
-            <a href="/contact">Kennismaken</a>
+            <a href="/contact">Contact</a>
           </nav>
         </details>
       </header>
 
-      <section class="hero atlas-scene" data-scene="scene-001" data-atlas-observation="public.home.entry" id="eerste-publieke-minuut" aria-labelledby="hero-title">
+      <section class="hero atlas-scene" data-scene="scene-001" id="eerste-publieke-minuut" aria-labelledby="hero-title">
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow">Websites. Strategie. Design. Technologie.</p>
+          <p class="hero__eyebrow">Professionele websites. Persoonlijk en begrijpelijk.</p>
 
-          <h1 class="hero__title" id="hero-title">Je bedrijf is klaar voor wat volgt.</h1>
+          <h1 class="hero__title" id="hero-title">Klaar voor je eerste professionele website?</h1>
 
           <p class="hero__text">
-            We ontwerpen en bouwen websites voor ondernemers die al iets hebben opgebouwd.<br>
-            Eerst maken we helder wat jouw bedrijf nu werkelijk nodig heeft.
+            Jij kent je bedrijf. Je hoeft de digitale wereld niet te kennen.<br>
+            We Build And Design helpt je om die eerste stap rustig en begrijpelijk te zetten.
           </p>
 
           <a class="hero__step" href="#begrijpen">
-            <span>Zie hoe we eerst begrijpen</span>
+            <span>Bekijk hoe Donovan begint</span>
             <i aria-hidden="true"></i>
           </a>
         </div>
 
       </section>
 
-      <section class="understand atlas-scene" data-scene="scene-002" data-atlas-observation="public.home.understanding" id="begrijpen" aria-labelledby="understand-title">
+      <section class="understand atlas-scene" data-scene="scene-002" id="begrijpen" aria-labelledby="understand-title">
         ${renderSceneWorld("scene-002")}
         <div class="understand__inner">
           <header class="understand__intro" data-home-reveal>
             <p class="understand__label"><span>ROUTE 02</span> WERKWIJZE</p>
             <h2 class="understand__title" id="understand-title">
-              We luisteren voorbij het eerste antwoord.
+              Eerst luisteren. Dan pas bouwen.
             </h2>
           </header>
 
           <div class="understand__experience">
             <div class="understand__thoughts" data-home-reveal>
-              <p>“De website moet vernieuwd.”</p>
-              <p>“We moeten meer automatiseren.”</p>
-              <p>“Ons verhaal moet scherper.”</p>
+              <p>“Ik weet dat ik een website nodig heb.”</p>
+              <p>“Ik stel die stap al een tijd uit.”</p>
+              <p>“Maar waar begin ik?”</p>
             </div>
 
             <div class="understand__insight" data-home-reveal>
               <p class="understand__realisation">
-                <span>${understandingMethod.publicTruth}</span>
-                <strong>${understandingMethod.publicQuestion}</strong>
+                <span>${publicMethod.truth}</span>
+                <strong>${publicMethod.question}</strong>
               </p>
 
               <div class="understand__belief">
                 <p>
-                  Daarom blijft het antwoord nog even open.<br>
-                  <strong>Tot waarneming en bewijs een patroon laten zien.</strong>
+                  Donovan begint niet bij techniek.<br>
+                  <strong>Hij begint bij jouw bedrijf, klanten en verhaal.</strong>
                 </p>
                 <p>
-                  Pas dan kiezen we samen<br>
-                  <strong>één betekenisvolle volgende stap.</strong>
+                  Daarna worden de keuzes kleiner<br>
+                  <strong>en de eerste stap begrijpelijk.</strong>
                 </p>
               </div>
-              <a class="understand__next" href="#digitaal-fundament">Verder wanneer de vraag helder is <i aria-hidden="true">→</i></a>
+              <a class="understand__next" href="#digitaal-fundament">Bekijk hoe je website ontstaat <i aria-hidden="true">→</i></a>
             </div>
           </div>
 
@@ -121,43 +115,43 @@ if (route === "/atlas") {
         <span class="scene-waypoint scene-waypoint--crossing"></span>
       </div>
 
-      <section class="why atlas-scene" data-scene="scene-004" data-atlas-observation="public.home.digital-foundation" id="digitaal-fundament" aria-labelledby="why-title">
+      <section class="why atlas-scene" data-scene="scene-004" id="digitaal-fundament" aria-labelledby="why-title">
         ${renderSceneWorld("scene-004")}
 
         <div class="why__intro" data-home-reveal>
           <p class="section-label">03 / Digitaal fundament</p>
 
           <h2 class="why__title" id="why-title">
-            Een website is vaak de eerste zichtbare stap. Het fundament erachter bepaalt hoe zij verder kan groeien.
+            Een professionele website begint bij begrijpen wat jouw bedrijf zichtbaar moet maken.
           </h2>
 
           <p class="why__lead">
-            Daarom brengen we strategie, ontwerp en technologie samen voordat we bepalen wat er gebouwd moet worden.
+            Daarom maken we eerst het verhaal en de keuzes helder. Ontwerp en techniek volgen pas daarna.
           </p>
         </div>
 
         <div class="why__grid" data-home-reveal>
           <article class="why-principle">
             <span class="why-principle__number">01</span>
-            <h3>Eerst begrijpen</h3>
+            <h3>Jouw bedrijf begrijpen</h3>
             <p>
-              We onderzoeken waar je bedrijf staat, wat al werkt en waar groei begint te knellen.
+              Donovan luistert naar wat je doet, voor wie je dat doet en waarom klanten voor jou kiezen.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">02</span>
-            <h3>Samenhang ontwerpen</h3>
+            <h3>Je verhaal zichtbaar maken</h3>
             <p>
-              Strategie, merk, website en processen krijgen één logische richting.
+              Je verhaal krijgt een heldere structuur en een vorm die professioneel bij je onderneming past.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">03</span>
-            <h3>Zorgvuldig doorbouwen</h3>
+            <h3>Zorgvuldig bouwen</h3>
             <p>
-              We bouwen wat nu nodig is en houden ruimte voor de volgende fase.
+              We bouwen wat je vandaag nodig hebt en leggen technische keuzes uit in gewone taal.
             </p>
           </article>
         </div>
@@ -171,12 +165,12 @@ if (route === "/atlas") {
             <p class="vision__eyebrow">04 / Van inzicht naar uitvoering</p>
 
             <h2 class="vision__title" id="vision-title">
-              Richting wordt waardevol wanneer je haar zorgvuldig kunt bouwen.
+              Een professionele website ontstaat stap voor stap.
             </h2>
 
             <p class="vision__text">
-              Daarom maken we keuzes zichtbaar voordat ze code worden. In strategiekaarten,
-              UX-structuren, ontwerpen en een plan dat past bij je organisatie.
+              Je hoeft niet vooraf te weten hoe een website werkt. We maken iedere keuze zichtbaar
+              voordat we haar ontwerpen en bouwen.
             </p>
           </header>
 
@@ -185,30 +179,30 @@ if (route === "/atlas") {
         <article class="vision-step">
           <span class="vision-step__number">01</span>
 
-          <h3>Analyseren</h3>
+          <h3>Luisteren</h3>
 
           <p>
-            We brengen doelen, klanten, processen en het bestaande digitale fundament samen.
+            We beginnen bij je bedrijf, je klanten en wat je online duidelijk wilt maken.
           </p>
         </article>
 
         <article class="vision-step">
           <span class="vision-step__number">02</span>
 
-          <h3>Richting bepalen</h3>
+          <h3>Vertalen</h3>
 
           <p>
-            We kiezen welke ingreep nu het meeste waarde toevoegt en wat bewust later kan.
+            We brengen je verhaal terug tot een logische structuur en een passend ontwerp.
           </p>
         </article>
 
         <article class="vision-step">
           <span class="vision-step__number">03</span>
 
-          <h3>Realiseren</h3>
+          <h3>Bouwen</h3>
 
           <p>
-            We ontwerpen, ontwikkelen, testen en verbeteren in een beheersbaar tempo.
+            We bouwen en testen de website en houden het proces voor jou begrijpelijk.
           </p>
         </article>
 
@@ -216,12 +210,12 @@ if (route === "/atlas") {
       <div class="vision__quote" data-home-reveal>
 
         <h2>
-          Overzicht maakt keuzes kleiner.<br>
-          Goede keuzes maken groei beheersbaar.
+          Jij hoeft de digitale route niet te kennen.<br>
+          Wel je bedrijf.
         </h2>
 
         <p>
-          Wat we vandaag bouwen moet direct bruikbaar zijn en morgen verder kunnen groeien.
+          Donovan maakt de keuzes begrijpelijk en blijft bereikbaar wanneer je een vraag hebt.
         </p>
 
       </div>
@@ -236,54 +230,53 @@ if (route === "/atlas") {
         <div class="container">
 
           <p class="section-eyebrow" data-home-reveal>
-            05 / Waar groei begint te knellen
+            05 / Waarom de eerste stap blijft liggen
           </p>
 
           <h2 class="section-title" id="challenges-title" data-home-reveal>
-            Je bedrijf beweegt verder. Je digitale fundament moet mee kunnen bewegen.
+            Een website wordt vaak uitgesteld omdat de eerste stap te groot voelt.
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Vaak is niet méér nodig, maar meer samenhang tussen wat je al hebt.
+            Je hoeft niet méér te weten. Je hebt iemand nodig die de route begrijpelijk maakt.
           </p>
 
           <div class="challenge-grid" data-home-reveal>
 
             <article class="challenge-card">
               <span>01</span>
-              <h3>Zichtbaarheid blijft achter</h3>
+              <h3>Je weet niet waar je begint</h3>
              <p>
-      Je expertise is sterk, maar dat wordt online nog niet overtuigend zichtbaar.
+      Je weet dat een website nodig is, maar niet welke keuzes eerst komen.
       </p>
-      <p class="challenge-outcome">Merk, verhaal en klantreis opnieuw uitlijnen.</p>
+      <p class="challenge-outcome">We beginnen bij jouw bedrijf, niet bij techniek.</p>
             </article>
 
             <article class="challenge-card">
               <span>02</span>
-              <h3>Systemen werken los</h3>
+              <h3>Je verhaal staat nog niet online</h3>
              <p>
-      Marketing, website en processen werken los van elkaar.
+      In gesprekken is duidelijk wat je goed doet, maar online ziet een nieuwe klant dat nog niet.
       </p>
-      <p class="challenge-outcome">Eén richting voor kanalen, content en techniek.</p>
+      <p class="challenge-outcome">Samen kiezen we wat je website helder moet vertellen.</p>
             </article>
 
             <article class="challenge-card">
               <span>03</span>
-              <h3>Handwerk remt</h3>
+              <h3>Techniek maakt onzeker</h3>
               <p>
-      Handmatig werk kost iedere week uren die je liever
-      aan je bedrijf besteedt.
+      Domeinen, hosting en systemen maken een overzichtelijke vraag onnodig groot.
       </p>
-      <p class="challenge-outcome">Processen vereenvoudigen waar technologie echt helpt.</p>
+      <p class="challenge-outcome">Donovan legt de keuzes uit in gewone taal.</p>
             </article>
 
             <article class="challenge-card">
               <span>04</span>
-              <h3>Het fundament groeit niet mee</h3>
+              <h3>Een groot bureau voelt te groot</h3>
               <p>
-      Je onderneming groeit sneller dan je digitale fundament.
+      Je zoekt professionele kwaliteit zonder afstandelijk proces of onnodige lagen.
       </p>
-      <p class="challenge-outcome">Doorbouwen zonder opnieuw vanaf nul te beginnen.</p>
+      <p class="challenge-outcome">Je hebt rechtstreeks contact met Donovan.</p>
             </article>
 
           </div>
@@ -299,26 +292,26 @@ if (route === "/atlas") {
         <div class="container">
 
           <p class="section-eyebrow" data-home-reveal>
-            06 / De volgende horizon
+            06 / Een begrijpelijke eerste stap
           </p>
 
           <h2 class="section-title" id="connection-title" data-home-reveal>
-            Je hoeft de oplossing niet vooraf te kennen.
+            Je hoeft niet te weten hoe een website wordt gebouwd.
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Wel wat een goede volgende stap voor je bedrijf moet opleveren.
-            Wij brengen de keuzes terug tot een richting die past bij wat je al hebt opgebouwd.
+            Vertel wat je bedrijf doet, wie je helpt en wat je online wilt laten zien.
+            Donovan helpt je om daar een heldere eerste stap van te maken.
           </p>
 
           <div class="connection-message" data-home-reveal>
 
             <p>
-              Eerst ontstaat overzicht.
+              Eerst een gewoon gesprek.
             </p>
 
             <p>
-              Vanuit overzicht ontstaat vertrouwen om te bewegen.
+              Daarna pas ontwerp en techniek.
             </p>
 
           </div>
@@ -330,10 +323,10 @@ if (route === "/atlas") {
           </div>
 
           <div class="next-horizon" data-home-reveal>
-            <p>Je volgende stap hoeft niet groter te zijn. Wel scherper.</p>
-            <h3>Begin bij wat jouw website en bedrijf nu nodig hebben.</h3>
+            <p>Je hoeft nog geen briefing of technische kennis te hebben.</p>
+            <h3>Vertel waar je nu staat.</h3>
             <a class="button button--primary" href="/contact">
-              Begin de verkenning
+              Neem contact op
             </a>
           </div>
 
@@ -344,7 +337,7 @@ if (route === "/atlas") {
             <span class="brand__mark">WBD.</span>
             <span class="brand__name">We Build and Design</span>
           </a>
-          <p>Websites, strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
+          <p>Professionele websites voor ondernemers die hun eerste stap online begrijpelijk willen zetten.</p>
         </footer>
 
       </section>
@@ -355,16 +348,4 @@ if (route === "/atlas") {
 } else {
   app.innerHTML = renderPublicPage(route);
   enablePageReveals();
-}
-
-if (route !== "/atlas" && route !== "/atlas-lab") {
-  try {
-    if (localStorage.getItem("atlas.workspace.observing-context.v1")) {
-      void import("./atlas-observe")
-        .then(({ mountObservationCapture }) => mountObservationCapture())
-        .catch(() => undefined);
-    }
-  } catch {
-    // Lokale opslag mag de publieke Experience nooit onderbreken.
-  }
 }
