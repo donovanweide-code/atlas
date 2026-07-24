@@ -1,6 +1,11 @@
 import "./styles/atlas-workspace.css";
 import { aquaFlaskProfile } from "./atlas-aquaflask-profile";
 import {
+  type BusinessProfile,
+  loadBusinessProfile,
+  saveBusinessProfile,
+} from "./atlas-business-profile";
+import {
   type AquaFlaskCase,
   type CaseId,
   type FocusItem,
@@ -104,6 +109,27 @@ function focusRecommendation(items: FocusItem[], aquaFlask: AquaFlaskCase): { ti
   };
 }
 
+const orientationEvents = [
+  {
+    date: "18 juli 2026",
+    title: "AquaFlask is onderzocht.",
+    source: "Case 0002 en incidentonderzoek",
+    meaning: "De oorspronkelijke productfout trad niet opnieuw op. De oorzaak blijft open; wachten op een concrete herhaling is nu zorgvuldiger dan wijzigen.",
+  },
+  {
+    date: "20 juli 2026",
+    title: "De Workspace werd de nieuwe voordeur.",
+    source: "Atlas Logboek",
+    meaning: "Vanaf dit moment kan de werkdag vanuit één rustige plek beginnen. Werkelijk gebruik moet aantonen wat nog ontbreekt.",
+  },
+  {
+    date: "21 juli 2026",
+    title: "Atlas maakte AquaFlask herkenbaar als bestaande klant.",
+    source: "Sprint 001C en Atlas Logboek",
+    meaning: "De review bevestigde dat minder, maar beter gekozen informatie meer begeleiding geeft. Daarna is geen nieuw hoofdcasebeeld bevestigd.",
+  },
+] as const;
+
 function caseOptions(selected: CaseId): string {
   return `<option value="" ${selected === "" ? "selected" : ""}>Geen case</option>
     <option value="0001" ${selected === "0001" ? "selected" : ""}>0001 · We Build And Design</option>
@@ -134,11 +160,13 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const today = localDateKey();
   const focusLoad = loadFocus(localStorage, today);
   const aquaLoad = loadAquaFlask(localStorage);
+  const businessProfileLoad = loadBusinessProfile(localStorage);
   const ideasLoad = loadIdeas(localStorage);
   const logsLoad = loadLogs(localStorage);
   const understandingLoad = loadUnderstanding(localStorage);
   let focusStore = focusLoad.value;
   let aquaFlask = aquaLoad.value;
+  let businessProfile = businessProfileLoad.value;
   let ideas: Idea[] = ideasLoad.value;
   let logs: LogEntry[] = logsLoad.value;
   const understanding = understandingLoad.value;
@@ -162,10 +190,39 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <header class="workspace-header"><div><p class="workspace-kicker">Werkdag</p><h1>Goedemorgen, Donovan.</h1></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
 
-      <section class="workspace-compass-card" id="overzicht" aria-labelledby="compass-title">
-        <div class="workspace-compass-card__copy"><p class="workspace-label">Het kompas</p><h2 id="compass-title">Helpt dit de ondernemer vandaag écht verder?</h2>
-          <div class="workspace-advice"><span>Atlas adviseert</span><strong data-advice-title></strong><p data-advice-reason></p></div>
-        </div>${compass()}
+      <section class="workspace-orientation" id="overzicht" aria-labelledby="orientation-title">
+        <header class="workspace-orientation__header">
+          <div><p class="workspace-label">Vandaag in Atlas</p><h2 id="orientation-title">We Build And Design is de hoofdcase.</h2></div>
+          <p>Het actuele beeld vraagt herbevestiging. Atlas heeft wel vastgelegd wat hieraan voorafging, maar geen latere menselijke bevestiging gevonden.</p>
+        </header>
+        <div class="workspace-orientation__grid">
+          <article class="workspace-orientation__why">
+            <p class="workspace-label">Waarom staan we hier?</p>
+            <ol>${orientationEvents.map((event) => `<li><time>${event.date}</time><div><strong>${escapeHtml(event.title)}</strong><p>${escapeHtml(event.meaning)}</p><small>Herkomst: ${escapeHtml(event.source)}</small></div></li>`).join("")}</ol>
+            <details><summary>Waarom zegt Atlas dit?</summary><p>De repository bewaart gebeurtenissen over de Workspace en AquaFlask, maar geen datum waarop het actuele beeld van We Build And Design daarna opnieuw door een mens is bevestigd. Atlas noemt dat gebrek aan bevestiging; het vult de ontbrekende status niet zelf in.</p><a href="#logboek">Bekijk de volledige hoofdlijn</a></details>
+          </article>
+          <div class="workspace-orientation__now">
+            <article class="workspace-today-attention">
+              <p class="workspace-label">Vandaag aandacht</p>
+              <strong data-advice-title></strong>
+              <p data-advice-reason></p>
+              <span>Eerstvolgende betekenisvolle stap</span>
+              <b data-orientation-next-step></b>
+              <small><i aria-hidden="true"></i>AquaFlask wacht op een concrete herhaling; wijzigingen zijn daar nu bewust niet actief.</small>
+            </article>
+            <article class="workspace-active-case">
+              <p class="workspace-label">Actieve case</p>
+              <header><div><span>Hoofdcase</span><h3>We Build And Design</h3></div><strong>Actief · opnieuw bevestigen</strong></header>
+              <dl>
+                <div><dt>Laatste betekenisvolle gebeurtenis</dt><dd>De Workspace werd als bruikbare voordeur vastgelegd.</dd></div>
+                <div><dt>Volgende stap</dt><dd data-orientation-case-step></dd></div>
+                <div><dt>Laatst bevestigd</dt><dd>Niet vastgelegd</dd></div>
+              </dl>
+              <a href="#cases">Bekijk case en context <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </div>
+        <div class="workspace-orientation__compass"><span>Atlas heeft al nagedacht</span>${compass()}<p>Helpt dit de ondernemer vandaag echt verder?</p></div>
       </section>
 
       <section class="workspace-section workspace-focus" id="focus" aria-labelledby="focus-title">
@@ -200,6 +257,38 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
           <div><p class="workspace-label">${escapeHtml(aquaFlaskProfile.currentCase.label)}</p><h3 id="aqua-current-title">${escapeHtml(aquaFlaskProfile.currentCase.title)}</h3></div>
           <p>${escapeHtml(aquaFlaskProfile.currentCase.summary)}</p>
         </article>
+
+        <section class="aqua-business-understanding" aria-labelledby="aqua-business-title">
+          <header>
+            <div><p class="workspace-label">Bedrijfsbegrip</p><h3 id="aqua-business-title">Eerst de onderneming. Daarna de techniek.</h3></div>
+            <p>Alleen context die Atlas nodig heeft om latere technische signalen correct te begrijpen.</p>
+          </header>
+          <div class="aqua-business-understanding__content" data-business-profile-view></div>
+          <details class="aqua-work-notes aqua-business-understanding__editor">
+            <summary><span>Begin het gesprek</span><small>Één betekenisvolle vraag tegelijk</small></summary>
+            <form class="workspace-case-form business-profile-conversation" data-business-profile-form>
+              <div class="business-profile-conversation__progress"><span data-business-profile-progress>Vraag 1 van 8</span><i aria-hidden="true"><b data-business-profile-progress-bar></b></i></div>
+              <label data-business-profile-question="0"><span>Bedrijfscontext</span><strong>Wat moeten we begrijpen over AquaFlask voordat we naar techniek kijken?</strong><small>Beschrijf alleen de context die latere keuzes kan beïnvloeden.</small><textarea name="businessContext" rows="4" maxlength="1200" required></textarea></label>
+              <label data-business-profile-question="1" hidden><span>Doelgroep</span><strong>Voor wie moet AquaFlask in de eerste plaats waarde leveren?</strong><small>Gebruik de woorden van de ondernemer. Een nog onbevestigde doelgroep blijft onbekend.</small><textarea name="targetAudience" rows="4" maxlength="800" required></textarea></label>
+              <label data-business-profile-question="2" hidden><span>Ambitie</span><strong>Welke volgende beweging wil de ondernemer mogelijk maken?</strong><small>Leg de gewenste verandering vast, niet alvast de oplossing.</small><textarea name="ambition" rows="4" maxlength="800" required></textarea></label>
+              <label data-business-profile-question="3" hidden><span>Belangrijkste bedrijfsproces</span><strong>Welk bedrijfsproces draagt de actuele vraag?</strong><small>Alleen het proces dat nodig is om technische signalen later te kunnen begrijpen.</small><textarea name="primaryBusinessProcess" rows="4" maxlength="1200" required></textarea></label>
+              <label data-business-profile-question="4" hidden><span>Huidige digitale werkelijkheid</span><strong>Hoe ondersteunt de digitale omgeving dit proces vandaag?</strong><small>Beschrijf de werkelijkheid, zonder al een verbetering te kiezen.</small><textarea name="currentDigitalReality" rows="4" maxlength="1200" required></textarea></label>
+              <label data-business-profile-question="5" hidden><span>Bron van deze kennis</span><strong>Waar komt dit bedrijfsbegrip vandaan?</strong><small>Noem het gesprek, document of onderzoek waarop dit profiel rust.</small><textarea name="source" rows="4" maxlength="800" required></textarea></label>
+              <label data-business-profile-question="6" hidden><span>Onzekerheden</span><strong>Wat weten we nog niet voldoende zeker?</strong><small>Onbekende kennis hoeft niet opgelost te worden om zorgvuldig te worden bewaard.</small><textarea name="uncertainties" rows="4" maxlength="1200" required></textarea></label>
+              <label data-business-profile-question="7" hidden><span>Datum van bevestiging</span><strong>Op welke datum is dit beeld door een mens bevestigd?</strong><small>Deze datum maakt zichtbaar vanaf welk moment het profiel geldig wordt geacht.</small><input name="confirmedAt" type="date" required></label>
+              <section class="business-profile-conversation__review" data-business-profile-review hidden aria-labelledby="business-profile-review-title">
+                <span class="workspace-label">Samen bekijken</span><h4 id="business-profile-review-title">Dit is wat Atlas heeft begrepen.</h4><p>Controleer het geheel voordat je het als bevestigd bedrijfsbegrip bewaart.</p><dl data-business-profile-review-list></dl>
+              </section>
+              <div class="business-profile-conversation__actions">
+                <button type="button" data-business-profile-previous hidden>Vorige vraag</button>
+                <button type="button" data-business-profile-unknown>Dit weten we nog niet</button>
+                <button type="button" data-business-profile-next>Volgende vraag</button>
+                <button type="submit" data-business-profile-save hidden>Bevestig bedrijfsbegrip</button>
+                <small>Geen automatisch gegenereerde inhoud. Gebruik geen vertrouwelijke gegevens.</small>
+              </div>
+            </form>
+          </details>
+        </section>
 
         <div class="aqua-profile-knowledge">
           <section aria-labelledby="aqua-knows-title"><p class="workspace-label">Blijvende klantkennis</p><h3 id="aqua-knows-title">Wat Atlas weet</h3><ul>${aquaFlaskProfile.durableKnowledge.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>
@@ -281,13 +370,23 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     notice.textContent = message; notice.hidden = false; notice.classList.toggle("is-error", error);
     window.setTimeout(() => { notice.hidden = true; }, 3200);
   };
-  [focusLoad.warning, aquaLoad.warning, ideasLoad.warning, logsLoad.warning, understandingLoad.warning].filter(Boolean).forEach((warning) => notify(warning, true));
+  [focusLoad.warning, aquaLoad.warning, businessProfileLoad.warning, ideasLoad.warning, logsLoad.warning, understandingLoad.warning].filter(Boolean).forEach((warning) => notify(warning, true));
 
   const persistFocus = () => save(localStorage, storageKeys.focus, focusStore) ? notify("Dagfocus opgeslagen.") : notify("Dagfocus kon niet lokaal worden opgeslagen.", true);
   const currentItems = () => focusStore.days[today] ?? [];
   const adviceTitle = app.querySelector<HTMLElement>("[data-advice-title]")!;
   const adviceReason = app.querySelector<HTMLElement>("[data-advice-reason]")!;
-  const paintAdvice = () => { const advice = focusRecommendation(currentItems(), aquaFlask); adviceTitle.textContent = advice.title; adviceReason.textContent = advice.reason; };
+  const orientationNextStep = app.querySelector<HTMLElement>("[data-orientation-next-step]")!;
+  const orientationCaseStep = app.querySelector<HTMLElement>("[data-orientation-case-step]")!;
+  const paintAdvice = () => {
+    const advice = focusRecommendation(currentItems(), aquaFlask);
+    adviceTitle.textContent = advice.title;
+    adviceReason.textContent = advice.reason;
+    const nextFocus = currentItems().find((item) => !item.completed);
+    const nextStep = nextFocus?.text || "Bevestig wat nu de belangrijkste beweging voor We Build And Design is.";
+    orientationNextStep.textContent = nextStep;
+    orientationCaseStep.textContent = nextStep;
+  };
 
   const focusList = app.querySelector<HTMLElement>("[data-focus-list]")!;
   const focusForm = app.querySelector<HTMLFormElement>("[data-focus-form]")!;
@@ -334,10 +433,75 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
 
   const aquaDetail = app.querySelector<HTMLElement>("#case-aquaflask")!;
   const aquaForm = app.querySelector<HTMLFormElement>("[data-aqua-form]")!;
+  const businessProfileForm = app.querySelector<HTMLFormElement>("[data-business-profile-form]")!;
+  const businessProfileView = app.querySelector<HTMLElement>("[data-business-profile-view]")!;
+  const businessProfileQuestions = [...businessProfileForm.querySelectorAll<HTMLElement>("[data-business-profile-question]")];
+  const businessProfileReview = app.querySelector<HTMLElement>("[data-business-profile-review]")!;
+  const businessProfileReviewList = app.querySelector<HTMLElement>("[data-business-profile-review-list]")!;
+  const businessProfileProgress = app.querySelector<HTMLElement>("[data-business-profile-progress]")!;
+  const businessProfileProgressBar = app.querySelector<HTMLElement>("[data-business-profile-progress-bar]")!;
+  const businessProfilePrevious = app.querySelector<HTMLButtonElement>("[data-business-profile-previous]")!;
+  const businessProfileUnknown = app.querySelector<HTMLButtonElement>("[data-business-profile-unknown]")!;
+  const businessProfileNext = app.querySelector<HTMLButtonElement>("[data-business-profile-next]")!;
+  const businessProfileSave = app.querySelector<HTMLButtonElement>("[data-business-profile-save]")!;
+  const businessProfileEditor = businessProfileForm.closest<HTMLDetailsElement>("details")!;
+  const businessProfileFields: ReadonlyArray<keyof BusinessProfile> = [
+    "businessContext",
+    "targetAudience",
+    "ambition",
+    "primaryBusinessProcess",
+    "currentDigitalReality",
+    "source",
+    "uncertainties",
+    "confirmedAt",
+  ];
+  const businessProfileLabels: Record<keyof BusinessProfile, string> = {
+    businessContext: "Bedrijfscontext",
+    targetAudience: "Doelgroep",
+    ambition: "Ambitie",
+    primaryBusinessProcess: "Belangrijkste bedrijfsproces",
+    currentDigitalReality: "Huidige digitale werkelijkheid",
+    source: "Bron van deze kennis",
+    uncertainties: "Onzekerheden",
+    confirmedAt: "Bevestigd op",
+  };
+  let activeBusinessProfileQuestion = 0;
+  const hasBusinessProfile = () => businessProfileFields.every((field) => businessProfile[field].trim().length > 0);
+  const currentBusinessProfileValue = (field: keyof BusinessProfile) => {
+    const input = businessProfileForm.elements.namedItem(field) as HTMLInputElement | HTMLTextAreaElement;
+    return input.value.trim();
+  };
+  const paintBusinessConversation = () => {
+    const reviewing = activeBusinessProfileQuestion === businessProfileFields.length;
+    businessProfileQuestions.forEach((question, index) => { question.hidden = reviewing || index !== activeBusinessProfileQuestion; });
+    businessProfileReview.hidden = !reviewing;
+    businessProfileProgress.textContent = reviewing ? "Klaar om samen te bekijken" : `Vraag ${activeBusinessProfileQuestion + 1} van ${businessProfileFields.length}`;
+    businessProfileProgressBar.style.width = `${reviewing ? 100 : ((activeBusinessProfileQuestion + 1) / businessProfileFields.length) * 100}%`;
+    businessProfilePrevious.hidden = activeBusinessProfileQuestion === 0;
+    businessProfileUnknown.hidden = reviewing || businessProfileFields[activeBusinessProfileQuestion] === "confirmedAt";
+    businessProfileNext.hidden = reviewing;
+    businessProfileSave.hidden = !reviewing;
+    if (reviewing) {
+      businessProfileReviewList.innerHTML = businessProfileFields.map((field) => `<div><dt>${businessProfileLabels[field]}</dt><dd>${escapeHtml(currentBusinessProfileValue(field))}</dd></div>`).join("");
+      businessProfileSave.focus();
+    } else {
+      const field = businessProfileForm.elements.namedItem(businessProfileFields[activeBusinessProfileQuestion]) as HTMLInputElement | HTMLTextAreaElement;
+      field.focus();
+    }
+  };
+  const paintBusinessProfile = () => {
+    businessProfileFields.forEach((name) => {
+      const field = businessProfileForm.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
+      field.value = businessProfile[name];
+    });
+    businessProfileView.innerHTML = hasBusinessProfile()
+      ? `<dl>${businessProfileFields.map((field) => `<div><dt>${businessProfileLabels[field]}</dt><dd>${escapeHtml(businessProfile[field])}</dd></div>`).join("")}</dl>`
+      : '<p class="aqua-business-understanding__empty">Nog niet bevestigd. Atlas vult ontbrekende bedrijfskennis niet zelf aan.</p>';
+  };
   const activity = () => aquaFlask.updatedAt ? new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(aquaFlask.updatedAt)) : "Nog niet bijgewerkt";
   const paintAqua = () => {
     (["problem", "nextQuestion", "nextStep", "notes", "lessons"] as const).forEach((name) => { const field = aquaForm.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement; field.value = aquaFlask[name]; });
-    app.querySelectorAll<HTMLElement>("[data-aqua-activity],[data-aqua-activity-detail]").forEach((element) => { element.textContent = activity(); }); paintAdvice();
+    app.querySelectorAll<HTMLElement>("[data-aqua-activity],[data-aqua-activity-detail]").forEach((element) => { element.textContent = activity(); }); paintBusinessProfile(); paintAdvice();
   };
   const aquaTrigger = app.querySelector<HTMLElement>("[data-open-aqua]")!;
   const aquaCloseButton = app.querySelector<HTMLButtonElement>("[data-close-aqua]")!;
@@ -353,6 +517,53 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     event.preventDefault(); const data = new FormData(aquaForm);
     aquaFlask = { version: 1, problem: String(data.get("problem") ?? "").trim(), nextQuestion: String(data.get("nextQuestion") ?? "").trim(), nextStep: String(data.get("nextStep") ?? "").trim(), notes: String(data.get("notes") ?? "").trim(), lessons: String(data.get("lessons") ?? "").trim(), updatedAt: new Date().toISOString() };
     save(localStorage, storageKeys.aquaFlask, aquaFlask) ? notify("AquaFlask-case opgeslagen.") : notify("De case kon niet lokaal worden opgeslagen.", true); paintAqua();
+  });
+  businessProfileNext.addEventListener("click", () => {
+    const fieldName = businessProfileFields[activeBusinessProfileQuestion];
+    if (!currentBusinessProfileValue(fieldName)) {
+      notify("Beantwoord de vraag of geef bewust aan dat dit nog onbekend is.", true);
+      return;
+    }
+    activeBusinessProfileQuestion += 1;
+    paintBusinessConversation();
+  });
+  businessProfileUnknown.addEventListener("click", () => {
+    const fieldName = businessProfileFields[activeBusinessProfileQuestion];
+    const field = businessProfileForm.elements.namedItem(fieldName) as HTMLInputElement | HTMLTextAreaElement;
+    field.value = "Nog onbekend.";
+    activeBusinessProfileQuestion += 1;
+    paintBusinessConversation();
+  });
+  businessProfilePrevious.addEventListener("click", () => {
+    activeBusinessProfileQuestion = Math.max(0, activeBusinessProfileQuestion - 1);
+    paintBusinessConversation();
+  });
+  businessProfileEditor.addEventListener("toggle", () => {
+    if (businessProfileEditor.open) paintBusinessConversation();
+  });
+  businessProfileForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(businessProfileForm);
+    const nextProfile: BusinessProfile = {
+      businessContext: String(data.get("businessContext") ?? "").trim(),
+      targetAudience: String(data.get("targetAudience") ?? "").trim(),
+      ambition: String(data.get("ambition") ?? "").trim(),
+      primaryBusinessProcess: String(data.get("primaryBusinessProcess") ?? "").trim(),
+      currentDigitalReality: String(data.get("currentDigitalReality") ?? "").trim(),
+      source: String(data.get("source") ?? "").trim(),
+      uncertainties: String(data.get("uncertainties") ?? "").trim(),
+      confirmedAt: String(data.get("confirmedAt") ?? "").trim(),
+    };
+    if (!saveBusinessProfile(localStorage, nextProfile)) {
+      notify("Het bedrijfsbegrip kon niet lokaal worden opgeslagen.", true);
+      return;
+    }
+    businessProfile = nextProfile;
+    notify("Bedrijfsbegrip opgeslagen.");
+    paintBusinessProfile();
+    activeBusinessProfileQuestion = 0;
+    paintBusinessConversation();
+    businessProfileEditor.open = false;
   });
 
   const understandingSection = app.querySelector<HTMLElement>("#understanding")!;

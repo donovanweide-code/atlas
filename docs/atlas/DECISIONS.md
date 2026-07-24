@@ -52,3 +52,15 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Gevolg:** Meer beschikbare kennis leidt niet automatisch tot meer interface. Nieuwe ontwerpen moeten aantonen waarom informatie nu aandacht verdient; open kansen concurreren nooit met de actieve case.
 - **Centrale toets:** Begrijpt Donovan binnen enkele seconden waarom een klant nu aandacht verdient en wat hij moet doen — en voelt het alsof Atlas al heeft nagedacht?
 - **Horizonverkenning:** [`Redactionele Intelligentie`](../ideas/005-Redactionele-Intelligentie.md) bewaart de toekomstige ontwerpvragen, schaalrisico's en trigger zonder ze aan Sprint 001C toe te voegen.
+
+## D-008 — Atlas volgt de digitale werkelijkheid
+
+- **Datum:** 2026-07-23
+- **Status:** Ontwerpprincipe voor toekomstige sprints; geen implementatie in Sprint 002.
+- **Keuze:** Atlas ontwerpt niet vanuit trends, maar vanuit de manier waarop ondernemers vandaag vanzelfsprekend werken.
+- **Verantwoordelijkheid:** Codex bewaakt daarom niet alleen de technische kwaliteit, maar ook de actuele mogelijkheden van de platformen waarop Atlas draait: desktop, mobiel, browsers en interactiepatronen.
+- **Toets bij iedere nieuwe interface:**
+  - Kan dit met minder handelingen?
+  - Sluit dit aan op wat gebruikers vandaag verwachten?
+  - Helpt dit de ondernemer daadwerkelijk verder?
+- **Grens:** Nieuwe mogelijkheden worden alleen toegepast wanneer zij betekenis toevoegen.
