@@ -2,32 +2,68 @@
 
 - **Relatie:** We Build And Design
 - **Status:** Actief
-- **Doel:** De eigen positionering, website en werkwijze laten samenvallen tot één geloofwaardig digitaal fundament.
-- **Context:** De lokale homepage en publieke routes ontwikkelen zich vanuit de Atlas Creative Language. De door Donovan bevestigde publieke URL `https://webuildanddesign.nl` toont op de op 22 juli 2026 gecontroleerde hoofd-, diensten- en contactroute een onderhoudspagina.
-- **Werkzaamheden:** Strategie, verhaal, UX, visual direction, frontend en toekomstige WordPress-fundering.
-- **Actieve beslissing:** Werk voorwaarts vanuit de huidige website en verander alleen waar de ervaring aantoonbaar sterker wordt.
-- **Publieke intentie:** De huidige lokale We Build And Design Experience is de beoogde publieke website en mag de onderhoudspagina op `https://webuildanddesign.nl` pas vervangen nadat zij gecontroleerd en gereed is.
-- **Productiegrens:** De bestaande WordPress-installatie is de huidige productietoestand en blijft tijdens voorbereiding herstelbaar. De daadwerkelijke vervanging vereist een nieuw expliciet ondernemersbesluit.
-- **Hostingcontext:** Donovan heeft in het TransIP-dashboard bevestigd dat Case 0001 reguliere `Webhosting` gebruikt met sitepad `/www`; `WordPress Hosting` en `Managed WordPress` zijn niet actief.
-- **Resultaat tot nu toe:** Een samenhangende lokale publieke route, een interne Atlas Workspace die de actuele prioriteit vóór de interface selecteert en een werkende lokale Waarnemen-keten. De ontworpen WBD Experience en contactroute zijn nog niet publiek waarneembaar op de gecontroleerde live routes.
-- **Bevestigde uitvoeringsvoorwaarde:** Donovan heeft in `Website → Domeinen & SSL` bevestigd dat de optie `+ Website toevoegen` aanwezig is. Daarmee is de geïsoleerde previewroute binnen het huidige pakket technisch beschikbaar.
-- **Eerstvolgende stap:** Voer geen hostingwijziging uit. Wacht op expliciete GO voor het aanmaken van een zelfstandige previewwebsite met een eigen DocumentRoot onder `/subsites/`; `/www` en WordPress blijven tot dat besluit onaangeraakt.
-- **Lessen:** Worden aan het einde van iedere betekenisvolle wijziging toegevoegd.
-- **Kansen:** Alleen opnemen wanneer werkelijk gebruik of een concrete klantvraag de waarde bevestigt.
+- **Doel:** De bewezen identiteit, publieke website en werkelijke manier van samenwerken laten samenvallen zonder de Horizon als bestaande dienstverlening te verkopen.
+- **Actuele positie:** We Build And Design heeft scherper gekregen wie het vandaag helpt: ondernemers die goed zijn in hun vak, maar de eerste professionele stap online groot en onbekend vinden. De bewezen waarde zit in luisteren, begrijpelijk begeleiden, visueel vertalen en bereikbaar blijven.
+- **Werkelijke onzekerheid:** De persoonlijke start is bewezen, maar langdurige en proactieve digitale begeleiding is nog niet structureel georganiseerd. Ook prijsstelling, uren, grenzen en specialistische kennis vragen verdere ontwikkeling.
+- **Actieve beslissing:** De website blijft de bewezen publieke dienst. Atlas blijft de interne methode en wordt niet publiek als product of bestaande klantdienst gepresenteerd.
+- **Volgende betekenisvolle stap:** Beoordeel de gesynchroniseerde Candidate en de volledige staged diff. Redactionele bevestiging, commit, push en livegang blijven daarna afzonderlijke ondernemersbesluiten.
+
+## Redactionele bronnen
+
+- [WE_BUILD_AND_DESIGN_ORIGIN.md](WE_BUILD_AND_DESIGN_ORIGIN.md) — de directe ondernemersreflectie, inclusief kwetsbaarheden en bewijsgrenzen.
+- [WE_BUILD_AND_DESIGN_IDENTITY.md](WE_BUILD_AND_DESIGN_IDENTITY.md) — de compacte identiteit van vandaag, gescheiden van Horizon en onzekerheid.
+- [PUBLIC-EXPERIENCE-AUDIT-2026-07-23.md](PUBLIC-EXPERIENCE-AUDIT-2026-07-23.md) — toets van de huidige publieke Experience en het begrensde sprintvoorstel.
+- [PUBLIC_BUSINESS_AND_CONTACT.md](PUBLIC_BUSINESS_AND_CONTACT.md) — de door Donovan bevestigde publieke bedrijfs- en contactgegevens.
+- [CASE-SNAPSHOT.json](CASE-SNAPSHOT.json) — de versiegebonden redactionele momentopname. Revision 2 is Candidate en blijft buiten de Workspace totdat Donovan haar afzonderlijk bevestigt.
+
+## Bevestigde technische werkelijkheid
+
+- De nieuwe public-only Experience is geïsoleerd gepubliceerd op `https://preview.webuildanddesign.nl`.
+- De preview gebruikt een eigen DocumentRoot onder `/subsites/preview.webuildanddesign.nl`.
+- De bestaande WordPress-installatie onder `/www`, de database en het hoofddomein zijn tijdens de previewvoorbereiding onaangeraakt gebleven.
+- De daadwerkelijke vervanging van de onderhoudspagina op `https://webuildanddesign.nl` blijft een afzonderlijk ondernemersbesluit.
+- Git bewaart de publieke bron, casecontext en het casebeeld als afzonderlijk herleidbare geschiedenissen. Een commit bewijst duurzaamheid, maar bevestigt geen Candidate en publiceert niets naar preview of live.
+- De preview is inhoudelijk en functioneel met de lokale releasebuild vergeleken. Er bestaat nog geen duurzaam deploymentmanifest of artefacthash die de preview exact aan één commit koppelt.
+
+## Werkstromen
+
+### We Build And Design — Referentieomgeving
+
+- **Status:** Actief.
+- **Lokaal oordeel:** NO GO als professionele referentieomgeving; beperkt GO als previewomgeving.
+- **Afhankelijkheden:** Geen externe afhankelijkheden.
+- **Volgende betekenisvolle stap:** Een geïsoleerde herstelproef voorbereiden en pas na afzonderlijke GO uitvoeren. `/www` en de actieve productiedatabase blijven onaangeraakt.
+- **Reikwijdte:** Dit oordeel blokkeert de livegangwerkstroom, Bij Cees, andere klantcases en Atlas-ontwikkeling niet.
+
+### We Build And Design — Livegang
+
+- **Status:** Voorbereiding.
+- **Lokaal oordeel:** NO GO voor publicatie naar de primaire publieke website; GO voor begrensde releasevoorbereiding.
+- **Afhankelijkheden:** Geen externe afhankelijkheden.
+- **Volgende betekenisvolle stap:** Maak na afzonderlijke GO één controleerbare releasecandidate met de ontbrekende publieke metadata, foutafhandeling, contactcontrole, publicatiechecklist en rollbackroute.
 
 ## Understanding
 
-### Verifieerbare bronnen en waarnemingen
+### Bewezen
 
-- `Foundation.md` is de canonieke bron voor missie, methode, principes en creatieve taal.
-- De huidige Workspace bewaart focus, cases, ideeën, logboek en het afzonderlijke Waarnemen-domein lokaal in één browser.
+- Klanten komen vooral via vertrouwen en via-via.
+- Zij zijn vaak ervaren in hun vak, maar onzeker over de eerste professionele digitale stap.
+- De website is vandaag de bewezen dienst.
+- Donovan wordt gewaardeerd om luisteren, meedenken, bereikbaarheid en gewone taal.
+- Het publieke e-mailadres, telefoonnummer, vestigingsadres, KvK-nummer en btw-nummer zijn rechtstreeks door Donovan bevestigd.
+- Atlas is de interne methode waarmee We Build And Design beter leert begrijpen, kiezen en begeleiden.
 
-### Open vraag
+### Horizon
 
-Welke onderdelen van de Workspace helpen Donovan tijdens echt gebruik aantoonbaar beter denken?
+Langdurige en proactieve digitale begeleiding kan de relatie na de eerste website verdiepen, maar is nog niet structureel georganiseerd of als publieke dienst bewezen.
 
-**Status:** bewijs nodig. Dit is nog geen inzicht of conclusie.
+### Open onzekerheden
 
-### Werkelijke vraag, inzicht en volgende stap
+- Welke bestaande projecten mogen met context en toestemming publiek als bewijs worden gebruikt?
+- Welke prijs-, uren- en scopegrenzen zijn nodig voordat langdurige begeleiding verantwoord kan worden beloofd?
+- Komt een testbericht via `info@webuildanddesign.nl` aantoonbaar bij Donovan aan?
+- Welke releasecandidate krijgt uiteindelijk GO voor commit, push en livegang?
 
-Nog niet vastleggen voordat werkelijk gebruik voldoende herleidbare informatie oplevert.
+### Werkelijke vraag
+
+Beschrijft de publieke Experience wat We Build And Design vandaag waarmaakt, of verkoopt zij al wat het later hoopt te worden?

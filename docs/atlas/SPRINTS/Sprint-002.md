@@ -1,7 +1,7 @@
 # Sprint 002 — Bewijssprint
 
 - **Start:** 2026-07-22
-- **Status:** In uitvoering na GO+.
+- **Status:** Afgerond — de eerste redactionele geheugenverbinding en de mobiele browsercorrectie zijn gecommit en gepusht.
 - **Canonieke basis:** `Foundation.md`; de Foundation blijft ongewijzigd.
 - **Aard:** Handmatig praktijkonderzoek, geen bouw- of automatiseringssprint.
 
@@ -182,3 +182,11 @@ De eerste onderzoeksketen heeft aantoonbaar een herziening doorlopen: van ontbre
 - **Betekenis:** De beslissende technische onzekerheid voor de geïsoleerde previewroute is opgelost. De uitvoering blijft afhankelijk van een afzonderlijke expliciete GO.
 - **Herziening:** `De beschikbaarheid binnen de pakketvariant moet nog worden bevestigd` wordt herzien naar `de geïsoleerde previewroute is beschikbaar en wacht op een uitvoeringsbesluit`.
 - **Productiehandeling:** Geen. De bestaande WordPress-installatie, `/www`, database, DNS en hostinginstellingen blijven onaangeraakt.
+
+## Afsluiting
+
+- Commit `7154855` introduceerde de eerste redactionele geheugenverbinding voor Case 0001.
+- Commit `8ca9a6400c30f924edf826c527772feec25d4bfc` rondde Sprint 002 af met de gevalideerde mobiele ankercorrectie.
+- `HEAD` en `origin/main` wijzen tijdens de synchronisatie op deze laatste commit.
+- Latere wijzigingen aan de publieke Experience, identiteit, contactroute en preview behoren tot de actuele Case 0001- en livegangwerkstroom. Zij zijn geen retroactieve uitbreiding van Sprint 002.
+- De huidige preview en de nieuwe Candidate zijn nog niet gecommit of gepusht en veranderen het afgeronde sprintresultaat daarom niet.

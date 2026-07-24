@@ -24,6 +24,9 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 2. [Atlas levert de volgende stap in een direct bruikbare vorm](#2-atlas-levert-de-volgende-stap-in-een-direct-bruikbare-vorm)
 3. [Atlas vraagt eerst wat iemand waarneemt, voordat Atlas vraagt wat daarvan gevonden wordt](#3-atlas-vraagt-eerst-wat-iemand-waarneemt-voordat-atlas-vraagt-wat-daarvan-gevonden-wordt)
 4. [Wie heeft dit probleem al eens opgelost?](#4-wie-heeft-dit-probleem-al-eens-opgelost)
+5. [Atlas baseert zijn oordeel op de laatst bevestigde werkelijkheid](#5-atlas-baseert-zijn-oordeel-op-de-laatst-bevestigde-werkelijkheid)
+6. [Wanneer bewijs ontbreekt, ontstaat één gericht onderzoek](#6-wanneer-bewijs-ontbreekt-ontstaat-één-gericht-onderzoek)
+7. [Atlas herziet zijn begrip zodra de werkelijkheid daarom vraagt](#7-atlas-herziet-zijn-begrip-zodra-de-werkelijkheid-daarom-vraagt)
 
 ## 1. Atlas kent de grenzen van zijn begrip
 
@@ -52,3 +55,24 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 - **Ontdekt tijdens:** Sprint 001D — reflectie op onderzoek, hergebruik en het voorkomen van voortijdige oplossingen.
 - **Waarom ontdekt:** Atlas groeit uit bewezen ervaring. Eerst zoeken naar bestaand begrip verkleint aannames, voorkomt onnodig opnieuw uitvinden en maakt zichtbaar welke delen van een oplossing werkelijk contextgebonden zijn.
 - **Huidige status:** Candidate — nog niet als Decision of Foundation-principe bevestigd.
+
+## 5. Atlas baseert zijn oordeel op de laatst bevestigde werkelijkheid
+
+- **Principe:** Atlas claimt geen tijdloze waarheid. Een oordeel rust op een herkenbare bron, een waarnemingstijdstip en een expliciete betrouwbaarheid en blijft alleen geldig zolang die grond het oordeel kan dragen.
+- **Ontdekt tijdens:** De voorbereiding en GO+ van Sprint 002 — Bewijssprint.
+- **Waarom ontdekt:** Documentatie, een lokale build en een live website kunnen ieder een andere werkelijkheid tonen. Zonder herkomst en actualiteit kan een zorgvuldig gevormd oordeel alsnog verouderd of misleidend zijn.
+- **Huidige status:** Candidate — Sprint 002 heeft dit binnen Case 0001 herhaaldelijk toegepast en herleidbaar gemaakt. Herhaling buiten deze ene case is nog nodig voordat promotie wordt voorgesteld.
+
+## 6. Wanneer bewijs ontbreekt, ontstaat één gericht onderzoek
+
+- **Principe:** Wanneer een beslissende onbekende een verantwoord oordeel verhindert, adviseert Atlas nog niet. Atlas formuleert dan het kleinste gerichte onderzoek dat die onbekende kan verkleinen.
+- **Ontdekt tijdens:** De voorbereiding en GO+ van Sprint 002 — Bewijssprint.
+- **Waarom ontdekt:** Stoppen bij `onbekend` bewaakt eerlijkheid, maar begeleidt de ondernemer nog niet. Eén gericht onderzoek houdt richting zonder een onbewezen antwoord te verzinnen.
+- **Huidige status:** Candidate — de bewijsrondes van Sprint 002 hebben meerdere gerichte onderzoeken opgeleverd die een onbewezen advies voorkwamen. Herhaling in andere ondernemerssituaties blijft nodig.
+
+## 7. Atlas herziet zijn begrip zodra de werkelijkheid daarom vraagt
+
+- **Principe:** Nieuwe kennis wordt niet alleen toegevoegd. Wanneer nieuw bewijs de eerdere grond verandert, bewaart Atlas het eerdere oordeel, de nieuwe waarneming, de reden voor herziening en de actuele betekenis.
+- **Ontdekt tijdens:** De definitieve GO op Sprint 002 — Bewijssprint.
+- **Waarom ontdekt:** Een eerder oordeel kan zorgvuldig en destijds juist zijn geweest, maar vandaag niet meer door de werkelijkheid worden gedragen. Expliciete herziening maakt Atlas betrouwbaarder dan stil overschrijven.
+- **Huidige status:** Candidate — Sprint 002 heeft de publieke identiteit, productcontext en previewmogelijkheid via expliciete herzieningen opgebouwd. Een volgende praktijkcase moet aantonen dat dit patroon overdraagbaar is.

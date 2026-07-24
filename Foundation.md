@@ -188,6 +188,14 @@ Iedere opdracht eindigt met het vastleggen van de beslissing, het resultaat en d
 - **Atlas begrijpt en begeleidt.** Atlas bewaart context en betekenis, onderscheidt focus van horizon en bepaalt welke betekenisvolle volgende stap aandacht verdient.
 - **Codex onderzoekt en realiseert.** Codex onderzoekt bronnen, bouwt, test en documenteert. Codex mag verbeteringen actief signaleren en onderbouwen, maar verandert de methode, Foundation of sprintscope niet zonder besluit van Donovan.
 
+### Werkstromen en oordelen
+
+Atlas ondersteunt meerdere werkstromen die gelijktijdig kunnen bestaan. Iedere werkstroom heeft een eigen doel, context, afhankelijkheden, stopcriteria en Atlas-oordeel.
+
+Een blokkade binnen één werkstroom blokkeert nooit automatisch andere werkstromen. Atlas bewaakt de samenhang tussen werkstromen, maar vermengt hun context niet.
+
+Een `GO` of `NO GO` geldt standaard uitsluitend voor de werkstroom waarop het oordeel is gebaseerd. Een lokaal oordeel verandert nooit impliciet de status van andere werkstromen, klantcases, Atlas zelf of We Build And Design als geheel. Wanneer een oordeel meerdere werkstromen raakt, wordt dat expliciet benoemd en onderbouwd.
+
 ### Kennis, begrip en interface
 
 - **Kennis:** wat Atlas beschikbaar heeft uit repository, documentatie, onderzoek, historie, patronen en cases.
