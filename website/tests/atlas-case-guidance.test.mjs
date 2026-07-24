@@ -8,7 +8,15 @@ const snapshotRaw = readFileSync(
   new URL("../../clients/0001-we-build-and-design/CASE-SNAPSHOT.json", import.meta.url),
   "utf8",
 );
-const confirmedCase0001 = parseCaseSnapshot(snapshotRaw);
+const confirmedSnapshot = JSON.parse(snapshotRaw);
+confirmedSnapshot.lifecycleStatus = "confirmed";
+confirmedSnapshot.confirmationMode = "editorially-confirmed";
+confirmedSnapshot.confirmedBy = "donovan";
+confirmedSnapshot.lastConfirmedAt = "2026-07-24";
+confirmedSnapshot.lastConfirmedAtPrecision = "day";
+
+const confirmedCase0001 = parseCaseSnapshot(JSON.stringify(confirmedSnapshot));
+const candidateCase0001 = parseCaseSnapshot(snapshotRaw);
 const unavailableCase0001 = { state: "unavailable", reason: "missing" };
 const emptyAquaFlask = {
   version: 1,
@@ -23,9 +31,16 @@ const emptyAquaFlask = {
 test("het Kompas gebruikt zonder dagfocus uitsluitend het bevestigde Case 0001-beeld", () => {
   const recommendation = focusRecommendation([], emptyAquaFlask, confirmedCase0001);
   assert.equal(recommendation.kind, "wbd-snapshot");
-  assert.match(recommendation.title, /previewroute wacht op GO/);
-  assert.match(recommendation.reason, /geïsoleerd en controleerbaar/);
-  assert.match(recommendation.prepared, /geen hostingwijziging/);
+  assert.match(recommendation.title, /publieke bron, casecontext en casebeeld/);
+  assert.match(recommendation.reason, /preview bewijst de nieuwe publieke richting/);
+  assert.match(recommendation.prepared, /revision 2/);
+});
+
+test("de actuele Candidate geeft dezelfde neutrale veiligheidsgrens", () => {
+  const recommendation = focusRecommendation([], emptyAquaFlask, candidateCase0001);
+  assert.equal(recommendation.kind, "wbd-unavailable");
+  assert.equal(recommendation.title, "Actueel casebeeld vraagt herbevestiging.");
+  assert.match(recommendation.reason, /voorlopig geen richting/);
 });
 
 test("een ontbrekend bevestigd casebeeld geeft geen oude inhoudelijke fallback", () => {

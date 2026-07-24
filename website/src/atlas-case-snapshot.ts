@@ -43,12 +43,12 @@ export interface CaseSnapshot {
   revision: number;
   lifecycleStatus: CaseSnapshotLifecycleStatus;
   supersedesRevision: number | null;
-  confirmationMode: "editorially-confirmed";
+  confirmationMode: "editorial-confirmation-pending" | "editorially-confirmed";
   editorialOwner: "atlas";
-  confirmedBy: "donovan";
+  confirmedBy: "donovan" | null;
   preparedBy: "codex";
-  lastConfirmedAt: string;
-  lastConfirmedAtPrecision: CaseSnapshotPrecision;
+  lastConfirmedAt: string | null;
+  lastConfirmedAtPrecision: CaseSnapshotPrecision | null;
   position: CaseSnapshotStatement;
   meaning: CaseSnapshotStatement;
   priority: CaseSnapshotStatement;
@@ -60,8 +60,16 @@ export interface CaseSnapshot {
   evidenceBoundary: string[];
 }
 
+export type ConfirmedCaseSnapshot = CaseSnapshot & {
+  lifecycleStatus: "confirmed";
+  confirmationMode: "editorially-confirmed";
+  confirmedBy: "donovan";
+  lastConfirmedAt: string;
+  lastConfirmedAtPrecision: CaseSnapshotPrecision;
+};
+
 export type CaseSnapshotLoadResult =
-  | { state: "confirmed"; snapshot: CaseSnapshot }
+  | { state: "confirmed"; snapshot: ConfirmedCaseSnapshot }
   | { state: "unavailable"; reason: "missing" | "invalid" | "not-confirmed" };
 
 const lifecycleStatuses = new Set<CaseSnapshotLifecycleStatus>(["candidate", "confirmed", "superseded", "withdrawn"]);
@@ -122,12 +130,8 @@ function isValidSnapshot(value: unknown): value is CaseSnapshot {
       (value.revision as number) < 1 ||
       !lifecycleStatuses.has(value.lifecycleStatus as CaseSnapshotLifecycleStatus) ||
       (value.supersedesRevision !== null && (!Number.isInteger(value.supersedesRevision) || (value.supersedesRevision as number) < 1 || (value.supersedesRevision as number) >= (value.revision as number))) ||
-      value.confirmationMode !== "editorially-confirmed" ||
       value.editorialOwner !== "atlas" ||
-      value.confirmedBy !== "donovan" ||
       value.preparedBy !== "codex" ||
-      !isTimestamp(value.lastConfirmedAt) ||
-      !precisions.has(value.lastConfirmedAtPrecision as CaseSnapshotPrecision) ||
       !isStatement(value.position) ||
       !isStatement(value.meaning) ||
       !isStatement(value.priority) ||
@@ -138,7 +142,20 @@ function isValidSnapshot(value: unknown): value is CaseSnapshot {
       !Array.isArray(value.openUncertainties) || !value.openUncertainties.every(isUncertainty) ||
       !isStringArray(value.evidenceBoundary)) return false;
 
-  if (!hasUniqueIds(value.claims) || !hasUniqueIds(value.sources) || !hasUniqueIds(value.openUncertainties)) return false;
+  const validConfirmationState = value.lifecycleStatus === "candidate"
+    ? value.confirmationMode === "editorial-confirmation-pending" &&
+      value.confirmedBy === null &&
+      value.lastConfirmedAt === null &&
+      value.lastConfirmedAtPrecision === null
+    : value.confirmationMode === "editorially-confirmed" &&
+      value.confirmedBy === "donovan" &&
+      isTimestamp(value.lastConfirmedAt) &&
+      precisions.has(value.lastConfirmedAtPrecision as CaseSnapshotPrecision);
+
+  if (!validConfirmationState ||
+      !hasUniqueIds(value.claims) ||
+      !hasUniqueIds(value.sources) ||
+      !hasUniqueIds(value.openUncertainties)) return false;
 
   const claimIds = new Set(value.claims.map((claim) => claim.id));
   const sourceIds = new Set(value.sources.map((source) => source.id));
@@ -166,5 +183,5 @@ export function parseCaseSnapshot(raw: unknown): CaseSnapshotLoadResult {
 
   if (!isValidSnapshot(parsed)) return { state: "unavailable", reason: "invalid" };
   if (parsed.lifecycleStatus !== "confirmed") return { state: "unavailable", reason: "not-confirmed" };
-  return { state: "confirmed", snapshot: parsed };
+  return { state: "confirmed", snapshot: parsed as ConfirmedCaseSnapshot };
 }
