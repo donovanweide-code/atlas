@@ -56,6 +56,15 @@ test("weigert een interne Oriëntatie in de publieke build", async () => {
   });
 });
 
+test("weigert een intern leveringsbeeld als publiek artefact", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/atlas-delivery-review.js"></script>',
+    "assets/atlas-delivery-review.js": "export const status='progress-update-ready';",
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /intern artefact/);
+  });
+});
+
 test("weigert interne entrypoints en chunknamen", async () => {
   await withBuild({
     "index.html": '<script type="module" src="/assets/index.js"></script>',

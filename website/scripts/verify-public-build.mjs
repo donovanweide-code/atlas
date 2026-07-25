@@ -14,7 +14,7 @@ const textExtensions = new Set([
 ]);
 
 const forbiddenPaths = [
-  /atlas-(?:workspace|workspace-data|lab|observe|observations|orientations|understanding|case-guidance|case-snapshot|aquaflask-profile)/i,
+  /atlas-(?:workspace|workspace-data|lab|observe|observations|orientations|delivery-review|understanding|case-guidance|case-snapshot|aquaflask-profile)/i,
   /aqua[-_]?flask/i,
   /case[-_]?snapshot/i,
   /(?:development|internal)-main/i,

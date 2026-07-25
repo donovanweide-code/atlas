@@ -42,6 +42,7 @@ import {
   understandingKinds,
   understandingStatuses,
 } from "./atlas-understanding";
+import { bijCeesDeliveryReview, deliveryEvidenceLabel } from "./atlas-delivery-review";
 import { confirmedOrientations, orientationStatusLabel } from "./atlas-orientations";
 
 const caseNames: Record<Exclude<CaseId, "">, string> = {
@@ -165,6 +166,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const orientationSummary = confirmedOrientations.length === 1
     ? "1 bevestigd praktijksignaal wacht op menselijke toewijzing."
     : `${confirmedOrientations.length} bevestigde praktijksignalen wachten op menselijke toewijzing.`;
+  const deliveryEvidenceCards = bijCeesDeliveryReview.realized.map((item) => `
+    <article class="workspace-delivery-evidence">
+      <header><h4>${escapeHtml(item.title)}</h4><span data-strength="${escapeHtml(item.strength)}">${escapeHtml(deliveryEvidenceLabel(item.strength))}</span></header>
+      <p>${escapeHtml(item.finding)}</p>
+      <small>${escapeHtml(item.boundary)}</small>
+    </article>`).join("");
+  const deliveryOpenItems = bijCeesDeliveryReview.openItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const deliveryBlockers = bijCeesDeliveryReview.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const deliveryUncertainties = bijCeesDeliveryReview.uncertainties.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const deliverySources = bijCeesDeliveryReview.sources.map((source) => source.kind === "live"
+    ? `<li><span>${escapeHtml(source.label)}</span><a href="${escapeHtml(source.location)}" target="_blank" rel="noreferrer">${escapeHtml(source.location)}</a></li>`
+    : `<li><span>${escapeHtml(source.label)}</span><code>${escapeHtml(source.location)}</code></li>`).join("");
 
   app.innerHTML = `<main class="atlas-workspace">
     <section class="workspace-opening" id="overzicht" aria-labelledby="guidance-title">
@@ -193,6 +206,39 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <section class="workspace-section workspace-orientation" id="orientatie" aria-labelledby="orientation-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Oriëntatie</p><h2 id="orientation-title">Nieuwe werkelijkheid, nog geen case.</h2></div><p>${orientationSummary}</p></header>
         <div class="workspace-orientations">${orientationCards}</div>
+        <article class="workspace-delivery-review" aria-labelledby="delivery-review-title">
+          <header class="workspace-delivery-review__header">
+            <div><p class="workspace-label">Leveringsbeeld · ${escapeHtml(snapshotDate(bijCeesDeliveryReview.reviewedAt))}</p><h3 id="delivery-review-title">Grip op wat live is — zonder te vroeg af te tekenen.</h3></div>
+            <p><strong>${escapeHtml(bijCeesDeliveryReview.feedback.timing)}</strong><span>${escapeHtml(bijCeesDeliveryReview.feedback.scope)}</span></p>
+          </header>
+
+          <section class="workspace-delivery-review__completion" aria-labelledby="delivery-completion-title">
+            <p class="workspace-label">Wat aantoonbaar af is</p>
+            <h4 id="delivery-completion-title">Formele afronding is nog niet bewezen.</h4>
+            <p>${escapeHtml(bijCeesDeliveryReview.formalCompletion)}</p>
+          </section>
+
+          <section class="workspace-delivery-review__realized" aria-labelledby="delivery-realized-title">
+            <header><p class="workspace-label">Aantoonbaar gerealiseerd</p><h4 id="delivery-realized-title">Live gezien, met een expliciete bewijsgrens.</h4></header>
+            <div>${deliveryEvidenceCards}</div>
+          </section>
+
+          <div class="workspace-delivery-review__questions">
+            <section aria-labelledby="delivery-open-title"><p class="workspace-label">Wat openstaat</p><h4 id="delivery-open-title">${bijCeesDeliveryReview.openItems.length} gerichte controles</h4><ol>${deliveryOpenItems}</ol></section>
+            <section aria-labelledby="delivery-blockers-title"><p class="workspace-label">Wat oplevering blokkeert</p><h4 id="delivery-blockers-title">${bijCeesDeliveryReview.blockers.length} beslissende grenzen</h4><ul>${deliveryBlockers}</ul></section>
+            <section aria-labelledby="delivery-uncertainties-title"><p class="workspace-label">Eerst onderzoeken</p><h4 id="delivery-uncertainties-title">${bijCeesDeliveryReview.uncertainties.length} onzekerheden</h4><ul>${deliveryUncertainties}</ul></section>
+          </div>
+
+          <section class="workspace-delivery-review__feedback" aria-labelledby="delivery-feedback-title">
+            <div><p class="workspace-label">Volgende betrouwbare terugkoppeling</p><h4 id="delivery-feedback-title">${escapeHtml(bijCeesDeliveryReview.feedback.timing)} — als voortgangsupdate.</h4></div>
+            <div><p>${escapeHtml(bijCeesDeliveryReview.feedback.message)}</p><small><strong>Opleverdatum:</strong> ${escapeHtml(bijCeesDeliveryReview.feedback.completionDate)}</small></div>
+          </section>
+
+          <details class="workspace-delivery-review__sources">
+            <summary>Bekijk ${bijCeesDeliveryReview.sources.length} onderzochte bronnen <i aria-hidden="true">→</i></summary>
+            <ul>${deliverySources}</ul>
+          </details>
+        </article>
       </section>
 
       <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
