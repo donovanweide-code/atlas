@@ -44,6 +44,12 @@ import {
 } from "./atlas-understanding";
 import { bijCeesDeliveryReview, deliveryEvidenceLabel } from "./atlas-delivery-review";
 import { confirmedOrientations, orientationStatusLabel } from "./atlas-orientations";
+import {
+  reviewAuthorityLabels,
+  reviewItemTypeLabels,
+  type ReviewLayerItem,
+  workspaceReviewLayer,
+} from "./atlas-review-layer";
 
 const caseNames: Record<Exclude<CaseId, "">, string> = {
   "0001": "We Build And Design",
@@ -77,6 +83,26 @@ function escapeHtml(value: string): string {
 function snapshotDate(value: string): string {
   const date = value.length === 10 ? new Date(`${value}T12:00:00`) : new Date(value);
   return new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
+function reviewLayerCard(item: ReviewLayerItem): string {
+  return `<article class="workspace-review-item" data-lane="${escapeHtml(item.lane)}" data-authority="${escapeHtml(item.authority)}">
+    <header>
+      <span>${escapeHtml(reviewItemTypeLabels[item.type])}</span>
+      <small>${escapeHtml(item.status)}</small>
+    </header>
+    <h3>${escapeHtml(item.title)}</h3>
+    <p>${escapeHtml(item.why)}</p>
+    <dl>
+      <div><dt>Gekoppeld aan</dt><dd>${escapeHtml(item.sourceLabel)}</dd></div>
+      <div><dt>Voorgestelde beoordeling</dt><dd>${escapeHtml(item.nextReview)}</dd></div>
+    </dl>
+    <footer>
+      <span>${escapeHtml(reviewAuthorityLabels[item.authority])}</span>
+      <small>${escapeHtml(item.approval)}</small>
+      <code>${escapeHtml(item.sourcePath)}</code>
+    </footer>
+  </article>`;
 }
 
 function createId(prefix: string): string {
@@ -166,6 +192,29 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const orientationSummary = confirmedOrientations.length === 1
     ? "1 bevestigd praktijksignaal wacht op menselijke toewijzing."
     : `${confirmedOrientations.length} bevestigde praktijksignalen wachten op menselijke toewijzing.`;
+  const reviewObservationItems: ReviewLayerItem[] = observationStore.observations.map((observation) => ({
+    id: observation.id,
+    lane: "review",
+    title: observation.text,
+    why:
+      `Vastgelegd tijdens Waarnemen bij ‘${observation.context.boundaryLabel}’ en nog niet inhoudelijk beoordeeld.`,
+    sourceLabel:
+      `Case 0001 · ${observation.context.pageLabel} · Sprint ${observation.context.sprintId}`,
+    sourcePath: `${observation.context.path}${observation.context.hash}`,
+    type: "observation",
+    status: "Onbeoordeeld",
+    authority: "review-result",
+    nextReview:
+      "Donovan beoordeelt welke betekenis deze Waarneming heeft; We Build And Design trekt hier nog geen conclusie.",
+    approval: "Betekenis en vervolg zijn nog niet bevestigd.",
+  }));
+  const reviewCandidateCards = workspaceReviewLayer.review.map(reviewLayerCard).join("");
+  const reviewObservationCards = reviewObservationItems.map(reviewLayerCard).join("");
+  const reviewHorizonCards = workspaceReviewLayer.horizon.map(reviewLayerCard).join("");
+  const reviewOpenDeliveryItems = workspaceReviewLayer.today.relatedOpenItems
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  const pendingReviewCount = workspaceReviewLayer.review.length + reviewObservationItems.length;
   const deliveryEvidenceCards = bijCeesDeliveryReview.realized.map((item) => `
     <article class="workspace-delivery-evidence">
       <header><h4>${escapeHtml(item.title)}</h4><span data-strength="${escapeHtml(item.strength)}">${escapeHtml(deliveryEvidenceLabel(item.strength))}</span></header>
@@ -202,7 +251,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     <aside class="workspace-sidebar">
       <a class="workspace-brand" href="#overzicht" aria-label="Atlas Workspace"><span class="workspace-brand__mark">A</span><span><strong>Atlas</strong><small>Workspace</small></span></a>
       <nav class="workspace-nav" aria-label="Workspace navigatie">
-        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#orientatie"><span>02</span>Oriëntatie</a><a href="#waarnemen"><span>03</span>Waarnemen</a><a href="#focus"><span>04</span>Vandaag</a><a href="#cases"><span>05</span>Cases</a><a href="#understanding"><span>06</span>Understanding</a><a href="#ideeen"><span>07</span>Ideeën</a><a href="#logboek"><span>08</span>Logboek</a>
+        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#werkbeeld"><span>02</span>Werkbeeld</a><a href="#orientatie"><span>03</span>Oriëntatie</a><a href="#waarnemen"><span>04</span>Waarnemen</a><a href="#focus"><span>05</span>Vandaag</a><a href="#cases"><span>06</span>Cases</a><a href="#understanding"><span>07</span>Understanding</a><a href="#ideeen"><span>08</span>Ideeën</a><a href="#logboek"><span>09</span>Logboek</a>
       </nav>
       <div class="workspace-sidebar__footer"><p>We Build And Design</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
     </aside>
@@ -210,6 +259,63 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     <div class="workspace-main">
       <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>Workspace</h2></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
+
+      <section class="workspace-section workspace-review-layer" id="werkbeeld" aria-labelledby="review-layer-title">
+        <header class="workspace-section__header">
+          <div><p class="workspace-label">${escapeHtml(workspaceReviewLayer.sender)}</p><h2 id="review-layer-title">Open voor beoordeling.</h2></div>
+          <p>Wat we hebben vastgesteld, wat nog openstaat en wat bewust kan wachten.</p>
+        </header>
+
+        <div class="workspace-review-summary" aria-label="Actueel werkbeeld">
+          <div data-state="decided"><span>Vastgestelde grens</span><strong>${escapeHtml(workspaceReviewLayer.workingBoundary)}</strong></div>
+          <div data-state="today"><span>Vandaag</span><strong>1 betekenisvolle actie</strong></div>
+          <div data-state="review"><span>Nog beoordelen</span><strong>${pendingReviewCount} ${pendingReviewCount === 1 ? "item" : "items"}</strong></div>
+          <div data-state="horizon"><span>Horizon</span><strong>${workspaceReviewLayer.horizon.length} bewust bewaard idee</strong></div>
+        </div>
+
+        <article class="workspace-review-today" aria-labelledby="review-today-title">
+          <div class="workspace-review-today__marker"><span>Vandaag doen</span><small>Handmatig gekozen uit de bestaande review</small></div>
+          <div class="workspace-review-today__content">
+            <header><span>${escapeHtml(reviewItemTypeLabels[workspaceReviewLayer.today.type])}</span><small>${escapeHtml(workspaceReviewLayer.today.status)}</small></header>
+            <h3 id="review-today-title">${escapeHtml(workspaceReviewLayer.today.title)}</h3>
+            <p>${escapeHtml(workspaceReviewLayer.today.why)}</p>
+            <dl>
+              <div><dt>Gekoppeld aan</dt><dd>${escapeHtml(workspaceReviewLayer.today.sourceLabel)}</dd></div>
+              <div><dt>Volgende beoordeling</dt><dd>${escapeHtml(workspaceReviewLayer.today.nextReview)}</dd></div>
+            </dl>
+            <footer><span>${escapeHtml(reviewAuthorityLabels[workspaceReviewLayer.today.authority])}</span><small>${escapeHtml(workspaceReviewLayer.today.approval)}</small><code>${escapeHtml(workspaceReviewLayer.today.sourcePath)}</code></footer>
+            <details>
+              <summary>Bekijk alle ${workspaceReviewLayer.today.relatedOpenItems.length} open leveringspunten <i aria-hidden="true">→</i></summary>
+              <ol>${reviewOpenDeliveryItems}</ol>
+            </details>
+          </div>
+        </article>
+
+        <section class="workspace-review-pending" aria-labelledby="review-pending-title">
+          <header>
+            <div><p class="workspace-label">Nog beoordelen</p><h3 id="review-pending-title">Praktijkinzichten zijn nog geen besluiten.</h3></div>
+            <p>${reviewObservationItems.length === 0 ? "Geen lokale Waarnemingen wachten op beoordeling." : `${reviewObservationItems.length} lokale ${reviewObservationItems.length === 1 ? "Waarneming wacht" : "Waarnemingen wachten"} op beoordeling.`}</p>
+          </header>
+          ${reviewObservationItems.length > 0
+            ? `<div class="workspace-review-pending__observations"><p class="workspace-review-subtitle">Onbeoordeelde Waarnemingen</p>${reviewObservationCards}</div>`
+            : `<div class="workspace-review-empty"><span>0</span><p>Geen onbeoordeelde Waarnemingen in deze browser.</p></div>`}
+          <div class="workspace-review-pending__candidates">
+            <p class="workspace-review-subtitle">${workspaceReviewLayer.review.length} candidates uit praktijkgebruik</p>
+            <div>${reviewCandidateCards}</div>
+          </div>
+        </section>
+
+        <section class="workspace-review-horizon" aria-labelledby="review-horizon-title">
+          <header><div><p class="workspace-label">Horizon</p><h3 id="review-horizon-title">Waardevol, maar nu niet dominant.</h3></div><p>Terugkeer alleen bij een aantoonbare praktijktrigger.</p></header>
+          <div>${reviewHorizonCards}</div>
+        </section>
+
+        <footer class="workspace-review-signature">
+          <strong>${escapeHtml(workspaceReviewLayer.signature)}</strong>
+          <span>Ontwerpverkenning · geen definitieve merkbeslissing</span>
+          <code>${escapeHtml(workspaceReviewLayer.handoffPath)}</code>
+        </footer>
+      </section>
 
       <section class="workspace-section workspace-orientation" id="orientatie" aria-labelledby="orientation-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Oriëntatie</p><h2 id="orientation-title">Nieuwe werkelijkheid, nog geen case.</h2></div><p>${orientationSummary}</p></header>
