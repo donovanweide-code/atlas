@@ -35,6 +35,20 @@ De winkelwagen- en checkoutcontrole gebruikte tijdelijk één product. Het produ
 - Een lokale WordPress/WooCommerce-databasedump is gegenereerd op 18 juli 2026 om 20:18.
 - Het bestand met API-gegevens is niet geopend of gebruikt.
 
+### Gericht scopeonderzoek
+
+Vier lokale Bij Cees-facturen uit 2024 en 2025 zijn read-only beoordeeld:
+
+- `F00237` noemt updates en een wijziging van verzendkosten;
+- `F00241` noemt een thema-update en foutoplossing;
+- `F00239` en `F00244` gaan over de bouw en afronding van de AquaFlask-website.
+
+Deze facturen bewijzen een bestaande werkrelatie en eerder uitgevoerd werk. Zij beschrijven niet de wijzigingsronde van juni 2026 en bevatten geen actuele acceptatiecriteria voor banners, Klarna, productpagina's, categorieën, menu, winkelwagen of filters.
+
+Binnen de onderzochte lokale bestanden is geen offerte, briefing, wijzigingsverzoek of ander document uit 2026 gevonden dat de actuele scope verantwoord kan dragen.
+
+**Beslissende ontbrekende bron:** het vroegste herleidbare e-mail-, WhatsApp- of briefingsspoor waarin Cees of Donovan de huidige wijzigingsronde beschrijft.
+
 ## Aantoonbaar gerealiseerd
 
 ### Banners
@@ -83,7 +97,7 @@ De implementatie is op meerdere onderdelen aantoonbaar live. Wat ontbreekt is ee
 
 ## Wat nog openstaat
 
-1. De oorspronkelijke klantvraag of een andere herleidbare scopebron terugvinden.
+1. Het vroegste communicatie- of briefingsspoor van de huidige wijzigingsronde verkrijgen; de lokale documentzoektocht leverde geen actuele scopebron op.
 2. Per genoemd werkitem vaststellen wat `af` betekende.
 3. De bedoelde filterverbetering expliciet maken en gericht toetsen.
 4. De dekking van categorieën, productpagina's en menuverbindingen breder controleren.

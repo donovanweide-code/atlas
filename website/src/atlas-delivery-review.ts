@@ -18,6 +18,13 @@ export interface DeliveryReview {
   reviewedAt: string;
   status: "progress-update-ready";
   formalCompletion: string;
+  scopeSearch: {
+    status: "not-found-locally";
+    finding: string;
+    searched: readonly string[];
+    decisiveSource: string;
+    boundary: string;
+  };
   realized: readonly DeliveryEvidenceItem[];
   openItems: readonly string[];
   blockers: readonly string[];
@@ -37,6 +44,21 @@ export const bijCeesDeliveryReview = {
   status: "progress-update-ready",
   formalCompletion:
     "Geen afzonderlijk werkitem kan op basis van de beschikbare bronnen formeel als geaccepteerd af worden aangemerkt.",
+  scopeSearch: {
+    status: "not-found-locally",
+    finding:
+      "De lokale documentzoektocht bevat geen briefing, offerte of wijzigingsverzoek uit 2026 dat de actuele scope of acceptatiecriteria draagt.",
+    searched: [
+      "Recente bestanden in Desktop/Bijcees: implementatie-assets en een databasedump, maar geen briefing.",
+      "Factuur F00237: updates en verzendkostenwijziging uit 2024.",
+      "Factuur F00241: thema-update en foutoplossing uit 2025.",
+      "Facturen F00239 en F00244: bouw en afronding van de AquaFlask-website uit 2025.",
+    ],
+    decisiveSource:
+      "Het vroegste herleidbare e-mail-, WhatsApp- of briefingsspoor van de wijzigingsronde van juni 2026.",
+    boundary:
+      "De historische facturen bewijzen een werkrelatie en ouder werk, niet de actuele opdracht of acceptatie.",
+  },
   realized: [
     {
       title: "Banners",
@@ -80,7 +102,7 @@ export const bijCeesDeliveryReview = {
     },
   ],
   openItems: [
-    "Vind de oorspronkelijke klantvraag of een andere herleidbare scopebron.",
+    "Verkrijg het vroegste communicatie- of briefingsspoor van de huidige wijzigingsronde; lokaal is geen actuele scopebron gevonden.",
     "Bepaal per genoemd werkitem welk acceptatiecriterium bij af hoort.",
     "Maak de bedoelde filterverbetering expliciet en toets die gericht.",
     "Controleer de dekking van categorieën, productpagina's en menuverbindingen breder.",
@@ -130,6 +152,11 @@ export const bijCeesDeliveryReview = {
     {
       label: "Volledige praktijkreview",
       location: "docs/atlas/PRAKTIJKREVIEW-BIJ-CEES-LEVERING-2026-07-25.md",
+      kind: "local",
+    },
+    {
+      label: "Historische facturen — alleen scopegrens",
+      location: "Downloads/F00237 · F00239 · F00241 · F00244",
       kind: "local",
     },
   ],

@@ -102,6 +102,22 @@
 .workspace-delivery-review__completion { margin-top: 2rem; padding: 1.15rem 1.25rem; border-left: 2px solid rgba(212,168,106,.7); background: rgba(212,168,106,.07); }
 .workspace-delivery-review__completion h4,.workspace-delivery-review__realized h4,.workspace-delivery-review__questions h4,.workspace-delivery-review__feedback h4 { margin: .35rem 0 0; color: #eee6d8; font-family: Georgia,serif; font-size: 1.05rem; font-weight: 400; line-height: 1.35; }
 .workspace-delivery-review__completion > p:last-child { margin: .55rem 0 0; color: var(--workspace-muted); font-size: .8rem; line-height: 1.65; }
+.workspace-delivery-review__scope-search { margin-top: .8rem; padding: 1.15rem 1.25rem; border: 1px solid var(--workspace-line); background: rgba(255,255,255,.018); }
+.workspace-delivery-review__scope-search > header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.workspace-delivery-review__scope-search h4 { margin: .35rem 0 0; color: #eee6d8; font-family: Georgia,serif; font-size: 1.05rem; font-weight: 400; }
+.workspace-delivery-review__scope-search > header > span { padding: .3rem .55rem; border-radius: 2rem; color: #d8c8ad; background: rgba(212,168,106,.11); font-size: .58rem; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.workspace-delivery-review__scope-search > p { max-width: 54rem; margin: .8rem 0 0; color: #d7d0c5; font-size: .78rem; line-height: 1.65; }
+.workspace-delivery-review__scope-search details { margin-top: .85rem; border-top: 1px solid rgba(255,255,255,.05); }
+.workspace-delivery-review__scope-search summary { display: flex; padding-top: .75rem; align-items: center; justify-content: space-between; color: var(--workspace-muted); cursor: pointer; font-size: .62rem; letter-spacing: .07em; list-style: none; text-transform: uppercase; }
+.workspace-delivery-review__scope-search summary::-webkit-details-marker { display: none; }
+.workspace-delivery-review__scope-search summary i { color: var(--horizon,#d4a86a); font-style: normal; transition: transform 180ms ease; }
+.workspace-delivery-review__scope-search details[open] summary i { transform: rotate(90deg); }
+.workspace-delivery-review__scope-search ul { margin: .8rem 0 0; padding-left: 1rem; color: var(--workspace-muted); font-size: .68rem; line-height: 1.55; }
+.workspace-delivery-review__scope-search li + li { margin-top: .4rem; }
+.workspace-delivery-review__scope-search footer { display: grid; margin-top: 1rem; padding-top: 1rem; grid-template-columns: minmax(10rem,.28fr) minmax(0,1fr); gap: .4rem 1rem; border-top: 1px solid rgba(255,255,255,.05); }
+.workspace-delivery-review__scope-search footer span { color: var(--horizon,#d4a86a); font-size: .61rem; letter-spacing: .07em; text-transform: uppercase; }
+.workspace-delivery-review__scope-search footer strong { color: #e4ddd1; font-size: .76rem; font-weight: 400; line-height: 1.55; }
+.workspace-delivery-review__scope-search footer small { grid-column: 2; color: var(--workspace-muted); font-size: .65rem; line-height: 1.5; }
 .workspace-delivery-review__realized { margin-top: 2.2rem; }
 .workspace-delivery-review__realized > header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
 .workspace-delivery-review__realized > div { display: grid; margin-top: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
@@ -417,6 +433,9 @@
   .workspace-orientation-card > footer small { text-align: left; }
   .workspace-delivery-review__header,.workspace-delivery-review__feedback { grid-template-columns: 1fr; }
   .workspace-delivery-review__header > p { justify-items: start; text-align: left; }
+  .workspace-delivery-review__scope-search > header { align-items: flex-start; flex-direction: column; }
+  .workspace-delivery-review__scope-search footer { grid-template-columns: 1fr; }
+  .workspace-delivery-review__scope-search footer small { grid-column: auto; }
   .workspace-delivery-review__realized > header { align-items: flex-start; flex-direction: column; }
   .workspace-delivery-review__realized > div,.workspace-delivery-review__questions { grid-template-columns: 1fr; }
   .workspace-delivery-evidence { min-height: 0; }
