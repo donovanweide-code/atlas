@@ -16,17 +16,32 @@ Welke terugkoppeling kan Donovan op basis van de actuele werkelijkheid betrouwba
 
 ## Onderzochte bronnen
 
+### Eerste herleidbare scopebron
+
+Donovan leverde op 25 juli 2026 twee screenshots aan van een doorgestuurde e-mail van 29 januari 2026 om 12:23:46 CET met onderwerp `Menubalk + teksten bijcees website`.
+
+De e-mail en de zichtbare menubalkbijlage zijn privacy-begrensd en met bronhashes vastgelegd in `docs/atlas/sources/bij-cees/EMAIL-SCOPE-2026-01-29.md`.
+
+De bron noemt aangeleverde SEO-teksten en een menubalk, verwijdering van `Woonstore`, zwart en kraft (`#D5B59C`), verzendkosten als bewust open onderwerp en Klarna voor Bij Cees en AquaFlask.
+
+De inhoud van de genoemde SEO-bijlage is niet aangeleverd. Alleen de bestandsnaam en de verwijzing in de e-mail zijn zichtbaar.
+
+**Bewijsgrens:** deze bron bewijst oorspronkelijke scope, maar geen latere acceptatie.
+
 ### Actuele publieke webshop
 
 Read-only gecontroleerd op 25 juli 2026:
 
 - `https://www.bijcees.nl/`
+- `https://www.bijcees.nl/product-categorie/keuken/pannen/`
+- `https://www.bijcees.nl/onze-verkooppunten/`
 - `https://www.bijcees.nl/product-categorie/koken-en-tafelen/`
 - `https://www.bijcees.nl/product/cabanaz-tea-coffee-pot-theepot/`
 - `https://www.bijcees.nl/winkelmand/`
 - `https://www.bijcees.nl/afrekenen/`
+- `https://aquaflask.nl/afrekenpagina/`
 
-De winkelwagen- en checkoutcontrole gebruikte tijdelijk één product. Het product is na de controle weer uit de testsessie verwijderd. Er is geen bestelling geplaatst, betaling gestart of productie-instelling gewijzigd.
+De winkelwagen- en checkoutcontroles gebruikten tijdelijk één product per webshop in geïsoleerde browsersessies. Er is geen bestelling geplaatst, betaling gestart of productie-instelling gewijzigd.
 
 ### Lokale implementatiesporen
 
@@ -45,9 +60,19 @@ Vier lokale Bij Cees-facturen uit 2024 en 2025 zijn read-only beoordeeld:
 
 Deze facturen bewijzen een bestaande werkrelatie en eerder uitgevoerd werk. Zij beschrijven niet de wijzigingsronde van juni 2026 en bevatten geen actuele acceptatiecriteria voor banners, Klarna, productpagina's, categorieën, menu, winkelwagen of filters.
 
-Binnen de onderzochte lokale bestanden is geen offerte, briefing, wijzigingsverzoek of ander document uit 2026 gevonden dat de actuele scope verantwoord kan dragen.
+Binnen de onderzochte lokale bestanden was geen actuele scopebron gevonden. De later door Donovan aangeleverde e-mail van 29 januari 2026 vult dit scopegat gedeeltelijk. De eerdere zoekconclusie blijft daarmee een herleidbare onderzoeksstap, maar is niet langer de actuele eindconclusie.
 
-**Beslissende ontbrekende bron:** het vroegste herleidbare e-mail-, WhatsApp- of briefingsspoor waarin Cees of Donovan de huidige wijzigingsronde beschrijft.
+## Scope per genoemd onderdeel
+
+| Onderdeel | Oorspronkelijk gevraagd | Aantoonbaar live | Nog open | Bewijs voor acceptatie |
+| --- | --- | --- | --- | --- |
+| SEO-teksten | SEO-teksten per categorie en subcategorie zijn als DOCX aangeleverd. | De homepage bevat inhoudelijke SEO-tekst. In de gecontroleerde subcategorie Pannen was geen zichtbare categorie-intro of afsluitende SEO-tekst aanwezig. | De inhoud van de bijlage ontbreekt; volledige vergelijking is niet mogelijk. | Niet aanwezig. |
+| Menubalk | De vijf hoofdgroepen en subcategorieën uit de PDF. | Alle vijf hoofdgroepen staan live. Woonstyling en Merken volgen de bron. Keuken heeft extra `Overige`; Tafelen gebruikt `Serveerplanken` en extra `Tafel accessoires`; Drinkflessen heeft extra `Tumbler`. | Vaststellen of deze afwijkingen bewust en geaccepteerd zijn. | Niet aanwezig. |
+| Woonstore | `Woonstore` verwijderen bij verkooppunten. | `Woonstore` is niet zichtbaar op de live verkooppuntenpagina; Depot 7 en vijf Loods 5-vestigingen worden genoemd. | Alleen menselijke acceptatie ontbreekt. | Niet aanwezig. |
+| Layoutkleuren | Zwart en kraft, kleurcode `#D5B59C`. | De live stylesheet gebruikt `#D5B59C` voor onder meer footer en productranden en zwart voor footerlinks. | De bron bevat geen schermspecifiek acceptatiecriterium voor de volledige layout. | Niet aanwezig. |
+| Verzendkosten | Geen definitief verzoek; Cees en Isa dachten hier nog over na. | De live webshop communiceert gratis verzending vanaf €49,95 en 1–3 werkdagen levertijd. | Het definitieve besluit na de e-mail ontbreekt. | Niet aanwezig. |
+| Klarna bij Bij Cees | Klarna toevoegen aan het betaalsysteem. | Klarna staat live als geselecteerde checkoutmethode. | De keten na `Plaats bestelling` en menselijke acceptatie zijn niet bewezen. | Niet aanwezig. |
+| Klarna bij AquaFlask | Klarna ook aan AquaFlask toevoegen. | In de gecontroleerde checkout stonden iDEAL, kaart, overboeking en Bancontact; Klarna was niet zichtbaar. | Klarna staat hier op basis van de live controle nog open. | Niet aanwezig. |
 
 ## Aantoonbaar gerealiseerd
 
@@ -59,9 +84,9 @@ De live homepage laadt nieuwe Gusta-, Puhlmann-, Cabanaz- en AquaFlask-banners. 
 
 ### Menu en categorie-indeling
 
-Het live hoofdmenu toont de nieuwe hoofdrichting `Keuken`, `Tafelen`, `Woonstyling`, `Drinkflessen` en `Merken`, met onderliggende categorieën. De mobiele pagina bevat dezelfde menustructuur en veroorzaakt bij de gecontroleerde viewport geen horizontale pagina-overflow.
+Het live hoofdmenu toont de vijf gevraagde hoofdgroepen `Keuken`, `Tafelen`, `Woonstyling`, `Drinkflessen` en `Merken`. Woonstyling en Merken volgen de bron. Keuken heeft extra `Overige`; Tafelen gebruikt `Serveerplanken` in plaats van `Planken` en heeft extra `Tafel accessoires`; Drinkflessen heeft extra `Tumbler`.
 
-**Bewijsgrens:** de huidige structuur is live, maar de oorspronkelijke gewenste indeling en volledige linkdekking zijn niet als acceptatiebron beschikbaar.
+**Bewijsgrens:** de huidige structuur is live, maar de aantoonbare afwijkingen zijn niet als geaccepteerde wijzigingen vastgelegd.
 
 ### Productpagina
 
@@ -77,7 +102,7 @@ De gecontroleerde Cabanaz-productpagina bevat:
 
 ### Winkelwagen en checkout
 
-Een product kon aan de winkelwagen worden toegevoegd. De winkelwagen berekende subtotaal, btw en totaal en bood een route naar checkout. De checkout toonde Klarna, iDEAL/Wero, kaart, Bancontact en PayPal.
+Bij Cees kon een product aan de winkelwagen worden toegevoegd. De checkout toonde Klarna, iDEAL/Wero, kaart, Bancontact en PayPal. In de afzonderlijk gecontroleerde AquaFlask-checkout werden iDEAL, kaart, overboeking en Bancontact aangeboden; Klarna was daar niet zichtbaar.
 
 **Bewijsgrens:** er is bewust geen bestelling geplaatst en geen betaling uitgevoerd. De technische en administratieve afhandeling na `Bestelling plaatsen` is dus niet bewezen.
 
@@ -85,11 +110,11 @@ Een product kon aan de winkelwagen worden toegevoegd. De winkelwagen berekende s
 
 De categoriepagina toont categorieën, sortering, productaantallen en een prijsfilter. De YITH-filtercomponent is in de pagina-assets herkenbaar, maar tijdens de controle verscheen geen aantoonbare aanvullende attribuutfilter.
 
-**Bewijsgrens:** de bron vermeldt alleen een `beoogde verbetering van de filters`. Zonder oorspronkelijke bedoeling of acceptatiecriterium kan niet worden vastgesteld of de actuele filterwerking de gevraagde verbetering is.
+**Bewijsgrens:** filters worden in de e-mail van 29 januari 2026 niet genoemd. De herkomst en het acceptatiecriterium van de eerder genoemde filterverbetering blijven dus onbewezen.
 
 ## Formele afronding
 
-Op basis van de beschikbare bronnen kan geen afzonderlijk werkitem formeel als geaccepteerd `af` worden aangemerkt.
+De scope is nu per genoemd onderdeel herleidbaar. Op basis van de beschikbare bronnen kan echter geen afzonderlijk werkitem formeel als geaccepteerd `af` worden aangemerkt.
 
 De implementatie is op meerdere onderdelen aantoonbaar live. Wat ontbreekt is een herleidbare verbinding tussen:
 
@@ -97,37 +122,38 @@ De implementatie is op meerdere onderdelen aantoonbaar live. Wat ontbreekt is ee
 
 ## Wat nog openstaat
 
-1. Het vroegste communicatie- of briefingsspoor van de huidige wijzigingsronde verkrijgen; de lokale documentzoektocht leverde geen actuele scopebron op.
-2. Per genoemd werkitem vaststellen wat `af` betekende.
-3. De bedoelde filterverbetering expliciet maken en gericht toetsen.
-4. De dekking van categorieën, productpagina's en menuverbindingen breder controleren.
-5. Checkout, betaling, orderbevestiging en verzending end-to-end laten valideren zonder ongecontroleerde productiehandeling.
-6. De eerder door Donovan ervaren fricties concreet aan een pagina, handeling en bron verbinden.
+1. De inhoud van de oorspronkelijke SEO-bijlage verkrijgen en per categorie en subcategorie vergelijken.
+2. De live menuaanvullingen en het label `Serveerplanken` door Cees en Isa laten bevestigen of corrigeren.
+3. Het definitieve verzendkostenbesluit na 29 januari 2026 herleiden.
+4. Klarna bij AquaFlask toevoegen of herstellen en de checkout opnieuw controleren.
+5. Menselijke acceptatie per scopeonderdeel vastleggen.
+6. Checkout, betaling, orderbevestiging en verzending end-to-end laten valideren zonder ongecontroleerde productiehandeling.
 
 ## Blokkers voor oplevering
 
-- Er ontbreekt een herleidbare scope- en acceptatiebron per werkitem.
-- De filterbedoeling en het bijbehorende acceptatiecriterium zijn onbekend.
+- De inhoud van de SEO-bijlage ontbreekt voor vergelijking.
+- Klarna is bij AquaFlask niet live aangetroffen.
+- De menuafwijkingen en het definitieve verzendkostenbesluit zijn niet door de opdrachtgever bevestigd.
 - De volledige orderketen na checkout is niet veilig bewezen.
-- Er is nog geen menselijke acceptatie van Cees op de actuele uitkomst vastgelegd.
+- Er is nog geen menselijke acceptatie van Cees of Isa op de actuele uitkomst vastgelegd.
 
 De Engelse checkouttekst `Enter your address to view shipping options.` is live waargenomen. Zonder acceptatiegrens is dit een concrete frictie, maar nog niet zelfstandig een opleveringsblokker.
 
 ## Beslissende onzekerheden
 
-- Wat vroeg Cees oorspronkelijk precies?
-- Welke fricties zag Donovan bij zijn eerdere controle?
-- Welke filterwerking moest aantoonbaar verbeteren?
-- Moest de opdracht alleen technisch live staan, of ook inhoudelijk en end-to-end worden geaccepteerd?
-- Welke onderdelen ervaart Cees zelf nog als onaf?
+- Zijn de live menuafwijkingen bewuste verbeteringen of onbedoelde afwijkingen?
+- Welke aangeleverde SEO-tekst hoort op iedere categorie en subcategorie?
+- Welk verzendkostenbesluit is na 29 januari 2026 genomen?
+- Waarom is Klarna bij AquaFlask niet zichtbaar en is het eerder wel actief geweest?
+- Welke onderdelen ervaren Cees en Isa zelf nog als onaf?
 
 ## Betrouwbare volgende terugkoppeling
 
 Een begrensde voortgangsterugkoppeling kan **nu** worden gegeven:
 
-> De banners, nieuwe menustructuur, categorie-indeling, productpresentatie, winkelwagenroute en Klarna zijn aantoonbaar live. Ik beschouw de oplevering nog niet als definitief afgerond, omdat de afgesproken acceptatie per onderdeel, de bedoelde filterverbetering en de volledige orderketen nog gecontroleerd moeten worden. Ik breng die punten eerst herleidbaar in kaart voordat ik een einddatum of afronding bevestig.
+> De oorspronkelijke scope is nu grotendeels herleidbaar. Woonstore is verwijderd, de gevraagde kleuren zijn toegepast en Klarna staat bij Bij Cees live. Voor afronding vergelijk ik eerst de aangeleverde SEO-teksten, laat ik de menuafwijkingen en verzendkosten bevestigen en herstel ik Klarna bij AquaFlask. Daarna leg ik de acceptatie per onderdeel vast voordat ik een einddatum of afronding bevestig.
 
-Een betrouwbare opleverdatum kan op basis van de huidige bronnen nog niet worden genoemd. Die wordt pas verantwoord nadat de oorspronkelijke scope, het filtercriterium en de veilige end-to-end validatieroute bekend zijn.
+Een betrouwbare opleverdatum kan op basis van de huidige bronnen nog niet worden genoemd. Die wordt pas verantwoord nadat de ontbrekende SEO-bron, AquaFlask-Klarna, menuafwijkingen, verzendkosten en acceptatie zijn opgelost of bevestigd.
 
 ## Betekenis voor Atlas
 

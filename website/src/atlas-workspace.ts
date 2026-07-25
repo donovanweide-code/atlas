@@ -175,7 +175,14 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const deliveryOpenItems = bijCeesDeliveryReview.openItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const deliveryBlockers = bijCeesDeliveryReview.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const deliveryUncertainties = bijCeesDeliveryReview.uncertainties.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const deliveryScopeSearch = bijCeesDeliveryReview.scopeSearch.searched.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const deliveryScopeRows = bijCeesDeliveryReview.scopeItems.map((item) => `
+    <article class="workspace-delivery-scope-row">
+      <header><h5>${escapeHtml(item.title)}</h5><span data-strength="${escapeHtml(item.strength)}">${escapeHtml(deliveryEvidenceLabel(item.strength))}</span></header>
+      <div><span>Oorspronkelijk gevraagd</span><p>${escapeHtml(item.originallyRequested)}</p></div>
+      <div><span>Aantoonbaar live</span><p>${escapeHtml(item.liveFinding)}</p></div>
+      <div><span>Nog open</span><p>${escapeHtml(item.open)}</p></div>
+      <div><span>Bewijs voor acceptatie</span><p>${escapeHtml(item.acceptanceEvidence)}</p></div>
+    </article>`).join("");
   const deliverySources = bijCeesDeliveryReview.sources.map((source) => source.kind === "live"
     ? `<li><span>${escapeHtml(source.label)}</span><a href="${escapeHtml(source.location)}" target="_blank" rel="noreferrer">${escapeHtml(source.location)}</a></li>`
     : `<li><span>${escapeHtml(source.label)}</span><code>${escapeHtml(source.location)}</code></li>`).join("");
@@ -219,14 +226,15 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
             <p>${escapeHtml(bijCeesDeliveryReview.formalCompletion)}</p>
           </section>
 
-          <section class="workspace-delivery-review__scope-search" aria-labelledby="delivery-scope-search-title">
-            <header><div><p class="workspace-label">Gericht brononderzoek</p><h4 id="delivery-scope-search-title">Actuele scope niet lokaal gevonden.</h4></div><span>Zoektocht afgerond</span></header>
-            <p>${escapeHtml(bijCeesDeliveryReview.scopeSearch.finding)}</p>
-            <details>
-              <summary>Bekijk onderzochte lokale sporen <i aria-hidden="true">→</i></summary>
-              <ul>${deliveryScopeSearch}</ul>
-            </details>
-            <footer><span>Beslissende ontbrekende bron</span><strong>${escapeHtml(bijCeesDeliveryReview.scopeSearch.decisiveSource)}</strong><small>${escapeHtml(bijCeesDeliveryReview.scopeSearch.boundary)}</small></footer>
+          <section class="workspace-delivery-review__scope-source" aria-labelledby="delivery-scope-source-title">
+            <header><div><p class="workspace-label">Eerste herleidbare scopebron</p><h4 id="delivery-scope-source-title">${escapeHtml(bijCeesDeliveryReview.scopeSource.subject)}</h4></div><span>Bron bevestigd</span></header>
+            <p>${escapeHtml(bijCeesDeliveryReview.scopeSource.finding)}</p>
+            <footer><time datetime="${escapeHtml(bijCeesDeliveryReview.scopeSource.date)}">${escapeHtml(snapshotDate(bijCeesDeliveryReview.scopeSource.date))}</time><code>${escapeHtml(bijCeesDeliveryReview.scopeSource.sourcePath)}</code><small>${escapeHtml(bijCeesDeliveryReview.scopeSource.boundary)}</small></footer>
+          </section>
+
+          <section class="workspace-delivery-review__scope" aria-labelledby="delivery-scope-title">
+            <header><p class="workspace-label">Scope tegenover werkelijkheid</p><h4 id="delivery-scope-title">Per genoemd onderdeel — zonder acceptatie te veronderstellen.</h4></header>
+            <div>${deliveryScopeRows}</div>
           </section>
 
           <section class="workspace-delivery-review__realized" aria-labelledby="delivery-realized-title">
