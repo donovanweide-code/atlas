@@ -14,7 +14,7 @@ const textExtensions = new Set([
 ]);
 
 const forbiddenPaths = [
-  /atlas-(?:workspace|workspace-data|lab|observe|observations|understanding|case-guidance|case-snapshot|aquaflask-profile)/i,
+  /atlas-(?:workspace|workspace-data|lab|observe|observations|orientations|understanding|case-guidance|case-snapshot|aquaflask-profile)/i,
   /aqua[-_]?flask/i,
   /case[-_]?snapshot/i,
   /(?:development|internal)-main/i,
@@ -30,6 +30,7 @@ const forbiddenContent = [
   { label: "interne opslag", pattern: /atlas\.workspace|\blocalStorage\b/i },
   { label: "Waarnemen-module", pattern: /atlas-(?:observe|observations)|data-atlas-observation|\bWaarnemen\b/i },
   { label: "Understanding-module", pattern: /atlas-understanding|\bUnderstanding\b/i },
+  { label: "interne Oriëntatie", pattern: /atlas-orientations|\bBij Cees\b/i },
   { label: "interne repositorybron", pattern: /clients\/000[12]-|docs\/atlas/i },
   { label: "sprintdocumentatie", pattern: /\bSprint 00[12][A-Z]?\b/i },
   { label: "interne hostingcontext", pattern: /TransIP Webhosting/i },

@@ -47,6 +47,15 @@ test("weigert onzichtbare Waarnemen-context in publieke HTML", async () => {
   });
 });
 
+test("weigert een interne Oriëntatie in de publieke build", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": 'const orientationSubject="Bij Cees";',
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /interne Oriëntatie/);
+  });
+});
+
 test("weigert interne entrypoints en chunknamen", async () => {
   await withBuild({
     "index.html": '<script type="module" src="/assets/index.js"></script>',

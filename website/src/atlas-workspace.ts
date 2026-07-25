@@ -42,6 +42,7 @@ import {
   understandingKinds,
   understandingStatuses,
 } from "./atlas-understanding";
+import { confirmedOrientations, orientationStatusLabel } from "./atlas-orientations";
 
 const caseNames: Record<Exclude<CaseId, "">, string> = {
   "0001": "We Build And Design",
@@ -143,6 +144,27 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const case0001Uncertainty = case0001?.openUncertainties[0]?.text ?? "Atlas vormt geen nieuwe onzekerheid zonder bevestigd casebeeld.";
   const case0001Boundary = case0001?.evidenceBoundary.join(" ") ?? "Atlas geeft geen inhoudelijk oordeel zolang de herleidbare momentopname ontbreekt.";
   const case0001Sources = case0001?.sources.map((source) => `<li><code>${escapeHtml(source.path)}</code><span>${escapeHtml(source.locator)}</span></li>`).join("") ?? "";
+  const orientationCards = confirmedOrientations.map((orientation) => `
+    <article class="workspace-orientation-card">
+      <header>
+        <span>${escapeHtml(orientationStatusLabel(orientation.status))}</span>
+        <time datetime="${escapeHtml(orientation.confirmedAt)}">Bevestigd ${escapeHtml(snapshotDate(orientation.confirmedAt))}</time>
+      </header>
+      <h3>${escapeHtml(orientation.subject)}</h3>
+      <blockquote>${escapeHtml(orientation.signal)}</blockquote>
+      <div class="workspace-orientation-card__context">
+        <div><span>Waarom Atlas dit bewaart</span><p>${escapeHtml(orientation.meaning)}</p></div>
+        <div><span>Terugkeertrigger</span><p>${escapeHtml(orientation.returnTrigger)}</p></div>
+      </div>
+      <footer>
+        <p>${orientation.boundaries.map((boundary) => `<span>${escapeHtml(boundary)}</span>`).join("")}</p>
+        <small>Beoordelingseigenaar · ${escapeHtml(orientation.reviewOwner)}</small>
+        <code>${escapeHtml(orientation.sourcePath)}</code>
+      </footer>
+    </article>`).join("");
+  const orientationSummary = confirmedOrientations.length === 1
+    ? "1 bevestigd praktijksignaal wacht op menselijke toewijzing."
+    : `${confirmedOrientations.length} bevestigde praktijksignalen wachten op menselijke toewijzing.`;
 
   app.innerHTML = `<main class="atlas-workspace">
     <section class="workspace-opening" id="overzicht" aria-labelledby="guidance-title">
@@ -159,7 +181,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     <aside class="workspace-sidebar">
       <a class="workspace-brand" href="#overzicht" aria-label="Atlas Workspace"><span class="workspace-brand__mark">A</span><span><strong>Atlas</strong><small>Workspace</small></span></a>
       <nav class="workspace-nav" aria-label="Workspace navigatie">
-        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#waarnemen"><span>02</span>Waarnemen</a><a href="#focus"><span>03</span>Vandaag</a><a href="#cases"><span>04</span>Cases</a><a href="#understanding"><span>05</span>Understanding</a><a href="#ideeen"><span>06</span>Ideeën</a><a href="#logboek"><span>07</span>Logboek</a>
+        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#orientatie"><span>02</span>Oriëntatie</a><a href="#waarnemen"><span>03</span>Waarnemen</a><a href="#focus"><span>04</span>Vandaag</a><a href="#cases"><span>05</span>Cases</a><a href="#understanding"><span>06</span>Understanding</a><a href="#ideeen"><span>07</span>Ideeën</a><a href="#logboek"><span>08</span>Logboek</a>
       </nav>
       <div class="workspace-sidebar__footer"><p>We Build And Design</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
     </aside>
@@ -167,6 +189,11 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     <div class="workspace-main">
       <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>Workspace</h2></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
+
+      <section class="workspace-section workspace-orientation" id="orientatie" aria-labelledby="orientation-title">
+        <header class="workspace-section__header"><div><p class="workspace-label">Oriëntatie</p><h2 id="orientation-title">Nieuwe werkelijkheid, nog geen case.</h2></div><p>${orientationSummary}</p></header>
+        <div class="workspace-orientations">${orientationCards}</div>
+      </section>
 
       <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
         <header class="workspace-section__header"><div><p class="workspace-label">Waarnemen</p><h2 id="observing-title">Bewaar wat je ervaart, vóór je het beoordeelt.</h2></div><p data-observing-summary></p></header>
