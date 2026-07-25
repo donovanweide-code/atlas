@@ -243,7 +243,7 @@ export function renderSiteHeader(currentPath: string): string {
   return `
     <header class="site-header">
       <a class="brand" href="/" aria-label="We Build And Design — home">
-        <span class="brand__mark">WBD.</span>
+        <img class="brand__logo" src="/wbd-mark-dark.svg" alt="" width="82" height="48">
         <span class="brand__name">We Build And Design</span>
       </a>
 
@@ -271,7 +271,7 @@ export function renderSiteFooter(): string {
   return `
     <footer class="site-footer">
       <a class="brand" href="/" aria-label="We Build And Design — home">
-        <span class="brand__mark">WBD.</span>
+        <img class="brand__logo" src="/wbd-mark-dark.svg" alt="" width="82" height="48">
         <span class="brand__name">We Build And Design</span>
       </a>
       <p>Strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>
@@ -349,6 +349,114 @@ function renderRoute(route: PublicRoute): string {
     </main>`;
 }
 
+function renderWerkwijze(): string {
+  document.title = "Werkwijze — We Build And Design";
+
+  return `
+    <main class="page werkwijze-page">
+      ${renderSiteHeader("/werkwijze")}
+
+      <article class="werkwijze-story">
+        <header class="werkwijze-hero">
+          <img src="${studioWorktable}" alt="Een ondernemer en maker die samen plannen en schetsen bespreken.">
+          <div class="werkwijze-hero__veil" aria-hidden="true"></div>
+          <div class="werkwijze-hero__content" data-page-reveal>
+            <p class="werkwijze-eyebrow">Onze werkwijze</p>
+            <h1>Een goede volgende stap begint niet met een oplossing.</h1>
+            <div class="werkwijze-hero__intro">
+              <p>Ze begint bij begrijpen wat er werkelijk speelt.</p>
+              <p>Daarom luisteren we eerst naar je vraag, je bedrijf en wat je al hebt opgebouwd. Pas wanneer de richting helder genoeg is, bepalen we samen wat aandacht verdient.</p>
+            </div>
+            <a href="#open-vraag">Zo ontstaat een keuze die je zelf begrijpt en kunt dragen</a>
+          </div>
+        </header>
+
+        <section class="werkwijze-open" id="open-vraag" aria-labelledby="open-vraag-titel">
+          <div class="werkwijze-thoughts" data-page-reveal aria-label="Vragen waarmee ondernemers bij ons komen">
+            <p>“Onze website moet vernieuwd.”</p>
+            <p>“Dit proces loopt niet meer prettig.”</p>
+            <p>“We willen verder, maar waar beginnen we?”</p>
+          </div>
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Je vraag mag nog open zijn</p>
+            <h2 id="open-vraag-titel">Je hoeft de vraag nog niet perfect te formuleren.</h2>
+            <p>Vaak begint een gesprek met iets dat zichtbaar is: een website die niet meer past, een proces dat vertraagt of een ambitie die nog geen duidelijke vorm heeft.</p>
+            <p>Dat is genoeg om te beginnen. We helpen je onderzoeken wat er achter die eerste vraag ligt, zonder meteen te doen alsof het antwoord al vaststaat.</p>
+          </div>
+        </section>
+
+        <section class="werkwijze-scene werkwijze-scene--reality" aria-labelledby="werkelijkheid-titel">
+          <figure data-page-reveal>
+            <img src="${studioCollaboration}" alt="Een ondernemer en twee makers in gesprek rond een werktafel.">
+          </figure>
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Luisteren en kijken</p>
+            <h2 id="werkelijkheid-titel">We beginnen bij wat er al staat.</h2>
+            <p>Jij kent je bedrijf, je klanten en de keuzes die eraan voorafgingen. Wij brengen afstand mee en stellen de vragen die helpen om verbanden te zien.</p>
+            <p>We luisteren naar wat je wilt bereiken, maar ook naar wat in de dagelijkse praktijk schuurt. Zo ontstaat een beeld dat niet alleen logisch klinkt, maar herkenbaar is voor de mensen die ermee werken.</p>
+          </div>
+        </section>
+
+        <section class="werkwijze-clarity" aria-labelledby="helderheid-titel">
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Helderheid vóór zekerheid</p>
+            <h2 id="helderheid-titel">We maken helder wat we weten — en wat nog niet.</h2>
+          </div>
+          <div class="werkwijze-clarity__body" data-page-reveal>
+            <p>Niet iedere aanname hoeft meteen een besluit te worden. We leggen naast elkaar wat aantoonbaar is, wat we samen interpreteren en welke vragen nog openstaan.</p>
+            <p>Dat geeft rust. Je ziet waar de echte spanning zit, welke keuze nu betekenis heeft en waar eerst meer inzicht nodig is.</p>
+          </div>
+        </section>
+
+        <section class="werkwijze-scene werkwijze-scene--choice" aria-labelledby="richting-titel">
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Samen kiezen</p>
+            <h2 id="richting-titel">De richting kiezen we samen.</h2>
+            <p>We leggen geen oplossing op tafel die je alleen nog hoeft goed te keuren. We bespreken wat een keuze betekent, wat zij mogelijk maakt en wat zij bewust buiten beeld laat.</p>
+            <p>Zo blijft de beslissing van jou, met genoeg helderheid om haar te begrijpen en te dragen.</p>
+          </div>
+          <figure data-page-reveal>
+            <img src="${studioProjectReview}" alt="Een ondernemer en ontwerper die samen een voorstel beoordelen.">
+          </figure>
+        </section>
+
+        <section class="werkwijze-scene werkwijze-scene--visible" aria-labelledby="zichtbaar-titel">
+          <figure data-page-reveal>
+            <img src="${studioCraftHorizon}" alt="Schetsen en modellen waarmee een gekozen richting zichtbaar wordt.">
+          </figure>
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Kijken vóór vastleggen</p>
+            <h2 id="zichtbaar-titel">Eerst zichtbaar, daarna definitief.</h2>
+            <p>Een gedachte wordt sterker wanneer je haar kunt bekijken, bespreken en bijstellen. Daarom maken we de richting eerst zichtbaar in een vorm die past bij de vraag.</p>
+            <p>Niet om het proces ingewikkelder te maken, maar om belangrijke keuzes nog te kunnen toetsen voordat ze moeilijk terug te draaien zijn.</p>
+          </div>
+        </section>
+
+        <section class="werkwijze-craft" aria-labelledby="bouwen-titel">
+          <div class="werkwijze-copy" data-page-reveal>
+            <p class="werkwijze-eyebrow">Zorgvuldig verder</p>
+            <h2 id="bouwen-titel">We bouwen zorgvuldig en blijven kijken.</h2>
+            <p>Wanneer de richting klopt, krijgt het werk vorm. Ook dan blijven we samen beoordelen wat werkt, wat aandacht vraagt en of de gekozen lijn nog steeds helpt.</p>
+            <p>Voortgang is belangrijk. Maar nooit belangrijker dan begrijpen waarom we een stap zetten.</p>
+          </div>
+          <blockquote data-page-reveal>
+            <p>Je hoeft niet vooraf alle antwoorden te hebben.</p>
+            <p>Je moet kunnen vertrouwen op de manier waarop ze ontstaan.</p>
+          </blockquote>
+        </section>
+
+        <aside class="werkwijze-next" aria-labelledby="vervolg-titel" data-page-reveal>
+          <p class="werkwijze-eyebrow">Wat de uitkomst kan worden</p>
+          <p>De werkwijze staat vast. De uitkomst niet.</p>
+          <h2 id="vervolg-titel">Welke vorm de volgende stap krijgt, hangt af van wat jouw bedrijf werkelijk nodig heeft.</h2>
+          <a class="button button--primary" href="/diensten">Bekijk waarmee we kunnen helpen</a>
+        </aside>
+      </article>
+
+      ${renderSiteFooter()}
+    </main>`;
+}
+
 function renderNotFound(): string {
   document.title = "Route niet gevonden — We Build And Design";
 
@@ -366,6 +474,7 @@ function renderNotFound(): string {
 }
 
 export function renderPublicPage(path: string): string {
+  if (path === "/werkwijze") return renderWerkwijze();
   const route = routeIndex.get(path);
   return route ? renderRoute(route) : renderNotFound();
 }

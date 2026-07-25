@@ -1,8 +1,8 @@
 import "./styles/main.css";
 import "./styles/atlas-expedition.css";
 import "./styles/public-pages.css";
+import "./styles/werkwijze.css";
 import { renderSceneWorld } from "./atlas-scenes";
-import { understandingMethod } from "./atlas-understanding";
 import {
   enablePageReveals,
   renderPublicPage,
@@ -22,7 +22,7 @@ if (route === "/atlas") {
     <main class="page">
       <header class="site-header">
         <a class="brand" href="/" aria-label="We Build and Design — home">
-          <span class="brand__mark">WBD.</span>
+          <img class="brand__logo" src="/wbd-mark-dark.svg" alt="" width="82" height="48">
           <span class="brand__name">We Build and Design</span>
         </a>
 
@@ -52,18 +52,20 @@ if (route === "/atlas") {
       <section class="hero atlas-scene" data-scene="scene-001" aria-labelledby="hero-title">
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
-          <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow">Strategie. Design. Technologie.</p>
+          <p class="hero__eyebrow">Voor ondernemers die al iets hebben opgebouwd.</p>
 
-          <h1 class="hero__title" id="hero-title">Je bedrijf is klaar voor wat volgt.</h1>
+          <h1 class="hero__title" id="hero-title">
+            <span class="hero__title-recognition">Je bedrijf beweegt verder.</span>
+            <span class="hero__title-question">Wat digitaal nodig is, is niet altijd meteen zichtbaar.</span>
+          </h1>
 
           <p class="hero__text">
-            Je zoekt geen nieuwe droom.<br>
-            Je zoekt overzicht, richting en vertrouwen.
+            Je website, verhaal, processen en techniek groeien niet altijd in dezelfde richting mee.<br>
+            Voordat we iets kiezen, begrijpen we eerst wat er werkelijk speelt.
           </p>
 
           <a class="hero__step" href="#begrijpen">
-            <span>Bekijk hoe we bouwen</span>
+            <span>Begin bij wat er al staat</span>
             <i aria-hidden="true"></i>
           </a>
         </div>
@@ -74,90 +76,76 @@ if (route === "/atlas") {
         ${renderSceneWorld("scene-002")}
         <div class="understand__inner">
           <header class="understand__intro" data-home-reveal>
-            <p class="understand__label"><span>ROUTE 02</span> WERKWIJZE</p>
             <h2 class="understand__title" id="understand-title">
-              We luisteren voorbij het eerste antwoord.
+              Niet alles hoeft opnieuw.
             </h2>
           </header>
 
           <div class="understand__experience">
             <div class="understand__thoughts" data-home-reveal>
-              <p>“De website moet vernieuwd.”</p>
-              <p>“We moeten meer automatiseren.”</p>
-              <p>“Ons verhaal moet scherper.”</p>
+              <p>“Onze website moet vernieuwd.”</p>
+              <p>“Dit proces kost te veel tijd.”</p>
+              <p>“We willen verder, maar waar beginnen we?”</p>
             </div>
 
             <div class="understand__insight" data-home-reveal>
               <p class="understand__realisation">
-                <span>${understandingMethod.publicTruth}</span>
-                <strong>${understandingMethod.publicQuestion}</strong>
+                <span>Dit zijn goede vertrekpunten.</span>
+                <strong>Maar de eerste vraag is niet altijd de werkelijke vraag.</strong>
               </p>
 
               <div class="understand__belief">
                 <p>
-                  Daarom blijft het antwoord nog even open.<br>
-                  <strong>Tot waarneming en bewijs een patroon laten zien.</strong>
+                  Je bedrijf heeft al een geschiedenis, klanten en keuzes.<br>
+                  <strong>Daarom onderzoeken we eerst wat behouden moet blijven.</strong>
                 </p>
                 <p>
-                  Pas dan kiezen we samen<br>
-                  <strong>één betekenisvolle volgende stap.</strong>
+                  Daarna maken we zichtbaar wat niet meer vanzelf meebeweegt<br>
+                  <strong>en wat werkelijk aandacht vraagt.</strong>
                 </p>
               </div>
-              <a class="understand__next" href="#digitaal-fundament">Verder wanneer de vraag helder is <i aria-hidden="true">→</i></a>
+              <a class="understand__next" href="#digitaal-fundament">Verder zonder de oplossing al vast te leggen <i aria-hidden="true">→</i></a>
             </div>
-          </div>
-
-          <div class="orientation-waypoint" aria-hidden="true">
-            <span class="orientation-waypoint__ring"></span>
-            <span class="orientation-waypoint__axis"></span>
-            <span class="orientation-waypoint__label">02 / RICHTING</span>
           </div>
 
         </div>
       </section>
 
-      <div class="route-transition atlas-scene scene-crossing" data-scene="scene-003" aria-hidden="true">
-        ${renderSceneWorld("scene-003")}
-        <span class="scene-waypoint scene-waypoint--crossing"></span>
-      </div>
-
       <section class="why atlas-scene" data-scene="scene-004" id="digitaal-fundament" aria-labelledby="why-title">
         ${renderSceneWorld("scene-004")}
 
         <div class="why__intro" data-home-reveal>
-          <p class="section-label">03 / Digitaal fundament</p>
-
           <h2 class="why__title" id="why-title">
-            Wat je hebt opgebouwd verdient een digitaal fundament dat zorgvuldig verder groeit.
+            Eerst maken we helder wat werkelijk aandacht vraagt.
           </h2>
 
           <p class="why__lead">
-            We brengen strategie, ontwerp en technologie samen rond één heldere volgende stap.
+            We brengen je bedrijf, klanten, ambitie, processen en digitale basis samen in één begrijpelijk beeld.
           </p>
         </div>
 
         <div class="why__grid" data-home-reveal>
           <article class="why-principle">
             <span class="why-principle__number">01</span>
-            <h3>Eerst begrijpen</h3>
+            <h3>Wat we weten</h3>
             <p>
-              We onderzoeken waar je bedrijf staat, wat al werkt en waar groei begint te knellen.
+              We beginnen bij bevestigde context en bij wat vandaag al waarde heeft.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">02</span>
-            <h3>Samenhang ontwerpen</h3>
+            <h3>Wat nog openstaat</h3>
             <p>
-              Strategie, merk, website en processen krijgen één logische richting.
+              Aannames en onzekerheden blijven zichtbaar, zodat we geen besluit nemen op basis van vermoedens.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">03</span>
-            <h3>Zorgvuldig doorbouwen</h3>
+            <h3>Wat nu betekenis heeft</h3>
             <p>
-              We bouwen wat nu nodig is en houden ruimte voor de volgende fase.
+              We kiezen samen welke stap aandacht verdient en wat bewust kan wachten.
             </p>
           </article>
         </div>
@@ -168,15 +156,13 @@ if (route === "/atlas") {
         <div class="vision__content">
 
           <header class="vision__intro" data-home-reveal>
-            <p class="vision__eyebrow">04 / Van inzicht naar uitvoering</p>
-
             <h2 class="vision__title" id="vision-title">
-              Richting wordt waardevol wanneer je haar zorgvuldig kunt bouwen.
+              De juiste volgende stap staat niet vooraf vast.
             </h2>
 
             <p class="vision__text">
-              Daarom maken we keuzes zichtbaar voordat ze code worden. In strategiekaarten,
-              UX-structuren, ontwerpen en een plan dat past bij je organisatie.
+              Soms is een nieuwe website nodig. Soms een gerichte verbetering, uitbreiding
+              of een helderder proces. Soms is eerst meer onderzoek nodig.
             </p>
           </header>
 
@@ -185,30 +171,30 @@ if (route === "/atlas") {
         <article class="vision-step">
           <span class="vision-step__number">01</span>
 
-          <h3>Analyseren</h3>
+          <h3>Behouden</h3>
 
           <p>
-            We brengen doelen, klanten, processen en het bestaande digitale fundament samen.
+            Wat goed werkt, hoeft niet te veranderen om ruimte te maken voor een volgende stap.
           </p>
         </article>
 
         <article class="vision-step">
           <span class="vision-step__number">02</span>
 
-          <h3>Richting bepalen</h3>
+          <h3>Verbeteren</h3>
 
           <p>
-            We kiezen welke ingreep nu het meeste waarde toevoegt en wat bewust later kan.
+            Een bestaande website, route of proces kan gericht sterker worden zonder opnieuw te beginnen.
           </p>
         </article>
 
         <article class="vision-step">
           <span class="vision-step__number">03</span>
 
-          <h3>Realiseren</h3>
+          <h3>Nieuw bouwen</h3>
 
           <p>
-            We ontwerpen, ontwikkelen, testen en verbeteren in een beheersbaar tempo.
+            Wanneer de richting daarom vraagt, maken we haar zichtbaar en bruikbaar in ontwerp en technologie.
           </p>
         </article>
 
@@ -216,12 +202,12 @@ if (route === "/atlas") {
       <div class="vision__quote" data-home-reveal>
 
         <h2>
-          Overzicht maakt keuzes kleiner.<br>
-          Goede keuzes maken groei beheersbaar.
+          Begrip maakt de volgende stap kleiner.<br>
+          Richting maakt haar draagbaar.
         </h2>
 
         <p>
-          Wat we vandaag bouwen moet direct bruikbaar zijn en morgen verder kunnen groeien.
+          Wat volgt, moet passen bij je bedrijf en bij wat we samen hebben vastgesteld.
         </p>
 
       </div>
@@ -229,61 +215,53 @@ if (route === "/atlas") {
       </section>
       <section class="challenges atlas-scene" data-scene="scene-006" aria-labelledby="challenges-title">
         ${renderSceneWorld("scene-006")}
-        <div class="scene-waypoint-moment" data-scene="scene-007" aria-hidden="true">
-          <span class="scene-waypoint scene-waypoint--insight"></span>
-        </div>
 
         <div class="container">
 
-          <p class="section-eyebrow" data-home-reveal>
-            05 / Waar groei begint te knellen
-          </p>
-
           <h2 class="section-title" id="challenges-title" data-home-reveal>
-            Je bedrijf beweegt verder. Je digitale fundament moet mee kunnen bewegen.
+            Wanneer de richting klopt, maken we haar zichtbaar en bruikbaar.
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Vaak is niet méér nodig, maar meer samenhang tussen wat je al hebt.
+            Strategie, ontwerp en technologie zijn middelen om een gekozen richting zorgvuldig uit te voeren.
           </p>
 
           <div class="challenge-grid" data-home-reveal>
 
             <article class="challenge-card">
               <span>01</span>
-              <h3>Zichtbaarheid blijft achter</h3>
+              <h3>Keuzes blijven begrijpelijk</h3>
              <p>
-      Je expertise is sterk, maar dat wordt online nog niet overtuigend zichtbaar.
+      We maken keuzes begrijpelijk voordat ontwerp of techniek ze definitief maakt.
       </p>
-      <p class="challenge-outcome">Merk, verhaal en klantreis opnieuw uitlijnen.</p>
+      <p class="challenge-outcome">Eerst beoordelen, daarna pas vastleggen.</p>
             </article>
 
             <article class="challenge-card">
               <span>02</span>
-              <h3>Systemen werken los</h3>
+              <h3>Uitvoering blijft beheersbaar</h3>
              <p>
-      Marketing, website en processen werken los van elkaar.
+      We ontwerpen, bouwen en testen in stappen met een duidelijke bedoeling.
       </p>
-      <p class="challenge-outcome">Eén richting voor kanalen, content en techniek.</p>
+      <p class="challenge-outcome">Voortgang zonder onnodige complexiteit.</p>
             </article>
 
             <article class="challenge-card">
               <span>03</span>
-              <h3>Handwerk remt</h3>
+              <h3>Technologie blijft gereedschap</h3>
               <p>
-      Handmatig werk kost iedere week uren die je liever
-      aan je bedrijf besteedt.
+      De technische oplossing ondersteunt de gekozen richting en neemt je bedrijf niet over.
       </p>
-      <p class="challenge-outcome">Processen vereenvoudigen waar technologie echt helpt.</p>
+      <p class="challenge-outcome">Jouw bedrijf en keuze houden de hoofdrol.</p>
             </article>
 
             <article class="challenge-card">
               <span>04</span>
-              <h3>Het fundament groeit niet mee</h3>
+              <h3>Niet handelen blijft mogelijk</h3>
               <p>
-      Je onderneming groeit sneller dan je digitale fundament.
+      Wanneer bewijs ontbreekt, kan wachten of nader onderzoeken zorgvuldiger zijn dan direct bouwen.
       </p>
-      <p class="challenge-outcome">Doorbouwen zonder opnieuw vanaf nul te beginnen.</p>
+      <p class="challenge-outcome">Alleen veranderen wanneer dat betekenis toevoegt.</p>
             </article>
 
           </div>
@@ -293,47 +271,35 @@ if (route === "/atlas") {
       </section>
       <section class="connection atlas-scene" data-scene="scene-008" aria-labelledby="connection-title">
         ${renderSceneWorld("scene-008")}
-        ${renderSceneWorld("scene-009")}
-        ${renderSceneWorld("scene-010")}
 
         <div class="container">
 
-          <p class="section-eyebrow" data-home-reveal>
-            06 / De volgende horizon
-          </p>
-
           <h2 class="section-title" id="connection-title" data-home-reveal>
-            Je hoeft de oplossing niet vooraf te kennen.
+            Hoe bepalen we wat werkelijk nodig is?
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Wel wat een goede volgende stap voor je bedrijf moet opleveren.
-            Wij brengen de keuzes terug tot een richting die past bij wat je al hebt opgebouwd.
+            Een goede digitale beslissing ontstaat niet uit een vast aanbod.
+            Ze begint bij zorgvuldig luisteren, onderzoeken en samen kiezen.
           </p>
 
           <div class="connection-message" data-home-reveal>
 
             <p>
-              Eerst ontstaat overzicht.
+              Eerst begrijpen we de werkelijkheid achter de vraag.
             </p>
 
             <p>
-              Vanuit overzicht ontstaat vertrouwen om te bewegen.
+              Daarna kiezen we één betekenisvolle volgende stap.
             </p>
 
           </div>
 
-          <div class="compass-moment" data-scene="scene-009" aria-hidden="true">
-            <span class="compass-moment__north">N</span>
-            <i class="compass-moment__needle"></i>
-            <i class="compass-moment__relief"></i>
-          </div>
-
           <div class="next-horizon" data-home-reveal>
-            <p>Je volgende stap hoeft niet groter te zijn. Wel scherper.</p>
-            <h3>Maak helder wat jouw bedrijf nu nodig heeft.</h3>
-            <a class="button button--primary" href="/contact">
-              Plan een verkenning
+            <p>De oplossing hoeft aan het begin nog niet vast te staan.</p>
+            <h3>Bekijk hoe wij van een eerste vraag naar een gedragen richting werken.</h3>
+            <a class="button button--primary" href="/werkwijze">
+              Bekijk onze werkwijze
             </a>
           </div>
 
@@ -341,7 +307,7 @@ if (route === "/atlas") {
 
         <footer class="site-footer">
           <a class="brand" href="/" aria-label="We Build and Design — home">
-            <span class="brand__mark">WBD.</span>
+            <img class="brand__logo" src="/wbd-mark-dark.svg" alt="" width="82" height="48">
             <span class="brand__name">We Build and Design</span>
           </a>
           <p>Strategie, design en technologie voor bedrijven die zorgvuldig verder willen.</p>

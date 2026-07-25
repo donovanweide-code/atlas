@@ -2695,6 +2695,123 @@
   }
 }
 
+/* Homepage refinement candidate — approved structure, tighter rhythm. */
+.brand__logo {
+  width: 2.65rem;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.site-header .brand__logo {
+  filter: none;
+}
+
+.brand__name {
+  color: #f5f3ee;
+  letter-spacing: 0.16em;
+}
+
+.hero {
+  min-height: 88svh;
+  padding-top: clamp(7.5rem, 12vh, 9.5rem);
+  padding-bottom: clamp(4rem, 7vh, 5.5rem);
+}
+
+.hero__content {
+  max-width: min(42rem, 54vw);
+}
+
+.hero__title {
+  font-size: clamp(3.6rem, 5.8vw, 6.5rem);
+}
+
+.hero__text,
+.hero__step {
+  margin-top: clamp(1.6rem, 3vh, 2.4rem);
+}
+
+.understand {
+  min-height: 108svh;
+  padding-block: clamp(7.5rem, 11vw, 11rem) clamp(10rem, 13vw, 14rem);
+}
+
+.understand__experience {
+  margin-top: clamp(3rem, 5vw, 5rem);
+}
+
+.page .why {
+  min-height: 100svh;
+  padding-block: clamp(8rem, 10vw, 11rem) clamp(8rem, 10vw, 10rem);
+}
+
+.page .vision {
+  min-height: 132svh;
+  padding-block: clamp(10rem, 13vw, 13rem) clamp(9rem, 12vw, 12rem);
+}
+
+.page .challenges {
+  min-height: 106svh;
+  padding-block: clamp(9rem, 12vw, 12rem) clamp(10rem, 13vw, 14rem);
+}
+
+.page .connection {
+  min-height: 156svh;
+  padding-top: clamp(11rem, 15vw, 16rem);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    min-height: 90svh;
+  }
+
+  .hero__content {
+    max-width: min(39rem, 76vw);
+  }
+
+  .page .vision,
+  .page .connection {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand__logo {
+    width: 2.25rem;
+  }
+
+  .hero {
+    min-height: 88svh;
+    padding-top: 7rem;
+    padding-bottom: 4rem;
+  }
+
+  .hero__title {
+    font-size: clamp(3.1rem, 14.5vw, 4.5rem);
+  }
+
+  .understand,
+  .page .why,
+  .page .vision,
+  .page .challenges,
+  .page .connection {
+    min-height: auto;
+  }
+
+  .understand {
+    padding-block: 7rem 9rem;
+  }
+
+  .page .why,
+  .page .vision,
+  .page .challenges {
+    padding-block: 8rem 9rem;
+  }
+
+  .page .connection {
+    padding-block: 9rem 11rem;
+  }
+}
+
 /* Sprint 2 — Route 03 visual refinement. Scope: Scene 004 only. */
 .page .why {
   min-height: 112svh;
@@ -2817,4 +2934,283 @@
     animation: none !important;
     transform: none;
   }
+}
+
+/* Final review authority: preserve the scene, tighten only its vertical rhythm. */
+.page .why {
+  min-height: 100svh;
+  padding-block: clamp(8rem, 10vw, 11rem) clamp(8rem, 10vw, 10rem);
+}
+
+@media (max-width: 900px) {
+  .page .why {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .page .why {
+    padding-block: 8rem 9rem;
+  }
+}
+
+/* Final brand and rhythm pass — no structural changes. */
+.hero {
+  min-height: 82svh;
+  padding-top: clamp(7rem, 10vh, 8.5rem);
+  padding-bottom: clamp(3.5rem, 6vh, 4.75rem);
+}
+
+.hero__content {
+  max-width: min(39rem, 50vw);
+}
+
+.hero__title {
+  font-size: clamp(3.35rem, 5.35vw, 6rem);
+}
+
+.hero::after {
+  bottom: -4.5rem;
+  height: clamp(13rem, 25svh, 17rem);
+}
+
+.understand {
+  margin-top: -8svh;
+  padding-top: calc(clamp(8rem, 11vw, 11rem) + 8svh);
+}
+
+.route-transition.scene-crossing {
+  height: clamp(16rem, 24vw, 22rem);
+}
+
+.page .why,
+.page .vision,
+.page .challenges {
+  min-height: auto;
+  padding-block: clamp(7.5rem, 9vw, 9.5rem);
+}
+
+.page .connection {
+  min-height: 138svh;
+  padding-top: clamp(9rem, 12vw, 12rem);
+}
+
+.page .challenges {
+  padding-bottom: clamp(7.5rem, 9vw, 9rem);
+}
+
+.connection::before {
+  top: -3.5rem;
+  height: 7rem;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    min-height: 84svh;
+  }
+
+  .hero__content {
+    max-width: min(36rem, 74vw);
+  }
+
+  .page .connection {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero {
+    min-height: 84svh;
+    padding-top: 6.5rem;
+    padding-bottom: 3.5rem;
+  }
+
+  .hero__title {
+    font-size: clamp(2.9rem, 13.4vw, 4.15rem);
+  }
+
+  .understand {
+    margin-top: -5svh;
+    padding-top: calc(6.5rem + 5svh);
+  }
+
+  .route-transition.scene-crossing {
+    height: 12rem;
+  }
+
+  .page .why,
+  .page .vision,
+  .page .challenges,
+  .page .connection {
+    padding-block: 7rem 8rem;
+  }
+}
+
+/* Reality-first review: symbolism supports people and decisions. */
+.page::before,
+.hero .scene-world__layer--atmosphere,
+.vision .scene-world__layer--cartography,
+.orientation-waypoint,
+.scene-waypoint,
+.scene-waypoint-moment,
+.compass-moment {
+  display: none !important;
+}
+
+.hero > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(4, 13, 22, 0.94) 0%, rgba(5, 16, 26, 0.72) 29%, rgba(6, 18, 28, 0.18) 54%, transparent 74%),
+    linear-gradient(180deg, rgba(3, 12, 20, 0.26) 0%, transparent 32% 72%, rgba(4, 15, 24, 0.72) 100%);
+}
+
+.understand {
+  margin-top: -4svh;
+  padding-top: calc(clamp(8rem, 10vw, 10rem) + 4svh);
+}
+
+.understand::before {
+  height: clamp(8rem, 15svh, 11rem);
+}
+
+.page .why {
+  margin-top: -1px;
+}
+
+.vision .scene-world__layer--material {
+  opacity: 0.08;
+}
+
+.connection > [data-world-for="scene-008"] {
+  inset: -4% -5% -5% 22%;
+}
+
+.connection [data-world-for="scene-008"] .scene-world__layer--traveler {
+  opacity: 0.68;
+}
+
+@media (max-width: 520px) {
+  .understand {
+    margin-top: -3svh;
+    padding-top: calc(6.5rem + 3svh);
+  }
+
+  .connection > [data-world-for="scene-008"] {
+    inset: 4% -58% 8% 0;
+  }
+}
+
+/* Final editorial rhythm: recognition first, reflection second. */
+.hero__title-recognition,
+.hero__title-question {
+  display: block;
+}
+
+.hero__title-recognition {
+  max-width: 7.4ch;
+}
+
+.hero__title-question {
+  max-width: 10.8ch;
+  margin-top: 0.22em;
+  color: rgba(255, 250, 240, 0.88);
+  font-size: 0.78em;
+  line-height: 1.02;
+}
+
+.hero__eyebrow,
+.understand__title,
+.why__title,
+.vision__title,
+.challenges .section-title,
+.connection .section-title {
+  text-wrap: balance;
+}
+
+.understand,
+.page .why,
+.page .vision,
+.page .challenges,
+.page .connection {
+  scroll-margin-top: 2rem;
+}
+
+@media (max-width: 520px) {
+  .hero__title-question {
+    max-width: 11.5ch;
+    margin-top: 0.28em;
+    font-size: 0.82em;
+  }
+}
+
+/* Readability pass: the message remains stronger than the image beneath it. */
+.why__lead,
+.why-principle p,
+.challenges .section-intro,
+.challenge-card p,
+.connection .section-intro,
+.connection-message p,
+.next-horizon > p {
+  color: #344640;
+}
+
+.challenge-card .challenge-outcome,
+.connection-message p:last-child {
+  color: #294f43;
+}
+
+.why__intro,
+.challenges .container,
+.connection .container {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.vision__text,
+.vision-step p,
+.vision__quote p {
+  color: rgba(247, 244, 234, 0.82);
+}
+
+@media (max-width: 520px) {
+  .why__lead,
+  .why-principle p,
+  .challenges .section-intro,
+  .challenge-card p,
+  .connection .section-intro,
+  .connection-message p,
+  .next-horizon > p {
+    color: #2f413b;
+  }
+}
+
+/* Final contrast layer: preserve the warm imagery, quiet it beneath reading areas. */
+.page .why > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(229, 231, 222, 0.96) 0 36%, rgba(232, 231, 221, 0.84) 64%, rgba(235, 229, 216, 0.58) 100%),
+    linear-gradient(180deg, rgba(229, 231, 222, 0.78), transparent 22% 74%, rgba(236, 229, 214, 0.82));
+}
+
+.page .challenges > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(225, 229, 222, 0.96) 0 34%, rgba(229, 230, 221, 0.84) 66%, rgba(235, 230, 218, 0.62) 100%),
+    linear-gradient(180deg, rgba(225, 229, 222, 0.8), transparent 20% 76%, rgba(236, 229, 214, 0.84));
+}
+
+.page .connection > .scene-world::after {
+  background:
+    linear-gradient(90deg, rgba(235, 231, 220, 0.96) 0 38%, rgba(237, 232, 221, 0.82) 66%, rgba(239, 233, 221, 0.56) 100%),
+    linear-gradient(180deg, rgba(235, 231, 220, 0.78), transparent 20% 72%, rgba(224, 219, 207, 0.86));
+}
+
+@media (max-width: 520px) {
+  .page .why > .scene-world::after,
+  .page .challenges > .scene-world::after,
+  .page .connection > .scene-world::after {
+    background: linear-gradient(90deg, rgba(235, 232, 222, 0.94), rgba(235, 232, 222, 0.72));
+  }
+}
+
+/* Final local balance: one even reading surface across the complete open-questions paragraph. */
+.why-principle:nth-child(2) p {
+  background: rgba(232, 233, 225, 0.88);
+  box-shadow: 0 0 1.2rem 0.9rem rgba(232, 233, 225, 0.82);
 }

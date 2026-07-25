@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 164 96" role="img" aria-labelledby="title">
+  <title id="title">We Build and Design</title>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e7c88c"/>
+      <stop offset=".48" stop-color="#c8a063"/>
+      <stop offset="1" stop-color="#9c7137"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 13v60l36-23 34 22V31L66 43v2L48 33 28 46V24z" fill="#f5f3ee"/>
+  <path d="M82 13h22c28 0 48 15 48 35s-20 35-48 35H88V68h16c18 0 31-8 31-20s-13-20-31-20H82z" fill="url(#gold)"/>
+</svg>
