@@ -1,6 +1,6 @@
 # Sprint 004 — Controlled Livegang We Build And Design
 
-**Status:** releasecandidate op staging gepubliceerd — publieke staging-smoketest nog open
+**Status:** productie-GO behaald — gecontroleerd live
 **Datum:** 26 juli 2026
 **Focus:** stabiliteit → controle → livegang
 **Geen nieuwe ontwerpfase:** bevestigd
@@ -105,16 +105,16 @@ De inhoud van de gevalideerde `dist/` is op 26 juli 2026 naar `/subsites/preview
 
 ### C. Productie
 
-Voorkeursroute:
+Uitgevoerd op 26 juli 2026:
 
-1. Controleer in TransIP de actuele back-up- en DocumentRootmogelijkheden.
-2. Bewaar de bestaande `/www`-toestand en WordPress-database als rollbackbron.
-3. Gebruik waar de hostingomgeving dit ondersteunt een afzonderlijke, versiegebonden productiemap en wijs het hoofddomein pas na controle naar die map.
-4. Wanneer een DocumentRoot-wissel niet veilig beschikbaar is, stop en leg vóór overschrijven van `/www` een expliciete bestands- én databaseherstelroute vast.
-5. Publiceer exact hetzelfde artefact als op staging; bouw niet opnieuw tussen staging en productie.
-6. Controleer domein, `www`, HTTPS, routes, assets en contact direct na omschakeling.
+1. De bestaande `/www`-toestand en WordPress-database zijn als rollbackbron behouden.
+2. De versiegebonden productiemap `/sites/wbd-20260726-ca3d1bd` is aangemaakt.
+3. De reeds gevalideerde `dist/` is zonder nieuwe build naar deze map gepubliceerd.
+4. De bewezen SPA-routerconfiguratie van staging is ongewijzigd toegevoegd.
+5. Het primaire TransIP-sitepad is omgeschakeld van `/www` naar `/sites/wbd-20260726-ca3d1bd`.
+6. Na de korte configuratieactivatie zijn hoofddomein, `www`, HTTPS, routes, assets en contact gecontroleerd.
 
-Er wordt geen productiepad aangenomen voordat de TransIP-instellingen zelf zijn gecontroleerd.
+De oude `/www`-map is niet overschreven, verplaatst of verwijderd.
 
 ---
 
@@ -208,39 +208,37 @@ Merk, navigatie, fotografische wereld, typografie en routeopbouw vormen lokaal �
 
 ### Staging-GO
 
-Nog niet volledig behaald.
+**Behaald en door Donovan bevestigd.**
 
-Behaald:
-
-- publicatie naar de geïsoleerde preview-DocumentRoot;
-- nieuwe `index.html` van 480 bytes aanwezig;
-- nieuwe JS- en CSS-chunks in de echte `assets/`-map aanwezig;
-- `.htaccess` ongewijzigd behouden;
-- tijdelijke uploadarchieven en foutief uitgepakte rootbestanden verwijderd;
-- vorige JS- en CSS-chunks behouden;
-- lokale rollbackcandidate en TransIP-hostingback-ups bevestigd.
-
-Open:
-
-- publieke route- en assetcontrole;
-- visuele desktop- en mobiele stagingcontrole;
-- consolecontrole op de publieke staging.
-
-De in-app browser blokkeert in deze sessie agenttoegang tot `preview.webuildanddesign.nl` op grond van een browserbeveiligingsregel. Deze open controles mogen daarom niet als uitgevoerd of als GO worden geregistreerd.
+De bevroren releasecandidate is zonder nieuwe ontwikkeling doorgeschoven naar productie.
 
 ### Productie-GO
 
-Nog niet behaald. Vereist:
+**Behaald op 26 juli 2026 omstreeks 14:35 CEST.**
 
-- staging-GO;
-- bevestigde TransIP-rollbackroute;
-- publicatie van exact hetzelfde artefact;
-- domein- en SSL-controle;
-- laatste rooktest.
+Gecontroleerd:
+
+- `https://webuildanddesign.nl`;
+- `https://www.webuildanddesign.nl`;
+- HTTPS;
+- `/`;
+- `/diensten`;
+- `/werkwijze`;
+- `/projecten`;
+- `/over-ons`;
+- `/contact`;
+- SPA-deeplinks via de productie-`.htaccess`;
+- nieuwe JS- en CSS-chunks;
+- zichtbare hero-afbeelding;
+- `mailto:info@webuildanddesign.nl`;
+- `tel:+31610067964`;
+- afwezigheid van de vorige WordPress-onderhoudspagina op de gecontroleerde routes.
+
+De TransIP-DocumentRoot had een korte activatievertraging. Tijdens die periode bleef de vorige WordPress-pagina bereikbaar; na activatie leverden unieke requests aantoonbaar Sprint 004.
 
 ### Externe afhankelijkheid
 
-De TransIP-aanmelding en de publicatie zijn afgerond. Voor het resterende staging-GO is een publieke visuele controle door Donovan nodig, omdat de in-app browser de previewhost in deze sessie niet aan Codex beschikbaar stelt.
+Geen open externe afhankelijkheid voor deze release.
 
 ### Bevestigde staging-rollback
 
@@ -250,7 +248,15 @@ De TransIP-aanmelding en de publicatie zijn afgerond. Voor het resterende stagin
 - Beide vorige chunks staan nog op staging.
 - De TransIP-omgeving biedt daarnaast recente hostingback-ups.
 
-Een rollback bestaat daardoor primair uit het terugplaatsen van de vorige `index.html`. De volledige vorige stagingcandidate en de hostingback-ups blijven beschikbaar als tweede herstelroute.
+Een stagingrollback bestaat daardoor primair uit het terugplaatsen van de vorige `index.html`. De volledige vorige stagingcandidate en de hostingback-ups blijven beschikbaar als tweede herstelroute.
+
+### Bevestigde productierollback
+
+- Huidige productie-DocumentRoot: `/sites/wbd-20260726-ca3d1bd`.
+- Vorige productie-DocumentRoot: `/www`.
+- `/www` en de WordPress-database zijn ongewijzigd behouden.
+- Directe rollback: wijzig het primaire websitepad in TransIP terug naar `/www`.
+- Controleer daarna hoofddomein, `www`, HTTPS en de WordPress-onderhoudspagina.
 
 ---
 
