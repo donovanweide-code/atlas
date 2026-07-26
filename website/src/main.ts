@@ -49,17 +49,17 @@ if (route === "/") {
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow">Professionele websites. Persoonlijk en begrijpelijk.</p>
+          <p class="hero__eyebrow hero__descriptor">Digitale ervaringen voor ondernemers</p>
 
-          <h1 class="hero__title" id="hero-title">Klaar voor je eerste professionele website?</h1>
+          <h1 class="hero__title" id="hero-title">Je bedrijf is het vertrekpunt.</h1>
 
           <p class="hero__text">
-            Jij kent je bedrijf. Je hoeft de digitale wereld niet te kennen.<br>
-            We Build And Design helpt je om die eerste stap rustig en begrijpelijk te zetten.
+            We helpen je eerst begrijpen wat digitaal nodig is. Daarna ontwerpen en bouwen we
+            een ervaring die bij je bedrijf past.
           </p>
 
           <a class="hero__step" href="#begrijpen">
-            <span>Bekijk hoe Donovan begint</span>
+            <span>Bekijk hoe we beginnen</span>
             <i aria-hidden="true"></i>
           </a>
         </div>

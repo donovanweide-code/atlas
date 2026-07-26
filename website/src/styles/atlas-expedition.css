@@ -2239,6 +2239,15 @@
   max-width: min(39rem, 48vw);
 }
 
+.hero__descriptor {
+  margin-bottom: 1.35rem;
+  font-size: clamp(0.82rem, 0.9vw, 0.95rem);
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  line-height: 1.45;
+  text-transform: none;
+}
+
 .hero__title {
   max-width: 9.8ch;
   font-size: clamp(3.8rem, 6.2vw, 7rem);
