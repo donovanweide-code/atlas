@@ -10,8 +10,9 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 4. [`SPRINTS/Sprint-001.md`](SPRINTS/Sprint-001.md) — doel, afbakening en verificatie van Sprint 001A–001F.
 5. [`SPRINTS/Sprint-002.md`](SPRINTS/Sprint-002.md) — handmatige bewijssprint voor de laatst bevestigde werkelijkheid.
 6. [`SPRINTS/Sprint-004.md`](SPRINTS/Sprint-004.md) — gecontroleerde route van lokale releasecandidate via staging naar productie.
-7. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
-8. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
+7. [`RELEASES/WBD-2026-07-26-ca3d1bd.md`](RELEASES/WBD-2026-07-26-ca3d1bd.md) — broncommit, artefacthash en validatie van de actuele publieke releasecandidate.
+8. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
+9. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
 
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 
