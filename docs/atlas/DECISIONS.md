@@ -91,3 +91,18 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Mandaat:** Binnen een vastgestelde Foundation en expliciete scope mag Codex zelfstandig technische en redactionele keuzes voorbereiden en onderbouwen. Realisatie volgt binnen de verleende opdracht; fundamentele wijzigingen in visie, methode, prioriteit of verantwoordelijkheid vallen daar nooit stilzwijgend onder.
 - **Grens:** Een fundamentele wijziging wordt nooit stilzwijgend uitgevoerd. Codex legt haar eerst als Candidate met bronnen, gevolgen, risico's en een voorstel aan Donovan voor. Donovan houdt het uiteindelijke besluit.
 - **Gevolg:** Kritisch meedenken en begrensd initiatief zijn onderdeel van goed Codex-werk; methodische of strategische autonomie zonder menselijke bevestiging niet.
+
+## D-012 — Production GO en Experience GO zijn afzonderlijke kwaliteitsgrenzen
+
+- **Datum:** 2026-07-26
+- **Status:** Expliciet besloten door Donovan na de gecontroleerde productielivegang van de We Build And Design Experience in Sprint 004.
+- **Aanleiding:** Sprint 004 bewees dat een Experience technisch verantwoord naar productie kan terwijl de volledige inhoudelijke reis nog niet gereed is voor een eerlijk oordeel als geheel. Zonder afzonderlijke grenzen kan een technische livegang onbedoeld worden geïnterpreteerd als bevestiging van inhoudelijke volledigheid.
+- **Keuze:** Iedere Atlas Experience kent twee zelfstandige GO-momenten:
+  - **Production GO:** de Experience is technisch gereed voor een gecontroleerde productiepublicatie, inclusief aantoonbare buildkwaliteit, bereikbaarheid, kritieke routecontrole, herstelbaarheid en een bevestigde rollback.
+  - **Experience GO:** de bedoelde inhoudelijke reis is voldoende volledig, coherent en eerlijk onderbouwd om als geheel door de beoogde mensen te laten beoordelen.
+- **Onafhankelijkheid:** Production GO impliceert geen Experience GO. Experience GO impliceert geen toestemming voor productiepublicatie. Ieder GO-moment vereist een eigen expliciete menselijke bevestiging.
+- **Voorwaarde voor Experience GO:** De volledige bedoelde reis is aanwezig; de belangrijkste claims rusten op herleidbare praktijk of aantoonbaar werk; kritieke tekst-, beeld-, bewijs- en vertrouwenslagen ontbreken niet; en bekende tijdelijke onderdelen vertekenen het oordeel over het geheel niet meer. Resterende punten mogen verfijningen zijn, maar geen ontbrekende hoofdstukken.
+- **Validatiegrens:** Vóór Experience GO zijn praktijkgesprekken, observaties, brononderzoek en gerichte beoordeling van afzonderlijke onderdelen toegestaan en gewenst. Er wordt nog geen algemeen oordeel gevraagd over de Experience als geheel en vroege bevindingen worden niet als bewijs voor de totale ervaring gebruikt.
+- **Menselijke grens:** Atlas en Codex mogen voor beide grenzen een onderbouwde kandidaatbeoordeling voorbereiden. Donovan of de verantwoordelijke menselijke eigenaar bevestigt Production GO en Experience GO afzonderlijk.
+- **Gevolg:** Iedere toekomstige Atlas Experience maakt expliciet zichtbaar voor welk GO-moment zij wordt beoordeeld. Releasegereedheid en ervaringsgereedheid kunnen daardoor niet meer stilzwijgend met elkaar worden verwisseld.
+- **Scope:** Dit besluit geldt generiek voor iedere toekomstige Atlas Experience en is niet beperkt tot de We Build And Design-website of Sprint 005.

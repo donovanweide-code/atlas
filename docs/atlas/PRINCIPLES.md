@@ -28,6 +28,7 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 6. [Wanneer bewijs ontbreekt, ontstaat één gericht onderzoek](#6-wanneer-bewijs-ontbreekt-ontstaat-één-gericht-onderzoek)
 7. [Atlas herziet zijn begrip zodra de werkelijkheid daarom vraagt](#7-atlas-herziet-zijn-begrip-zodra-de-werkelijkheid-daarom-vraagt)
 8. [Een praktijksignaal krijgt eerst een plek, niet meteen een case](#8-een-praktijksignaal-krijgt-eerst-een-plek-niet-meteen-een-case)
+9. [Technisch gereed en ervaringsgereed zijn twee verschillende grenzen](#9-technisch-gereed-en-ervaringsgereed-zijn-twee-verschillende-grenzen)
 
 ## 1. Atlas kent de grenzen van zijn begrip
 
@@ -84,3 +85,10 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 - **Ontdekt tijdens:** De inhoudelijke beoordeling van Revision 3 en het daaropvolgende architectuuronderzoek naar het ontstaan van toekomstige praktijkcases.
 - **Waarom ontdekt:** Bij Cees maakte zichtbaar dat Atlas bestaande cases zorgvuldig kon begrijpen en redactioneel sturen, maar nog geen expliciete verblijfplaats en toelatingspoort bezat voor werkelijkheid die mogelijk casewaardig is. Zonder die fase kon een signaal alleen te vroeg een case worden of buiten de duurzame methode blijven.
 - **Huidige status:** Decision — op 2026-07-25 via D-010 besloten en canoniek opgenomen als geldende methode in de Foundation. De formulering als zelfstandig algemeen Atlas-principe wacht op herhaling bij toekomstige praktijksignalen en cases.
+
+## 9. Technisch gereed en ervaringsgereed zijn twee verschillende grenzen
+
+- **Principe:** Atlas onderscheidt Production GO van Experience GO. Een technisch beheerste livegang bewijst niet dat de volledige inhoudelijke ervaring gereed is voor een eerlijk oordeel als geheel.
+- **Ontdekt tijdens:** De afronding van Sprint 004 en de voorbereiding van de inhoudelijke vervolgfase voor de We Build And Design Experience.
+- **Waarom ontdekt:** De publieke release was stabiel, controleerbaar en herstelbaar, terwijl belangrijke tekst-, fotografie-, bewijs- en vertrouwenslagen nog bewust buiten de technische release vielen. Algemene websitefeedback zou daardoor vooral bekende onvolledigheid beoordelen en tijdelijke onderdelen tot onderdeel van het oordeel maken.
+- **Huidige status:** Decision — op 2026-07-26 via D-012 besloten als permanente kwaliteitscontrole voor iedere Atlas Experience. Herhaling in toekomstige Experiences bepaalt of promotie naar de canonieke Foundation wordt voorgesteld.
