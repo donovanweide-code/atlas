@@ -1,7 +1,9 @@
-import studioWorktable from "./assets/images/atlas/studio/atlas-studio-worktable-v01.webp";
 import studioCraftHorizon from "./assets/images/atlas/studio/atlas-studio-craft-horizon-v01.webp";
 import studioProjectReview from "./assets/images/atlas/studio/atlas-studio-project-review-v01.webp";
 import studioThreshold from "./assets/images/atlas/studio/atlas-studio-threshold-v01.webp";
+import methodListening from "./assets/images/atlas/generated/atlas-method-listening-v01.jpg";
+import methodClarity from "./assets/images/atlas/generated/atlas-method-clarity-v01.jpg";
+import methodPrototype from "./assets/images/atlas/generated/atlas-method-prototype-v01.jpg";
 
 interface RouteChapter {
   number: string;
@@ -92,9 +94,9 @@ const publicRoutes: PublicRoute[] = [
     title: "Eerst luisteren. Dan pas bouwen.",
     intro:
       "Je hoeft geen briefing of technisch plan mee te brengen. We beginnen bij jouw verhaal en maken de route samen kleiner.",
-    heroAsset: studioWorktable,
+    heroAsset: methodListening,
     heroAlt:
-      "Twee mensen onderzoeken samen schetsen en modellen aan een rustige werktafel.",
+      "Een ondernemer laat een tastbaar onderdeel van het bedrijf zien terwijl Donovan luistert en aantekeningen maakt.",
     heroPosition: "58% center",
     chapters: [
       {
@@ -273,7 +275,9 @@ export function renderSiteHeader(currentPath: string): string {
   return `
     <header class="site-header">
       <a class="brand" href="/" aria-label="We Build And Design — home">
-        <span class="brand__mark">WBD.</span>
+        <span class="brand__mark" aria-hidden="true">
+          <span>W</span><i></i><span>BD</span>
+        </span>
         <span class="brand__name">We Build And Design</span>
       </a>
 
@@ -301,7 +305,9 @@ export function renderSiteFooter(): string {
   return `
     <footer class="site-footer">
       <a class="brand" href="/" aria-label="We Build And Design — home">
-        <span class="brand__mark">WBD.</span>
+        <span class="brand__mark" aria-hidden="true">
+          <span>W</span><i></i><span>BD</span>
+        </span>
         <span class="brand__name">We Build And Design</span>
       </a>
       <p>Professionele websites voor ondernemers die hun eerste stap online begrijpelijk willen zetten.</p>
@@ -430,6 +436,153 @@ function renderRoute(route: PublicRoute): string {
     </main>`;
 }
 
+function renderMethodPage(route: PublicRoute): string {
+  const [understand, clarify, reveal, build, remain] = route.chapters;
+  document.title = "Werkwijze — We Build And Design";
+
+  return `
+    <main class="page route-page route-page--aurora method-page">
+      ${renderSiteHeader(route.path)}
+
+      <article class="method-story">
+        <header class="method-hero">
+          <img
+            class="method-hero__image"
+            src="${methodListening}"
+            alt="Een ondernemer laat een tastbaar onderdeel van het bedrijf zien terwijl Donovan luistert en aantekeningen maakt."
+            fetchpriority="high"
+            decoding="async"
+          >
+          <div class="method-hero__veil" aria-hidden="true"></div>
+          <div class="method-hero__content" data-page-reveal>
+            <p class="route-kicker"><span>${route.index}</span>${route.phase}</p>
+            <h1>${route.title}</h1>
+            <p>${route.intro}</p>
+            <a class="route-hero__step" href="#eerste-vraag">
+              Ervaar hoe we beginnen <i aria-hidden="true"></i>
+            </a>
+          </div>
+          <aside class="method-hero__question" aria-label="De eerste vraag" data-page-reveal>
+            <span>Niet de oplossing</span>
+            <p>Wat moet een nieuwe klant als eerste over jouw bedrijf begrijpen?</p>
+          </aside>
+        </header>
+
+        <div class="method-continuum">
+          <div class="method-route" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </div>
+
+          <section class="method-listen" id="eerste-vraag" aria-labelledby="method-listen-title">
+            <div class="method-listen__intro" data-page-reveal>
+              <p class="method-index">${understand.number} / Begrijpen</p>
+              <h2 id="method-listen-title">${understand.title}</h2>
+              <p>${understand.text}</p>
+            </div>
+            <div class="method-listen__questions" aria-label="Vragen waarmee het gesprek begint">
+              <p data-page-reveal><span>01</span>Wat doe je iedere dag dat voor jou vanzelfsprekend is?</p>
+              <p data-page-reveal><span>02</span>Waar komen klanten juist voor bij jou terug?</p>
+              <p data-page-reveal><span>03</span>Wat moet iemand voelen voordat die contact opneemt?</p>
+            </div>
+            <p class="method-listen__answer" data-page-reveal>
+              Nog geen briefing.<br>
+              Eerst jouw werkelijkheid.
+            </p>
+          </section>
+
+          <section class="method-clarity" aria-labelledby="method-clarity-title">
+            <div class="method-clarity__image" data-page-reveal>
+              <img
+                src="${methodClarity}"
+                alt="Losse observaties, foto's en materiaal worden door twee mensen teruggebracht tot een heldere reeks."
+                loading="lazy"
+                decoding="async"
+              >
+              <span aria-hidden="true">Ruis</span>
+              <span aria-hidden="true">Kern</span>
+              <span aria-hidden="true">Richting</span>
+            </div>
+            <div class="method-clarity__copy" data-page-reveal>
+              <p class="method-index">${clarify.number} / Helder krijgen</p>
+              <h2 id="method-clarity-title">${clarify.title}</h2>
+              <p>${clarify.text}</p>
+              <blockquote>
+                Niet alles hoeft op de website.<br>
+                Alleen wat iemand helpt om verder te kijken.
+              </blockquote>
+            </div>
+          </section>
+
+          <section class="method-choice" aria-labelledby="method-choice-title">
+            <header data-page-reveal>
+              <p class="method-index">${reveal.number} / Samen kiezen</p>
+              <h2 id="method-choice-title">${reveal.title}</h2>
+              <p>${reveal.text}</p>
+            </header>
+            <div class="method-choice__field" data-page-reveal>
+              <article>
+                <span>Mogelijkheid 01</span>
+                <i></i><i></i><i></i>
+              </article>
+              <article class="is-chosen">
+                <span>Dit draagt het verhaal</span>
+                <strong>De kern</strong>
+                <i></i><i></i>
+              </article>
+              <article>
+                <span>Mogelijkheid 03</span>
+                <i></i><i></i><i></i>
+              </article>
+              <p>Een keuze wordt pas definitief wanneer jij haar kunt zien, vergelijken en begrijpen.</p>
+            </div>
+          </section>
+
+          <section class="method-build" aria-labelledby="method-build-title">
+            <img
+              src="${methodPrototype}"
+              alt="Een gekozen ontwerp wordt zorgvuldig vertaald naar een tastbaar prototype en digitaal gecontroleerd."
+              loading="lazy"
+              decoding="async"
+            >
+            <div class="method-build__veil" aria-hidden="true"></div>
+            <div class="method-build__copy" data-page-reveal>
+              <p class="method-index">${build.number} / Zorgvuldig bouwen</p>
+              <h2 id="method-build-title">${build.title}</h2>
+              <p>${build.text}</p>
+              <ol>
+                <li><span>01</span>Eerst zichtbaar</li>
+                <li><span>02</span>Dan samen beoordelen</li>
+                <li><span>03</span>Daarna zorgvuldig bouwen</li>
+              </ol>
+            </div>
+          </section>
+
+          <section class="method-remain" aria-labelledby="method-remain-title">
+            <div class="method-remain__marker" aria-hidden="true">
+              <span></span>
+            </div>
+            <div data-page-reveal>
+              <p class="method-index">${remain.number} / Verder kunnen</p>
+              <h2 id="method-remain-title">${remain.title}</h2>
+              <p>${remain.text}</p>
+            </div>
+            <blockquote data-page-reveal>${route.reflection}</blockquote>
+          </section>
+
+          <aside class="route-next method-next" data-page-reveal>
+            <p>${route.nextLabel}</p>
+            <h2>${route.nextTitle}</h2>
+            <a href="${route.nextPath}" aria-label="${route.nextLabel}">
+              <span>Volgende route</span><i aria-hidden="true"></i>
+            </a>
+          </aside>
+        </div>
+      </article>
+
+      ${renderSiteFooter()}
+    </main>`;
+}
+
 function renderNotFound(): string {
   document.title = "Route niet gevonden — We Build And Design";
 
@@ -448,6 +601,7 @@ function renderNotFound(): string {
 
 export function renderPublicPage(path: string): string {
   const route = routeIndex.get(path);
+  if (route?.path === "/werkwijze") return renderMethodPage(route);
   return route ? renderRoute(route) : renderNotFound();
 }
 

@@ -16,7 +16,9 @@ if (route === "/") {
     <main class="page">
       <header class="site-header">
         <a class="brand" href="/" aria-label="We Build and Design — home">
-          <span class="brand__mark">WBD.</span>
+          <span class="brand__mark" aria-hidden="true">
+            <span>W</span><i></i><span>BD</span>
+          </span>
           <span class="brand__name">We Build and Design</span>
         </a>
 
@@ -334,7 +336,9 @@ if (route === "/") {
 
         <footer class="site-footer">
           <a class="brand" href="/" aria-label="We Build and Design — home">
-            <span class="brand__mark">WBD.</span>
+            <span class="brand__mark" aria-hidden="true">
+              <span>W</span><i></i><span>BD</span>
+            </span>
             <span class="brand__name">We Build and Design</span>
           </a>
           <p>Professionele websites voor ondernemers die hun eerste stap online begrijpelijk willen zetten.</p>

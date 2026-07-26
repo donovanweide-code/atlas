@@ -9,8 +9,9 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 3. [`ATLAS_LOGBOOK.md`](ATLAS_LOGBOOK.md) — bewaar lessen, successen en momentum.
 4. [`SPRINTS/Sprint-001.md`](SPRINTS/Sprint-001.md) — doel, afbakening en verificatie van Sprint 001A–001F.
 5. [`SPRINTS/Sprint-002.md`](SPRINTS/Sprint-002.md) — handmatige bewijssprint voor de laatst bevestigde werkelijkheid.
-6. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
-7. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
+6. [`SPRINTS/Sprint-004.md`](SPRINTS/Sprint-004.md) — gecontroleerde route van lokale releasecandidate via staging naar productie.
+7. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
+8. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
 
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 
