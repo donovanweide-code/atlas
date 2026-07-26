@@ -1,6 +1,6 @@
 # Sprint 004 — Controlled Livegang We Build And Design
 
-**Status:** releasecandidate lokaal gevalideerd — stagingpublicatie wacht op TransIP-aanmelding
+**Status:** releasecandidate op staging gepubliceerd — publieke staging-smoketest nog open
 **Datum:** 26 juli 2026
 **Focus:** stabiliteit → controle → livegang
 **Geen nieuwe ontwerpfase:** bevestigd
@@ -59,14 +59,15 @@ Sprint 004 introduceert geen nieuwe visuele richting, dienstenpropositie of pagi
   - `website/src/styles/public-pages.css`;
   - drie lokale beelden onder `website/src/assets/images/atlas/generated/`.
 - Andere aanwezige werkboomwijzigingen worden niet automatisch onderdeel van de publieke release.
-- De bestaande online preview draagt nog de oudere chunks:
-  - `assets/index-oTiyd6q5.js`;
-  - `assets/index-C4u4CfAT.css`.
-- De lokaal gevalideerde candidate draagt:
+- De lokaal gevalideerde candidate en de stagingpublicatie dragen:
   - `assets/index-DxU6iiRJ.js`;
   - `assets/index-NnYm0S8a.css`.
+- De vorige chunks zijn bewust in de staging-assetmap behouden:
+  - `assets/index-oTiyd6q5.js`;
+  - `assets/index-C4u4CfAT.css`.
+- De bestaande `.htaccess` van 124 bytes is ongewijzigd behouden.
 
-De huidige online preview is dus bereikbaar, maar nog niet dezelfde candidate als de lokaal gevalideerde release.
+De inhoud van de gevalideerde `dist/` is op 26 juli 2026 naar `/subsites/preview.webuildanddesign.nl` gepubliceerd. Voor het transport is dezelfde build opnieuw als ZIP verpakt met POSIX-padtekens, omdat TransIP de Windows-padtekens uit het oorspronkelijke ZIP-bestand als letterlijke bestandsnamen interpreteerde. De gepubliceerde bestanden komen ongewijzigd uit dezelfde gevalideerde `dist/`; er is niet opnieuw gebouwd.
 
 ---
 
@@ -207,7 +208,25 @@ Merk, navigatie, fotografische wereld, typografie en routeopbouw vormen lokaal �
 
 ### Staging-GO
 
-Nog niet behaald. De gevalideerde candidate moet eerst naar de bestaande preview worden gepubliceerd en daar worden gecontroleerd.
+Nog niet volledig behaald.
+
+Behaald:
+
+- publicatie naar de geïsoleerde preview-DocumentRoot;
+- nieuwe `index.html` van 480 bytes aanwezig;
+- nieuwe JS- en CSS-chunks in de echte `assets/`-map aanwezig;
+- `.htaccess` ongewijzigd behouden;
+- tijdelijke uploadarchieven en foutief uitgepakte rootbestanden verwijderd;
+- vorige JS- en CSS-chunks behouden;
+- lokale rollbackcandidate en TransIP-hostingback-ups bevestigd.
+
+Open:
+
+- publieke route- en assetcontrole;
+- visuele desktop- en mobiele stagingcontrole;
+- consolecontrole op de publieke staging.
+
+De in-app browser blokkeert in deze sessie agenttoegang tot `preview.webuildanddesign.nl` op grond van een browserbeveiligingsregel. Deze open controles mogen daarom niet als uitgevoerd of als GO worden geregistreerd.
 
 ### Productie-GO
 
@@ -221,7 +240,17 @@ Nog niet behaald. Vereist:
 
 ### Externe afhankelijkheid
 
-Het TransIP-controlepaneel vraagt om aanmelding. Codex beschikt niet over en vraagt niet om wachtwoorden. Donovan meldt zichzelf aan in de geopende browser en geeft daarna aan dat de sessie gereed is.
+De TransIP-aanmelding en de publicatie zijn afgerond. Voor het resterende staging-GO is een publieke visuele controle door Donovan nodig, omdat de in-app browser de previewhost in deze sessie niet aan Codex beschikbaar stelt.
+
+### Bevestigde staging-rollback
+
+- Vorige stagingcandidate: `website/.codex-tmp/wbd-preview-experience-review-20260723.zip`.
+- SHA-256: `D6500ADA2F56AB706DB10EB18855B003A55AF6012F365620E85B183237AAD47A`.
+- Vorige `index.html` verwijst naar `assets/index-oTiyd6q5.js` en `assets/index-C4u4CfAT.css`.
+- Beide vorige chunks staan nog op staging.
+- De TransIP-omgeving biedt daarnaast recente hostingback-ups.
+
+Een rollback bestaat daardoor primair uit het terugplaatsen van de vorige `index.html`. De volledige vorige stagingcandidate en de hostingback-ups blijven beschikbaar als tweede herstelroute.
 
 ---
 
