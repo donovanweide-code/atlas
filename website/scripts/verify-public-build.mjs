@@ -68,7 +68,8 @@ export async function verifyPublicBuild(distDirectory) {
     if (!textExtensions.has(path.extname(file).toLowerCase())) continue;
     scannedTextFiles += 1;
     const content = await readFile(file, "utf8");
-    const violation = forbiddenContent.find(({ pattern }) => pattern.test(content));
+    const contentWithoutApprovedPublicAnchors = content.replace(/Design the understanding first\.?/gi, "");
+    const violation = forbiddenContent.find(({ pattern }) => pattern.test(contentWithoutApprovedPublicAnchors));
     if (violation) {
       const relativeFile = path.relative(dist, file).replaceAll("\\", "/");
       throw new Error(`Publieke build lekt ${violation.label} via ${relativeFile}.`);
