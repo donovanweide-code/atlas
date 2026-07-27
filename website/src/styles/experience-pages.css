@@ -776,6 +776,176 @@
   color: #68491f;
 }
 
+.legal-hero {
+  padding: clamp(11rem, 17vh, 14rem) max(5vw, calc((100vw - 1440px) / 2)) clamp(5rem, 8vw, 7rem);
+  color: #f6f1e7;
+  background:
+    radial-gradient(circle at 78% 24%, rgba(119, 154, 137, 0.22), transparent 24rem),
+    linear-gradient(125deg, #07161c 0%, #102b2b 58%, #183b35 100%);
+}
+
+.legal-hero h1 {
+  max-width: 15ch;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.4rem, 6vw, 6.8rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.legal-hero > p:not(.experience-kicker, .legal-meta) {
+  max-width: 43rem;
+  margin: 2rem 0 0;
+  color: rgba(247, 241, 228, 0.78);
+  font-size: clamp(1rem, 1.25vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.legal-meta {
+  margin: 2.25rem 0 0;
+  color: #dcb46f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.legal-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.34fr) minmax(0, 1fr);
+  gap: clamp(3rem, 7vw, 8rem);
+  width: min(calc(100% - 10vw), 82rem);
+  margin: clamp(5rem, 9vw, 8rem) auto clamp(6rem, 10vw, 10rem);
+}
+
+.legal-index {
+  position: sticky;
+  top: 2rem;
+  align-self: start;
+  padding-top: 0.25rem;
+}
+
+.legal-index > p,
+.legal-note > p,
+.legal-contact > p {
+  margin: 0;
+  color: #765321;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.legal-index ol {
+  display: grid;
+  gap: 0.72rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legal-index a {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  color: var(--experience-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.legal-index a:hover {
+  color: var(--experience-ink);
+}
+
+.legal-document {
+  min-width: 0;
+}
+
+.legal-note {
+  margin-bottom: clamp(4rem, 7vw, 6rem);
+  padding: clamp(2rem, 4vw, 3rem);
+  border: 1px solid rgba(41, 68, 55, 0.16);
+  background: rgba(248, 242, 231, 0.62);
+}
+
+.legal-note strong {
+  display: block;
+  max-width: 42rem;
+  margin-top: 1.25rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.45rem, 2.5vw, 2.2rem);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+
+.legal-section {
+  scroll-margin-top: 2rem;
+  padding: clamp(2.75rem, 5vw, 4.5rem) 0;
+  border-top: 1px solid rgba(41, 68, 55, 0.16);
+}
+
+.legal-section h2 {
+  max-width: 21ch;
+  margin: 0 0 1.75rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 3.5vw, 3.35rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.legal-section p,
+.legal-section li {
+  max-width: 45rem;
+  color: var(--experience-muted);
+  font-size: clamp(0.98rem, 1.12vw, 1.08rem);
+  line-height: 1.78;
+}
+
+.legal-section p {
+  margin: 0;
+}
+
+.legal-section p + p {
+  margin-top: 1.15rem;
+}
+
+.legal-section ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.legal-contact {
+  margin-top: clamp(3rem, 6vw, 5rem);
+  padding: clamp(2.5rem, 5vw, 4.5rem);
+  color: #f4eee2;
+  background: #183b35;
+}
+
+.legal-contact h2 {
+  max-width: 18ch;
+  margin: 1.25rem 0 2rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 3.6vw, 3.6rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.legal-contact a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.65rem;
+  color: #f4eee2;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .page a:focus-visible,
 .page summary:focus-visible {
   border-radius: 0.15rem;
@@ -837,6 +1007,21 @@
 
   .knowledge-continuation {
     grid-template-columns: 1fr;
+  }
+
+  .legal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .legal-index {
+    position: static;
+    padding-bottom: 2.5rem;
+    border-bottom: 1px solid rgba(41, 68, 55, 0.16);
+  }
+
+  .legal-index ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 2rem;
   }
 }
 
@@ -975,6 +1160,38 @@
 
   .knowledge-continuation__grid article {
     padding: 1.5rem 1.25rem;
+  }
+
+  .legal-hero {
+    padding: 9rem 1.25rem 4rem;
+  }
+
+  .legal-hero h1 {
+    font-size: clamp(3rem, 13vw, 4.4rem);
+  }
+
+  .legal-layout {
+    width: calc(100% - 2.5rem);
+    gap: 3rem;
+    margin: 4rem auto 6rem;
+  }
+
+  .legal-index ol {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .legal-note {
+    margin-bottom: 3.5rem;
+    padding: 2rem 1.5rem;
+  }
+
+  .legal-section {
+    padding: 2.75rem 0;
+  }
+
+  .legal-contact {
+    padding: 2.75rem 1.5rem;
   }
 }
 

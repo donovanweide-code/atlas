@@ -1,0 +1,47 @@
+Options -Indexes
+DirectoryIndex index.html
+ErrorDocument 404 /404.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Eén publieke bron: www verwijst permanent naar het hoofddomein.
+  RewriteCond %{HTTP_HOST} ^www\.webuildanddesign\.nl$ [NC]
+  RewriteRule ^ https://webuildanddesign.nl%{REQUEST_URI} [R=301,L,NE]
+
+  # Bestaande bestanden en mappen worden rechtstreeks geserveerd.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Alleen bekende publieke routes gebruiken de client-side router.
+  RewriteRule ^$ index.html [L]
+  RewriteRule ^(?:diensten|werkwijze|projecten|over-ons|contact|algemene-voorwaarden|privacy)/?$ index.html [L]
+  RewriteRule ^kennis/?$ index.html [L]
+  RewriteRule ^kennis/(?:wanneer-website-vernieuwen|website-verbeteren-of-vernieuwen|wanneer-past-wbd|wat-wbd-doet)/?$ index.html [L]
+
+  # Iedere andere route is werkelijk niet gevonden.
+  RewriteRule ^ - [R=404,L]
+</IfModule>
+
+<IfModule mod_setenvif.c>
+  SetEnvIf Host "^preview\.webuildanddesign\.nl$" wbd_preview
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "DENY"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Strict-Transport-Security "max-age=15552000"
+  Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+  Header always set X-Robots-Tag "noindex, nofollow" env=wbd_preview
+
+  <FilesMatch "\.(?:css|js|jpe?g|png|webp|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  <FilesMatch "^(?:index|404)\.html$|^(?:robots\.txt|sitemap\.xml)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

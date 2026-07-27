@@ -1,9 +1,45 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { verifyPublicBuild } from "../scripts/verify-public-build.mjs";
+
+test("neemt de juridische basis op in routes, footer en sitemap", async () => {
+  const [experienceSource, homepageSource, legalSource, sitemap] = await Promise.all([
+    readFile(new URL("../src/experience-pages.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/legal-pages.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/sitemap.xml", import.meta.url), "utf8"),
+  ]);
+
+  for (const route of ["/algemene-voorwaarden", "/privacy"]) {
+    assert.match(legalSource, new RegExp(`path: "${route}"`));
+    assert.match(experienceSource, new RegExp(`href="${route}"`));
+    assert.match(homepageSource, new RegExp(`href="${route}"`));
+    assert.match(sitemap, new RegExp(`<loc>https://webuildanddesign\\.nl${route}</loc>`));
+  }
+
+  assert.match(experienceSource, /legalPageIndex\.get\(path\)/);
+  assert.match(legalSource, /geen cookies/);
+  assert.match(legalSource, /geen cookiebanner/);
+});
+
+test("borgt de releasewaardige hostinggrens", async () => {
+  const [hostingConfig, notFoundPage] = await Promise.all([
+    readFile(new URL("../public/.htaccess", import.meta.url), "utf8"),
+    readFile(new URL("../public/404.html", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(hostingConfig, /www\\\.webuildanddesign\\\.nl/);
+  assert.match(hostingConfig, /algemene-voorwaarden\|privacy/);
+  assert.match(hostingConfig, /R=404/);
+  assert.match(hostingConfig, /X-Robots-Tag "noindex, nofollow"/);
+  assert.match(hostingConfig, /Cache-Control "public, max-age=31536000, immutable"/);
+  assert.match(hostingConfig, /Content-Security-Policy/);
+  assert.match(notFoundPage, /meta name="robots" content="noindex, nofollow"/);
+  assert.match(notFoundPage, /Deze route loopt hier niet verder/);
+});
 
 async function withBuild(files, assertion) {
   const directory = await mkdtemp(path.join(tmpdir(), "atlas-public-build-"));
@@ -27,6 +63,19 @@ test("accepteert uitsluitend een publieke entry en publieke assets", async () =>
   }, async (directory) => {
     const result = await verifyPublicBuild(directory);
     assert.equal(result.files, 3);
+  });
+});
+
+test("accepteert een publieke 404 en gescande hostingconfiguratie", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "404.html": '<meta name="robots" content="noindex"><h1>Niet gevonden</h1>',
+    ".htaccess": 'ErrorDocument 404 /404.html',
+    "assets/index.js": 'document.title="We Build And Design";',
+  }, async (directory) => {
+    const result = await verifyPublicBuild(directory);
+    assert.equal(result.files, 4);
+    assert.equal(result.scannedTextFiles, 4);
   });
 });
 

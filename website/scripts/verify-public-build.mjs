@@ -56,7 +56,8 @@ export async function verifyPublicBuild(distDirectory) {
   const files = await listFiles(dist);
   const relativeFiles = files.map((file) => path.relative(dist, file).replaceAll("\\", "/"));
   const htmlFiles = relativeFiles.filter((file) => path.extname(file).toLowerCase() === ".html");
-  if (htmlFiles.length !== 1 || htmlFiles[0] !== "index.html") {
+  const unexpectedHtmlFiles = htmlFiles.filter((file) => !["index.html", "404.html"].includes(file));
+  if (!htmlFiles.includes("index.html") || unexpectedHtmlFiles.length > 0) {
     throw new Error(`Publieke build bevat onverwachte HTML-entrypoints: ${htmlFiles.join(", ") || "geen"}.`);
   }
 
@@ -65,7 +66,7 @@ export async function verifyPublicBuild(distDirectory) {
 
   let scannedTextFiles = 0;
   for (const file of files) {
-    if (!textExtensions.has(path.extname(file).toLowerCase())) continue;
+    if (!textExtensions.has(path.extname(file).toLowerCase()) && path.basename(file) !== ".htaccess") continue;
     scannedTextFiles += 1;
     const content = await readFile(file, "utf8");
     const contentWithoutApprovedPublicAnchors = content.replace(/Design the understanding first\.?/gi, "");

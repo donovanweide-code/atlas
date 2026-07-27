@@ -6,6 +6,7 @@ import responsiveCheck from "./assets/images/experience/wbd-responsive-check-v01
 import methodListening from "./assets/images/atlas/generated/atlas-method-listening-v01.jpg";
 import methodClarity from "./assets/images/atlas/generated/atlas-method-clarity-v01.jpg";
 import methodPrototype from "./assets/images/atlas/generated/atlas-method-prototype-v01.jpg";
+import { legalPages, type LegalPage } from "./legal-pages";
 
 interface ExperienceSection {
   label: string;
@@ -654,6 +655,7 @@ const knowledgeArticles: KnowledgeArticle[] = [
 
 const pageIndex = new Map(pages.map((page) => [page.path, page]));
 const articleIndex = new Map(knowledgeArticles.map((article) => [article.path, article]));
+const legalPageIndex = new Map(legalPages.map((page) => [page.path, page]));
 
 function escapeAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -730,6 +732,7 @@ export function renderExperienceFooter(): string {
       <a href="/diensten">Diensten</a><a href="/werkwijze">Werkwijze</a>
       <a href="/projecten">Projecten</a><a href="/over-ons">Over ons</a>
       <a href="/kennis">Kennis</a><a href="/contact">Contact</a>
+      <a href="/algemene-voorwaarden">Algemene voorwaarden</a><a href="/privacy">Privacyverklaring</a>
     </nav>
   </footer>`;
 }
@@ -923,6 +926,57 @@ function renderKnowledgeArticle(article: KnowledgeArticle): string {
   </main>`;
 }
 
+function renderLegalPage(page: LegalPage): string {
+  setMeta(page.eyebrow, page.description, page.path);
+  return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
+  <main class="page experience-page legal-page" id="main-content" tabindex="-1">
+    ${renderExperienceHeader(page.path)}
+    <article>
+      <header class="legal-hero">
+        <p class="experience-kicker"><span>—</span>${page.eyebrow}</p>
+        <h1>${page.title}</h1>
+        <p>${page.intro}</p>
+        <p class="legal-meta">${page.updated}</p>
+      </header>
+      <div class="legal-layout">
+        <aside class="legal-index" aria-label="Inhoudsopgave">
+          <p>Op deze pagina</p>
+          <ol>
+            ${page.sections
+              .map((section) => `<li><a href="#${section.id}">${section.title.replace(/^\d+\.\s*/, "")}</a></li>`)
+              .join("")}
+          </ol>
+        </aside>
+        <div class="legal-document">
+          <aside class="legal-note">
+            <p>Goed om vooraf te weten</p>
+            <strong>${page.note}</strong>
+          </aside>
+          ${page.sections
+            .map(
+              (section) => `<section class="legal-section" id="${section.id}">
+                <h2>${section.title}</h2>
+                ${section.paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("")}
+                ${
+                  section.points
+                    ? `<ul>${section.points.map((point) => `<li>${point}</li>`).join("")}</ul>`
+                    : ""
+                }
+              </section>`,
+            )
+            .join("")}
+          <aside class="legal-contact">
+            <p>Een vraag over deze afspraken?</p>
+            <h2>Vraag liever om uitleg dan dat je iets moet aannemen.</h2>
+            <a href="mailto:info@webuildanddesign.nl">info@webuildanddesign.nl <span aria-hidden="true">→</span></a>
+          </aside>
+        </div>
+      </div>
+    </article>
+    ${renderExperienceFooter()}
+  </main>`;
+}
+
 function renderNotFound(): string {
   setMeta("Pagina niet gevonden", "Deze pagina bestaat niet.", window.location.pathname);
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
@@ -943,6 +997,8 @@ export function renderExperiencePage(path: string): string {
   if (path === "/kennis") return renderKnowledgeHub();
   const article = articleIndex.get(path);
   if (article) return renderKnowledgeArticle(article);
+  const legalPage = legalPageIndex.get(path);
+  if (legalPage) return renderLegalPage(legalPage);
   return renderNotFound();
 }
 

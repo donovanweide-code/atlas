@@ -296,6 +296,8 @@ if (route === "/") {
             <a href="/over-ons">Over ons</a>
             <a href="/kennis">Kennis</a>
             <a href="/contact">Contact</a>
+            <a href="/algemene-voorwaarden">Algemene voorwaarden</a>
+            <a href="/privacy">Privacyverklaring</a>
           </nav>
         </footer>
 
