@@ -11,6 +11,23 @@
     "minimumIndependentRoutes": 2,
     "minimumObservationSpanMs": 15000
   },
+  "execution": {
+    "approvedRunnerContexts": [
+      {
+        "id": "codex-network-enabled",
+        "networkCapable": true,
+        "networkContexts": [
+          "transip-ipv4",
+          "transip-ipv6"
+        ]
+      }
+    ],
+    "localPermissionErrorCodes": [
+      "EACCES",
+      "EPERM"
+    ],
+    "localPermissionRetryLimit": 1
+  },
   "endpoints": {
     "target": {
       "url": "https://webuildanddesign.nl/",

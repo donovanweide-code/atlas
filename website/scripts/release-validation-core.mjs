@@ -60,6 +60,7 @@ function assessReport(report, options) {
     maximumEvidenceAgeMs,
     minimumConsecutiveSamples,
     minimumObservationSpanMs,
+    approvedRunnerContexts,
     now,
   } = options;
 
@@ -67,16 +68,42 @@ function assessReport(report, options) {
     report,
     routeId: report?.source?.routeId ?? null,
     sourceId: report?.source?.id ?? null,
+    runnerContext: report?.source?.runnerContext ?? null,
+    networkContext: report?.source?.networkContext ?? null,
     valid: false,
     reason,
   });
 
-  if (report?.schemaVersion !== 1) return invalid("onbekende of ontbrekende rapportversie");
+  if (report?.schemaVersion !== 2) return invalid("onbekende of ontbrekende rapportversie");
   if (report?.phase !== phase) return invalid(`rapportfase ${report?.phase ?? "ontbreekt"} wijkt af van ${phase}`);
   if (report?.validationProfileSha256 !== expectedProfileSha256) {
     return invalid("meetrapport hoort niet bij het verwachte validatieprofiel");
   }
-  if (!report?.source?.id || !report?.source?.routeId) return invalid("bron- of route-identiteit ontbreekt");
+  if (
+    !report?.source?.id
+    || !report?.source?.routeId
+    || !report?.source?.runnerContext
+    || !report?.source?.networkContext
+  ) return invalid("bron-, route-, runner- of netwerkidentiteit ontbreekt");
+
+  const approvedRunner = approvedRunnerContexts.find((runner) => (
+    runner.id === report.source.runnerContext
+    && runner.networkCapable === true
+    && runner.networkContexts.includes(report.source.networkContext)
+  ));
+  if (!approvedRunner || report?.runner?.approved !== true || report?.runner?.networkCapable !== true) {
+    return invalid("meetresultaat komt niet uit een goedgekeurde netwerkgeschikte runnercontext");
+  }
+  if (report?.probeFailure?.kind === "local-runner-not-authorized") {
+    return invalid(
+      `lokale runner niet bevoegd: ${report.probeFailure.code ?? "onbekende permissiefout"}`,
+    );
+  }
+  if (report?.probeFailure) {
+    return invalid(
+      `probe-uitval: ${report.probeFailure.kind ?? "onbekend"} (${report.probeFailure.code ?? "geen code"})`,
+    );
+  }
   if (!isIsoDate(report.startedAt) || !isIsoDate(report.completedAt)) {
     return invalid("geldige meettijd ontbreekt");
   }
@@ -113,6 +140,8 @@ function assessReport(report, options) {
     report,
     routeId: report.source.routeId,
     sourceId: report.source.id,
+    runnerContext: report.source.runnerContext,
+    networkContext: report.source.networkContext,
     valid: true,
     targetState: target.state,
   };
@@ -122,6 +151,8 @@ function summarizeRoutes(routeAssessments) {
   return routeAssessments.map((assessment) => ({
     sourceId: assessment.sourceId,
     routeId: assessment.routeId,
+    runnerContext: assessment.runnerContext,
+    networkContext: assessment.networkContext,
     valid: assessment.valid,
     targetState: assessment.targetState ?? null,
     reason: assessment.reason ?? null,
@@ -137,6 +168,7 @@ export function evaluateReleaseValidation({
   minimumConsecutiveSamples = 2,
   minimumIndependentRoutes = 2,
   minimumObservationSpanMs = 0,
+  approvedRunnerContexts = [],
 }) {
   if (!["preflight", "post-switch"].includes(phase)) {
     throw new Error("Validatiefase moet preflight of post-switch zijn.");
@@ -147,6 +179,9 @@ export function evaluateReleaseValidation({
   if (!expectedProfileSha256) {
     throw new Error("De SHA-256 van het validatieprofiel is vereist.");
   }
+  if (!Array.isArray(approvedRunnerContexts) || approvedRunnerContexts.length === 0) {
+    throw new Error("Minstens één goedgekeurde runnercontext is vereist.");
+  }
 
   const assessed = reports.map((report) => assessReport(report, {
     expectedProfileSha256,
@@ -154,12 +189,15 @@ export function evaluateReleaseValidation({
     maximumEvidenceAgeMs,
     minimumConsecutiveSamples,
     minimumObservationSpanMs,
+    approvedRunnerContexts,
     now,
   }));
 
   const seenRoutes = new Set();
+  const seenNetworkContexts = new Set();
   const uniqueValidRoutes = [];
   const duplicateRoutes = [];
+  const duplicateNetworkContexts = [];
 
   for (const assessment of assessed) {
     if (!assessment.valid) continue;
@@ -167,7 +205,12 @@ export function evaluateReleaseValidation({
       duplicateRoutes.push(assessment.routeId);
       continue;
     }
+    if (seenNetworkContexts.has(assessment.networkContext)) {
+      duplicateNetworkContexts.push(assessment.networkContext);
+      continue;
+    }
     seenRoutes.add(assessment.routeId);
+    seenNetworkContexts.add(assessment.networkContext);
     uniqueValidRoutes.push(assessment);
   }
 
@@ -177,6 +220,7 @@ export function evaluateReleaseValidation({
     independentValidRoutes: uniqueValidRoutes.length,
     requiredIndependentRoutes: minimumIndependentRoutes,
     duplicateRoutes: [...new Set(duplicateRoutes)],
+    duplicateNetworkContexts: [...new Set(duplicateNetworkContexts)],
     rollbackRecommended: false,
   };
 

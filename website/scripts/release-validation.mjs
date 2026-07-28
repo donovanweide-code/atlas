@@ -14,7 +14,7 @@ import {
 function usage() {
   return [
     "Gebruik:",
-    "  node scripts/release-validation.mjs capture --config <json> --phase <preflight|post-switch> --source <id> --route <id> [--family <4|6>] --output <json>",
+    "  node scripts/release-validation.mjs capture --config <json> --phase <preflight|post-switch> --source <id> --route <id> --runner-context <id> --network-context <id> [--family <4|6>] --output <json>",
     "  node scripts/release-validation.mjs evaluate --config <json> --phase <preflight|post-switch> --report <json> --report <json> [--output <json>]",
   ].join("\n");
 }
@@ -54,6 +54,8 @@ async function capture(options) {
     phase: required(options, "phase"),
     sourceId: required(options, "source"),
     routeId: required(options, "route"),
+    runnerContext: required(options, "runner-context"),
+    networkContext: required(options, "network-context"),
     addressFamily: options.family ? Number(options.family) : 0,
   });
   await writeJson(required(options, "output"), report);
@@ -73,6 +75,7 @@ async function evaluate(options) {
     minimumConsecutiveSamples: config.validation?.minimumConsecutiveSamples ?? 2,
     minimumIndependentRoutes: config.validation?.minimumIndependentRoutes ?? 2,
     minimumObservationSpanMs: config.validation?.minimumObservationSpanMs ?? 0,
+    approvedRunnerContexts: config.execution.approvedRunnerContexts,
   });
 
   if (options.output) await writeJson(options.output, result);

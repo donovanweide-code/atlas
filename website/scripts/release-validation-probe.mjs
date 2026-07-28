@@ -13,6 +13,8 @@ const assertionTypes = new Set([
   "headerExcludes",
 ]);
 
+const DEFAULT_LOCAL_PERMISSION_ERROR_CODES = ["EACCES", "EPERM"];
+
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -53,6 +55,33 @@ export function validateReleaseValidationConfig(config) {
         throw new Error(`${endpointName}/${assertion.id} bevat geen definitieve verwachting.`);
       }
     }
+  }
+
+  const runnerContexts = config?.execution?.approvedRunnerContexts;
+  if (!Array.isArray(runnerContexts) || runnerContexts.length === 0) {
+    throw new Error("Configuratie vereist minstens één expliciet goedgekeurde runnercontext.");
+  }
+  const runnerIds = new Set();
+  for (const runner of runnerContexts) {
+    if (!runner?.id || runnerIds.has(runner.id)) {
+      throw new Error("Goedgekeurde runnercontexten vereisen unieke id's.");
+    }
+    runnerIds.add(runner.id);
+    if (runner.networkCapable !== true) {
+      throw new Error(`Runnercontext ${runner.id} is niet als netwerkgeschikt vastgelegd.`);
+    }
+    if (!Array.isArray(runner.networkContexts) || runner.networkContexts.length === 0) {
+      throw new Error(`Runnercontext ${runner.id} vereist minstens één netwerkcontext.`);
+    }
+  }
+  const permissionCodes = new Set(
+    config.execution.localPermissionErrorCodes ?? DEFAULT_LOCAL_PERMISSION_ERROR_CODES,
+  );
+  if (!permissionCodes.has("EACCES") || !permissionCodes.has("EPERM")) {
+    throw new Error("De lokale permissieclassificatie moet EACCES en EPERM bevatten.");
+  }
+  if ((config.execution.localPermissionRetryLimit ?? 1) !== 1) {
+    throw new Error("De lokale permissieherhaling moet exact één meetronde zijn.");
   }
 }
 
@@ -240,16 +269,28 @@ async function requestUrl(url, { timeoutMs, maxBodyBytes, addressFamily }) {
   });
 }
 
-async function captureEndpoint(endpoint, probeOptions) {
+function localPermissionErrorCodes(config) {
+  return new Set(
+    config?.execution?.localPermissionErrorCodes ?? DEFAULT_LOCAL_PERMISSION_ERROR_CODES,
+  );
+}
+
+function observationFailureKind(observation, permissionErrorCodes) {
+  const code = observation?.transport?.errorCode ?? observation?.tls?.errorCode ?? null;
+  return permissionErrorCodes.has(code) ? "local-runner-not-authorized" : null;
+}
+
+async function captureEndpoint(endpoint, probeOptions, requestUrlImpl, permissionErrorCodes) {
   const samples = [];
   for (let index = 0; index < probeOptions.attempts; index += 1) {
     const at = new Date().toISOString();
-    const observation = await requestUrl(endpoint.url, probeOptions);
+    const observation = await requestUrlImpl(endpoint.url, probeOptions);
+    const failureKind = observationFailureKind(observation, permissionErrorCodes);
     samples.push({
       at,
       dns: observation.dns,
-      transport: observation.transport,
-      tls: observation.tls,
+      transport: { ...observation.transport, failureKind },
+      tls: { ...observation.tls, failureKind },
       http: observation.http,
       assertions: (endpoint.assertions ?? []).map((assertion) => assertionResult(assertion, observation)),
     });
@@ -258,20 +299,90 @@ async function captureEndpoint(endpoint, probeOptions) {
   return { url: endpoint.url, samples };
 }
 
+function findApprovedRunner(config, runnerContext, networkContext) {
+  return config.execution.approvedRunnerContexts.find((runner) => (
+    runner.id === runnerContext
+    && runner.networkCapable === true
+    && runner.networkContexts.includes(networkContext)
+  ));
+}
+
+function hasLocalPermissionFailure(endpoints) {
+  const samples = [
+    ...(endpoints?.target?.samples ?? []),
+    ...(endpoints?.control?.samples ?? []),
+  ];
+  return samples.some(
+    (sample) => sample?.transport?.failureKind === "local-runner-not-authorized",
+  );
+}
+
+function firstLocalPermissionCode(endpoints) {
+  const samples = [
+    ...(endpoints?.target?.samples ?? []),
+    ...(endpoints?.control?.samples ?? []),
+  ];
+  return samples.find((sample) => sample?.transport?.failureKind === "local-runner-not-authorized")
+    ?.transport?.errorCode ?? null;
+}
+
 export async function captureReleaseValidationReport(config, {
   phase,
   sourceId,
   routeId,
   addressFamily = 0,
-}) {
+  runnerContext,
+  networkContext,
+}, {
+  requestUrlImpl = requestUrl,
+} = {}) {
   if (!["preflight", "post-switch"].includes(phase)) {
     throw new Error("Capturefase moet preflight of post-switch zijn.");
   }
-  if (!sourceId || !routeId) throw new Error("sourceId en routeId zijn verplicht.");
+  if (!sourceId || !routeId || !runnerContext || !networkContext) {
+    throw new Error("sourceId, routeId, runnerContext en networkContext zijn verplicht.");
+  }
   if (![0, 4, 6].includes(addressFamily)) {
     throw new Error("addressFamily moet 4, 6 of 0 (automatisch) zijn.");
   }
   validateReleaseValidationConfig(config);
+
+  const approvedRunner = findApprovedRunner(config, runnerContext, networkContext);
+  const startedAt = new Date().toISOString();
+  if (!approvedRunner) {
+    return {
+      schemaVersion: 2,
+      phase,
+      validationProfileSha256: releaseValidationProfileSha256(config),
+      source: {
+        id: sourceId,
+        routeId,
+        addressFamily: addressFamily || "auto",
+        runnerContext,
+        networkContext,
+      },
+      runner: {
+        approved: false,
+        networkCapable: false,
+        localPermissionRetry: {
+          attempted: false,
+          limit: config.execution?.localPermissionRetryLimit ?? 1,
+          outcome: "not-eligible",
+        },
+      },
+      probeFailure: {
+        code: "RUNNER_CONTEXT_NOT_APPROVED",
+        kind: "runner-context-invalid",
+        reason: "De opgegeven runner- en netwerkcontext vormen geen goedgekeurde meetcontext.",
+      },
+      startedAt,
+      completedAt: new Date().toISOString(),
+      endpoints: {
+        target: { url: config.endpoints.target.url, samples: [] },
+        control: { url: config.endpoints.control.url, samples: [] },
+      },
+    };
+  }
 
   const probeOptions = {
     attempts: config.probe?.attempts ?? 3,
@@ -282,21 +393,54 @@ export async function captureReleaseValidationReport(config, {
   };
   if (probeOptions.attempts < 2) throw new Error("Minstens twee meetpogingen zijn vereist.");
 
-  const startedAt = new Date().toISOString();
-  const [target, control] = await Promise.all([
-    captureEndpoint(config.endpoints.target, probeOptions),
-    captureEndpoint(config.endpoints.control, probeOptions),
+  const permissionErrorCodes = localPermissionErrorCodes(config);
+  let [target, control] = await Promise.all([
+    captureEndpoint(config.endpoints.target, probeOptions, requestUrlImpl, permissionErrorCodes),
+    captureEndpoint(config.endpoints.control, probeOptions, requestUrlImpl, permissionErrorCodes),
   ]);
+  const retryLimit = config.execution?.localPermissionRetryLimit ?? 1;
+  const shouldRetry = retryLimit === 1
+    && hasLocalPermissionFailure({ target, control });
+  let retryOutcome = "not-needed";
+
+  if (shouldRetry) {
+    [target, control] = await Promise.all([
+      captureEndpoint(config.endpoints.target, probeOptions, requestUrlImpl, permissionErrorCodes),
+      captureEndpoint(config.endpoints.control, probeOptions, requestUrlImpl, permissionErrorCodes),
+    ]);
+    retryOutcome = hasLocalPermissionFailure({ target, control })
+      ? "local-permission-denied"
+      : "completed";
+  }
+
+  const localRunnerFailure = hasLocalPermissionFailure({ target, control });
+  const localRunnerFailureCode = firstLocalPermissionCode({ target, control });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     phase,
     validationProfileSha256: releaseValidationProfileSha256(config),
     source: {
       id: sourceId,
       routeId,
       addressFamily: addressFamily || "auto",
+      runnerContext,
+      networkContext,
     },
+    runner: {
+      approved: true,
+      networkCapable: true,
+      localPermissionRetry: {
+        attempted: shouldRetry,
+        limit: retryLimit,
+        outcome: retryOutcome,
+      },
+    },
+    probeFailure: localRunnerFailure ? {
+      code: localRunnerFailureCode,
+      kind: "local-runner-not-authorized",
+      reason: "De lokale runner mocht geen uitgaande netwerkverbinding openen.",
+    } : null,
     startedAt,
     completedAt: new Date().toISOString(),
     endpoints: { target, control },

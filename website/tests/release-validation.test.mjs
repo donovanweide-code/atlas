@@ -4,6 +4,11 @@ import { evaluateReleaseValidation } from "../scripts/release-validation-core.mj
 
 const now = Date.parse("2026-07-28T12:00:00.000Z");
 const validationProfileSha256 = "TEST-PROFILE-SHA256";
+const approvedRunnerContexts = [{
+  id: "approved-network-runner",
+  networkCapable: true,
+  networkContexts: ["network-a", "network-b"],
+}];
 
 function sample({ available = true, assertionsPass = true, critical = true } = {}) {
   return {
@@ -23,6 +28,8 @@ function sample({ available = true, assertionsPass = true, critical = true } = {
 function report({
   sourceId,
   routeId,
+  networkContext = routeId,
+  runnerContext = "approved-network-runner",
   phase = "post-switch",
   targetSamples = [sample(), sample()],
   controlSamples = [sample(), sample()],
@@ -30,10 +37,16 @@ function report({
   completedAt = "2026-07-28T11:59:59.000Z",
 }) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     phase,
     validationProfileSha256,
-    source: { id: sourceId, routeId },
+    source: { id: sourceId, routeId, runnerContext, networkContext },
+    runner: {
+      approved: true,
+      networkCapable: true,
+      localPermissionRetry: { attempted: false, limit: 1, outcome: "not-needed" },
+    },
+    probeFailure: null,
     startedAt,
     completedAt,
     endpoints: {
@@ -51,6 +64,7 @@ function evaluate(reports, overrides = {}) {
     now,
     minimumIndependentRoutes: 2,
     minimumConsecutiveSamples: 2,
+    approvedRunnerContexts,
     ...overrides,
   });
 }
@@ -80,12 +94,55 @@ test("classificeert een falende controlehost als Probe invalid", () => {
 
 test("telt twee rapporten via dezelfde netwerkroute niet als onafhankelijk bewijs", () => {
   const result = evaluate([
-    report({ sourceId: "runner-a", routeId: "shared-network" }),
-    report({ sourceId: "runner-b", routeId: "shared-network" }),
+    report({ sourceId: "runner-a", routeId: "shared-network", networkContext: "network-a" }),
+    report({ sourceId: "runner-b", routeId: "shared-network", networkContext: "network-b" }),
   ]);
 
   assert.equal(result.classification, "Probe invalid");
   assert.deepEqual(result.duplicateRoutes, ["shared-network"]);
+});
+
+test("telt dezelfde netwerkcontext niet als twee onafhankelijke metingen", () => {
+  const result = evaluate([
+    report({ sourceId: "runner-a", routeId: "route-a", networkContext: "network-a" }),
+    report({ sourceId: "runner-b", routeId: "route-b", networkContext: "network-a" }),
+  ]);
+
+  assert.equal(result.classification, "Probe invalid");
+  assert.deepEqual(result.duplicateNetworkContexts, ["network-a"]);
+});
+
+test("weigert een niet-goedgekeurde runnercontext als bewijs", () => {
+  const unapproved = report({
+    sourceId: "runner-a",
+    routeId: "network-a",
+    runnerContext: "restricted-windows-runner",
+  });
+  unapproved.runner.approved = false;
+  const result = evaluate([
+    unapproved,
+    report({ sourceId: "runner-b", routeId: "network-b" }),
+  ]);
+
+  assert.equal(result.classification, "Probe invalid");
+  assert.match(result.evidence[0].reason, /goedgekeurde netwerkgeschikte runnercontext/);
+});
+
+test("accepteert EACCES nooit als geldig bewijs of rollbackgrond", () => {
+  const denied = report({ sourceId: "runner-a", routeId: "network-a" });
+  denied.probeFailure = {
+    code: "EACCES",
+    kind: "local-runner-not-authorized",
+    reason: "lokale socket geweigerd",
+  };
+  const result = evaluate([
+    denied,
+    report({ sourceId: "runner-b", routeId: "network-b" }),
+  ]);
+
+  assert.equal(result.classification, "Probe invalid");
+  assert.equal(result.rollbackRecommended, false);
+  assert.match(result.evidence[0].reason, /lokale runner niet bevoegd/);
 });
 
 test("rolt niet terug bij een enkelvoudige transportfout", () => {
@@ -190,6 +247,7 @@ test("preflight geeft nooit een rollbackadvies", () => {
     now,
     minimumIndependentRoutes: 2,
     minimumConsecutiveSamples: 2,
+    approvedRunnerContexts,
   });
 
   assert.equal(result.classification, "Production failed");
