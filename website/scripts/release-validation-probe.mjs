@@ -158,6 +158,7 @@ async function requestUrl(url, { timeoutMs, maxBodyBytes }) {
       const chunks = [];
       let bytes = 0;
       let truncated = false;
+      const responseSocket = response.socket;
 
       response.on("data", (chunk) => {
         if (bytes >= maxBodyBytes) {
@@ -173,22 +174,21 @@ async function requestUrl(url, { timeoutMs, maxBodyBytes }) {
 
       response.on("end", () => {
         const bodyBuffer = Buffer.concat(chunks);
-        const socket = response.socket;
         const isTls = parsed.protocol === "https:";
         resolve({
           dns,
           transport: {
             ok: true,
             errorCode: null,
-            remoteAddress: socket.remoteAddress ?? null,
-            remotePort: socket.remotePort ?? null,
+            remoteAddress: responseSocket?.remoteAddress ?? null,
+            remotePort: responseSocket?.remotePort ?? null,
           },
           tls: {
             applicable: isTls,
-            ok: !isTls || socket.authorized === true,
-            authorized: isTls ? socket.authorized === true : null,
-            protocol: isTls && typeof socket.getProtocol === "function" ? socket.getProtocol() : null,
-            errorCode: isTls ? socket.authorizationError ?? null : null,
+            ok: !isTls || responseSocket?.authorized === true,
+            authorized: isTls ? responseSocket?.authorized === true : null,
+            protocol: isTls && typeof responseSocket?.getProtocol === "function" ? responseSocket.getProtocol() : null,
+            errorCode: isTls ? responseSocket?.authorizationError ?? null : null,
           },
           http: {
             received: true,
