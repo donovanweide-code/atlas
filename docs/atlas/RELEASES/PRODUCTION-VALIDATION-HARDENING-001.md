@@ -83,7 +83,7 @@ vastgelegde bundelnamen en eventuele checksums in.
 Per onafhankelijke runner:
 
 ```text
-npm run validate:release -- capture --config <config.json> --phase preflight --source <runner-id> --route <netwerkroute-id> --output <rapport.json>
+npm run validate:release -- capture --config <config.json> --phase preflight --source <runner-id> --route <netwerkroute-id> [--family <4|6>] --output <rapport.json>
 ```
 
 Beoordeel daarna gezamenlijk:
@@ -109,6 +109,9 @@ Geen van deze scripts wijzigt hosting, DocumentRoot, preview of productie.
 
 - Een opgegeven `routeId` is operatorbewijs; het script kan niet zelfstandig
   bewijzen dat twee runners fysiek verschillende netwerkpaden gebruiken.
+- IPv4 en IPv6 kunnen expliciet als afzonderlijke netwerkpaden worden gemeten.
+  Zij delen op één host nog steeds dezelfde runneromgeving; een tweede externe
+  runner blijft daarom sterker bewijs wanneer die beschikbaar is.
 - De validator kan TransIP-switchconvergentie meten, maar de vereiste
   observatieduur blijft een expliciet releasebesluit.
 - Serverlogs zijn geen voorwaarde voor classificatie wanneer twee

@@ -1,0 +1,26 @@
+{
+  "phase": "preflight",
+  "evidence": [
+    {
+      "sourceId": "codex-host-ipv4",
+      "routeId": "transip-ipv4",
+      "valid": true,
+      "targetState": "pass",
+      "reason": null
+    },
+    {
+      "sourceId": "codex-host-ipv6",
+      "routeId": "transip-ipv6",
+      "valid": true,
+      "targetState": "pass",
+      "reason": null
+    }
+  ],
+  "independentValidRoutes": 2,
+  "requiredIndependentRoutes": 2,
+  "duplicateRoutes": [],
+  "rollbackRecommended": false,
+  "classification": "Pass",
+  "releaseDecision": "switch-eligible",
+  "reason": "Alle vereiste onafhankelijke routes leveren overeenstemmend geldig bewijs."
+}
