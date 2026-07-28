@@ -47,6 +47,7 @@ test("legt DNS, transport, HTTP, hash en assertions per endpoint vast", async ()
       phase: "post-switch",
       sourceId: "local-test-runner",
       routeId: "loopback-test-route",
+      addressFamily: 4,
     });
 
     const target = report.endpoints.target.samples;
@@ -58,6 +59,7 @@ test("legt DNS, transport, HTTP, hash en assertions per endpoint vast", async ()
     assert.match(target[0].http.bodySha256, /^[A-F0-9]{64}$/);
     assert.ok(target[0].assertions.every((item) => item.pass));
     assert.equal(report.validationProfileSha256, releaseValidationProfileSha256(config));
+    assert.equal(report.source.addressFamily, 4);
   });
 });
 

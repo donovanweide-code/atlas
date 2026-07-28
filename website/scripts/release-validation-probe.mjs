@@ -111,9 +111,12 @@ function assertionResult(assertion, observation) {
   };
 }
 
-async function resolveHost(hostname) {
+async function resolveHost(hostname, addressFamily) {
   try {
-    const results = await lookup(hostname, { all: true });
+    const results = await lookup(hostname, {
+      all: true,
+      ...(addressFamily ? { family: addressFamily } : {}),
+    });
     return {
       ok: true,
       addresses: results.map(({ address, family }) => ({ address, family })),
@@ -128,10 +131,10 @@ async function resolveHost(hostname) {
   }
 }
 
-async function requestUrl(url, { timeoutMs, maxBodyBytes }) {
+async function requestUrl(url, { timeoutMs, maxBodyBytes, addressFamily }) {
   const started = performance.now();
   const parsed = new URL(url);
-  const dns = await resolveHost(parsed.hostname);
+  const dns = await resolveHost(parsed.hostname, addressFamily);
 
   if (!dns.ok) {
     return {
@@ -152,6 +155,7 @@ async function requestUrl(url, { timeoutMs, maxBodyBytes }) {
       },
       rejectUnauthorized: true,
       timeout: timeoutMs,
+      ...(addressFamily ? { family: addressFamily } : {}),
     });
 
     request.once("response", (response) => {
@@ -254,11 +258,19 @@ async function captureEndpoint(endpoint, probeOptions) {
   return { url: endpoint.url, samples };
 }
 
-export async function captureReleaseValidationReport(config, { phase, sourceId, routeId }) {
+export async function captureReleaseValidationReport(config, {
+  phase,
+  sourceId,
+  routeId,
+  addressFamily = 0,
+}) {
   if (!["preflight", "post-switch"].includes(phase)) {
     throw new Error("Capturefase moet preflight of post-switch zijn.");
   }
   if (!sourceId || !routeId) throw new Error("sourceId en routeId zijn verplicht.");
+  if (![0, 4, 6].includes(addressFamily)) {
+    throw new Error("addressFamily moet 4, 6 of 0 (automatisch) zijn.");
+  }
   validateReleaseValidationConfig(config);
 
   const probeOptions = {
@@ -266,6 +278,7 @@ export async function captureReleaseValidationReport(config, { phase, sourceId, 
     intervalMs: config.probe?.intervalMs ?? 2_000,
     timeoutMs: config.probe?.timeoutMs ?? 8_000,
     maxBodyBytes: config.probe?.maxBodyBytes ?? 1024 * 1024,
+    addressFamily,
   };
   if (probeOptions.attempts < 2) throw new Error("Minstens twee meetpogingen zijn vereist.");
 
@@ -279,7 +292,11 @@ export async function captureReleaseValidationReport(config, { phase, sourceId, 
     schemaVersion: 1,
     phase,
     validationProfileSha256: releaseValidationProfileSha256(config),
-    source: { id: sourceId, routeId },
+    source: {
+      id: sourceId,
+      routeId,
+      addressFamily: addressFamily || "auto",
+    },
     startedAt,
     completedAt: new Date().toISOString(),
     endpoints: { target, control },

@@ -14,7 +14,7 @@ import {
 function usage() {
   return [
     "Gebruik:",
-    "  node scripts/release-validation.mjs capture --config <json> --phase <preflight|post-switch> --source <id> --route <id> --output <json>",
+    "  node scripts/release-validation.mjs capture --config <json> --phase <preflight|post-switch> --source <id> --route <id> [--family <4|6>] --output <json>",
     "  node scripts/release-validation.mjs evaluate --config <json> --phase <preflight|post-switch> --report <json> --report <json> [--output <json>]",
   ].join("\n");
 }
@@ -54,6 +54,7 @@ async function capture(options) {
     phase: required(options, "phase"),
     sourceId: required(options, "source"),
     routeId: required(options, "route"),
+    addressFamily: options.family ? Number(options.family) : 0,
   });
   await writeJson(required(options, "output"), report);
   console.log(`Meetrapport vastgelegd: ${options.output}`);
