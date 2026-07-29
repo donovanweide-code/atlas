@@ -1,14 +1,12 @@
-import auroraLandscape from "./assets/images/atlas/atmosphere/atlas-landscape-aurora-v01.webp";
 import forestCrossing from "./assets/images/atlas/landscapes/atlas-forest-crossing-v01.webp";
 import naturalMaterials from "./assets/images/atlas/materials/atlas-natural-materials-v01.webp";
 import routeLandscape from "./assets/images/atlas/navigation/atlas-route-landscape-v01.webp";
 import horizonLandscape from "./assets/images/atlas/landscapes/atlas-landscape-horizon-v01.webp";
-import travelerHorizon from "./assets/images/atlas/landscapes/atlas-traveler-horizon-v01.webp";
 import summitLandscape from "./assets/images/atlas/landscapes/atlas-landscape-summit-v01.webp";
-import studioOverview from "./assets/images/atlas/studio/atlas-studio-overview-v01.webp";
-import studioWorktable from "./assets/images/atlas/studio/atlas-studio-worktable-v01.webp";
 import studioCraftHorizon from "./assets/images/atlas/studio/atlas-studio-craft-horizon-v01.webp";
 import studioDigitalFoundation from "./assets/images/atlas/studio/atlas-studio-digital-foundation-v01.webp";
+import businessReality from "./assets/images/experience/wbd-business-reality-v01.webp";
+import sourceToDigital from "./assets/images/experience/wbd-source-to-digital-v01.webp";
 
 export type AtlasSceneId =
   | "scene-001"
@@ -55,10 +53,9 @@ export const firstExpeditionScenes: readonly AtlasScene[] = [
     phase: "Aankomst",
     tone: "midnight",
     density: "rich",
-    accessibleLabel: "Een ervaren ondernemer kijkt vanuit een rustige ontwerpstudio over een open vallei naar de volgende horizon.",
+    accessibleLabel: "De werkelijkheid achter een digitale vraag wordt naast een eerste structuur onderzocht.",
     layers: [
-      { asset: studioOverview, kind: "horizon", eager: true },
-      { asset: auroraLandscape, kind: "atmosphere", eager: true },
+      { asset: businessReality, kind: "horizon", eager: true },
     ],
   },
   {
@@ -68,8 +65,7 @@ export const firstExpeditionScenes: readonly AtlasScene[] = [
     tone: "aurora",
     density: "balanced",
     layers: [
-      { asset: studioWorktable, kind: "space" },
-      { asset: auroraLandscape, kind: "atmosphere" },
+      { asset: sourceToDigital, kind: "space" },
     ],
   },
   {
@@ -87,7 +83,7 @@ export const firstExpeditionScenes: readonly AtlasScene[] = [
     tone: "first-light",
     density: "balanced",
     accessibleLabel:
-      "Een scherpe ontwerpstudio in zacht ochtendlicht, waar strategie, UX-structuur, digitale bouwtekeningen en technologie samen één helder fundament vormen.",
+      "Een digitale structuur wordt vanuit inhoud en richting zorgvuldig opgebouwd.",
     layers: [{ asset: studioDigitalFoundation, kind: "space" }],
   },
   {
@@ -124,8 +120,8 @@ export const firstExpeditionScenes: readonly AtlasScene[] = [
     phase: "Overzicht",
     tone: "horizon",
     density: "quiet",
-    accessibleLabel: "Een reiziger kijkt vooruit over een lichte, open vallei.",
-    layers: [{ asset: travelerHorizon, kind: "traveler" }],
+    accessibleLabel: "Een werkende digitale ervaring wordt zorgvuldig op verschillende schermen beoordeeld.",
+    layers: [{ asset: studioDigitalFoundation, kind: "space" }],
   },
   {
     id: "scene-009",

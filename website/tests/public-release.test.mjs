@@ -88,6 +88,24 @@ test("weigert een interne Oriëntatie in de publieke build", async () => {
   });
 });
 
+test("accepteert de goedgekeurde publieke understanding-ankerzin", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": 'const heading="Design the understanding first.";',
+  }, async (directory) => {
+    await verifyPublicBuild(directory);
+  });
+});
+
+test("weigert herkenbare interne Understanding-signaturen", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": 'const workspace="<section data-understanding-list></section>";',
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /Understanding-module/);
+  });
+});
+
 test("weigert een intern leveringsbeeld als publiek artefact", async () => {
   await withBuild({
     "index.html": '<script type="module" src="/assets/atlas-delivery-review.js"></script>',

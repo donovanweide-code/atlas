@@ -29,7 +29,10 @@ const forbiddenContent = [
   { label: "AquaFlask", pattern: /\bAquaFlask\b/i },
   { label: "interne opslag", pattern: /atlas\.workspace|\blocalStorage\b/i },
   { label: "Waarnemen-module", pattern: /atlas-(?:observe|observations)|data-atlas-observation|\bWaarnemen\b/i },
-  { label: "Understanding-module", pattern: /atlas-understanding|\bUnderstanding\b/i },
+  {
+    label: "Understanding-module",
+    pattern: /atlas-understanding|data-(?:open-wbd-)?understanding|#understanding\b|\bAtlas Understanding\b/i,
+  },
   { label: "interne Oriëntatie", pattern: /atlas-orientations|\bBij Cees\b/i },
   { label: "interne repositorybron", pattern: /clients\/000[12]-|docs\/atlas/i },
   { label: "sprintdocumentatie", pattern: /\bSprint 00[12][A-Z]?\b/i },

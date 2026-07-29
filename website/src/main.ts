@@ -1,25 +1,27 @@
 import "./styles/main.css";
 import "./styles/atlas-expedition.css";
 import "./styles/public-pages.css";
+import "./styles/experience-pages.css";
 import { renderSceneWorld } from "./atlas-scenes";
 import { publicMethod } from "./public-method";
 import {
   enablePageReveals,
-  renderPublicPage,
 } from "./public-pages";
+import { renderExperiencePage } from "./experience-pages";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const route = window.location.pathname.replace(/\/+$/, "") || "/";
 
 if (route === "/") {
   app.innerHTML = `
-    <main class="page">
+    <a class="skip-link" href="#main-content">Ga naar inhoud</a>
+    <main class="page" id="main-content" tabindex="-1">
       <header class="site-header">
-        <a class="brand" href="/" aria-label="We Build and Design — home">
+        <a class="brand" href="/" aria-label="We Build And Design — home">
           <span class="brand__mark" aria-hidden="true">
             <span>W</span><i></i><span>BD</span>
           </span>
-          <span class="brand__name">We Build and Design</span>
+          <span class="brand__name">We Build And Design</span>
         </a>
 
         <nav class="site-nav" aria-label="Hoofdnavigatie">
@@ -27,10 +29,11 @@ if (route === "/") {
           <a href="/werkwijze">Werkwijze</a>
           <a href="/projecten">Projecten</a>
           <a href="/over-ons">Over ons</a>
+          <a href="/kennis">Kennis</a>
         </nav>
 
         <a class="button button--primary site-header__cta" href="/contact">
-          Bespreek je website
+          Vertel wat er speelt
         </a>
 
         <details class="site-menu">
@@ -40,6 +43,7 @@ if (route === "/") {
             <a href="/werkwijze">Werkwijze</a>
             <a href="/projecten">Projecten</a>
             <a href="/over-ons">Over ons</a>
+            <a href="/kennis">Kennis</a>
             <a href="/contact">Contact</a>
           </nav>
         </details>
@@ -49,13 +53,13 @@ if (route === "/") {
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow hero__descriptor">Digitale ervaringen voor ondernemers</p>
+          <p class="hero__eyebrow hero__descriptor">Digitale ervaringen die beginnen met begrip</p>
 
-          <h1 class="hero__title" id="hero-title">Je bedrijf is het vertrekpunt.</h1>
+          <h1 class="hero__title" id="hero-title">Begrijpen is het vertrekpunt.</h1>
 
           <p class="hero__text">
-            We helpen je eerst begrijpen wat digitaal nodig is. Daarna ontwerpen en bouwen we
-            een ervaring die bij je bedrijf past.
+            We onderzoeken eerst wat digitaal werkelijk nodig is. Daarna ontwerpen en bouwen we
+            een ervaring die de gewenste verandering helder maakt.
           </p>
 
           <a class="hero__step" href="#begrijpen">
@@ -78,7 +82,7 @@ if (route === "/") {
 
           <div class="understand__experience">
             <div class="understand__thoughts" data-home-reveal>
-              <p>“Ik weet dat ik een website nodig heb.”</p>
+              <p>“Ik weet dat er digitaal iets moet veranderen.”</p>
               <p>“Ik stel die stap al een tijd uit.”</p>
               <p>“Maar waar begin ik?”</p>
             </div>
@@ -91,15 +95,15 @@ if (route === "/") {
 
               <div class="understand__belief">
                 <p>
-                  Donovan begint niet bij techniek.<br>
-                  <strong>Hij begint bij jouw bedrijf, klanten en verhaal.</strong>
+                  We beginnen niet bij techniek.<br>
+                  <strong>De situatie, de betrokken mensen en de gewenste verandering komen eerst.</strong>
                 </p>
                 <p>
                   Daarna worden de keuzes kleiner<br>
                   <strong>en de eerste stap begrijpelijk.</strong>
                 </p>
               </div>
-              <a class="understand__next" href="#digitaal-fundament">Bekijk hoe je website ontstaat <i aria-hidden="true">→</i></a>
+              <a class="understand__next" href="#digitaal-fundament">Bekijk hoe een richting ontstaat <i aria-hidden="true">→</i></a>
             </div>
           </div>
 
@@ -124,28 +128,33 @@ if (route === "/") {
           <p class="section-label">03 / Digitaal fundament</p>
 
           <h2 class="why__title" id="why-title">
-            Een professionele website begint bij begrijpen wat jouw bedrijf zichtbaar moet maken.
+            Een professionele digitale ervaring begint met begrijpen wat zichtbaar en mogelijk moet worden.
           </h2>
 
           <p class="why__lead">
-            Daarom maken we eerst het verhaal en de keuzes helder. Ontwerp en techniek volgen pas daarna.
+            Daarom maken we eerst de vraag en de keuzes helder. Ontwerp en techniek volgen pas daarna.
+          </p>
+
+          <p class="why__bridge">
+            Dat kan betekenen dat we een bestaande digitale route verbeteren, een nieuw onderdeel
+            ontwerpen of een complete website bouwen — afhankelijk van wat werkelijk nodig is.
           </p>
         </div>
 
         <div class="why__grid" data-home-reveal>
           <article class="why-principle">
             <span class="why-principle__number">01</span>
-            <h3>Jouw bedrijf begrijpen</h3>
+            <h3>De werkelijke vraag begrijpen</h3>
             <p>
-              Donovan luistert naar wat je doet, voor wie je dat doet en waarom klanten voor jou kiezen.
+              We onderzoeken wat al werkt, waar mensen twijfelen en welke verandering ertoe doet.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">02</span>
-            <h3>Je verhaal zichtbaar maken</h3>
+            <h3>Richting zichtbaar maken</h3>
             <p>
-              Je verhaal krijgt een heldere structuur en een vorm die professioneel bij je onderneming past.
+              De gekozen richting krijgt een heldere structuur en een vorm die mensen kunnen begrijpen en beoordelen.
             </p>
           </article>
 
@@ -153,7 +162,8 @@ if (route === "/") {
             <span class="why-principle__number">03</span>
             <h3>Zorgvuldig bouwen</h3>
             <p>
-              We bouwen wat je vandaag nodig hebt en leggen technische keuzes uit in gewone taal.
+              We bouwen en controleren de ervaring — van inhoud en interactie tot toegankelijkheid,
+              snelheid en beheer.
             </p>
           </article>
         </div>
@@ -167,11 +177,11 @@ if (route === "/") {
             <p class="vision__eyebrow">04 / Van inzicht naar uitvoering</p>
 
             <h2 class="vision__title" id="vision-title">
-              Een professionele website ontstaat stap voor stap.
+              Een professionele digitale ervaring ontstaat stap voor stap.
             </h2>
 
             <p class="vision__text">
-              Je hoeft niet vooraf te weten hoe een website werkt. We maken iedere keuze zichtbaar
+              Je hoeft niet vooraf te weten hoe de oplossing werkt. We maken iedere keuze zichtbaar
               voordat we haar ontwerpen en bouwen.
             </p>
           </header>
@@ -184,7 +194,7 @@ if (route === "/") {
           <h3>Luisteren</h3>
 
           <p>
-            We beginnen bij je bedrijf, je klanten en wat je online duidelijk wilt maken.
+            We beginnen bij de situatie, de mensen om wie het gaat en wat digitaal duidelijk moet worden.
           </p>
         </article>
 
@@ -194,7 +204,7 @@ if (route === "/") {
           <h3>Vertalen</h3>
 
           <p>
-            We brengen je verhaal terug tot een logische structuur en een passend ontwerp.
+            We brengen de gekozen richting terug tot een logische structuur en een passend ontwerp.
           </p>
         </article>
 
@@ -204,7 +214,7 @@ if (route === "/") {
           <h3>Bouwen</h3>
 
           <p>
-            We bouwen en testen de website en houden het proces voor jou begrijpelijk.
+            We bouwen en testen de digitale ervaring en houden het proces begrijpelijk.
           </p>
         </article>
 
@@ -213,78 +223,15 @@ if (route === "/") {
 
         <h2>
           Jij hoeft de digitale route niet te kennen.<br>
-          Wel je bedrijf.
+          Wel wat er moet veranderen.
         </h2>
 
         <p>
-          Donovan maakt de keuzes begrijpelijk en blijft bereikbaar wanneer je een vraag hebt.
+          Je ziet waarom een keuze bij de werkelijke vraag past en wie er verantwoordelijkheid voor draagt.
         </p>
 
       </div>
         </div>
-      </section>
-      <section class="challenges atlas-scene" data-scene="scene-006" aria-labelledby="challenges-title">
-        ${renderSceneWorld("scene-006")}
-        <div class="scene-waypoint-moment" data-scene="scene-007" aria-hidden="true">
-          <span class="scene-waypoint scene-waypoint--insight"></span>
-        </div>
-
-        <div class="container">
-
-          <p class="section-eyebrow" data-home-reveal>
-            05 / Waarom de eerste stap blijft liggen
-          </p>
-
-          <h2 class="section-title" id="challenges-title" data-home-reveal>
-            Een website wordt vaak uitgesteld omdat de eerste stap te groot voelt.
-          </h2>
-
-          <p class="section-intro" data-home-reveal>
-            Je hoeft niet méér te weten. Je hebt iemand nodig die de route begrijpelijk maakt.
-          </p>
-
-          <div class="challenge-grid" data-home-reveal>
-
-            <article class="challenge-card">
-              <span>01</span>
-              <h3>Je weet niet waar je begint</h3>
-             <p>
-      Je weet dat een website nodig is, maar niet welke keuzes eerst komen.
-      </p>
-      <p class="challenge-outcome">We beginnen bij jouw bedrijf, niet bij techniek.</p>
-            </article>
-
-            <article class="challenge-card">
-              <span>02</span>
-              <h3>Je verhaal staat nog niet online</h3>
-             <p>
-      In gesprekken is duidelijk wat je goed doet, maar online ziet een nieuwe klant dat nog niet.
-      </p>
-      <p class="challenge-outcome">Samen kiezen we wat je website helder moet vertellen.</p>
-            </article>
-
-            <article class="challenge-card">
-              <span>03</span>
-              <h3>Techniek maakt onzeker</h3>
-              <p>
-      Domeinen, hosting en systemen maken een overzichtelijke vraag onnodig groot.
-      </p>
-      <p class="challenge-outcome">Donovan legt de keuzes uit in gewone taal.</p>
-            </article>
-
-            <article class="challenge-card">
-              <span>04</span>
-              <h3>Een groot bureau voelt te groot</h3>
-              <p>
-      Je zoekt professionele kwaliteit zonder afstandelijk proces of onnodige lagen.
-      </p>
-      <p class="challenge-outcome">Je hebt rechtstreeks contact met Donovan.</p>
-            </article>
-
-          </div>
-
-        </div>
-
       </section>
       <section class="connection atlas-scene" data-scene="scene-008" aria-labelledby="connection-title">
         ${renderSceneWorld("scene-008")}
@@ -294,16 +241,16 @@ if (route === "/") {
         <div class="container">
 
           <p class="section-eyebrow" data-home-reveal>
-            06 / Een begrijpelijke eerste stap
+            05 / Een begrijpelijke eerste stap
           </p>
 
           <h2 class="section-title" id="connection-title" data-home-reveal>
-            Je hoeft niet te weten hoe een website wordt gebouwd.
+            Je hoeft niet te weten hoe de digitale oplossing wordt gebouwd.
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Vertel wat je bedrijf doet, wie je helpt en wat je online wilt laten zien.
-            Donovan helpt je om daar een heldere eerste stap van te maken.
+            Vertel wat er speelt, wie ermee te maken heeft en wat je digitaal wilt veranderen.
+            Samen maken we daar een heldere eerste stap van.
           </p>
 
           <div class="connection-message" data-home-reveal>
@@ -328,20 +275,30 @@ if (route === "/") {
             <p>Je hoeft nog geen briefing of technische kennis te hebben.</p>
             <h3>Vertel waar je nu staat.</h3>
             <a class="button button--primary" href="/contact">
-              Neem contact op
+              Vertel wat er speelt
             </a>
           </div>
 
         </div>
 
         <footer class="site-footer">
-          <a class="brand" href="/" aria-label="We Build and Design — home">
+          <a class="brand" href="/" aria-label="We Build And Design — home">
             <span class="brand__mark" aria-hidden="true">
               <span>W</span><i></i><span>BD</span>
             </span>
-            <span class="brand__name">We Build and Design</span>
+            <span class="brand__name">We Build And Design</span>
           </a>
-          <p>Professionele websites voor ondernemers die hun eerste stap online begrijpelijk willen zetten.</p>
+          <p>Digitale ervaringen voor vragen die eerst goed begrepen moeten worden.</p>
+          <nav aria-label="Voettekstnavigatie">
+            <a href="/diensten">Diensten</a>
+            <a href="/werkwijze">Werkwijze</a>
+            <a href="/projecten">Projecten</a>
+            <a href="/over-ons">Over ons</a>
+            <a href="/kennis">Kennis</a>
+            <a href="/contact">Contact</a>
+            <a href="/algemene-voorwaarden">Algemene voorwaarden</a>
+            <a href="/privacy">Privacyverklaring</a>
+          </nav>
         </footer>
 
       </section>
@@ -350,6 +307,5 @@ if (route === "/") {
 
   enablePageReveals("[data-home-reveal]");
 } else {
-  app.innerHTML = renderPublicPage(route);
-  enablePageReveals();
+  app.innerHTML = renderExperiencePage(route);
 }

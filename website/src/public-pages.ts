@@ -52,14 +52,14 @@ const publicRoutes: PublicRoute[] = [
     phase: "Van richting naar vorm",
     title: "Een professionele website begint bij jouw bedrijf.",
     intro:
-      "We Build And Design helpt ondernemers die klaar zijn voor hun eerste professionele stap online. Donovan maakt de route begrijpelijk; ontwerp en techniek volgen daarna.",
+      "We Build And Design helpt ondernemers die klaar zijn voor hun eerste professionele stap online. We maken de route begrijpelijk; ontwerp en techniek volgen daarna.",
     heroAsset: studioCraftHorizon,
     heroAlt:
       "Een rustige ontwerpstudio met maquettes, schetsen en een open horizon.",
     chapters: [
       {
         number: "03.1",
-        title: "Donovan begint met luisteren.",
+        title: "We beginnen met luisteren.",
         text: "Jij vertelt wat je bedrijf doet, voor wie je werkt en wat een nieuwe klant online moet begrijpen. Technische kennis is niet nodig.",
       },
       {
@@ -74,7 +74,7 @@ const publicRoutes: PublicRoute[] = [
       },
       {
         number: "03.4",
-        title: "Na livegang blijft Donovan bereikbaar.",
+        title: "Na livegang blijven we bereikbaar.",
         text: "Je kunt met vragen terugkomen. Een volgende stap kiezen we samen wanneer daar werkelijk aanleiding voor is; structurele begeleiding beloven we niet vooraf.",
       },
     ],
@@ -96,13 +96,13 @@ const publicRoutes: PublicRoute[] = [
       "Je hoeft geen briefing of technisch plan mee te brengen. We beginnen bij jouw verhaal en maken de route samen kleiner.",
     heroAsset: methodListening,
     heroAlt:
-      "Een ondernemer laat een tastbaar onderdeel van het bedrijf zien terwijl Donovan luistert en aantekeningen maakt.",
+      "Een ondernemer laat een tastbaar onderdeel van het bedrijf zien tijdens een aandachtig gesprek.",
     heroPosition: "58% center",
     chapters: [
       {
         number: "04.1",
         title: "We beginnen bij jouw bedrijf.",
-        text: "Donovan luistert naar je werk, klanten en ambitie. Zo hoeft een digitaal vraagstuk niet groter te worden dan het is.",
+        text: "We luisteren naar je werk, klanten en ambitie. Zo hoeft een digitaal vraagstuk niet groter te worden dan het is.",
       },
       {
         number: "04.2",
@@ -178,9 +178,9 @@ const publicRoutes: PublicRoute[] = [
     navLabel: "Over ons",
     index: "06",
     phase: "Persoonlijk samenwerken",
-    title: "Je werkt rechtstreeks met Donovan.",
+    title: "Je werkt rechtstreeks met degene die ook bouwt.",
     intro:
-      "We Build And Design is de persoonlijke ontwerp- en webpraktijk van Donovan. Hij luistert, denkt mee, vertaalt je bedrijf visueel en blijft bereikbaar.",
+      "We Build And Design is een persoonlijke ontwerp- en webpraktijk. We luisteren, denken mee, vertalen je bedrijf visueel en blijven bereikbaar.",
     heroAsset: studioThreshold,
     heroAlt:
       "Een ondernemer kijkt vanuit een rustige werkruimte naar de volgende stap.",
@@ -188,8 +188,8 @@ const publicRoutes: PublicRoute[] = [
     chapters: [
       {
         number: "06.1",
-        title: "Donovan luistert vóór hij adviseert.",
-        text: "Jij kent je vak, klanten en dagelijkse werkelijkheid. Donovan helpt om dat terug te brengen tot een website die anderen begrijpen.",
+        title: "Eerst luisteren, dan adviseren.",
+        text: "Jij kent je vak, klanten en dagelijkse werkelijkheid. We helpen om dat terug te brengen tot een website die anderen begrijpen.",
       },
       {
         number: "06.2",
@@ -199,7 +199,7 @@ const publicRoutes: PublicRoute[] = [
       {
         number: "06.3",
         title: "Je bedrijf blijft de hoofdrol houden.",
-        text: "Donovan vertaalt je verhaal visueel zonder het van je over te nemen. Jij moet jezelf en je onderneming in de website herkennen.",
+        text: "We vertalen je verhaal visueel zonder het van je over te nemen. Jij moet jezelf en je onderneming in de website herkennen.",
       },
       {
         number: "06.4",
@@ -220,7 +220,7 @@ const publicRoutes: PublicRoute[] = [
     phase: "De volgende stap",
     title: "Je eerste website mag beginnen met een gewoon gesprek.",
     intro:
-      "Je hoeft geen briefing, planning of technische kennis mee te brengen. Vertel wat je bedrijf doet en wat je online zichtbaar wilt maken; je spreekt rechtstreeks met Donovan.",
+      "Je hoeft geen briefing, planning of technische kennis mee te brengen. Vertel wat je bedrijf doet en wat je online zichtbaar wilt maken; je spreekt rechtstreeks met degene die je vraag verder brengt.",
     heroAsset: studioThreshold,
     heroAlt:
       "Een ondernemer staat bij een rustige gesprekstafel aan de drempel van een ontwerpstudio, met de route en horizon voor zich.",
@@ -234,7 +234,7 @@ const publicRoutes: PublicRoute[] = [
       {
         number: "07.2",
         title: "We beginnen zonder jargon.",
-        text: "Donovan luistert eerst en maakt daarna duidelijk of We Build And Design je kan helpen en welke kleine vervolgstap logisch is.",
+        text: "We luisteren eerst en maken daarna duidelijk of We Build And Design kan helpen en welke kleine vervolgstap logisch is.",
       },
     ],
     reflection:
@@ -352,14 +352,14 @@ function renderContact(route: PublicRoute): string {
     <section class="route-contact" id="contact-opnemen" aria-labelledby="route-contact-title" data-page-reveal>
       <div class="route-contact__identity">
         <span class="route-contact__logo" aria-hidden="true">WBD.</span>
-        <p>Rechtstreeks contact met Donovan</p>
+        <p>Rechtstreeks contact met WBD</p>
       </div>
       <div class="route-contact__conversation">
         <p class="route-contact__eyebrow">Begin gewoon bij waar je nu staat</p>
         <h2 id="route-contact-title">Vertel kort wat jouw bedrijf online nodig heeft.</h2>
         <div class="route-contact__actions">
           <a class="button button--primary" href="mailto:${route.contact.email}">
-            E-mail Donovan
+            E-mail WBD
           </a>
           <a class="button button--secondary" href="tel:${route.contact.phoneHref}">
             Bel ${route.contact.phone}
@@ -449,7 +449,7 @@ function renderMethodPage(route: PublicRoute): string {
           <img
             class="method-hero__image"
             src="${methodListening}"
-            alt="Een ondernemer laat een tastbaar onderdeel van het bedrijf zien terwijl Donovan luistert en aantekeningen maakt."
+            alt="Een ondernemer laat een tastbaar onderdeel van het bedrijf zien tijdens een aandachtig gesprek."
             fetchpriority="high"
             decoding="async"
           >
