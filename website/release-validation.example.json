@@ -1,0 +1,113 @@
+{
+  "probe": {
+    "attempts": 4,
+    "intervalMs": 5000,
+    "timeoutMs": 8000,
+    "maxBodyBytes": 1048576
+  },
+  "validation": {
+    "maximumEvidenceAgeSeconds": 600,
+    "minimumConsecutiveSamples": 2,
+    "minimumIndependentRoutes": 2,
+    "minimumObservationSpanMs": 15000
+  },
+  "activation": {
+    "maximumPropagationMs": 1200000,
+    "pollIntervalMs": 60000,
+    "minimumStableRounds": 3,
+    "healthAssertionIds": [
+      "production-status",
+      "production-is-indexable"
+    ],
+    "previousArtifact": {
+      "id": "previous-release",
+      "bodyIncludes": [
+        "/assets/index-REPLACE-PREVIOUS.js",
+        "/assets/index-REPLACE-PREVIOUS.css"
+      ]
+    },
+    "candidateArtifact": {
+      "id": "candidate-release",
+      "bodyIncludes": [
+        "/assets/index-REPLACE-CANDIDATE.js",
+        "/assets/index-REPLACE-CANDIDATE.css"
+      ]
+    },
+    "routes": [
+      {
+        "sourceId": "production-ipv4",
+        "routeId": "production-ipv4",
+        "runnerContext": "release-network-runner",
+        "networkContext": "independent-ipv4",
+        "addressFamily": 4
+      },
+      {
+        "sourceId": "production-ipv6",
+        "routeId": "production-ipv6",
+        "runnerContext": "release-network-runner",
+        "networkContext": "independent-ipv6",
+        "addressFamily": 6
+      }
+    ]
+  },
+  "execution": {
+    "approvedRunnerContexts": [
+      {
+        "id": "release-network-runner",
+        "networkCapable": true,
+        "networkContexts": [
+          "independent-ipv4",
+          "independent-ipv6"
+        ]
+      }
+    ],
+    "localPermissionErrorCodes": [
+      "EACCES",
+      "EPERM"
+    ],
+    "localPermissionRetryLimit": 1
+  },
+  "endpoints": {
+    "target": {
+      "url": "https://webuildanddesign.nl/",
+      "assertions": [
+        {
+          "id": "production-status",
+          "type": "status",
+          "equals": 200,
+          "critical": true
+        },
+        {
+          "id": "canonical-js-bundle",
+          "type": "bodyIncludes",
+          "value": "/assets/index-REPLACE.js",
+          "critical": true
+        },
+        {
+          "id": "canonical-css-bundle",
+          "type": "bodyIncludes",
+          "value": "/assets/index-REPLACE.css",
+          "critical": true
+        },
+        {
+          "id": "production-is-indexable",
+          "type": "headerExcludes",
+          "name": "x-robots-tag",
+          "value": "noindex",
+          "critical": true
+        }
+      ]
+    },
+    "control": {
+      "url": "https://preview.webuildanddesign.nl/",
+      "assertions": [
+        {
+          "id": "control-status",
+          "type": "status",
+          "equals": 200,
+          "critical": true
+        }
+      ]
+    }
+  }
+}
