@@ -10,8 +10,8 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 4. [`SPRINTS/Sprint-001.md`](SPRINTS/Sprint-001.md) — doel, afbakening en verificatie van Sprint 001A–001F.
 5. [`SPRINTS/Sprint-002.md`](SPRINTS/Sprint-002.md) — handmatige bewijssprint voor de laatst bevestigde werkelijkheid.
 6. [`SPRINTS/Sprint-004.md`](SPRINTS/Sprint-004.md) — gecontroleerde route van lokale releasecandidate via staging naar productie.
-7. [`SPRINTS/Sprint-005.md`](SPRINTS/Sprint-005.md) — iteratieve Experience-ontwikkeling met de actuele preview als voortschrijdende nulmeting.
-8. [`RELEASES/WBD-2026-07-26-ca3d1bd.md`](RELEASES/WBD-2026-07-26-ca3d1bd.md) — broncommit, artefacthash en validatie van de actuele publieke releasecandidate.
+7. [`SPRINTS/Sprint-005.md`](SPRINTS/Sprint-005.md) — afgeronde ontwikkeling en productiepublicatie van de huidige publieke Experience.
+8. [`RELEASES/WBD-2026-07-29-c95aaf8.md`](RELEASES/WBD-2026-07-29-c95aaf8.md) — broncommit, artefacthash, activatiebewijs en rollbackstatus van de actuele productierelease.
 9. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
 10. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
 

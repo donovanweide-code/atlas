@@ -41,3 +41,12 @@ Het Logboek bewaart betekenis, niet iedere activiteit. Voeg een notitie toe wann
 - **Betekenis:** Een betekenisvol praktijksignaal hoeft niet langer te vroeg een case te worden of buiten Atlas te blijven. Oriëntatie bewaart het signaal neutraal als `Nog niet toegewezen` totdat Donovan een expliciete bestemming bevestigt.
 - **Volgende stap:** Toets een volgend werkelijk praktijksignaal aan de nieuwe methode voordat een case-ID, snapshot, Workspace-plaatsing of Kompasprioriteit wordt bepaald.
 - **Herbruikbare les:** Een methode voorkomt vergeten niet door alles direct te structureren, maar door werkelijkheid eerst een neutrale, herleidbare verblijfplaats en een menselijke beslispoort te geven.
+
+### 2026-07-29 — De inhoudelijke en technische canon komen samen
+
+- **Type:** beslissing, succes en les
+- **Case:** 0001 — We Build And Design
+- **Context:** De gecontroleerde publicatie maakte zichtbaar dat de technisch actuele release niet automatisch de laatst goedgekeurde publieke Experience bevatte. De inhoudelijke canon uit `e6aedab` is daarom begrensd geïntegreerd met de actuele releasetechniek op `main`. Release `wbd-20260729-c95aaf8` is daarna via propagatiebewuste validatie gepubliceerd en stabiel LIVE bevestigd.
+- **Betekenis:** De publieke website, repository en release-identiteit verwijzen opnieuw naar dezelfde werkelijkheid. De releaseprocedure bewaakte build, artefact, activatie, onafhankelijke netwerkroutes en rollback zonder de inhoudelijke canon opnieuw te ontwerpen.
+- **Volgende stap:** Laat de live Experience in de praktijk werken. Nieuwe wijzigingen ontstaan uit nieuwe observaties en krijgen opnieuw een afzonderlijke scope en GO.
+- **Herbruikbare les:** Een release heeft zowel een technische als een inhoudelijke identiteit. Beide moeten vóór publicatie expliciet worden vastgesteld; een actuele commit alleen bewijst niet dat de juiste Experience wordt gepubliceerd.

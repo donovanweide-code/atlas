@@ -1,9 +1,10 @@
 # Sprint 005 — Van technisch live naar Experience GO
 
-**Status:** Process-GO — Candidate 005A wacht op inhoudelijke review  
+**Status:** Afgerond — huidige Experience gecontroleerd LIVE
 **Startdatum:** 26 juli 2026  
+**Einddatum:** 29 juli 2026
 **Focus:** de We Build And Design Experience iteratief in de werkelijkheid ontwikkelen  
-**Productie:** blijft ongewijzigd zonder afzonderlijke Production GO
+**Productie:** release `wbd-20260729-c95aaf8` is LIVE en gevalideerd
 
 ---
 
@@ -20,6 +21,9 @@ De leidende principes zijn:
 > De website volgt de werkelijkheid — de werkelijkheid wordt niet gevormd om de website te vullen.
 
 > We publiceren geen visie. We publiceren het bewijs van onze visie.
+
+De hoofdstukken 2 tot en met 5 bewaren de oorspronkelijke werkwijze en
+candidate-afbakening. De actuele eindstatus staat in hoofdstuk 6.
 
 ---
 
@@ -72,7 +76,7 @@ Een candidate die wordt teruggedraaid, wordt geen nieuwe nulmeting. Alleen de na
 
 ## 5. Candidate 005A — Homepagepositionering boven de vouw
 
-**Status:** inhoudelijke review open — geen implementatie-GO.
+**Historische status bij aanvang:** inhoudelijke review open — geen implementatie-GO.
 
 ### Observatie
 
@@ -101,5 +105,31 @@ Leidende studies:
 - productiepublicatie;
 - Candidate 005B.
 
-Na een positieve inhoudelijke review en expliciete Candidate-GO wordt uitsluitend Candidate 005A op preview geïmplementeerd. De homepage wordt daar opnieuw als actuele Experience beoordeeld voordat een volgende candidate wordt geopend.
+Candidate 005A begon als een geïsoleerde previewstap. De latere geïntegreerde
+Experience heeft deze tussenstatus vervangen; de definitieve afronding staat
+in hoofdstuk 6.
+
+---
+
+## 6. Afronding Fase 2
+
+De Experience-ontwikkeling, eindredactie, Experience Reviews en gecontroleerde
+releasevoorbereiding zijn afgerond. De goedgekeurde publieke Experience uit
+`e6aedab` is als inhoudelijke canon samengebracht met de actuele
+releasetechniek op `main`.
+
+Op 29 juli 2026 is release `wbd-20260729-c95aaf8` gecontroleerd gepubliceerd
+vanuit commit `c95aaf8a8e19cd551068678b8982ac57f8105612`.
+
+De productievalidatie bevestigde:
+
+- stabiele activatie via de propagatiebewuste releaseprocedure;
+- bereikbaarheid van alle publieke hoofdroutes via IPv4 en IPv6;
+- geldige TLS-respons;
+- hash-exacte overeenstemming tussen publieke bestanden en het
+  releaseartefact;
+- een beschikbaar, niet gebruikt rollbackdoel.
+
+Fase 2 is hiermee afgerond. Er is geen nieuwe ontwikkelfase geopend.
+Vervolgwerk ontstaat pas uit een nieuwe observatie en expliciete opdracht.
 

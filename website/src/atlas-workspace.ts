@@ -253,7 +253,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       <nav class="workspace-nav" aria-label="Workspace navigatie">
         <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#werkbeeld"><span>02</span>Werkbeeld</a><a href="#orientatie"><span>03</span>Oriëntatie</a><a href="#waarnemen"><span>04</span>Waarnemen</a><a href="#focus"><span>05</span>Vandaag</a><a href="#cases"><span>06</span>Cases</a><a href="#understanding"><span>07</span>Understanding</a><a href="#ideeen"><span>08</span>Ideeën</a><a href="#logboek"><span>09</span>Logboek</a>
       </nav>
-      <div class="workspace-sidebar__footer"><p>We Build And Design</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
+      <div class="workspace-sidebar__footer"><p>We Build And Design · LIVE · c95aaf8</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
     </aside>
 
     <div class="workspace-main">
