@@ -8,7 +8,8 @@
     "build": "tsc && vite build && node scripts/verify-public-build.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
-    "verify:public-build": "node scripts/verify-public-build.mjs"
+    "verify:public-build": "node scripts/verify-public-build.mjs",
+    "validate:release": "node scripts/release-validation.mjs"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
