@@ -106,6 +106,40 @@ Evaluatie:
 npm run validate:release -- evaluate --config <config.json> --phase preflight --report <ipv4.json> --report <ipv6.json> --output <besluit.json>
 ```
 
+## Post-switch: propagatiebewuste activatie
+
+De directe evaluator is uitsluitend nog voor preflight beschikbaar.
+Post-switchvalidatie loopt via één activatiesessie:
+
+```text
+npm run validate:release -- activate --config <config.json> --switch-requested-at <ISO-8601> --output <activatierapport.json>
+```
+
+Het vaste `switchRequestedAt` voorkomt dat het propagatievenster bij iedere
+meetronde opnieuw begint. TransIP heeft aangegeven dat de backendwijziging
+achter de nginx-proxy circa vijftien minuten kan vragen. Het huidige profiel
+gebruikt twintig minuten als configureerbare veiligheidsmarge en meet eenmaal
+per minuut.
+
+Het profiel legt expliciet vast:
+
+- de vorige productie-identiteit;
+- de kandidaat-identiteit;
+- de release-onafhankelijke kritieke gezondheidsasserties;
+- minimaal twee onafhankelijke netwerkcontexten;
+- minimaal drie opeenvolgende stabiele kandidaatrondes.
+
+Een gezonde vorige release heet tijdens het budget `Propagation pending`; een
+gezonde oude/nieuwe mix heet `Propagation converging`; een overal zichtbare
+kandidaat heet eerst `Candidate stabilizing`. Alleen na voldoende stabiele
+rondes volgt `Pass`.
+
+Wanneer na het budget nog uitsluitend de gezonde vorige release of een gezonde
+mix zichtbaar is, volgt `Activation timeout` met
+`restore-previous-root`. Dit is herstel van een niet-afgeronde activatie en
+geen bewijs van `Production failed`. Rollback blijft uitsluitend gerechtvaardigd
+bij meervoudig bevestigd hard productiefalen.
+
 ## Veiligheidsgrens
 
 Niet gewijzigd:
@@ -121,6 +155,10 @@ Een `Probe invalid` wordt nooit `Pass`, `Validation failed` of
 `Production failed` op basis van een lokale permissiefout. Rollback blijft
 alleen mogelijk wanneer minstens twee onafhankelijke geldige routes een
 kritieke productiefout bevestigen tijdens `post-switch`.
+
+Een directe aanroep van de oude core-evaluator met `phase: post-switch` wordt
+expliciet geweigerd. Daardoor kan geen interne aanroeper de activatielaag, het
+vaste switchtijdstip of de vereiste stabiele rondes omzeilen.
 
 ## Verificatie
 

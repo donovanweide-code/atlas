@@ -84,6 +84,20 @@ test("legt DNS, transport, HTTP, hash en assertions per endpoint vast", async ()
     const config = {
       probe: { attempts: 2, intervalMs: 0, timeoutMs: 1_000 },
       execution: executionConfig(),
+      activation: {
+        maximumPropagationMs: 1_200_000,
+        pollIntervalMs: 60_000,
+        minimumStableRounds: 3,
+        healthAssertionIds: ["status"],
+        previousArtifact: {
+          id: "previous",
+          bodyIncludes: ["/assets/index-previous.js"],
+        },
+        candidateArtifact: {
+          id: "candidate",
+          bodyIncludes: ["/assets/index-canonical.js"],
+        },
+      },
       endpoints: { target: endpoint, control: endpoint },
     };
     const report = await captureReleaseValidationReport(config, {
@@ -103,6 +117,8 @@ test("legt DNS, transport, HTTP, hash en assertions per endpoint vast", async ()
     assert.equal(target[0].http.status, 200);
     assert.match(target[0].http.bodySha256, /^[A-F0-9]{64}$/);
     assert.ok(target[0].assertions.every((item) => item.pass));
+    assert.equal(target[0].artifact.identity, "candidate");
+    assert.equal(target[0].artifact.artifactId, "candidate");
     assert.equal(report.validationProfileSha256, releaseValidationProfileSha256(config));
     assert.equal(report.source.addressFamily, 4);
     assert.equal(report.source.runnerContext, "test-network-runner");

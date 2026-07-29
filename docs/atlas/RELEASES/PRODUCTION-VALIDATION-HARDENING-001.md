@@ -29,6 +29,46 @@ De validator kent vier uitkomsten:
 | `Validation failed` | Geldige meetroutes spreken elkaar tegen of bewijzen de kandidaat niet eenduidig | stoppen en aanvullend bewijs verzamelen | nee |
 | `Production failed` | Minstens twee onafhankelijke geldige routes bevestigen een kritieke fout | preflight: stoppen; post-switch: rollback | alleen post-switch |
 
+## Propagatiebewuste post-switchactivatie
+
+TransIP heeft bevestigd dat een DocumentRoot-wijziging in het controlepaneel
+zichtbaar kan zijn voordat alle serveerlagen de nieuwe configuratie gebruiken.
+De verwerking achter de nginx-proxy kan circa vijftien minuten duren. Atlas
+gebruikt daarom voor het huidige TransIP-profiel een configureerbaar
+propagatiebudget van twintig minuten: de genoemde vijftien minuten plus vijf
+minuten veiligheidsmarge.
+
+Een post-switchbesluit loopt uitsluitend via:
+
+```text
+npm run validate:release -- activate --config <config.json> --switch-requested-at <ISO-8601> --output <activatierapport.json>
+```
+
+`switchRequestedAt` is het werkelijke tijdstip waarop de DocumentRoot-wijziging
+is aangevraagd. Dit tijdstip blijft gedurende alle meetrondes gelijk; een losse
+probe of herstart mag de propagatietimer niet ongemerkt opnieuw beginnen.
+
+Het activatieprofiel legt vooraf zowel de kandidaat als de vorige productie
+vast. De vorige release geldt alleen als gezond wanneer haar identiteit,
+HTTP-status en alle geconfigureerde release-onafhankelijke kritieke
+gezondheidsasserties slagen. Voor het productieprofiel omvat dit minimaal de
+status- en indexeerbaarheidscontrole.
+
+| Activatiestatus | Betekenis | Operatoractie |
+|---|---|---|
+| `Propagation pending` | Alle geldige routes tonen nog de bevestigde gezonde vorige release binnen het budget | niets wijzigen; automatisch opnieuw meten |
+| `Propagation converging` | Geldige routes tonen een gezonde mix van vorige en kandidaat-release | niets wijzigen; automatisch opnieuw meten |
+| `Candidate stabilizing` | Alle routes tonen de kandidaat, maar nog niet gedurende het vereiste aantal stabiele rondes | wachten op verdere meetrondes |
+| `Pass` | Alle routes bevestigen de kandidaat gedurende minimaal drie opeenvolgende volledige rondes | release accepteren |
+| `Activation timeout` | Na twintig minuten blijft de gezonde vorige release of een gezonde oude/nieuwe mix zichtbaar | vorige DocumentRoot handmatig herstellen; geen productiefout claimen |
+| `Production failed` | Minstens twee geldige onafhankelijke routes bevestigen onbereikbaarheid, een kritisch falende kandidaat of een onbekend/beschadigd artefact | echte rollback uitvoeren |
+
+Het terugzetten van de vorige DocumentRoot na `Activation timeout` is
+operationeel herstel van een niet-afgeronde activatie. Het is niet automatisch
+bewijs dat productie defect was of dat een technische rollback noodzakelijk
+was. Een gezonde vorige release binnen het propagatiebudget is nooit voldoende
+grond voor `Production failed`.
+
 ## Bewijsmodel
 
 Ieder meetrapport bevat:
@@ -66,13 +106,15 @@ minstens vijftien seconden en twee opeenvolgende geldige meetpunten.
 
 ## Post-switch
 
-Na de switch worden nieuwe rapporten gemaakt. De targetasserties controleren
-de canonieke JS- en CSS-bundels en de afwezigheid van productie-`noindex`.
-De controlehost blijft gelijktijdig onderdeel van ieder rapport.
+Na de switch beheert het `activate`-commando opeenvolgende volledige
+meetrondes. Iedere ronde controleert de canonieke JS- en CSS-bundels, de
+release-onafhankelijke gezondheidsasserties en de afwezigheid van
+productie-`noindex`. De controlehost blijft gelijktijdig onderdeel van ieder
+rapport.
 
-Rollback is alleen toegestaan wanneer de evaluator `Production failed`
-classificeert. Eén falende route, strijdige resultaten of een ongeldige
-controlehost leiden tot stoppen zonder automatische rollback.
+Rollback is alleen toegestaan wanneer de activatielaag `Production failed`
+classificeert. Een gezonde vorige release, normale convergentie, één falende
+route of een ongeldige probe leveren geen rollbackgrond.
 
 ## Uitvoering
 
@@ -92,8 +134,13 @@ Beoordeel daarna gezamenlijk:
 npm run validate:release -- evaluate --config <config.json> --phase preflight --report <rapport-a.json> --report <rapport-b.json> --output <besluit.json>
 ```
 
-Na een toegestane switch worden `capture` en `evaluate` herhaald met
-`--phase post-switch`.
+Na een toegestane switch wordt niet opnieuw rechtstreeks `evaluate --phase
+post-switch` gebruikt. Start in plaats daarvan één activatiesessie met het
+werkelijke vaste switchtijdstip:
+
+```text
+npm run validate:release -- activate --config <config.json> --switch-requested-at <ISO-8601> --output <activatierapport.json>
+```
 
 De exitcodes zijn bedoeld voor een gecontroleerde pipeline:
 
@@ -101,6 +148,7 @@ De exitcodes zijn bedoeld voor een gecontroleerde pipeline:
 - `20` — `Probe invalid`;
 - `30` — `Validation failed`;
 - `40` — `Production failed`;
+- `50` — `Activation timeout`;
 - `2` — ongeldige CLI-invoer of configuratie.
 
 Geen van deze scripts wijzigt hosting, DocumentRoot, preview of productie.

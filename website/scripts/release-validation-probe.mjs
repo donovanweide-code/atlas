@@ -14,6 +14,11 @@ const assertionTypes = new Set([
 ]);
 
 const DEFAULT_LOCAL_PERMISSION_ERROR_CODES = ["EACCES", "EPERM"];
+const DEFAULT_ACTIVATION_SETTINGS = Object.freeze({
+  maximumPropagationMs: 1_200_000,
+  pollIntervalMs: 60_000,
+  minimumStableRounds: 3,
+});
 
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
@@ -83,6 +88,74 @@ export function validateReleaseValidationConfig(config) {
   if ((config.execution.localPermissionRetryLimit ?? 1) !== 1) {
     throw new Error("De lokale permissieherhaling moet exact één meetronde zijn.");
   }
+
+  if (config.activation) {
+    const settings = {
+      ...DEFAULT_ACTIVATION_SETTINGS,
+      ...config.activation,
+    };
+    if (!Number.isFinite(settings.maximumPropagationMs) || settings.maximumPropagationMs <= 0) {
+      throw new Error("activation.maximumPropagationMs moet een positief getal zijn.");
+    }
+    if (!Number.isFinite(settings.pollIntervalMs) || settings.pollIntervalMs <= 0) {
+      throw new Error("activation.pollIntervalMs moet een positief getal zijn.");
+    }
+    if (!Number.isInteger(settings.minimumStableRounds) || settings.minimumStableRounds < 1) {
+      throw new Error("activation.minimumStableRounds moet minstens 1 zijn.");
+    }
+
+    const validateArtifact = (name, artifact) => {
+      if (!artifact?.id) throw new Error(`activation.${name}.id is verplicht.`);
+      const includes = artifact.bodyIncludes;
+      const hasIncludes = Array.isArray(includes)
+        && includes.length > 0
+        && includes.every((value) => typeof value === "string" && value.length > 0);
+      const hasHash = typeof artifact.bodySha256 === "string"
+        && /^[a-f0-9]{64}$/i.test(artifact.bodySha256);
+      if (!hasIncludes && !hasHash) {
+        throw new Error(`activation.${name} vereist bodyIncludes en/of een geldige bodySha256.`);
+      }
+      if (Array.isArray(includes) && includes.some((value) => value.includes("REPLACE"))) {
+        throw new Error(`activation.${name} bevat geen definitieve bundelverwachting.`);
+      }
+    };
+    validateArtifact("previousArtifact", config.activation.previousArtifact);
+    validateArtifact("candidateArtifact", config.activation.candidateArtifact);
+    if (config.activation.previousArtifact.id === config.activation.candidateArtifact.id) {
+      throw new Error("Vorige en kandidaat-release vereisen verschillende artefact-id's.");
+    }
+    const healthAssertionIds = config.activation.healthAssertionIds;
+    if (!Array.isArray(healthAssertionIds) || healthAssertionIds.length === 0) {
+      throw new Error("activation.healthAssertionIds vereist minstens één gezondheidsassertion.");
+    }
+    const targetAssertions = new Map(
+      config.endpoints.target.assertions.map((assertion) => [assertion.id, assertion]),
+    );
+    for (const assertionId of healthAssertionIds) {
+      const assertion = targetAssertions.get(assertionId);
+      if (!assertion) {
+        throw new Error(`Onbekende activatie-gezondheidsassertion: ${assertionId}.`);
+      }
+      if (assertion.critical === false) {
+        throw new Error(`Activatie-gezondheidsassertion ${assertionId} moet kritiek zijn.`);
+      }
+    }
+
+    if (config.activation.routes !== undefined) {
+      if (!Array.isArray(config.activation.routes)
+        || config.activation.routes.length < (config.validation?.minimumIndependentRoutes ?? 2)) {
+        throw new Error("activation.routes bevat onvoldoende expliciete meetroutes.");
+      }
+      for (const route of config.activation.routes) {
+        if (!route?.sourceId || !route?.routeId || !route?.runnerContext || !route?.networkContext) {
+          throw new Error("Iedere activatieroute vereist sourceId, routeId, runnerContext en networkContext.");
+        }
+        if (![0, 4, 6].includes(route.addressFamily ?? 0)) {
+          throw new Error("Een activatieroute gebruikt een ongeldige addressFamily.");
+        }
+      }
+    }
+  }
 }
 
 function normalizedHeaders(headers) {
@@ -137,6 +210,46 @@ function assertionResult(assertion, observation) {
     pass,
     expected: assertion.equals ?? assertion.value ?? null,
     actual,
+  };
+}
+
+function artifactMatches(observation, artifact) {
+  if (!artifact || observation?.http?.received !== true) return false;
+  const body = observation.body ?? "";
+  const includesMatch = !Array.isArray(artifact.bodyIncludes)
+    || artifact.bodyIncludes.every((value) => body.includes(value));
+  const hashMatch = !artifact.bodySha256
+    || observation.http?.bodySha256?.toLowerCase() === artifact.bodySha256.toLowerCase();
+  return includesMatch && hashMatch;
+}
+
+function detectArtifactIdentity(observation, activation) {
+  if (!activation || observation?.http?.received !== true) {
+    return {
+      identity: "unknown",
+      artifactId: null,
+      matchedPrevious: false,
+      matchedCandidate: false,
+    };
+  }
+  const matchedPrevious = artifactMatches(observation, activation.previousArtifact);
+  const matchedCandidate = artifactMatches(observation, activation.candidateArtifact);
+  if (matchedPrevious === matchedCandidate) {
+    return {
+      identity: "unknown",
+      artifactId: null,
+      matchedPrevious,
+      matchedCandidate,
+    };
+  }
+  const artifact = matchedCandidate
+    ? activation.candidateArtifact
+    : activation.previousArtifact;
+  return {
+    identity: matchedCandidate ? "candidate" : "previous",
+    artifactId: artifact.id,
+    matchedPrevious,
+    matchedCandidate,
   };
 }
 
@@ -280,7 +393,13 @@ function observationFailureKind(observation, permissionErrorCodes) {
   return permissionErrorCodes.has(code) ? "local-runner-not-authorized" : null;
 }
 
-async function captureEndpoint(endpoint, probeOptions, requestUrlImpl, permissionErrorCodes) {
+async function captureEndpoint(
+  endpoint,
+  probeOptions,
+  requestUrlImpl,
+  permissionErrorCodes,
+  activation,
+) {
   const samples = [];
   for (let index = 0; index < probeOptions.attempts; index += 1) {
     const at = new Date().toISOString();
@@ -293,6 +412,7 @@ async function captureEndpoint(endpoint, probeOptions, requestUrlImpl, permissio
       tls: { ...observation.tls, failureKind },
       http: observation.http,
       assertions: (endpoint.assertions ?? []).map((assertion) => assertionResult(assertion, observation)),
+      artifact: detectArtifactIdentity(observation, activation),
     });
     if (index < probeOptions.attempts - 1) await delay(probeOptions.intervalMs);
   }
@@ -395,8 +515,20 @@ export async function captureReleaseValidationReport(config, {
 
   const permissionErrorCodes = localPermissionErrorCodes(config);
   let [target, control] = await Promise.all([
-    captureEndpoint(config.endpoints.target, probeOptions, requestUrlImpl, permissionErrorCodes),
-    captureEndpoint(config.endpoints.control, probeOptions, requestUrlImpl, permissionErrorCodes),
+    captureEndpoint(
+      config.endpoints.target,
+      probeOptions,
+      requestUrlImpl,
+      permissionErrorCodes,
+      config.activation,
+    ),
+    captureEndpoint(
+      config.endpoints.control,
+      probeOptions,
+      requestUrlImpl,
+      permissionErrorCodes,
+      null,
+    ),
   ]);
   const retryLimit = config.execution?.localPermissionRetryLimit ?? 1;
   const shouldRetry = retryLimit === 1
@@ -405,8 +537,20 @@ export async function captureReleaseValidationReport(config, {
 
   if (shouldRetry) {
     [target, control] = await Promise.all([
-      captureEndpoint(config.endpoints.target, probeOptions, requestUrlImpl, permissionErrorCodes),
-      captureEndpoint(config.endpoints.control, probeOptions, requestUrlImpl, permissionErrorCodes),
+      captureEndpoint(
+        config.endpoints.target,
+        probeOptions,
+        requestUrlImpl,
+        permissionErrorCodes,
+        config.activation,
+      ),
+      captureEndpoint(
+        config.endpoints.control,
+        probeOptions,
+        requestUrlImpl,
+        permissionErrorCodes,
+        null,
+      ),
     ]);
     retryOutcome = hasLocalPermissionFailure({ target, control })
       ? "local-permission-denied"

@@ -10,12 +10,14 @@ import {
   releaseValidationProfileSha256,
   validateReleaseValidationConfig,
 } from "./release-validation-probe.mjs";
+import { runPostSwitchActivation } from "./release-validation-activation.mjs";
 
 function usage() {
   return [
     "Gebruik:",
     "  node scripts/release-validation.mjs capture --config <json> --phase <preflight|post-switch> --source <id> --route <id> --runner-context <id> --network-context <id> [--family <4|6>] --output <json>",
-    "  node scripts/release-validation.mjs evaluate --config <json> --phase <preflight|post-switch> --report <json> --report <json> [--output <json>]",
+    "  node scripts/release-validation.mjs evaluate --config <json> --phase preflight --report <json> --report <json> [--output <json>]",
+    "  node scripts/release-validation.mjs activate --config <json> --switch-requested-at <ISO-8601> --output <json>",
   ].join("\n");
 }
 
@@ -65,10 +67,14 @@ async function capture(options) {
 async function evaluate(options) {
   const config = await readJson(required(options, "config"));
   validateReleaseValidationConfig(config);
+  const phase = required(options, "phase");
+  if (phase === "post-switch") {
+    throw new Error("Gebruik voor post-switchvalidatie het commando activate met een vast switchRequestedAt.");
+  }
   if (options.report.length === 0) throw new Error("Minstens één --report is verplicht.");
   const reports = await Promise.all(options.report.map(readJson));
   const result = evaluateReleaseValidation({
-    phase: required(options, "phase"),
+    phase,
     reports,
     expectedProfileSha256: releaseValidationProfileSha256(config),
     maximumEvidenceAgeMs: (config.validation?.maximumEvidenceAgeSeconds ?? 600) * 1000,
@@ -90,10 +96,34 @@ async function evaluate(options) {
   process.exitCode = exitCodes[result.classification];
 }
 
+async function activate(options) {
+  const config = await readJson(required(options, "config"));
+  const output = required(options, "output");
+  const result = await runPostSwitchActivation(config, {
+    switchRequestedAt: required(options, "switch-requested-at"),
+    onUpdate: async (update) => {
+      await writeJson(output, update);
+      console.log(
+        `Ronde ${update.currentRound}: ${update.activationStatus} — ${update.reason}`,
+      );
+    },
+  });
+
+  const exitCodes = {
+    [RELEASE_VALIDATION_CLASSIFICATION.pass]: 0,
+    [RELEASE_VALIDATION_CLASSIFICATION.probeInvalid]: 20,
+    [RELEASE_VALIDATION_CLASSIFICATION.validationFailed]: 30,
+    [RELEASE_VALIDATION_CLASSIFICATION.productionFailed]: 40,
+    [RELEASE_VALIDATION_CLASSIFICATION.activationTimeout]: 50,
+  };
+  process.exitCode = exitCodes[result.classification] ?? 30;
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const { command, options } = parseArguments(argv);
   if (command === "capture") return capture(options);
   if (command === "evaluate") return evaluate(options);
+  if (command === "activate") return activate(options);
   throw new Error(usage());
 }
 
