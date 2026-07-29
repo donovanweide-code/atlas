@@ -36,6 +36,27 @@ const forbiddenContent = [
   { label: "interne hostingcontext", pattern: /TransIP Webhosting/i },
 ];
 
+const requiredSpaFallbackDirectives = [
+  "RewriteEngine On",
+  "RewriteCond %{REQUEST_FILENAME} !-f",
+  "RewriteCond %{REQUEST_FILENAME} !-d",
+  "RewriteCond %{REQUEST_URI} !\\.[^/]+$ [NC]",
+  "RewriteRule ^ index.html [L]",
+];
+
+export function verifySpaFallbackConfiguration(content) {
+  const directives = new Set(
+    content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
+  const missingDirective = requiredSpaFallbackDirectives.find((directive) => !directives.has(directive));
+  if (missingDirective) {
+    throw new Error(`SPA-fallback mist vereiste directive: ${missingDirective}`);
+  }
+}
+
 async function listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
@@ -52,6 +73,10 @@ export async function verifyPublicBuild(distDirectory) {
   const indexPath = path.join(dist, "index.html");
   const indexStats = await stat(indexPath).catch(() => null);
   if (!indexStats?.isFile()) throw new Error("Publieke build mist dist/index.html.");
+  const spaFallbackPath = path.join(dist, ".htaccess");
+  const spaFallbackStats = await stat(spaFallbackPath).catch(() => null);
+  if (!spaFallbackStats?.isFile()) throw new Error("Publieke build mist dist/.htaccess.");
+  verifySpaFallbackConfiguration(await readFile(spaFallbackPath, "utf8"));
 
   const files = await listFiles(dist);
   const relativeFiles = files.map((file) => path.relative(dist, file).replaceAll("\\", "/"));
@@ -65,7 +90,7 @@ export async function verifyPublicBuild(distDirectory) {
 
   let scannedTextFiles = 0;
   for (const file of files) {
-    if (!textExtensions.has(path.extname(file).toLowerCase())) continue;
+    if (!textExtensions.has(path.extname(file).toLowerCase()) && path.basename(file) !== ".htaccess") continue;
     scannedTextFiles += 1;
     const content = await readFile(file, "utf8");
     const violation = forbiddenContent.find(({ pattern }) => pattern.test(content));

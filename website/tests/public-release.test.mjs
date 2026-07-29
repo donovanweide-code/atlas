@@ -5,10 +5,19 @@ import path from "node:path";
 import test from "node:test";
 import { verifyPublicBuild } from "../scripts/verify-public-build.mjs";
 
-async function withBuild(files, assertion) {
+const validSpaFallback = `RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !\\.[^/]+$ [NC]
+RewriteRule ^ index.html [L]
+`;
+
+async function withBuild(files, assertion, { includeFallback = true } = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), "atlas-public-build-"));
   try {
-    for (const [relativePath, content] of Object.entries(files)) {
+    const buildFiles = includeFallback ? { ".htaccess": validSpaFallback, ...files } : files;
+    for (const [relativePath, content] of Object.entries(buildFiles)) {
       const destination = path.join(directory, relativePath);
       await mkdir(path.dirname(destination), { recursive: true });
       await writeFile(destination, content);
@@ -26,7 +35,30 @@ test("accepteert uitsluitend een publieke entry en publieke assets", async () =>
     "assets/atlas-landscape.webp": "publieke afbeelding",
   }, async (directory) => {
     const result = await verifyPublicBuild(directory);
-    assert.equal(result.files, 3);
+    assert.equal(result.files, 4);
+  });
+});
+
+test("weigert een publieke build zonder SPA-fallback", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": "export {};",
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /mist dist\/\.htaccess/);
+  }, { includeFallback: false });
+});
+
+test("weigert een SPA-fallback die ontbrekende assets naar index herschrijft", async () => {
+  await withBuild({
+    ".htaccess": `RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+`,
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": "export {};",
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /REQUEST_URI/);
   });
 });
 

@@ -9,6 +9,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
     "verify:public-build": "node scripts/verify-public-build.mjs",
+    "package:release": "node scripts/create-portable-release.mjs",
     "validate:release": "node scripts/release-validation.mjs"
   },
   "devDependencies": {
