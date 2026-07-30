@@ -11,7 +11,11 @@ export default defineConfig(({ command }) => ({
           configureServer(server) {
             server.middlewares.use((request, _response, next) => {
               const requestUrl = new URL(request.url ?? "/", "http://localhost");
-              if (requestUrl.pathname === "/atlas" || requestUrl.pathname === "/atlas-lab") {
+              if (
+                requestUrl.pathname === "/atlas" ||
+                requestUrl.pathname === "/atlas-lab" ||
+                requestUrl.pathname === "/sportpaleis-proof"
+              ) {
                 request.url = `/internal.html${requestUrl.search}`;
               }
               next();

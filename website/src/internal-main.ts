@@ -11,6 +11,10 @@ if (route === "/atlas") {
   );
 } else if (route === "/atlas-lab") {
   void import("./atlas-lab").then(({ renderAtlasLab }) => renderAtlasLab(app));
+} else if (route === "/sportpaleis-proof") {
+  void import("./sportpaleis-proof").then(({ renderSportpaleisProof }) =>
+    renderSportpaleisProof(app),
+  );
 } else {
   app.innerHTML = `
     <main>
