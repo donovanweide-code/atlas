@@ -29,6 +29,7 @@ interface ExperienceSection {
 interface ExperiencePage {
   path: string;
   navLabel: string;
+  metaTitle: string;
   index: string;
   phase: string;
   title: string;
@@ -48,6 +49,7 @@ interface ExperiencePage {
 interface KnowledgeArticle {
   path: string;
   title: string;
+  metaTitle: string;
   description: string;
   linkLabel: string;
   routeLabel: string;
@@ -68,228 +70,236 @@ const pages: ExperiencePage[] = [
   {
     path: "/diensten",
     navLabel: "Diensten",
-    index: "03",
-    phase: "Van vraag naar digitale ervaring",
-    title: "Wat werkelijk nodig is, bepaalt wat we maken.",
+    metaTitle: "Digitale verbetering voor organisaties",
+    index: "04",
+    phase: "Van praktijk naar verbetering",
+    title: "Wat je organisatie nodig heeft, bepaalt wat we verbeteren.",
     intro:
-      "We Build And Design onderzoekt, adviseert, ontwerpt en bouwt digitale ervaringen. Niet als vast pakket, maar als één samenhangende vertaling van een werkelijke vraag naar wat mensen digitaal moeten begrijpen en kunnen doen.",
+      "We beginnen bij hoe je organisatie werkt, welke systemen er al zijn en waar jij, collega’s of klanten vastlopen. Daarna bepalen we wat kan blijven en welke praktische verbetering het meest helpt.",
     description:
-      "Ontdek hoe We Build And Design van een werkelijke digitale vraag naar een begrijpelijke, werkende ervaring gaat.",
+      "Lees hoe We Build And Design eerst je organisatie begrijpt en daarna gericht verbetert wat nodig is.",
     heroAsset: sourceToDigital,
     heroAlt:
-      "Bronmateriaal uit een werkelijke situatie wordt naast een heldere digitale structuur beoordeeld.",
+      "Bronmateriaal uit de dagelijkse praktijk wordt naast een heldere digitale structuur beoordeeld.",
     heroPosition: "center",
     sections: [
       {
-        label: "03.1 / Onderzoeken",
-        title: "Eerst bepalen we welke vraag werkelijk aandacht verdient.",
+        label: "04.1 / Onderzoeken",
+        title: "Eerst begrijpen we wat er in de praktijk gebeurt.",
         paragraphs: [
-          "Misschien is je website verouderd, groeit het aanbod niet meer logisch mee of begrijpen bezoekers onvoldoende wat er voor hen mogelijk is. Dat is het zichtbare probleem. De werkelijke vraag kan ergens anders liggen.",
-          "We onderzoeken de situatie, het aanbod, de mensen om wie het gaat, de bestaande ervaring en de momenten waarop twijfel ontstaat. Bestaande gesprekken, zoekgedrag en meetdata kunnen daarbij helpen, zolang we ze niet verwarren met een verklaring.",
+          "Misschien kost een terugkerende taak te veel tijd, sluit een systeem niet goed aan op het werk of krijgen klanten steeds dezelfde vraag niet beantwoord. Het zichtbare probleem is niet altijd de oorzaak.",
+          "We bekijken de werkwijze, de betrokken mensen, bestaande software en de momenten waarop vertraging of twijfel ontstaat. Daarom luisteren we waar mogelijk ook naar de collega’s die er dagelijks mee werken. Gesprekken, veelgestelde vragen en gebruiksgegevens helpen, maar de praktijk geeft de context.",
         ],
         points: [
-          "Bestaande website en inhoud",
-          "Aanbod, gebruikers en veelgestelde vragen",
-          "Digitale route en belangrijkste onzekerheden",
+          "Bestaande werkwijze en software",
+          "Klanten, collega’s en terugkerende vragen",
+          "Knelpunten, afhankelijkheden en wat al goed werkt",
         ],
         editorialInsight: {
-          label: "Open de professionele context",
-          title: "Waarom meetdata alleen niet genoeg is",
+          label: "Bekijk de context",
+          title: "Waarom cijfers alleen niet genoeg zijn",
           paragraphs: [
-            "Analytics kan laten zien waar bezoekers afhaken. Search Console kan zichtbaar maken via welke zoekvragen zij binnenkomen. Campagnedata kan tonen welke boodschap een klik oplevert. Geen van die bronnen vertelt vanzelf waarom iemand daarna twijfelt.",
-            "Daarvoor bekijken we gedrag, inhoud, navigatie en techniek in samenhang. Zo wordt data een bruikbaar signaal, in plaats van een snelle conclusie met een keurig percentage erachter.",
+            "Cijfers kunnen laten zien waar klanten afhaken of hoeveel tijd een handeling kost. Ze vertellen niet vanzelf waarom iemand twijfelt, iets dubbel invoert of een omweg kiest.",
+            "Daarom leggen we gegevens naast gesprekken en observaties uit de praktijk. Zo worden cijfers bruikbare signalen in plaats van snelle conclusies.",
           ],
         },
       },
       {
-        label: "03.2 / Adviseren",
-        title: "Eerst wordt de richting helder. Daarna kiezen we de oplossing.",
+        label: "04.2 / Adviseren",
+        title: "We kiezen eerst de kleinste stap die echt helpt.",
         paragraphs: [
-          "We brengen mogelijkheden terug tot een keuze die je kunt begrijpen: wat veranderen we, waarom, wat moet dat opleveren en wat laten we bewust liggen?",
-          "Soms leidt dat tot een nieuwe website. Soms is een gerichte verbetering van de bestaande ervaring verstandiger. Als WBD niet de passende partij is, zeggen we dat voordat het traject groter wordt.",
+          "We maken duidelijk wat kan blijven, wat beter kan, wat dat moet opleveren en wat we bewust nog niet aanpakken.",
+          "Vaak is een aangepaste werkwijze, een slimmere inrichting of een gerichte verbetering van bestaande software genoeg. Denk aan gegevens nog maar één keer invoeren, een formulier dat bij de juiste collega uitkomt of software die eenvoudiger is ingericht. Alleen als de praktijk daar aantoonbaar om vraagt, adviseren we een nieuwe website of toepassing.",
+          "Is WBD niet de passende partij, dan zeggen we dat voordat het traject groter wordt.",
         ],
       },
       {
-        label: "03.3 / Ontwerpen",
-        title: "Design maakt de richting zichtbaar en toetsbaar.",
+        label: "04.3 / Ontwerpen",
+        title: "We maken de verbetering zichtbaar en bespreekbaar.",
         paragraphs: [
-          "We vertalen de gekozen richting naar inhoud, paginastructuur, interactie en visuele vorm. Je ziet niet alleen hoe iets eruitziet, maar vooral wat een bezoeker eerst moet begrijpen en welke route daarna helpt.",
-          "Opties worden beoordeeld zolang aanpassen nog eenvoudig is. Zo wordt design een besluitvormingsmiddel, niet alleen een mooie eindlaag.",
+          "We vertalen de gekozen richting naar een heldere werkwijze, inhoud, structuur en vorm. Zo zie je niet alleen hoe iets eruitziet, maar vooral hoe het straks voor klanten en collega’s werkt.",
+          "We beoordelen keuzes zolang aanpassen nog eenvoudig is. Zo helpt het ontwerp om samen een besluit te nemen.",
         ],
         image: methodClarity,
         imageAlt:
           "Losse signalen worden teruggebracht tot een heldere inhoudelijke en visuele richting.",
       },
       {
-        label: "03.4 / Bouwen",
-        title: "We realiseren de ervaring die we samen hebben begrepen.",
+        label: "04.4 / Bouwen",
+        title: "We voeren uit wat binnen de gekozen stap past.",
         paragraphs: [
-          "WBD bouwt professionele websites en digitale ervaringen waarin inhoud, ontwerp en techniek dezelfde richting dragen. De toepassing werkt responsive, blijft begrijpelijk en wordt gecontroleerd op wat voor dit project relevant is.",
-          "Bij een bestaande omgeving kijken we bijvoorbeeld hoe contentstructuur, formulieren, integraties en beheer elkaar beïnvloeden. Performance, toegankelijkheid en organische vindbaarheid worden niet achteraf als losse controles toegevoegd; ze krijgen de plek die de toepassing vraagt.",
-          "We maken geen universele kwaliteitsclaim. We leggen uit welke controles bij jouw toepassing nodig zijn en waarom.",
+          "Wat WBD vandaag aantoonbaar kan, is een bestaande website gericht verbeteren of een nieuwe website ontwerpen en bouwen. Wijst de vraag naar een andere software-inrichting, een koppeling of specialistisch werk, dan bepalen we eerst wie dat verantwoord kan uitvoeren.",
+          "Bestaande systemen kunnen vaak gewoon blijven. We onderzoeken hoe inhoud, formulieren, koppelingen en beheer elkaar beïnvloeden en veranderen alleen wat de gekozen verbetering belemmert.",
+          "Vooraf spreken we af wat we binnen deze stap controleren en wat erbuiten valt. Zo weet je waarop je wel en niet kunt rekenen.",
         ],
         image: methodPrototype,
         imageAlt:
           "Een gekozen digitale richting wordt op meerdere schermformaten gecontroleerd.",
       },
       {
-        label: "03.5 / Passendheid",
-        title: "WBD past wanneer kwaliteit en begrip dicht bij elkaar moeten blijven.",
+        label: "04.5 / Wanneer WBD past",
+        title: "WBD past wanneer begrijpen en uitvoeren dicht bij elkaar moeten blijven.",
         paragraphs: [
-          "Je hoeft geen technische briefing te hebben. Wel helpt het wanneer je bereid bent de situatie, betrokken mensen en twijfel open te bespreken en tussentijdse keuzes werkelijk te beoordelen.",
-          "Zoek je alleen snelle productie van een vooraf vaststaand ontwerp of een groot uitvoerend team, dan is een andere partij waarschijnlijk passender.",
+          "Je hoeft geen technische briefing te hebben. Wel helpt het wanneer je de dagelijkse praktijk, betrokken mensen en twijfels open kunt bespreken en tussentijdse keuzes wilt beoordelen.",
+          "Zoek je alleen snelle uitvoering van een volledig vaststaand plan of heb je direct een groot specialistisch team nodig, dan past een andere partij waarschijnlijk beter.",
         ],
       },
     ],
     reflection:
-      "Begrijpen, richting kiezen, ontwerpen en bouwen zijn geen losse diensten. Ze vormen één lijn van werkelijkheid naar digitale ervaring.",
-    nextPath: "/werkwijze",
-    nextLabel: "Bekijk hoe die lijn ontstaat",
-    nextTitle: "Eerst begrijpen. Dan kiezen. Daarna bouwen.",
+      "Eerst begrijpen we hoe je organisatie werkt. Daarna verbeteren we alleen wat nodig is.",
+    nextPath: "/projecten",
+    nextLabel: "Bekijk hoe we naar uitgevoerd werk kijken",
+    nextTitle: "Goed werk laat zien welke keuze in de praktijk verschil maakte.",
   },
   {
     path: "/werkwijze",
     navLabel: "Werkwijze",
-    index: "04",
+    metaTitle: "Werkwijze voor digitale verbetering",
+    index: "03",
     phase: "Een zorgvuldig ritme",
     title: "Eerst luisteren. Dan pas bouwen.",
     intro:
-      "Je hoeft geen briefing of technisch plan mee te brengen. We beginnen bij jouw werkelijkheid en zorgen dat je iedere betekenisvolle keuze kunt begrijpen voordat zij wordt gebouwd.",
+      "Je hoeft geen briefing of technisch plan mee te brengen. We beginnen bij je dagelijkse praktijk en maken iedere belangrijke keuze begrijpelijk voordat we iets veranderen.",
     description:
-      "Ervaar hoe We Build And Design van een echte vraag naar een werkende digitale ervaring gaat.",
+      "Lees hoe We Build And Design van een vraag uit de praktijk naar een passende digitale verbetering werkt.",
     heroAsset: methodListening,
     heroAlt:
-      "Iemand laat een tastbaar onderdeel van de werkelijke situatie zien tijdens een aandachtig gesprek.",
+      "Iemand laat een tastbaar onderdeel van de dagelijkse praktijk zien tijdens een aandachtig gesprek.",
     heroPosition: "58% center",
     sections: [
       {
-        label: "04.1 / Begrijpen",
+        label: "03.1 / Begrijpen",
         title: "We beginnen bij wat jij iedere dag al weet.",
         paragraphs: [
-          "Jij kent de situatie, de betrokken mensen en de werkelijkheid achter je vraag. We onderzoeken wat voor jou vanzelfsprekend is, maar voor een buitenstaander nog niet zichtbaar wordt.",
-          "Nog geen oplossingen of technische lijst. Eerst een gedeeld beeld van wat er speelt.",
+          "Jij kent het werk, de mensen en de afspraken achter je vraag. We onderzoeken wat voor jou vanzelfsprekend is, maar voor een buitenstaander nog niet zichtbaar is.",
+          "Raakt de vraag het dagelijkse werk van collega’s, dan betrekken we hun ervaring bij de afweging. Een keuze voor de werkvloer baseren we niet alleen op het beeld van het management.",
+          "We beginnen niet met oplossingen of een technische lijst, maar met een gedeeld beeld van wat er speelt.",
         ],
         points: [
-          "Wat waarderen mensen nu al?",
-          "Wat begrijpen zij nu nog niet?",
-          "Welke verandering zou werkelijk helpen?",
+          "Wat werkt nu al goed?",
+          "Waar verliezen jij en je collega’s onnodig tijd?",
+          "Wat hebben klanten nodig om verder te kunnen?",
         ],
       },
       {
-        label: "04.2 / Helder krijgen",
+        label: "03.2 / Helder krijgen",
         title: "Losse signalen worden een begrijpelijke kern.",
         paragraphs: [
-          "We ordenen observaties, vragen en bestaande inhoud. Wanneer ze beschikbaar zijn, leggen we gesprekken en supportvragen naast zoekgedrag, gebruiksdata en bestaande conversieroutes. Niet om de mens tot een dashboard terug te brengen, maar om te zien waar verschillende signalen hetzelfde vertellen.",
-          "Niet alles hoeft in de digitale ervaring. Alleen wat iemand helpt om de situatie te begrijpen, vertrouwen en de volgende stap te zetten.",
+          "We ordenen observaties, vragen en bestaande informatie. Waar mogelijk leggen we gesprekken en terugkerende hulpvragen naast gebruiksgegevens en de huidige werkwijze. Zo zien we waar verschillende signalen hetzelfde vertellen.",
+          "Niet alles hoeft te veranderen. Alleen wat collega’s helpt efficiënter te werken en klanten helpt om te begrijpen of verder te gaan.",
         ],
         image: methodClarity,
         imageAlt:
-          "Bronmateriaal wordt samen geordend tot een heldere reeks van betekenisvolle keuzes.",
+          "Bronmateriaal wordt samen geordend tot een heldere reeks keuzes.",
       },
       {
-        label: "04.3 / Samen kiezen",
+        label: "03.3 / Samen kiezen",
         title: "Je ziet de keuze voordat zij definitief wordt.",
         paragraphs: [
-          "Structuur, inhoud en ontwerp maken mogelijkheden vergelijkbaar. Je hoeft geen ontwerper te zijn om te kunnen beoordelen waarom een richting bij de vraag en gewenste uitkomst past.",
+          "Een procesvoorstel, structuur of ontwerp maakt mogelijkheden vergelijkbaar. Je hoeft geen technische kennis te hebben om te beoordelen waarom een richting bij de vraag en gewenste uitkomst past.",
           "Een besluit is pas sterk wanneer jij het zelf kunt begrijpen en dragen.",
         ],
       },
       {
-        label: "04.4 / Zichtbaar maken",
-        title: "Design vertaalt begrip naar een ervaring die je kunt gebruiken.",
+        label: "03.4 / Zichtbaar maken",
+        title: "We maken de gekozen verbetering bruikbaar.",
         paragraphs: [
-          "We maken de route, prioriteiten en interacties tastbaar. Daarmee toetsen we of de digitale ervaring werkelijk zegt en doet wat we samen hebben bedoeld.",
+          "We maken de werkwijze, prioriteiten en handelingen tastbaar. Daarmee toetsen we of de verbetering doet wat we samen hebben bedoeld.",
         ],
         image: methodPrototype,
         imageAlt:
-          "Een gekozen structuur wordt als digitale ervaring op verschillende schermen getoetst.",
+          "Een gekozen structuur wordt op verschillende schermen getoetst.",
       },
       {
-        label: "04.5 / Bouwen en verder",
-        title: "De gekozen lijn blijft overeind in de werkende toepassing.",
+        label: "03.5 / Bouwen en verder",
+        title: "De gekozen lijn blijft overeind tijdens de uitvoering.",
         paragraphs: [
-          "Tijdens de bouw controleren en verfijnen we. Een bestaand CMS, webshop, integratie, interne collega of andere leverancier wordt niet genegeerd omdat die niet in een nieuw ontwerp past; de afhankelijkheden horen bij de werkelijkheid die de oplossing moet dragen.",
-          "Na livegang kun je met vragen terugkomen. Nieuwe wensen worden opnieuw beoordeeld op wat de situatie dan nodig heeft, niet automatisch aan de bestaande oplossing toegevoegd.",
+          "Tijdens de uitvoering controleren en verfijnen we. Een bestaand CMS, webshop, koppeling, collega of leverancier is onderdeel van de praktijk. Wat goed werkt, hoeft niet te verdwijnen om ruimte te maken voor iets nieuws.",
+          "Na oplevering kun je met vragen terugkomen. Doorlopende begeleiding is alleen onderdeel van de samenwerking wanneer we dat afzonderlijk afspreken.",
+          "Nieuwe wensen beoordelen we opnieuw op wat de situatie dan nodig heeft; we voegen ze niet vanzelf aan de bestaande oplossing toe.",
         ],
       },
     ],
     reflection:
-      "Je hoeft de digitale antwoorden niet vooraf te kennen. Je moet kunnen begrijpen waarom een keuze bij de werkelijke vraag past.",
-    nextPath: "/projecten",
-    nextLabel: "Bekijk hoe we naar werk kijken",
-    nextTitle: "Werk wordt bewijs wanneer de context eerlijk verteld kan worden.",
+      "Je hoeft de oplossing niet vooraf te kennen. Je moet wel kunnen begrijpen waarom een keuze bij je organisatie past.",
+    nextPath: "/diensten",
+    nextLabel: "Bekijk wat we kunnen verbeteren",
+    nextTitle: "De praktijk bepaalt welke vorm de verbetering krijgt.",
   },
   {
     path: "/projecten",
     navLabel: "Projecten",
+    metaTitle: "Projecten: wat we wel en niet claimen",
     index: "05",
     phase: "Werk en werkelijkheid",
-    title: "Werk bewijst zich pas in de werkelijkheid.",
+    title: "Goed werk moet in de praktijk verschil maken.",
     intro:
-      "Een beeld van een website is nog geen case. We delen alleen wat de uitgangssituatie, de keuzes, het gebouwde werk en de werkelijke betekenis samen kan laten zien.",
+      "Een mooi eindbeeld vertelt niet genoeg. We delen alleen werk wanneer we de beginsituatie, de gemaakte keuzes en de verandering in de praktijk eerlijk kunnen laten zien.",
     description:
-      "Lees hoe We Build And Design projecten beoordeelt en welk werk vandaag aantoonbaar gedeeld kan worden.",
+      "Bekijk welk werk je nu kunt beoordelen en waarom We Build And Design resultaten pas met bewijs deelt.",
     heroAsset: responsiveCheck,
     heroAlt:
-      "Een digitale ervaring wordt op een telefoon en een groter scherm gecontroleerd.",
+      "Een website wordt op een telefoon en een groter scherm gecontroleerd.",
     heroPosition: "center",
     sections: [
       {
         label: "05.1 / Geen etalage",
-        title: "De context komt vóór het eindbeeld.",
+        title: "Je moet kunnen zien wat er in de praktijk veranderde.",
         paragraphs: [
-          "Een projectpagina hoort niet alleen smaak te tonen. Je moet kunnen zien welke situatie er speelde, welke keuze richting gaf en wat daarna aantoonbaar veranderde.",
+          "Daarom tonen we niet alleen een eindbeeld. We willen duidelijk maken hoe de organisatie werkte, welke keuze richting gaf en wat daarna aantoonbaar veranderde.",
         ],
       },
       {
         label: "05.2 / Huidige praktijk",
-        title: "Deze website laat zien hoe WBD keuzes onderzoekt en bouwt.",
+        title: "Dit kun je op deze website al beoordelen.",
         paragraphs: [
-          "Deze website is iteratief ontwikkeld vanuit observaties over positionering, begrip, beeldtaal, inhoud, responsive gedrag en gecontroleerde livegang. Keuzes zijn vastgelegd, gebouwd, getest en waar nodig teruggedraaid.",
-          "Dit laat zien dat WBD zijn eigen werkwijze toepast: eerst begrijpen, vervolgens zichtbaar maken, gecontroleerd bouwen en pas daarna beoordelen.",
+          "Deze website laat zien hoe we werken: eerst de vraag begrijpen, daarna keuzes zichtbaar maken, zorgvuldig uitvoeren en in de praktijk beoordelen.",
+          "De website is stap voor stap ontwikkeld vanuit vragen over positionering, begrijpelijkheid, beeld, inhoud en gebruik op verschillende schermen. Keuzes zijn vastgelegd, getest en waar nodig teruggedraaid.",
+          "Dit laat de werkwijze en de uitgevoerde website zien. Het zegt nog niets over resultaat bij een andere organisatie.",
         ],
         points: [
-          "Een werkende, samenhangende digitale ervaring op desktop en mobiel",
+          "Een samenhangende website op desktop en mobiel",
           "Inhoud, beeld, ontwerp en techniek ontwikkeld vanuit dezelfde richting",
-          "Een gecontroleerde livegang met ruimte om verantwoord terug te draaien",
+          "Een beheerste publicatie met ruimte om veilig terug te draaien",
         ],
         editorialInsight: {
           label: "Open het werkdossier",
-          title: "Wat is hier werkelijk uitgevoerd en geleerd?",
+          title: "Wat is hier uitgevoerd en geleerd?",
           paragraphs: [
-            "<strong>Vertrekpunt.</strong> De website liet nog niet snel genoeg zien wat WBD concreet realiseert en voelde per pagina nog niet als één merkwereld.",
-            "<strong>Onderzocht en herzien.</strong> Positionering, art direction, paginastructuur, copy, beeldritme en de compositie boven de vouw zijn afzonderlijk onderzocht. Diensten werden niet als productmenu opgebouwd, omdat de werkelijke vraag eerst richting moest geven.",
-            "<strong>Gebouwd en gecontroleerd.</strong> De publieke reis, kennisbibliotheek, responsive ritme, toetsenbordgebruik, metadata, performance en gecontroleerde release zijn in samenhang beoordeeld. Keuzes die niet voldeden zijn aangepast of teruggedraaid.",
-            "<strong>Geleerd.</strong> De bezoeker moet vroeg begrijpen dat WBD niet alleen onderzoekt en adviseert, maar ook ontwerpt en bouwt. De positionering moest bovendien ruimte bieden aan teams en organisaties, zonder de menselijke nabijheid te verliezen.",
-            "<strong>Nog niet geclaimd.</strong> Er is nog geen extern klantresultaat, conversiestijging of organische groei die aan deze website kan worden toegeschreven. Zulke uitkomsten blijven onderzoek totdat echte praktijk ze bevestigt.",
+            "<strong>Vertrekpunt.</strong> De website liet nog niet snel genoeg zien hoe WBD organisaties helpt en voelde per pagina nog niet als één geheel.",
+            "<strong>Onderzocht en herzien.</strong> Positionering, beeldrichting, paginastructuur, tekst, beeldritme en de eerste indruk zijn afzonderlijk onderzocht. Diensten werden niet als productmenu opgebouwd, omdat de vraag uit de praktijk eerst richting moest geven.",
+            "<strong>Gebouwd en gecontroleerd.</strong> De publieke route, kennisbibliotheek, werking op verschillende schermen, toetsenbordgebruik, paginasnelheid en publicatie zijn in samenhang beoordeeld. Keuzes die niet voldeden zijn aangepast of teruggedraaid.",
+            "<strong>Geleerd.</strong> Een bezoeker moet vroeg begrijpen dat WBD eerst de organisatie en haar werkwijze wil doorgronden. Ontwerp en techniek ondersteunen de verbetering die daaruit volgt.",
+            "<strong>Nog niet geclaimd.</strong> Er is nog geen extern klantresultaat, conversiestijging of organische groei die aan deze website kan worden toegeschreven. Zonder praktijkbewijs trekken we daar geen conclusie over.",
           ],
         },
       },
       {
         label: "05.3 / Wat nog niet wordt geclaimd",
-        title: "Geen resultaat voordat het werkelijk bestaat.",
+        title: "We claimen alleen resultaten die aantoonbaar zijn.",
         paragraphs: [
-          "Er zijn op dit moment geen gepubliceerde klantcases met bevestigde uitkomsten. Dat ontbrekende bewijs vullen we niet aan met fictieve resultaten, testimonials of representatieve succesverhalen.",
-          "Nieuwe projecten verschijnen hier zodra vraag, samenwerking, gebouwd werk en observaties samen een eerlijk verhaal vormen.",
+          "Er zijn op dit moment geen gepubliceerde klantcases met bevestigde uitkomsten. Dat ontbrekende bewijs vullen we niet aan met verzonnen resultaten, testimonials of voorbeeldverhalen.",
+          "Nieuwe projecten verschijnen hier zodra de vraag, samenwerking, uitvoering en waargenomen verandering samen een eerlijk verhaal vormen.",
         ],
       },
     ],
     reflection:
-      "Eerst goed werk leveren. Daarna het echte verhaal vertellen.",
+      "Eerst goed werk leveren. Daarna eerlijk vertellen wat het heeft veranderd.",
     nextPath: "/over-ons",
     nextLabel: "Lees waarom WBD zo werkt",
-    nextTitle: "Onze naam begint met bouwen. Ons werk begint met begrijpen.",
+    nextTitle: "We beginnen niet met bouwen, maar met begrijpen.",
   },
   {
     path: "/over-ons",
     navLabel: "Over ons",
+    metaTitle: "Over ons en onze werkwijze",
     index: "06",
     phase: "De aandacht achter het werk",
-    title: "Onze naam begint met bouwen. Ons werk begint met begrijpen.",
+    title: "We beginnen niet met bouwen, maar met begrijpen.",
     intro:
-      "We Build And Design helpt helder krijgen wat digitaal werkelijk nodig is. Daarna ontwerpen en bouwen we de professionele website of digitale ervaring die daarbij past.",
+      "Bij We Build And Design heb je rechtstreeks contact. We willen eerst weten hoe je organisatie werkt, wat al goed gaat en waar verandering nodig is. Daarna wordt pas duidelijk welke rol WBD verantwoord kan nemen.",
     description:
-      "Waarom We Build And Design eerst begrijpt en daarna professionele websites en digitale ervaringen bouwt.",
+      "Lees waarom We Build And Design eerst je organisatie en werkwijze begrijpt en daarna gericht helpt verbeteren.",
     heroAsset: attentionBehindWork,
     heroAlt:
       "Vanuit het perspectief van de vraagsteller wordt een digitale keuze aandachtig beoordeeld.",
@@ -297,78 +307,81 @@ const pages: ExperiencePage[] = [
     sections: [
       {
         label: "06.1 / Werkelijkheid",
-        title: "Je vraag begint nooit op een leeg vel.",
+        title: "Rechtstreeks contact. Korte lijnen.",
         paragraphs: [
-          "Er zijn al mensen, keuzes en onderdelen die goed werken. Jij kent de dagelijkse werkelijkheid achter de vraag. Wij helpen zien wat moet blijven, wat niet meer meegroeit en wat nog niet helder wordt begrepen.",
-          "Wat we nog niet begrijpen, vullen we niet alvast in.",
+          "Vanaf het eerste gesprek blijft We Build And Design betrokken bij de afwegingen, het ontwerp en de uitvoering. Je hoeft je vraag niet steeds opnieuw uit te leggen.",
+          "Dat houdt de lijnen kort en de afstemming duidelijk. Wanneer aanvullende kennis nodig is, benoemen we dat vooraf en maken we helder wie waarvoor verantwoordelijk is.",
         ],
       },
       {
         label: "06.2 / Richting",
-        title: "Richting begint bij een betere vraag.",
+        title: "We beginnen bij wat er al is.",
         paragraphs: [
-          "De vraag waarmee je binnenkomt, is niet altijd de vraag die het meeste verschil maakt. Samen onderscheiden we wat vaststaat, wat onzeker is en welke verandering nu de meeste waarde toevoegt.",
-          "Zo ontstaat overzicht en een volgende stap die je zelf kunt begrijpen en dragen.",
+          "Er is al veel dat goed werkt: mensen, afspraken, software en processen. Jij kent de dagelijkse praktijk achter de vraag. Wij helpen zien wat moet blijven, wat niet meer meegroeit en waar onduidelijkheid ontstaat.",
+          "De vraag waarmee je binnenkomt, is niet altijd de vraag die het meeste verschil maakt. Samen onderscheiden we wat vaststaat, wat onzeker is en welke verandering nu het meeste helpt.",
+          "Wat we nog niet begrijpen, vullen we niet alvast in.",
         ],
       },
       {
-        label: "06.3 / Design",
-        title: "Design the understanding first.",
+        label: "06.3 / Ontwerpen",
+        title: "Ontwerp maakt de keuze zichtbaar.",
         paragraphs: [
-          "Ontwerpen begint niet bij kleur of een mooi scherm. Het begint bij wat iemand moet begrijpen, welke informatie voorrang krijgt en welke route daarbij helpt.",
-          "We vertalen dat naar inhoud, structuur, interactie en vorm, zodat je opties kunt vergelijken voordat we definitief bouwen.",
+          "Ontwerpen begint niet bij kleur of een mooi scherm. Het begint bij wat klanten of collega’s moeten begrijpen en kunnen doen.",
+          "We vertalen dat naar een werkwijze, inhoud, structuur, interactie en vorm. Zo kun je opties vergelijken voordat we iets definitief uitvoeren.",
         ],
       },
       {
-        label: "06.4 / Build",
-        title: "We Build.",
+        label: "06.4 / Uitvoeren",
+        title: "Daarna voert WBD uit wat binnen zijn rol past.",
         paragraphs: [
-          "WBD stopt niet bij inzicht, advies of een ontwerpbestand. We realiseren professionele websites en digitale ervaringen waarin inhoud, ontwerp en techniek dezelfde gekozen richting dragen.",
-          "Tijdens de bouw toetsen we of die lijn in de werkende toepassing overeind blijft. Waar gebruik of beheer om een correctie vraagt, sturen we bij.",
+          "Wat WBD vandaag aantoonbaar kan, is professionele websites ontwerpen en bouwen. Ook daarbij beginnen we bij de organisatie, bestaande inhoud en wat klanten of collega’s moeten kunnen doen.",
+          "Vraagt de situatie om nieuwe software, complexe koppelingen of andere specialistische kennis, dan zeggen we duidelijk dat WBD dit niet vanzelfsprekend alleen kan. We maken eerst duidelijk welke rol passend is en wie er verder nodig is.",
         ],
         image: responsiveCheck,
         imageAlt:
-          "Een werkende digitale ervaring wordt responsive en inhoudelijk gecontroleerd.",
+          "Een website wordt op verschillende schermen en inhoudelijk gecontroleerd.",
       },
       {
-        label: "06.5 / Begrenzing",
+        label: "06.5 / Grenzen",
         title: "Niet alles wat kan, hoeft te worden gebouwd.",
         paragraphs: [
-          "Soms is behouden, kleiner beginnen of eerst één onzekerheid onderzoeken de sterkste keuze. Een technische oplossing is alleen zinvol wanneer zij werkelijk helpt.",
+          "Soms is behouden, kleiner beginnen of eerst één onzekerheid onderzoeken de beste keuze. Een technische oplossing is alleen zinvol wanneer zij het werk aantoonbaar verbetert.",
+          "Bereikbaar blijven betekent dat je met vragen kunt terugkomen. Het is geen belofte van doorlopende begeleiding, tenzij we die afzonderlijk afspreken.",
         ],
       },
       {
         label: "06.6 / Verantwoordelijkheid",
-        title: "Van eerste gesprek tot uitvoering blijft dezelfde lijn bewaakt.",
+        title: "Je weet wie waarvoor verantwoordelijk is.",
         paragraphs: [
-          "De persoon die luistert, blijft betrokken bij de keuzes, het ontwerp en de digitale vertaling. Begrip, richting en realisatie worden niet aan losse loketten overgedragen.",
-          "Wanneer aanvullende expertise nodig is, maken we dat helder en betrekken we die gericht. Zo blijft duidelijk wie verantwoordelijkheid draagt, terwijl jouw werkelijkheid het uitgangspunt blijft.",
+          "We Build And Design blijft betrokken bij de keuzes, het ontwerp en de uitvoering. Begrip, richting en uitvoering worden niet aan losse loketten overgedragen.",
+          "Wanneer aanvullende expertise nodig is, maken we dat duidelijk en betrekken we die gericht. Zo weet je wie waarvoor verantwoordelijk is en blijft jouw organisatie het uitgangspunt.",
         ],
       },
       {
         label: "06.7 / Volgende stap",
         title: "Een vraag hoeft nog geen oplossing te zijn.",
         paragraphs: [
-          "Vertel wat er speelt, wat mensen moeilijk begrijpen of welke volgende stap je overweegt. Eerst wordt helder welke kleine stap passend is — en of er überhaupt iets gebouwd moet worden.",
+          "Vertel wat er speelt, waar werk onnodig ingewikkeld wordt of welke stap je overweegt. Eerst bepalen we welke kleine verbetering past en of er überhaupt iets gebouwd hoeft te worden.",
         ],
       },
     ],
     reflection:
-      "Onze naam begint met bouwen. Ons werk begint met begrijpen.",
+      "Eerst begrijpen we de praktijk. Daarna verbeteren we alleen wat nodig is.",
     nextPath: "/contact",
     nextLabel: "Vertel wat er speelt",
-    nextTitle: "Een eerste gesprek begint bij je werkelijkheid, niet bij een briefing.",
+    nextTitle: "Een eerste gesprek begint bij je dagelijkse praktijk, niet bij een briefing.",
   },
   {
     path: "/contact",
     navLabel: "Contact",
+    metaTitle: "Contact over een digitaal vraagstuk",
     index: "07",
     phase: "Een gewone eerste stap",
     title: "Vertel wat er speelt.",
     intro:
-      "Je hoeft nog geen briefing, planning of technische keuze te hebben. Beschrijf kort wat er verandert, wat digitaal niet meer werkt of welke vraag je blijft uitstellen.",
+      "Je hoeft geen briefing, planning of technische keuze te hebben. Je hebt rechtstreeks contact met We Build And Design over hoe je organisatie werkt, waar jij of je collega’s vastlopen en wat je wilt verbeteren.",
     description:
-      "Neem rechtstreeks contact op met We Build And Design over een digitale vraag of gewenste verandering.",
+      "Neem rechtstreeks contact op met We Build And Design over een praktische digitale verbetering binnen je organisatie.",
     heroAsset: conversationThreshold,
     heroAlt:
       "Een rustige werkruimte staat klaar voor een open eerste gesprek.",
@@ -376,24 +389,26 @@ const pages: ExperiencePage[] = [
     sections: [
       {
         label: "07.1 / Wanneer contact past",
-        title: "Je weet dat er digitaal iets moet veranderen, maar nog niet wat de juiste stap is.",
+        title: "Je merkt dat iets slimmer kan, maar weet nog niet welke stap past.",
         paragraphs: [
-          "Misschien groeit je website niet meer mee, wordt online onvoldoende duidelijk wat mensen kunnen doen of raakt een verandering verstrikt in bestaande keuzes. Je hoeft nog niet te weten of verbeteren, vernieuwen of iets kleiners passend is.",
+          "Misschien kost een proces te veel tijd, sluit bestaande software niet goed aan of krijgen klanten online onvoldoende houvast. Je hoeft nog niet te weten of een kleine aanpassing, een slimmere inrichting of iets nieuws nodig is.",
         ],
       },
       {
         label: "07.2 / Wat je kunt verwachten",
-        title: "Het eerste gesprek draait om de context, niet om een kant-en-klare oplossing.",
+        title: "Het eerste antwoord mag ook zijn dat WBD niet de juiste partij is.",
         paragraphs: [
-          "We luisteren naar wat er speelt en maken daarna duidelijk of WBD passend is en welke kleine vervolgstap betekenisvol kan zijn. Als een andere richting verstandiger is, benoemen we dat.",
+          "We luisteren naar wat er speelt en kijken wat al goed werkt. Daarna maken we duidelijk wat we begrijpen, wat nog onderzocht moet worden en of WBD past.",
+          "Een verantwoord antwoord kan ook zijn: nu niets veranderen, eerst informatie verzamelen of een andere specialist betrekken.",
+          "Is een vervolgstap zinvol, dan maken we eerst duidelijk wat die stap omvat, wie ervoor nodig is en welke vragen nog openstaan. Afspraken over planning en kosten volgen voordat de uitvoering begint.",
         ],
       },
     ],
     reflection:
-      "Een echte vraag is genoeg om het gesprek te beginnen.",
-    nextPath: "/",
-    nextLabel: "Terug naar het begin",
-    nextTitle: "Begrip blijft het vertrekpunt.",
+      "Een eerlijke beschrijving van de situatie is genoeg om te beginnen.",
+    nextPath: "/kennis",
+    nextLabel: "Liever eerst verder lezen?",
+    nextTitle: "Bekijk vragen die helpen om je eigen situatie te verhelderen.",
     contact: true,
   },
 ];
@@ -402,12 +417,13 @@ const knowledgeArticles: KnowledgeArticle[] = [
   {
     path: "/kennis/wanneer-website-vernieuwen",
     title: "Wanneer is het tijd om je website te vernieuwen?",
+    metaTitle: "Website vernieuwen: wanneer is dat nodig?",
     description:
-      "Herken wanneer je website niet meer meegroeit en bepaal of vernieuwing werkelijk nodig is.",
+      "Herken wanneer je website niet meer meegroeit en bepaal of vernieuwing echt nodig is.",
     linkLabel: "Onderzoek de signalen",
     routeLabel: "Begin hier",
     lead:
-      "Niet iedere oude website hoeft te worden vervangen. De relevante vraag is of de huidige ervaring mensen nog helpt om te begrijpen, kiezen en handelen.",
+      "Niet iedere oude website hoeft te worden vervangen. De relevante vraag is of de huidige website mensen nog helpt om te begrijpen, kiezen en handelen.",
     readingTime: "3 minuten",
     sections: [
       {
@@ -421,8 +437,8 @@ const knowledgeArticles: KnowledgeArticle[] = [
         label: "Signaal 02",
         title: "Mensen stellen vragen die de website al had moeten beantwoorden.",
         paragraphs: [
-          "Terugkerende twijfel over aanbod, werkwijze, prijsrichting of passendheid is bruikbaar onderzoeksmateriaal. Het laat zien waar de digitale ervaring onvoldoende richting geeft.",
-          "Analytics kan laten zien op welke pagina een route stopt en Search Console via welke zoekintentie iemand binnenkomt. Waarom die persoon twijfelt, wordt pas zichtbaar wanneer data naast gesprekken, inhoud en navigatie wordt gelegd.",
+          "Terugkerende vragen over aanbod, werkwijze, prijs of de vraag of iets past, laten zien waar de website onvoldoende richting geeft.",
+          "Gebruiksgegevens kunnen laten zien op welke pagina bezoekers afhaken of met welke vraag zij binnenkomen. Waarom iemand twijfelt, wordt pas duidelijk wanneer we die gegevens naast gesprekken, inhoud en navigatie leggen.",
         ],
         editorialNote: {
           label: "Veelgemaakte aanname",
@@ -431,42 +447,43 @@ const knowledgeArticles: KnowledgeArticle[] = [
       },
       {
         label: "Signaal 03",
-        title: "De techniek beperkt betekenisvolle verbetering.",
+        title: "De techniek staat bruikbare verbetering in de weg.",
         paragraphs: [
-          "Een nieuw systeem is pas logisch wanneer de bestaande basis aanpassingen, toegankelijkheid, snelheid of beheer daadwerkelijk belemmert. Alleen het bouwjaar is zelden een overtuigend argument.",
+          "Een nieuw systeem is pas logisch wanneer de bestaande basis bruikbare verbeteringen echt belemmert. Denk aan toegankelijkheid, snelheid of beheer. Alleen het bouwjaar is zelden een goede reden.",
         ],
       },
       {
         label: "Eerste stap",
         title: "Begin met vaststellen wat behouden moet blijven.",
         paragraphs: [
-          "Breng eerst in kaart wat mensen al begrijpen, welke pagina’s worden gebruikt en welke onderdelen de huidige werkelijkheid goed vertegenwoordigen. Dan wordt duidelijk of gerichte verbetering volstaat of een nieuwe website eerlijker is.",
+          "Breng eerst in kaart wat mensen al begrijpen, welke pagina’s worden gebruikt en welke onderdelen nog goed bij de organisatie passen. Dan wordt duidelijk of een gerichte verbetering volstaat of een grondigere vernieuwing nodig is.",
         ],
       },
     ],
-    summaryTitle: "Vernieuw niet omdat een website oud voelt, maar omdat de huidige ervaring de gewenste verandering belemmert.",
+    summaryTitle: "Vernieuw alleen wanneer de huidige website noodzakelijke verbetering belemmert, niet omdat zij oud aanvoelt.",
     summaryText:
-      "Onderzoek eerst wat nog werkt, waar begrip verloren gaat en of de bestaande basis verbetering werkelijk in de weg staat.",
+      "Onderzoek eerst wat nog werkt, waar begrip verloren gaat en of de bestaande basis verbetering in de weg staat.",
     continuationIntro:
-      "Als vernieuwing een mogelijkheid wordt, ontstaat meestal meteen een tweede vraag: hoeveel moet er werkelijk veranderen?",
+      "Als vernieuwing een mogelijkheid wordt, ontstaat meestal meteen een tweede vraag: hoeveel moet er veranderen?",
     relatedInsights: [
       {
         path: "/kennis/website-verbeteren-of-vernieuwen",
-        title: "Verbeter je de bestaande website of begin je opnieuw?",
-        reason: "Vergelijk een gerichte verbetering met het bouwen van een nieuwe digitale basis.",
+        title: "Verbeter je de bestaande website of is vernieuwing nodig?",
+        reason: "Vergelijk een gerichte verbetering met een grondigere vernieuwing.",
       },
       {
         path: "/kennis/wat-wbd-doet",
-        title: "Wat onderzoekt, adviseert, ontwerpt en bouwt WBD?",
-        reason: "Bekijk hoe een onduidelijke vernieuwingsvraag stap voor stap wordt teruggebracht tot richting.",
+        title: "Hoe helpt We Build And Design bij digitale vraagstukken?",
+        reason: "Bekijk hoe een onduidelijke vraag stap voor stap wordt teruggebracht tot een passende verbetering.",
       },
     ],
   },
   {
     path: "/kennis/website-verbeteren-of-vernieuwen",
-    title: "Verbeter je de bestaande website of begin je opnieuw?",
+    title: "Verbeter je de bestaande website of is vernieuwing nodig?",
+    metaTitle: "Website verbeteren of vernieuwen?",
     description:
-      "Een praktische afweging tussen gericht verbeteren en een nieuwe digitale basis bouwen.",
+      "Een praktische afweging tussen gericht verbeteren en grondiger vernieuwen.",
     linkLabel: "Vergelijk beide richtingen",
     routeLabel: "Een logische volgende vraag",
     lead:
@@ -477,14 +494,14 @@ const knowledgeArticles: KnowledgeArticle[] = [
         label: "Verbeteren",
         title: "Verbeter wanneer de basis klopt en het probleem begrensd is.",
         paragraphs: [
-          "Als positionering, techniek en structuur nog bruikbaar zijn, kan een gerichte aanpassing aan inhoud, navigatie, interactie of toegankelijkheid meer waarde leveren dan volledige vervanging.",
+          "Als positionering, techniek en structuur nog bruikbaar zijn, kan een gerichte aanpassing aan inhoud, navigatie, interactie of toegankelijkheid meer opleveren dan volledige vervanging.",
         ],
       },
       {
         label: "Vernieuwen",
         title: "Vernieuw wanneer meerdere lagen elkaar tegelijk tegenwerken.",
         paragraphs: [
-          "Wanneer verhaal, structuur, vorm en techniek allemaal niet meer passen, wordt lokaal repareren vaak duurder en onduidelijker. Een nieuwe basis kan dan juist kleiner en beter beheersbaar zijn.",
+          "Wanneer verhaal, structuur, vorm en techniek allemaal niet meer passen, kan steeds plaatselijk repareren duur en onoverzichtelijk worden. Ook dan onderzoeken we eerst wat behouden kan blijven. Alleen de lagen die verbetering blokkeren, vragen om een nieuwe basis.",
         ],
       },
       {
@@ -494,68 +511,70 @@ const knowledgeArticles: KnowledgeArticle[] = [
           "Beschrijf eerst wat iemand na de verbetering beter moet begrijpen of kunnen doen. Beoordeel daarna pas hoeveel van de bestaande website daarvoor moet veranderen.",
         ],
         editorialNote: {
-          label: "Werkelijke vraag",
-          text: "De vraag is meestal niet of er een nieuwe website nodig is. De vraag is welke verandering mensen straks beter moeten begrijpen of kunnen uitvoeren.",
+          label: "Kernvraag",
+          text: "De vraag is meestal niet of er een nieuwe website nodig is, maar wat klanten of collega’s straks beter moeten begrijpen of kunnen doen.",
         },
         editorialInsight: {
           label: "Open de technische afweging",
           title: "Wanneer beïnvloedt de bestaande basis de keuze?",
           paragraphs: [
             "Een CMS, koppeling, webshop of hostingomgeving kan een ogenschijnlijk kleine verbetering onnodig kwetsbaar of kostbaar maken. Dat is een reden om de basis te onderzoeken, niet automatisch om haar te vervangen.",
-            "We brengen daarom afhankelijkheden, beheer en migratierisico's in kaart voordat de omvang wordt bepaald. Wat bruikbaar en onderhoudbaar is, blijft. Alleen wat de gewenste verandering aantoonbaar blokkeert, vraagt om een nieuwe basis.",
+            "Daarom brengen we afhankelijkheden, beheer en de risico’s van een overstap in kaart voordat we de omvang bepalen. Wat bruikbaar en onderhoudbaar is, blijft. Alleen wat de gewenste verandering aantoonbaar blokkeert, vraagt om een nieuwe basis.",
           ],
         },
       },
     ],
     summaryTitle: "Behoud wat de nieuwe richting kan dragen.",
     summaryText:
-      "Vernieuw alleen de lagen die begrip, gebruik of verdere ontwikkeling aantoonbaar tegenwerken.",
+      "Vernieuw alleen de lagen die begrip, gebruik of verdere verbetering aantoonbaar tegenwerken.",
     continuationIntro:
       "De omvang wordt duidelijker zodra je weet welke keuzes vóór ontwerp en techniek onderzocht moeten worden.",
     relatedInsights: [
       {
         path: "/kennis/wanneer-website-vernieuwen",
         title: "Wanneer is het tijd om je website te vernieuwen?",
-        reason: "Controleer eerst welke signalen werkelijk op een verouderde digitale ervaring wijzen.",
+        reason: "Controleer eerst welke signalen erop wijzen dat de website niet meer goed aansluit.",
       },
       {
         path: "/kennis/wat-wbd-doet",
-        title: "Wat onderzoekt, adviseert, ontwerpt en bouwt WBD?",
-        reason: "Zie hoe onderzoek en begrenzing voorkomen dat de oplossing groter wordt dan de vraag.",
+        title: "Hoe helpt We Build And Design bij digitale vraagstukken?",
+        reason: "Zie hoe onderzoek en duidelijke grenzen voorkomen dat de oplossing groter wordt dan de vraag.",
       },
     ],
   },
   {
     path: "/kennis/wanneer-past-wbd",
     title: "Wanneer past We Build And Design bij je vraag?",
+    metaTitle: "Wanneer past We Build And Design?",
     description:
-      "Lees wanneer de ontwerp- en bouwpraktijk van WBD passend is en wanneer waarschijnlijk niet.",
-    linkLabel: "Beoordeel de passendheid",
+      "Lees wanneer de werkwijze van WBD bij je vraag past en wanneer waarschijnlijk niet.",
+    linkLabel: "Bekijk of WBD past",
     routeLabel: "Beoordeel de samenwerking",
     lead:
-      "Een goede samenwerking begint niet bij overtuigen, maar bij eerlijk vaststellen of vraag, werkwijze en verantwoordelijkheid bij elkaar passen.",
+      "Een goede samenwerking begint niet met overtuigen, maar met eerlijk vaststellen of de vraag, werkwijze en verantwoordelijkheid bij elkaar passen.",
     readingTime: "2 minuten",
     sections: [
       {
         label: "WBD past",
-        title: "Wanneer richting én realisatie dicht bij elkaar moeten blijven.",
+        title: "Wanneer richting én uitvoering dicht bij elkaar moeten blijven.",
         paragraphs: [
-          "WBD past wanneer de digitale vraag nog begrip en richting nodig heeft, keuzes beoordeelbaar moeten blijven en de gekozen lijn daarna ook professioneel gerealiseerd moet worden.",
-          "Dat kan ook binnen een organisatie met een intern team, bestaande systemen en meerdere leveranciers. Voorwaarde is dat verantwoordelijkheden en afhankelijkheden bespreekbaar blijven, zodat één keuze niet elders onverwacht schade veroorzaakt.",
+          "WBD past wanneer een vraag uit de praktijk eerst begrip en richting nodig heeft en de gekozen verbetering daarna ook zorgvuldig moet worden uitgevoerd.",
+          "Dat kan binnen een organisatie met een intern team, bestaande systemen en meerdere leveranciers. We maken verantwoordelijkheden en afhankelijkheden bespreekbaar, zodat een verbetering op de ene plek geen nieuw probleem op een andere plek veroorzaakt.",
+          "Wat WBD vandaag aantoonbaar kan, is professionele websites ontwerpen en bouwen. Gaat de vraag over andere software of specialistische koppelingen, dan onderzoeken we eerst of WBD de juiste rol kan nemen.",
         ],
       },
       {
         label: "WBD past mogelijk niet",
         title: "Als de oplossing volledig vaststaat of een groot team nodig is.",
         paragraphs: [
-          "Zoek je uitsluitend productie van een aangeleverd ontwerp, voortdurende campagnecapaciteit of grootschalige specialistische uitvoering, dan sluit een andere organisatie waarschijnlijk beter aan.",
+          "Zoek je uitsluitend uitvoering van een aangeleverd ontwerp, doorlopende campagneondersteuning of direct een groot specialistisch team, dan sluit een andere organisatie waarschijnlijk beter aan.",
         ],
       },
       {
         label: "Eerste gesprek",
         title: "Twijfel hoeft vooraf niet opgelost te zijn.",
         paragraphs: [
-          "Je hoeft alleen te kunnen vertellen wat er speelt. In het eerste contact bekijken we of WBD betekenisvol kan helpen en wat een passende volgende stap zou zijn.",
+          "Je hoeft alleen te kunnen vertellen wat er speelt. In het eerste contact bekijken we of WBD kan helpen en wat een passende volgende stap is.",
         ],
         editorialNote: {
           label: "Goed om te weten",
@@ -563,91 +582,94 @@ const knowledgeArticles: KnowledgeArticle[] = [
         },
       },
     ],
-    summaryTitle: "Passendheid gaat niet over overtuigen, maar over de aard van de vraag en de gewenste samenwerking.",
+    summaryTitle: "Een goede samenwerking draait niet om overtuigen, maar om een passende vraag en werkwijze.",
     summaryText:
-      "WBD past wanneer begrijpen, kiezen en realiseren één herkenbare lijn moeten vormen. Staat de oplossing al volledig vast, dan kan een andere vorm van uitvoering beter passen.",
+      "WBD past wanneer begrijpen, kiezen en uitvoeren één herkenbare lijn moeten vormen. Staat de oplossing al volledig vast, dan kan een andere vorm van uitvoering beter passen.",
     continuationIntro:
       "Wil je weten wat die samenwerking concreet omvat, kijk dan naar de rol van iedere stap vóór en tijdens de bouw.",
     relatedInsights: [
       {
         path: "/kennis/wat-wbd-doet",
-        title: "Wat onderzoekt, adviseert, ontwerpt en bouwt WBD?",
-        reason: "Zie hoe richting en realisatie elkaar opvolgen zonder los van elkaar te raken.",
+        title: "Hoe helpt We Build And Design bij digitale vraagstukken?",
+        reason: "Zie hoe begrip, richting en uitvoering elkaar opvolgen zonder los van elkaar te raken.",
       },
       {
         path: "/kennis/website-verbeteren-of-vernieuwen",
-        title: "Verbeter je de bestaande website of begin je opnieuw?",
+        title: "Verbeter je de bestaande website of is vernieuwing nodig?",
         reason: "Bekijk hoe de gewenste verandering de omvang van een mogelijke samenwerking bepaalt.",
       },
     ],
   },
   {
     path: "/kennis/wat-wbd-doet",
-    title: "Wat onderzoekt, adviseert, ontwerpt en bouwt WBD?",
+    title: "Hoe helpt We Build And Design bij digitale vraagstukken?",
+    metaTitle: "Hulp bij digitale vraagstukken",
     description:
-      "Een concreet overzicht van de rol van onderzoek, advies, design en build binnen We Build And Design.",
+      "Een concreet overzicht van hoe We Build And Design een vraag begrijpt, terugbrengt tot een heldere keuze en praktisch helpt verbeteren.",
     linkLabel: "Bekijk het denkproces",
     routeLabel: "Bekijk het geheel",
     lead:
-      "De disciplines zijn geen los menu. Iedere volgende stap is afhankelijk van het begrip dat in de vorige ontstaat.",
+      "Onderzoeken, kiezen, ontwerpen en uitvoeren vormen één geheel. Iedere stap bouwt voort op het begrip uit de vorige.",
     readingTime: "3 minuten",
     sections: [
       {
         label: "Onderzoeken",
-        title: "De situatie, betrokken mensen, bestaande ervaring en onzekerheden.",
+        title: "De dagelijkse praktijk, betrokken mensen, bestaande systemen en onzekerheden.",
         paragraphs: [
-          "We verzamelen alleen wat nodig is om de digitale vraag te begrijpen: doelen, vragen, huidige inhoud, routes, frictie en relevante context. Waar beschikbaar verbinden we gesprekken met zoekgedrag, analytics, formulieren en andere signalen uit de werkende ervaring.",
+          "We verzamelen alleen wat nodig is om de vraag te begrijpen: doelen, terugkerende handelingen, bestaande informatie, knelpunten en relevante context. Waar mogelijk verbinden we gesprekken met gebruiksgegevens, formulieren en andere signalen uit de dagelijkse praktijk.",
         ],
       },
       {
         label: "Adviseren",
-        title: "Eén begrijpelijke richting en bewuste begrenzing.",
+        title: "Eén begrijpelijke richting en duidelijke grenzen.",
         paragraphs: [
-          "Advies maakt helder wat nu verandert, waarom, wat het moet opleveren en wat buiten de eerste stap blijft.",
+          "Het advies maakt duidelijk wat kan blijven, wat nu verandert, waarom dat helpt en wat buiten de eerste stap blijft.",
         ],
       },
       {
         label: "Ontwerpen",
-        title: "Inhoud, structuur, interactie en visuele vorm.",
+        title: "We brengen inhoud, structuur, interactie en vorm samen.",
         paragraphs: [
-          "Design maakt de gekozen richting zichtbaar en toetsbaar voordat technische realisatie de aanpassingsruimte kleiner maakt.",
+          "Het ontwerp maakt de gekozen richting zichtbaar en toetsbaar, voordat aanpassen tijdens de technische uitvoering lastiger wordt.",
         ],
         editorialNote: {
           label: "Even onthouden",
-          text: "Een andere kleur kan iets duidelijker maken. Maar niet bepalen wát eerst duidelijk moet worden.",
+          text: "Een andere kleur kan iets duidelijker maken, maar bepaalt niet wát eerst duidelijk moet worden.",
         },
       },
       {
         label: "Bouwen",
-        title: "Een werkende, responsive digitale ervaring.",
+        title: "Een verbetering die werkt in de dagelijkse praktijk.",
         paragraphs: [
-          "Pas wanneer de richting beoordeeld kan worden, begint de technische realisatie. We vertalen de gekozen lijn naar een professionele toepassing en controleren wat voor de specifieke ervaring relevant is, waaronder bruikbaarheid, toegankelijkheid, snelheid, vindbaarheid, veiligheid en beheer.",
+          "Pas wanneer de richting beoordeeld kan worden, begint de technische uitvoering. WBD kan professionele websites ontwerpen en bouwen en bestaande websites gericht verbeteren.",
+          "Vraagt de gekozen richting om andere software, complexe koppelingen of aanvullende specialistische kennis, dan maken we eerst duidelijk wie die verantwoordelijkheid kan dragen.",
+          "Binnen de afgesproken uitvoering controleren we wat voor de situatie belangrijk is, zoals bruikbaarheid, toegankelijkheid, snelheid, veiligheid en beheer.",
         ],
         editorialInsight: {
           label: "Open de kwaliteitslaag",
           title: "Technische kwaliteit is geen losse eindcontrole",
           paragraphs: [
-            "Core Web Vitals zijn geen doel op zichzelf. Ze kunnen wel laten zien waar beeld, code en content samen een pagina vertragen. Toegankelijkheid gaat evenmin over één auditmoment; zij begint al bij structuur, contrast, taal en interactie.",
-            "Ook privacy, hosting, integraties en beheerbaarheid worden in hun context beoordeeld. De relevante kwaliteitsvraag is steeds dezelfde: kan deze ervaring betrouwbaar gebruikt, begrepen en onderhouden worden?",
+            "Snelheidsmetingen zijn geen doel op zichzelf. Ze kunnen wel laten zien waar beeld, code en inhoud samen een pagina vertragen. Toegankelijkheid is evenmin één controlemoment; zij begint al bij structuur, contrast, taal en interactie.",
+            "Ook privacy, hosting, koppelingen en beheerbaarheid beoordelen we in hun context. De kwaliteitsvraag blijft steeds dezelfde: kunnen mensen deze oplossing betrouwbaar gebruiken, begrijpen en onderhouden?",
           ],
         },
       },
     ],
-    summaryTitle: "Begrijpen, richting kiezen, ontwerpen en bouwen vormen één denkproces.",
+    summaryTitle: "Begrijpen, richting kiezen, ontwerpen en uitvoeren vormen één proces.",
     summaryText:
-      "Onderzoek verkleint de onzekerheid. Advies begrenst de richting. Design maakt haar toetsbaar. Build zorgt dat dezelfde lijn in de werkende ervaring overeind blijft.",
+      "Onderzoek verkleint de onzekerheid. Advies bepaalt de grenzen. Ontwerp maakt de richting beoordeelbaar. De uitvoering zorgt dat dezelfde lijn in de praktijk overeind blijft.",
     continuationIntro:
       "Nu de samenhang helder is, kun je beoordelen wanneer deze manier van werken bij een vraag past — en wanneer niet.",
     relatedInsights: [
       {
         path: "/kennis/wanneer-past-wbd",
         title: "Wanneer past We Build And Design bij je vraag?",
-        reason: "Beoordeel of vraag, werkwijze en verantwoordelijkheid werkelijk bij elkaar passen.",
+        reason: "Beoordeel of de vraag, werkwijze en verantwoordelijkheid bij elkaar passen.",
       },
       {
         path: "/kennis/website-verbeteren-of-vernieuwen",
-        title: "Verbeter je de bestaande website of begin je opnieuw?",
-        reason: "Pas het denkproces toe op een concrete keuze over de bestaande digitale basis.",
+        title: "Verbeter je de bestaande website of is vernieuwing nodig?",
+        reason: "Pas deze werkwijze toe op een concrete keuze over de bestaande digitale basis.",
       },
     ],
   },
@@ -661,7 +683,12 @@ function escapeAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-function setMeta(title: string, description: string, path: string): void {
+function setMeta(
+  title: string,
+  description: string,
+  path: string,
+  options: { type?: "website" | "article"; robots?: string } = {},
+): void {
   const brandedTitle = `${title} — We Build And Design`;
   document.title = brandedTitle;
   const absoluteUrl = `https://webuildanddesign.nl${path}`;
@@ -678,8 +705,11 @@ function setMeta(title: string, description: string, path: string): void {
   upsert('meta[name="description"]', "name:description", description);
   upsert('meta[property="og:title"]', "property:og:title", brandedTitle);
   upsert('meta[property="og:description"]', "property:og:description", description);
-  upsert('meta[property="og:type"]', "property:og:type", "website");
+  upsert('meta[property="og:type"]', "property:og:type", options.type ?? "website");
   upsert('meta[property="og:url"]', "property:og:url", absoluteUrl);
+  if (options.robots) {
+    upsert('meta[name="robots"]', "name:robots", options.robots);
+  }
   let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
   if (!canonical) {
     canonical = document.createElement("link");
@@ -691,8 +721,8 @@ function setMeta(title: string, description: string, path: string): void {
 
 function navLinks(currentPath: string): string {
   const links = [
-    ["/diensten", "Diensten"],
     ["/werkwijze", "Werkwijze"],
+    ["/diensten", "Diensten"],
     ["/projecten", "Projecten"],
     ["/over-ons", "Over ons"],
     ["/kennis", "Kennis"],
@@ -727,9 +757,9 @@ export function renderExperienceFooter(): string {
       <span class="brand__mark" aria-hidden="true"><span>W</span><i></i><span>BD</span></span>
       <span class="brand__name">We Build And Design</span>
     </a>
-    <p>We helpen begrijpen wat digitaal werkelijk nodig is en bouwen daarna de passende ervaring.</p>
+    <p>We begrijpen eerst hoe je organisatie werkt en verbeteren daarna wat nodig is.</p>
     <nav aria-label="Voettekstnavigatie">
-      <a href="/diensten">Diensten</a><a href="/werkwijze">Werkwijze</a>
+      <a href="/werkwijze">Werkwijze</a><a href="/diensten">Diensten</a>
       <a href="/projecten">Projecten</a><a href="/over-ons">Over ons</a>
       <a href="/kennis">Kennis</a><a href="/contact">Contact</a>
       <a href="/algemene-voorwaarden">Algemene voorwaarden</a><a href="/privacy">Privacyverklaring</a>
@@ -785,11 +815,11 @@ function renderContactPanel(): string {
   return `<section class="experience-contact" id="contact-opnemen">
     <p class="experience-label">Een gewone eerste stap</p>
     <div>
-      <h2>Begin bij waar je nu staat.</h2>
-      <p>Beschrijf in een paar regels wat er speelt. Je ontvangt een persoonlijk antwoord over wat we zien en welke vervolgstap passend kan zijn.</p>
+      <h2>Begin bij wat er nu speelt.</h2>
+      <p>Beschrijf in een paar regels hoe je organisatie werkt en waar iets vastloopt. Je krijgt rechtstreeks antwoord met wat we begrijpen, wat nog niet duidelijk is en welke vervolgstap eventueel past.</p>
       <div class="experience-contact__actions">
         <a class="button button--primary" href="mailto:info@webuildanddesign.nl">Stuur een e-mail</a>
-        <a class="button button--secondary" href="tel:+31610067964">Bel direct</a>
+        <a class="button button--secondary" href="tel:+31610067964">Bel rechtstreeks</a>
       </div>
     </div>
     <address>
@@ -801,7 +831,7 @@ function renderContactPanel(): string {
 }
 
 function renderPage(page: ExperiencePage): string {
-  setMeta(page.navLabel, page.description, page.path);
+  setMeta(page.metaTitle, page.description, page.path);
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
   <main class="page experience-page experience-page--${page.path.slice(1)}" id="main-content" tabindex="-1">
     ${renderExperienceHeader(page.path)}
@@ -836,8 +866,8 @@ function renderPage(page: ExperiencePage): string {
 
 function renderKnowledgeHub(): string {
   setMeta(
-    "Kennis voor digitale keuzes",
-    "Een samenhangende bibliotheek met heldere inzichten over digitale vragen, richting, design en build.",
+    "Kennis voor praktische digitale keuzes",
+    "Heldere inzichten om te bepalen welke digitale verbetering bij je organisatie past en wat behouden kan blijven.",
     "/kennis",
   );
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
@@ -845,9 +875,9 @@ function renderKnowledgeHub(): string {
     ${renderExperienceHeader("/kennis")}
     <article>
       <header class="knowledge-hero">
-        <p class="experience-kicker"><span>08</span>Kennis die een keuze helpt dragen</p>
-        <h1>Begrijp eerst welke digitale stap werkelijk nodig is.</h1>
-        <p>Geen losse artikelen, maar een groeiende bibliotheek van vragen die vóór ontwerp en techniek aandacht verdienen.</p>
+        <p class="experience-kicker"><span>08</span>Kennis voor een doordachte keuze</p>
+        <h1>Begrijp eerst wat er in je organisatie beter kan.</h1>
+        <p>Praktische vragen die helpen om te bepalen wat kan blijven en welke digitale stap echt nodig is.</p>
       </header>
       <section class="knowledge-grid" aria-label="Kennisartikelen">
         ${knowledgeArticles
@@ -863,8 +893,8 @@ function renderKnowledgeHub(): string {
       </section>
       <aside class="knowledge-question">
         <p>Staat je vraag er niet tussen?</p>
-        <h2>Een echte situatie is vaak een betere start dan een algemene oplossing.</h2>
-        <p class="knowledge-question__text">Je hoeft de oplossing nog niet te kennen. Beschrijf wat er speelt; dan onderzoeken we welke vraag eerst helder moet worden.</p>
+        <h2>Je eigen praktijk is een betere start dan een algemene oplossing.</h2>
+        <p class="knowledge-question__text">Je hoeft de oplossing nog niet te kennen. Beschrijf wat er speelt; dan onderzoeken we wat eerst helder moet worden.</p>
         <a class="button button--primary" href="/contact">Vertel wat er speelt</a>
       </aside>
     </article>
@@ -895,7 +925,7 @@ function renderKnowledgeContinuation(article: KnowledgeArticle): string {
 }
 
 function renderKnowledgeArticle(article: KnowledgeArticle): string {
-  setMeta(article.title, article.description, article.path);
+  setMeta(article.metaTitle, article.description, article.path, { type: "article" });
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
   <main class="page experience-page knowledge-article" id="main-content" tabindex="-1">
     ${renderExperienceHeader(article.path)}
@@ -917,8 +947,8 @@ function renderKnowledgeArticle(article: KnowledgeArticle): string {
       ${renderKnowledgeContinuation(article)}
       <aside class="knowledge-question">
         <p>Toepassen op je eigen situatie?</p>
-        <h2>Onderzoek eerst welke vraag aandacht verdient.</h2>
-        <p class="knowledge-question__text">Een eerste gesprek hoeft niet met een briefing te beginnen. Een eerlijke beschrijving van wat er speelt is genoeg.</p>
+        <h2>Begin bij wat er in de praktijk gebeurt.</h2>
+        <p class="knowledge-question__text">Een eerste gesprek hoeft niet met een briefing te beginnen. Een eerlijke beschrijving van wat er speelt, is genoeg.</p>
         <a class="button button--primary" href="/contact">Vertel wat er speelt</a>
       </aside>
     </article>
@@ -978,13 +1008,15 @@ function renderLegalPage(page: LegalPage): string {
 }
 
 function renderNotFound(): string {
-  setMeta("Pagina niet gevonden", "Deze pagina bestaat niet.", window.location.pathname);
+  setMeta("Pagina niet gevonden", "Deze pagina bestaat niet.", window.location.pathname, {
+    robots: "noindex, follow",
+  });
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
   <main class="page experience-page knowledge-page" id="main-content" tabindex="-1">
     ${renderExperienceHeader("")}
     <section class="knowledge-hero"><p class="experience-kicker"><span>—</span>Niet gevonden</p>
-      <h1>Deze route loopt hier niet verder.</h1>
-      <p>Ga terug naar het begin en kies opnieuw waar je wilt kijken.</p>
+      <h1>Deze pagina konden we niet vinden.</h1>
+      <p>Ga terug naar de homepage om verder te kijken.</p>
       <a class="button button--primary" href="/">Terug naar de homepage</a>
     </section>
     ${renderExperienceFooter()}

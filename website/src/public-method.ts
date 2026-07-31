@@ -1,4 +1,4 @@
 export const publicMethod = {
-  truth: "Je hoeft de digitale oplossing nog niet te kennen.",
-  question: "Wat moet er digitaal duidelijker of mogelijk worden?",
+  truth: "Je hoeft nog niet te weten welke oplossing nodig is.",
+  question: "Wat moet er in je organisatie duidelijker of makkelijker worden?",
 } as const;
