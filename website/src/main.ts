@@ -25,8 +25,8 @@ if (route === "/") {
         </a>
 
         <nav class="site-nav" aria-label="Hoofdnavigatie">
-          <a href="/diensten">Diensten</a>
           <a href="/werkwijze">Werkwijze</a>
+          <a href="/diensten">Diensten</a>
           <a href="/projecten">Projecten</a>
           <a href="/over-ons">Over ons</a>
           <a href="/kennis">Kennis</a>
@@ -39,8 +39,8 @@ if (route === "/") {
         <details class="site-menu">
           <summary aria-label="Open navigatie"><span></span><span></span></summary>
           <nav aria-label="Mobiele navigatie">
-            <a href="/diensten">Diensten</a>
             <a href="/werkwijze">Werkwijze</a>
+            <a href="/diensten">Diensten</a>
             <a href="/projecten">Projecten</a>
             <a href="/over-ons">Over ons</a>
             <a href="/kennis">Kennis</a>
@@ -53,13 +53,13 @@ if (route === "/") {
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow hero__descriptor">Digitale ervaringen die beginnen met begrip</p>
+          <p class="hero__eyebrow hero__descriptor">Praktische digitale verbeteringen die beginnen met begrip</p>
 
           <h1 class="hero__title" id="hero-title">Begrijpen is het vertrekpunt.</h1>
 
           <p class="hero__text">
-            We onderzoeken eerst wat digitaal werkelijk nodig is. Daarna ontwerpen en bouwen we
-            een ervaring die de gewenste verandering helder maakt.
+            We Build And Design onderzoekt eerst hoe je organisatie werkt, wat al goed gaat en waar
+            mensen vastlopen. Daarna bepalen we samen welke praktische digitale verbetering helpt.
           </p>
 
           <a class="hero__step" href="#begrijpen">
@@ -82,9 +82,9 @@ if (route === "/") {
 
           <div class="understand__experience">
             <div class="understand__thoughts" data-home-reveal>
-              <p>“Ik weet dat er digitaal iets moet veranderen.”</p>
-              <p>“Ik stel die stap al een tijd uit.”</p>
-              <p>“Maar waar begin ik?”</p>
+              <p>“Ik merk dat ons werk onnodig ingewikkeld wordt.”</p>
+              <p>“We lopen steeds tegen dezelfde vragen aan.”</p>
+              <p>“Maar waar beginnen we zonder alles om te gooien?”</p>
             </div>
 
             <div class="understand__insight" data-home-reveal>
@@ -96,14 +96,14 @@ if (route === "/") {
               <div class="understand__belief">
                 <p>
                   We beginnen niet bij techniek.<br>
-                  <strong>De situatie, de betrokken mensen en de gewenste verandering komen eerst.</strong>
+                  <strong>Je dagelijkse praktijk, de betrokken mensen en bestaande systemen komen eerst.</strong>
                 </p>
                 <p>
-                  Daarna worden de keuzes kleiner<br>
-                  <strong>en de eerste stap begrijpelijk.</strong>
+                  Daarna kiezen we wat kan blijven<br>
+                  <strong>en welke kleine stap echt verschil maakt.</strong>
                 </p>
               </div>
-              <a class="understand__next" href="#digitaal-fundament">Bekijk hoe een richting ontstaat <i aria-hidden="true">→</i></a>
+              <a class="understand__next" href="#digitaal-fundament">Bekijk hoe een verbetering ontstaat <i aria-hidden="true">→</i></a>
             </div>
           </div>
 
@@ -125,45 +125,47 @@ if (route === "/") {
         ${renderSceneWorld("scene-004")}
 
         <div class="why__intro" data-home-reveal>
-          <p class="section-label">03 / Digitaal fundament</p>
+          <p class="section-label">03 / Praktische verbetering</p>
 
           <h2 class="why__title" id="why-title">
-            Een professionele digitale ervaring begint met begrijpen wat zichtbaar en mogelijk moet worden.
+            Een goede digitale verbetering begint bij hoe je organisatie nu werkt.
           </h2>
 
           <p class="why__lead">
-            Daarom maken we eerst de vraag en de keuzes helder. Ontwerp en techniek volgen pas daarna.
+            We kijken wat al werkt, waar jij of je collega’s tijd verliezen en wat klanten nodig hebben.
+            Ontwerp en techniek volgen pas daarna.
           </p>
 
           <p class="why__bridge">
-            Dat kan betekenen dat we een bestaande digitale route verbeteren, een nieuw onderdeel
-            ontwerpen of een complete website bouwen — afhankelijk van wat werkelijk nodig is.
+            Vaak kan de software die je al gebruikt gewoon blijven. Een digitale verbetering kan
+            een website, intern systeem, webshop of koppeling zijn, maar ook een slimmer proces of
+            een gerichte aanpassing. Welke vorm past, bepalen we pas nadat we de praktijk begrijpen.
           </p>
         </div>
 
         <div class="why__grid" data-home-reveal>
           <article class="why-principle">
             <span class="why-principle__number">01</span>
-            <h3>De werkelijke vraag begrijpen</h3>
+            <h3>De dagelijkse praktijk begrijpen</h3>
             <p>
-              We onderzoeken wat al werkt, waar mensen twijfelen en welke verandering ertoe doet.
+              We onderzoeken wat goed gaat, waar werk blijft liggen en wat voor klanten of collega’s onduidelijk is.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">02</span>
-            <h3>Richting zichtbaar maken</h3>
+            <h3>De kleinste zinvolle stap kiezen</h3>
             <p>
-              De gekozen richting krijgt een heldere structuur en een vorm die mensen kunnen begrijpen en beoordelen.
+              We maken helder wat kan blijven, wat beter kan en waarom die keuze bij je organisatie past.
             </p>
           </article>
 
           <article class="why-principle">
             <span class="why-principle__number">03</span>
-            <h3>Zorgvuldig bouwen</h3>
+            <h3>Zorgvuldig verbeteren</h3>
             <p>
-              We bouwen en controleren de ervaring — van inhoud en interactie tot toegankelijkheid,
-              snelheid en beheer.
+              We werken in begrensde stappen en spreken af wat we per stap beoordelen. Zo blijft
+              duidelijk wat wel en niet wordt aangepakt.
             </p>
           </article>
         </div>
@@ -177,12 +179,12 @@ if (route === "/") {
             <p class="vision__eyebrow">04 / Van inzicht naar uitvoering</p>
 
             <h2 class="vision__title" id="vision-title">
-              Een professionele digitale ervaring ontstaat stap voor stap.
+              Verbeteren hoeft niet in één keer.
             </h2>
 
             <p class="vision__text">
-              Je hoeft niet vooraf te weten hoe de oplossing werkt. We maken iedere keuze zichtbaar
-              voordat we haar ontwerpen en bouwen.
+              Je hoeft vooraf niet te weten welke oplossing past. We bekijken eerst wat behouden
+              kan blijven en maken iedere volgende keuze begrijpelijk.
             </p>
           </header>
 
@@ -194,7 +196,7 @@ if (route === "/") {
           <h3>Luisteren</h3>
 
           <p>
-            We beginnen bij de situatie, de mensen om wie het gaat en wat digitaal duidelijk moet worden.
+            We beginnen bij het dagelijkse werk, de mensen om wie het gaat en wat nu onnodig lastig is.
           </p>
         </article>
 
@@ -204,17 +206,18 @@ if (route === "/") {
           <h3>Vertalen</h3>
 
           <p>
-            We brengen de gekozen richting terug tot een logische structuur en een passend ontwerp.
+            We brengen de vraag terug tot een haalbare stap die je kunt beoordelen en dragen.
           </p>
         </article>
 
         <article class="vision-step">
           <span class="vision-step__number">03</span>
 
-          <h3>Bouwen</h3>
+          <h3>Uitvoeren</h3>
 
           <p>
-            We bouwen en testen de digitale ervaring en houden het proces begrijpelijk.
+            We voeren de afgesproken verbetering uit en maken het duidelijk wanneer specialistische
+            hulp of nieuwe software nodig is.
           </p>
         </article>
 
@@ -222,12 +225,12 @@ if (route === "/") {
       <div class="vision__quote" data-home-reveal>
 
         <h2>
-          Jij hoeft de digitale route niet te kennen.<br>
-          Wel wat er moet veranderen.
+          Jij hoeft de technische route niet te kennen.<br>
+          Wel waar het werk vastloopt.
         </h2>
 
         <p>
-          Je ziet waarom een keuze bij de werkelijke vraag past en wie er verantwoordelijkheid voor draagt.
+          Je ziet wat kan blijven, wat moet veranderen en waarom die keuze bij je organisatie past.
         </p>
 
       </div>
@@ -241,16 +244,16 @@ if (route === "/") {
         <div class="container">
 
           <p class="section-eyebrow" data-home-reveal>
-            05 / Een begrijpelijke eerste stap
+            05 / Een gewone eerste stap
           </p>
 
           <h2 class="section-title" id="connection-title" data-home-reveal>
-            Je hoeft niet te weten hoe de digitale oplossing wordt gebouwd.
+            Je hoeft nog niet te weten welke oplossing past.
           </h2>
 
           <p class="section-intro" data-home-reveal>
-            Vertel wat er speelt, wie ermee te maken heeft en wat je digitaal wilt veranderen.
-            Samen maken we daar een heldere eerste stap van.
+            Vertel hoe je organisatie werkt, wie tegen het probleem aanloopt en wat je wilt verbeteren.
+            Samen bepalen we een haalbare eerste stap.
           </p>
 
           <div class="connection-message" data-home-reveal>
@@ -260,7 +263,7 @@ if (route === "/") {
             </p>
 
             <p>
-              Daarna pas ontwerp en techniek.
+              Daarna pas een oplossing.
             </p>
 
           </div>
@@ -272,10 +275,10 @@ if (route === "/") {
           </div>
 
           <div class="next-horizon" data-home-reveal>
-            <p>Je hoeft nog geen briefing of technische kennis te hebben.</p>
-            <h3>Vertel waar je nu staat.</h3>
-            <a class="button button--primary" href="/contact">
-              Vertel wat er speelt
+            <p>Je hoeft geen briefing of technisch plan te hebben.</p>
+            <h3>Bekijk hoe we samen beginnen.</h3>
+            <a class="button button--primary" href="/werkwijze">
+              Bekijk onze werkwijze
             </a>
           </div>
 
@@ -288,10 +291,10 @@ if (route === "/") {
             </span>
             <span class="brand__name">We Build And Design</span>
           </a>
-          <p>Digitale ervaringen voor vragen die eerst goed begrepen moeten worden.</p>
+          <p>We beginnen bij hoe je organisatie werkt en verbeteren alleen wat nodig is.</p>
           <nav aria-label="Voettekstnavigatie">
-            <a href="/diensten">Diensten</a>
             <a href="/werkwijze">Werkwijze</a>
+            <a href="/diensten">Diensten</a>
             <a href="/projecten">Projecten</a>
             <a href="/over-ons">Over ons</a>
             <a href="/kennis">Kennis</a>

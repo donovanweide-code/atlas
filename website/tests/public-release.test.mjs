@@ -38,7 +38,7 @@ test("borgt de releasewaardige hostinggrens", async () => {
   assert.match(hostingConfig, /Cache-Control "public, max-age=31536000, immutable"/);
   assert.match(hostingConfig, /Content-Security-Policy/);
   assert.match(notFoundPage, /meta name="robots" content="noindex, nofollow"/);
-  assert.match(notFoundPage, /Deze route loopt hier niet verder/);
+  assert.match(notFoundPage, /Deze pagina konden we niet vinden/);
 });
 
 async function withBuild(files, assertion) {

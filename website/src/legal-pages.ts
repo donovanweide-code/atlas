@@ -151,7 +151,7 @@ export const legalPages: LegalPage[] = [
       "Lees welke persoonsgegevens We Build And Design verwerkt, waarom dat gebeurt en welke keuzes de publieke website bewust niet maakt.",
     eyebrow: "Privacyverklaring",
     intro:
-      "We vragen alleen om informatie die nodig is om een vraag te begrijpen, samen te werken of aan wettelijke verplichtingen te voldoen. Deze verklaring beschrijft de werkelijkheid van de website en onze zakelijke contacten van vandaag.",
+      "We vragen alleen om informatie die nodig is om een vraag te begrijpen, samen te werken of aan wettelijke verplichtingen te voldoen. Deze verklaring beschrijft de huidige website en onze zakelijke contacten.",
     updated: "Versie 28 juli 2026",
     note:
       "De publieke website gebruikt nu geen contactformulier, analytics, trackingcookies of marketingprofielen. Contact begint via je eigen e-mail- of telefoonapp.",
@@ -161,7 +161,7 @@ export const legalPages: LegalPage[] = [
         title: "1. Wie verantwoordelijk is",
         paragraphs: [
           "We Build And Design is verantwoordelijk voor de persoonsgegevens die in deze verklaring worden beschreven. We zijn gevestigd aan de Gerard Terborchstraat 35, 1318 LE Almere en staan bij de Kamer van Koophandel ingeschreven onder nummer 69326126.",
-          "Voor een privacyvraag of verzoek kun je e-mailen naar info@webuildanddesign.nl.",
+          "Met een privacyvraag of verzoek kun je e-mailen naar info@webuildanddesign.nl.",
         ],
       },
       {
@@ -213,7 +213,7 @@ export const legalPages: LegalPage[] = [
         id: "bewaren",
         title: "7. Hoe lang we gegevens bewaren",
         paragraphs: [
-          "Een zakelijke vraag die niet tot een opdracht leidt bewaren we maximaal twee jaar na het laatste inhoudelijke contact, tenzij eerder verwijderen passend is.",
+          "Een zakelijke vraag die niet tot een opdracht leidt, bewaren we maximaal twee jaar na het laatste inhoudelijke contact. Als eerder verwijderen passend is, doen we dat.",
           "Projectcorrespondentie en afspraken bewaren we in beginsel maximaal vijf jaar na het einde van een opdracht. Gegevens die onderdeel zijn van onze fiscale administratie, zoals facturen en betaalinformatie, bewaren we zeven jaar. Is informatie nodig voor een lopend geschil of een wettelijke verplichting, dan kan een langere termijn gelden.",
           "Technische serverlogs worden alleen bewaard zolang dat nodig is voor beveiliging, storingsonderzoek en beheer van de hostingomgeving. De hostingprovider hanteert daarvoor zijn eigen technische bewaarschema. We gebruiken deze logs niet voor bezoekersprofielen.",
         ],
@@ -223,14 +223,14 @@ export const legalPages: LegalPage[] = [
         title: "8. Hoe we gegevens beschermen",
         paragraphs: [
           "We nemen passende technische en organisatorische maatregelen die passen bij de aard van de gegevens en de huidige dienstverlening. Toegang wordt beperkt tot mensen en leveranciers die de informatie nodig hebben voor hun taak.",
-          "Geen digitale overdracht is zonder risico. Vermoed je dat gegevens onjuist zijn gebruikt of beveiligd, neem dan direct contact op via info@webuildanddesign.nl.",
+          "Geen digitale overdracht is zonder risico. Vermoed je dat gegevens onjuist zijn gebruikt of onvoldoende zijn beveiligd, neem dan direct contact op via info@webuildanddesign.nl.",
         ],
       },
       {
         id: "rechten",
         title: "9. Jouw privacyrechten",
         paragraphs: [
-          "Je kunt vragen om inzage, correctie, verwijdering, beperking of overdracht van je persoonsgegevens. Je kunt ook bezwaar maken tegen een verwerking op basis van een gerechtvaardigd belang en een eerder gegeven toestemming intrekken.",
+          "Je kunt vragen om inzage, correctie, verwijdering, beperking of overdracht van je persoonsgegevens. Je kunt ook bezwaar maken tegen een verwerking op basis van een gerechtvaardigd belang en eerder gegeven toestemming intrekken.",
           "Stuur je verzoek naar info@webuildanddesign.nl. We reageren in beginsel binnen één maand. Wanneer we redelijkerwijs moeten controleren of het verzoek van jou komt, vragen we alleen om de informatie die daarvoor noodzakelijk is.",
           "Denk je dat we niet zorgvuldig met je gegevens omgaan, bespreek dat dan bij voorkeur eerst met ons. Je hebt daarnaast het recht om een klacht in te dienen bij de Autoriteit Persoonsgegevens via autoriteitpersoonsgegevens.nl.",
         ],
