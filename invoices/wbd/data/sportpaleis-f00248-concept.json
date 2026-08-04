@@ -1,0 +1,58 @@
+{
+  "document_status": "concept",
+  "invoice": {
+    "number": "F00248",
+    "date": "2026-08-04",
+    "payment_term_days": 14,
+    "project": "Sportpaleis Workspace en bedrukkingsmodule",
+    "reference": "[Project- of inkoopreferentie]"
+  },
+  "sender": {
+    "company_name": "We Build And Design",
+    "address": "Gerard Terborchstraat 35",
+    "postal_code": "1318 LE",
+    "city": "Almere",
+    "kvk": "69326126",
+    "vat_number": "NL190255879B01",
+    "iban": "NL16 KNAB 0603 6280 95",
+    "bic": "KNABNL2H",
+    "phone": "06 100 67 964",
+    "email": "info@webuildanddesign.nl",
+    "website": "webuildanddesign.nl"
+  },
+  "customer": {
+    "company_name": "Sport 2000 Sportpaleis B.V.",
+    "contact_person": "[Contactpersoon]",
+    "address": "[Straat en huisnummer]",
+    "postal_code": "[Postcode]",
+    "city": "[Plaats]",
+    "reference": "[Klantreferentie]"
+  },
+  "lines": [
+    {
+      "description": "Bedrukkingsmodule – voorschot Codex-credits",
+      "quantity": "1",
+      "unit_price": "100.00",
+      "vat_rate": "21",
+      "price_mode": "inclusive"
+    },
+    {
+      "description": "Bedrukkingsmodule – reeds gemaakte ontwikkelkosten",
+      "quantity": "1",
+      "unit_price": "231.01",
+      "vat_rate": "21",
+      "price_mode": "inclusive"
+    }
+  ],
+  "expected_totals": {
+    "exclusive": "273.56",
+    "vat": "57.45",
+    "inclusive": "331.01"
+  },
+  "validation": {
+    "blockers": [
+      "Bevestig dat F00248 daadwerkelijk het eerstvolgende beschikbare factuurnummer is.",
+      "Bevestig het btw-nummer: F00247 toont NL190255879B01 in het afzenderblok maar NL190255870B01 in de footer."
+    ]
+  }
+}
