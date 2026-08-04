@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from decimal import Decimal
@@ -11,6 +12,19 @@ from invoice import calculate_invoice, calculate_line, validate_release_state  #
 
 
 class InvoiceCalculationTests(unittest.TestCase):
+    def test_sportpaleis_data_instance_is_exact(self):
+        data_path = MODULE_DIR / "data" / "sportpaleis-f00248-concept.json"
+        data = json.loads(data_path.read_text(encoding="utf-8"))
+        lines, totals = calculate_invoice(data["lines"])
+
+        self.assertEqual(lines[0].description, "Bedrukkingsmodule – voorschot Codex-credits")
+        self.assertEqual(lines[0].input_unit_price, Decimal("100.00"))
+        self.assertEqual(lines[0].input_mode, "inclusive")
+        self.assertEqual(lines[1].description, "Bedrukkingsmodule – reeds gemaakte ontwikkelkosten")
+        self.assertEqual(lines[1].input_unit_price, Decimal("231.01"))
+        self.assertEqual(lines[1].input_mode, "inclusive")
+        self.assertEqual(totals.gross, Decimal("331.01"))
+
     def test_inclusive_prices_match_sportpaleis_concept(self):
         lines, totals = calculate_invoice(
             [

@@ -24,6 +24,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from brand import draw_wbd_logo
+
 
 TWOPLACES = Decimal("0.01")
 MONEY_ROUNDING = ROUND_HALF_UP
@@ -455,15 +457,16 @@ def draw_page(canvas: Any, doc: SimpleDocTemplate, data: dict[str, Any], fonts: 
     canvas.saveState()
     canvas.setFillColor(MIDNIGHT)
     canvas.rect(0, height - 49 * mm, width, 49 * mm, stroke=0, fill=1)
-    canvas.setFillColor(HORIZON)
-    canvas.rect(17 * mm, height - 13 * mm, 1.2 * mm, 7 * mm, stroke=0, fill=1)
+    draw_wbd_logo(
+        canvas,
+        17 * mm,
+        height - 21.5 * mm,
+        45 * mm,
+        fonts,
+        SUMMIT,
+    )
 
     canvas.setFillColor(SUMMIT)
-    canvas.setFont(sans_bold, 12.8)
-    canvas.drawString(22 * mm, height - 10.5 * mm, "WE BUILD")
-    canvas.setFont(sans, 10.4)
-    canvas.drawString(22 * mm, height - 16 * mm, "AND DESIGN")
-
     canvas.setFont(serif, 29)
     canvas.drawString(17 * mm, height - 35 * mm, "Factuur")
     canvas.setFillColor(colors.HexColor("#B9C3BD"))

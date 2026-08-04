@@ -14,6 +14,7 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 8. [`RELEASES/WBD-2026-07-26-ca3d1bd.md`](RELEASES/WBD-2026-07-26-ca3d1bd.md) — broncommit, artefacthash en validatie van de actuele publieke releasecandidate.
 9. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
 10. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
+11. [`WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md`](WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md) — permanente merk- en documentbasis voor WBD-facturen en toekomstige zakelijke documenten.
 
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 

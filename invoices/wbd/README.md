@@ -1,15 +1,20 @@
-# Project 001A - WBD factuursjabloon
+# WBD Business Documents - factuursjabloon
 
-Dit is een vast, herbruikbaar factuursjabloon voor We Build And Design. Het is bewust geen facturatiesysteem: er is geen klantbeheer, automatische nummering, verzending, betaalstatus, abonnementenmodule of boekhoudkoppeling.
+Dit is een permanent, herbruikbaar bedrijfsmiddel van We Build And Design. Project 001A heeft de eerste versie en de eerste Sportpaleis-conceptfactuur opgeleverd, maar het sjabloon zelf is niet van Sportpaleis en blijft beschikbaar voor alle toekomstige WBD-facturen.
+
+De plaats, verantwoordelijkheid en herbruikbaarheid zijn canoniek geregistreerd in [`../../docs/atlas/WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md`](../../docs/atlas/WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md). Het blijft bewust een documentsjabloon en geen facturatiesysteem: er is geen klantbeheer, automatische nummering, verzending, betaalstatus, abonnementenmodule of boekhoudkoppeling.
 
 ## Opbouw
 
+- `brand.py` bevat het officiële actuele `W / BD`-logo als vectoriële, herbruikbare documentcomponent.
 - `invoice.py` bevat uitsluitend berekeningen, validatie en de A4-layout.
-- `data/sportpaleis-f00248-concept.json` bevat alle afzender-, klant-, factuur- en regeldata van het eerste concept.
+- `data/sportpaleis-f00248-concept.json` is één klantgebonden data-instance en bevat alle afzender-, klant-, factuur- en regeldata van het eerste concept.
 - `tests/test_invoice.py` controleert beide prijsinvoermethoden en voorkomt definitieve uitvoer zolang blockers bestaan.
 - De gegenereerde PDF staat in `output/pdf/`; de visuele controle staat in `output/pdf/screenshots/`.
 
-De vormgeving vertaalt de huidige WBD-identiteit naar een rustige zakelijke toepassing: inktgroen, warm papier, mineraalgroen en het gedempte goud uit de bestaande tokens; een redactionele serif voor betekenis en een rustige sans-serif voor gegevens. Omdat de repository nog geen goedgekeurd definitief vectorwoordmerk bevat, gebruikt het document de vastgestelde tweeregelige naam als ingetogen typografische lock-up en niet het verouderde `W / BD`-beeldmerk uit F00247.
+De vormgeving vertaalt de huidige WBD-identiteit naar een rustige zakelijke toepassing: inktgroen, warm papier, mineraalgroen en het gedempte goud uit de bestaande tokens; een redactionele serif voor betekenis en een rustige sans-serif voor gegevens. De PDF gebruikt hetzelfde officiële samengestelde `W / BD`-merk en dezelfde volledige merknaam als de actuele publieke Experience. Er staat geen tijdelijk woordmerk of logo-placeholder meer in het document.
+
+De merkcomponent is herleidbaar naar `website/src/main.ts`, `website/src/styles/main.css` en `website/src/styles/public-pages.css`. Nieuwe zakelijke documenten gebruiken `brand.py` en bouwen geen eigen logovariant.
 
 ## Bedragen inclusief en exclusief btw
 
