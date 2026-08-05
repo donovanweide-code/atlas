@@ -1,4 +1,8 @@
 import "./styles/atlas-workspace.css";
+import { atlasWorkspace } from "./workspace-config";
+import { renderWorkspaceSidebar } from "./workspace-shell";
+import { atlasDailyBrief } from "./atlas-daily-brief";
+import { currentWorkstream, wbdProjects } from "./wbd-foundation-data";
 import { aquaFlaskProfile } from "./atlas-aquaflask-profile";
 import { focusRecommendation } from "./atlas-case-guidance";
 import { case0001SnapshotLoad } from "./atlas-case-snapshot-source";
@@ -196,16 +200,13 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     id: observation.id,
     lane: "review",
     title: observation.text,
-    why:
-      `Vastgelegd tijdens Waarnemen bij ‘${observation.context.boundaryLabel}’ en nog niet inhoudelijk beoordeeld.`,
-    sourceLabel:
-      `Case 0001 · ${observation.context.pageLabel} · Sprint ${observation.context.sprintId}`,
+    why: `Vastgelegd tijdens Waarnemen bij ‘${observation.context.boundaryLabel}’ en nog niet inhoudelijk beoordeeld.`,
+    sourceLabel: `Case 0001 · ${observation.context.pageLabel} · Sprint ${observation.context.sprintId}`,
     sourcePath: `${observation.context.path}${observation.context.hash}`,
     type: "observation",
     status: "Onbeoordeeld",
     authority: "review-result",
-    nextReview:
-      "Donovan beoordeelt welke betekenis deze Waarneming heeft; We Build And Design trekt hier nog geen conclusie.",
+    nextReview: "Donovan beoordeelt welke betekenis deze Waarneming heeft; We Build And Design trekt hier nog geen conclusie.",
     approval: "Betekenis en vervolg zijn nog niet bevestigd.",
   }));
   const reviewCandidateCards = workspaceReviewLayer.review.map(reviewLayerCard).join("");
@@ -235,32 +236,121 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const deliverySources = bijCeesDeliveryReview.sources.map((source) => source.kind === "live"
     ? `<li><span>${escapeHtml(source.label)}</span><a href="${escapeHtml(source.location)}" target="_blank" rel="noreferrer">${escapeHtml(source.location)}</a></li>`
     : `<li><span>${escapeHtml(source.label)}</span><code>${escapeHtml(source.location)}</code></li>`).join("");
+  const dailySilence = atlasDailyBrief.silence.map((item) => `
+    <li>
+      <strong>${escapeHtml(item.title)}</strong>
+      <span>${escapeHtml(item.why)}</span>
+    </li>`).join("");
+  const dailyHorizon = atlasDailyBrief.horizon.map((item, index) => `
+    <article class="daily-horizon-item">
+      <span>0${index + 1}</span>
+      <div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.summary)}</p>
+        <details class="daily-disclosure">
+          <summary><i aria-hidden="true">+</i> Waarom staat dit op Horizon?</summary>
+          <p>${escapeHtml(item.trigger)}</p>
+        </details>
+      </div>
+    </article>`).join("");
 
   app.innerHTML = `<main class="atlas-workspace">
-    <section class="workspace-opening" id="overzicht" aria-labelledby="guidance-title">
-      <div class="workspace-opening__inner">
-        <p class="workspace-opening__greeting">Goedemorgen, Donovan.</p>
-        <h1 id="guidance-title" data-advice-title></h1>
-        <p class="workspace-opening__message"><span data-advice-reason></span> <span data-guidance-prepared></span></p>
-        <a class="workspace-opening__action" data-guidance-action href="/"><strong data-guidance-action-label></strong><i aria-hidden="true">→</i></a>
+    <section class="daily-opening" id="overzicht" aria-labelledby="daily-title">
+      <div class="daily-opening__frame">
+        <header class="daily-mast">
+          <a class="daily-brand" href="#overzicht" aria-label="Atlas Workspace">
+            <span class="daily-brand__mark">A</span>
+            <span><strong>Atlas</strong><small>Daily companion</small></span>
+          </a>
+          <p>${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p>
+        </header>
+
+        <div class="daily-opening__grid">
+          <div class="daily-opening__copy">
+            <p class="workspace-label">Goedemorgen, Donovan.</p>
+            <div class="daily-status"><span aria-hidden="true"></span>${escapeHtml(atlasDailyBrief.statusLabel)}</div>
+            <h1 id="daily-title">${escapeHtml(atlasDailyBrief.title)}</h1>
+            <p class="daily-opening__subtitle">${escapeHtml(atlasDailyBrief.subtitle)}</p>
+            <p class="daily-opening__summary">${escapeHtml(atlasDailyBrief.summary)}</p>
+            <dl class="daily-opening__meta">
+              <div><dt>Laatst beoordeeld</dt><dd>${escapeHtml(snapshotDate(atlasDailyBrief.reviewedAt))}</dd></div>
+              <div><dt>Terugkeertrigger</dt><dd>${escapeHtml(atlasDailyBrief.returnTrigger)}</dd></div>
+            </dl>
+            <details class="daily-disclosure daily-disclosure--evidence">
+              <summary><i aria-hidden="true">+</i> Waarom denkt Atlas dit?</summary>
+              <div>
+                <ul>${atlasDailyBrief.why.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+                <p><span>Bewijsbron</span>${escapeHtml(atlasDailyBrief.evidenceSource)}</p>
+                <p><span>Externe afhankelijkheid</span>${escapeHtml(atlasDailyBrief.externalDependency)}</p>
+              </div>
+            </details>
+          </div>
+          <div class="daily-opening__compass" aria-hidden="true">
+            ${compass()}
+            <span>Kompas</span>
+          </div>
+        </div>
+
+        <div class="daily-first-layer">
+          <article class="daily-focus" aria-labelledby="daily-focus-title">
+            <p class="workspace-label">Focus · wat vandaag betekenis heeft</p>
+            <h2 id="daily-focus-title">${escapeHtml(atlasDailyBrief.focus.title)}</h2>
+            <p>${escapeHtml(atlasDailyBrief.focus.summary)}</p>
+            <footer>
+              <a href="${escapeHtml(atlasDailyBrief.focus.actionHref)}">${escapeHtml(atlasDailyBrief.focus.actionLabel)} <span aria-hidden="true">↓</span></a>
+              <details class="daily-disclosure">
+                <summary><i aria-hidden="true">+</i> Hoe kwam Atlas tot deze keuze?</summary>
+                <div>
+                  <ul>${atlasDailyBrief.focus.explanation.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+                  <p>${escapeHtml(atlasDailyBrief.focus.nextStep)}</p>
+                </div>
+              </details>
+            </footer>
+          </article>
+          <aside class="daily-silence" aria-labelledby="daily-silence-title">
+            <p class="workspace-label">Stilte · bewust niet doen</p>
+            <h2 id="daily-silence-title">Rust is hier een besluit.</h2>
+            <ul>${dailySilence}</ul>
+          </aside>
+        </div>
+        <div hidden>
+          <span data-advice-title></span>
+          <span data-advice-reason></span>
+          <span data-guidance-prepared></span>
+          <a data-guidance-action href="/"><span data-guidance-action-label></span></a>
+        </div>
       </div>
-      ${compass()}
     </section>
 
     <div class="workspace-shell">
-    <aside class="workspace-sidebar">
-      <a class="workspace-brand" href="#overzicht" aria-label="Atlas Workspace"><span class="workspace-brand__mark">A</span><span><strong>Atlas</strong><small>Workspace</small></span></a>
-      <nav class="workspace-nav" aria-label="Workspace navigatie">
-        <a class="is-current" href="#overzicht"><span>01</span>Overzicht</a><a href="#werkbeeld"><span>02</span>Werkbeeld</a><a href="#orientatie"><span>03</span>Oriëntatie</a><a href="#waarnemen"><span>04</span>Waarnemen</a><a href="#focus"><span>05</span>Vandaag</a><a href="#cases"><span>06</span>Cases</a><a href="#understanding"><span>07</span>Understanding</a><a href="#ideeen"><span>08</span>Ideeën</a><a href="#logboek"><span>09</span>Logboek</a>
-      </nav>
-      <div class="workspace-sidebar__footer"><p>We Build And Design</p><a href="/">Publieke website <span aria-hidden="true">↗</span></a></div>
-    </aside>
+    ${renderWorkspaceSidebar(atlasWorkspace, "overzicht")}
 
     <div class="workspace-main">
-      <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>Workspace</h2></div><p class="workspace-date">${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></header>
+      <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>De werkelijkheid achter vandaag</h2></div><p class="workspace-date">${escapeHtml(atlasDailyBrief.changedSinceLast)}</p></header>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
 
-      <section class="workspace-section workspace-review-layer" id="werkbeeld" aria-labelledby="review-layer-title">
+      <section class="workspace-position" id="werkelijkheid" aria-labelledby="workspace-position-title">
+        <header>
+          <div><p class="workspace-label">Werkelijkheid</p><h2 id="workspace-position-title">Atlas en de WBD Workspace tonen dezelfde projectstatus.</h2></div>
+          <p>Workspace Sync · GO / Afgerond</p>
+        </header>
+        <dl>
+          <div data-state="completed"><dt>${escapeHtml(wbdProjects[0].id)} · Afgerond</dt><dd>${escapeHtml(wbdProjects[0].latestMilestone)}</dd></div>
+          <div data-state="completed"><dt>${escapeHtml(wbdProjects[1].id)} · Afgerond</dt><dd>${escapeHtml(wbdProjects[1].latestMilestone)}</dd></div>
+          <div data-state="current"><dt>${escapeHtml(currentWorkstream.title)} · Actief</dt><dd>${escapeHtml(currentWorkstream.summary)}</dd></div>
+          <div data-state="next"><dt>${escapeHtml(wbdProjects[2].id)} · Hierna</dt><dd>${escapeHtml(wbdProjects[2].nextValidatedStep)}</dd></div>
+        </dl>
+      </section>
+
+      <section class="workspace-section daily-horizon" id="daily-horizon" aria-labelledby="daily-horizon-title">
+        <header class="workspace-section__header">
+          <div><p class="workspace-label">Horizon</p><h2 id="daily-horizon-title">Niet vergeten. Ook niet naar voren halen.</h2></div>
+          <p>Een ontwikkeling keert alleen terug wanneer de werkelijkheid daarom vraagt.</p>
+        </header>
+        <div class="daily-horizon__list">${dailyHorizon}</div>
+      </section>
+
+      <section class="workspace-section workspace-review-layer" id="werkbeeld" aria-labelledby="review-layer-title" hidden>
         <header class="workspace-section__header">
           <div><p class="workspace-label">${escapeHtml(workspaceReviewLayer.sender)}</p><h2 id="review-layer-title">Open voor beoordeling.</h2></div>
           <p>Wat we hebben vastgesteld, wat nog openstaat en wat bewust kan wachten.</p>
@@ -317,8 +407,26 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
         </footer>
       </section>
 
-      <section class="workspace-section workspace-orientation" id="orientatie" aria-labelledby="orientation-title">
-        <header class="workspace-section__header"><div><p class="workspace-label">Oriëntatie</p><h2 id="orientation-title">Nieuwe werkelijkheid, nog geen case.</h2></div><p>${orientationSummary}</p></header>
+      <section class="workspace-section workspace-room" id="werkruimte" aria-labelledby="workspace-room-title">
+        <header class="workspace-section__header">
+          <div><p class="workspace-label">Werkruimte</p><h2 id="workspace-room-title">Open alleen wat je nodig hebt.</h2></div>
+          <p>De volledige Atlas-werkelijkheid blijft beschikbaar, zonder de dagstart te belasten.</p>
+        </header>
+        <nav class="workspace-room__routes" aria-label="Verdiepende werkruimte">
+          <a href="#praktijkdossiers"><span>Praktijk</span><strong>Onderbouwing en leveringsbeeld</strong><i aria-hidden="true">↓</i></a>
+          <a href="#waarnemen"><span>Waarnemen</span><strong>Bewaar wat je ervaart</strong><i aria-hidden="true">↓</i></a>
+          <a href="#cases"><span>Relaties</span><strong>Werk met betekenis en context</strong><i aria-hidden="true">↓</i></a>
+          <a href="#understanding"><span>Understanding</span><strong>Begrens het begrip</strong><i aria-hidden="true">↓</i></a>
+          <a href="#ideeen"><span>Ideeën</span><strong>Bewaren zonder nu te bouwen</strong><i aria-hidden="true">↓</i></a>
+          <a href="#logboek"><span>Logboek</span><strong>Bewaar wat betekenis heeft</strong><i aria-hidden="true">↓</i></a>
+        </nav>
+      </section>
+
+      <section class="workspace-section workspace-orientation workspace-deep" id="praktijkdossiers" aria-labelledby="orientation-title">
+        <header class="workspace-section__header"><div><p class="workspace-label">Praktijkdossiers</p><h2 id="orientation-title">De onderbouwing blijft dichtbij.</h2></div><p>${orientationSummary}</p></header>
+        <details class="workspace-dossier">
+          <summary><span>Open de actuele praktijkdossiers</span><small>Oriëntatie en leveringsbewijs</small><i aria-hidden="true">+</i></summary>
+          <div class="workspace-dossier__content">
         <div class="workspace-orientations">${orientationCards}</div>
         <article class="workspace-delivery-review" aria-labelledby="delivery-review-title">
           <header class="workspace-delivery-review__header">
@@ -364,6 +472,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
             <ul>${deliverySources}</ul>
           </details>
         </article>
+          </div>
+        </details>
       </section>
 
       <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
@@ -389,7 +499,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
         </div>
       </section>
 
-      <section class="workspace-section workspace-focus" id="focus" aria-labelledby="focus-title">
+      <section class="workspace-section workspace-focus" id="focus" aria-labelledby="focus-title" hidden>
         <header class="workspace-section__header"><div><p class="workspace-label">Atlas heeft afgewogen</p><h2 id="focus-title" data-today-decision></h2></div><p data-today-reason></p></header>
         <a class="workspace-screen-action" data-today-action href="/"><strong data-today-action-label></strong><i aria-hidden="true">→</i></a>
         <details class="workspace-screen-tools" data-focus-tools>

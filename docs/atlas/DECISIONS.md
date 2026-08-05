@@ -106,3 +106,12 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Menselijke grens:** Atlas en Codex mogen voor beide grenzen een onderbouwde kandidaatbeoordeling voorbereiden. Donovan of de verantwoordelijke menselijke eigenaar bevestigt Production GO en Experience GO afzonderlijk.
 - **Gevolg:** Iedere toekomstige Atlas Experience maakt expliciet zichtbaar voor welk GO-moment zij wordt beoordeeld. Releasegereedheid en ervaringsgereedheid kunnen daardoor niet meer stilzwijgend met elkaar worden verwisseld.
 - **Scope:** Dit besluit geldt generiek voor iedere toekomstige Atlas Experience en is niet beperkt tot de We Build And Design-website of Sprint 005.
+
+## D-013 — Modules zijn de werkvorm; connectoren verbinden externe systemen
+
+- **Datum:** 2026-08-05
+- **Status:** Bevestigde WBD-bedrijfsrichting na afronding van Project 001B; geen promotie naar de Atlas Foundation en geen GO voor een volgende uitvoering.
+- **Aanleiding:** De factuurworkflow is binnen de centrale WBD Workspace voor het eerst praktisch gebruikt. Daarmee is zichtbaar geworden welk onderscheid de groei van de Workspace nodig heeft.
+- **Keuze:** Een module is een afzonderlijk bruikbare werkvorm binnen de WBD Workspace. Een connector verbindt zo'n werkvorm met een extern systeem en is geen zelfstandig doel. WBD wil bewezen modules later afzonderlijk commercieel kunnen aanbieden.
+- **Prijsgrens:** Een prijs voor een ontwikkelpartner is niet automatisch een marktprijs. Een toekomstig Value & Pricing Framework moet waarde, doelgroep, bewijs, leveringsvorm, ondersteuning en prijsstelling afzonderlijk toetsen voordat een commerciële moduleprijs wordt vastgesteld.
+- **Gevolg:** Na GO / Afgerond op de Atlas Workspace Sync is Experience Polish de actieve werkstroom. Project 002 blijft de fase hierna. Deze beslissing bouwt geen connector, module, prijsmodel of Sportpaleis-functionaliteit en activeert geen Horizon-item.

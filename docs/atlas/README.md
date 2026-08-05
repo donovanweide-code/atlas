@@ -15,6 +15,7 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 9. [`OBSERVATIONS.md`](OBSERVATIONS.md) — domeingrens, opslag en werkende keten van Waarnemen.
 10. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
 11. [`WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md`](WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md) — permanente merk- en documentbasis voor WBD-facturen en toekomstige zakelijke documenten.
+12. [`WBD-WORKSPACE-FOUNDATION-001B.md`](WBD-WORKSPACE-FOUNDATION-001B.md) — afgesloten WBD Workspace Foundation en Atlas Workspace Sync, actuele ontwikkelpartner en grens van Experience Polish naar Project 002.
 
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 

@@ -29,6 +29,7 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 7. [Atlas herziet zijn begrip zodra de werkelijkheid daarom vraagt](#7-atlas-herziet-zijn-begrip-zodra-de-werkelijkheid-daarom-vraagt)
 8. [Een praktijksignaal krijgt eerst een plek, niet meteen een case](#8-een-praktijksignaal-krijgt-eerst-een-plek-niet-meteen-een-case)
 9. [Technisch gereed en ervaringsgereed zijn twee verschillende grenzen](#9-technisch-gereed-en-ervaringsgereed-zijn-twee-verschillende-grenzen)
+10. [Een ontwikkelpartnerprijs bewijst nog geen marktprijs](#10-een-ontwikkelpartnerprijs-bewijst-nog-geen-marktprijs)
 
 ## 1. Atlas kent de grenzen van zijn begrip
 
@@ -92,3 +93,10 @@ Promotie gebeurt alleen na een besluit van Donovan. Een Candidate verandert de F
 - **Ontdekt tijdens:** De afronding van Sprint 004 en de voorbereiding van de inhoudelijke vervolgfase voor de We Build And Design Experience.
 - **Waarom ontdekt:** De publieke release was stabiel, controleerbaar en herstelbaar, terwijl belangrijke tekst-, fotografie-, bewijs- en vertrouwenslagen nog bewust buiten de technische release vielen. Algemene websitefeedback zou daardoor vooral bekende onvolledigheid beoordelen en tijdelijke onderdelen tot onderdeel van het oordeel maken.
 - **Huidige status:** Decision — op 2026-07-26 via D-012 besloten als permanente kwaliteitscontrole voor iedere Atlas Experience. Herhaling in toekomstige Experiences bepaalt of promotie naar de canonieke Foundation wordt voorgesteld.
+
+## 10. Een ontwikkelpartnerprijs bewijst nog geen marktprijs
+
+- **Principe:** Een prijs binnen een ontwikkelpartnerschap weerspiegelt een specifieke samenwerking, leerwaarde en risicodeling. Zij wordt niet zonder afzonderlijke waardetoets als marktprijs of toekomstige moduleprijs gebruikt.
+- **Ontdekt tijdens:** De afsluiting van Project 001B en de eerste praktische toepassing van de factuurworkflow binnen de WBD Workspace.
+- **Waarom ontdekt:** De Workspace maakt herbruikbare modules voorstelbaar, maar hergebruik en commerciële waarde zijn niet hetzelfde. Zonder toets op doelgroep, bewezen uitkomst, leveringsvorm, ondersteuning en prijsperceptie zou een ontwikkelafspraak te vroeg tot marktwaarheid worden verheven.
+- **Huidige status:** Candidate — D-013 bewaart de actuele WBD-prijsgrens. Een toekomstig Value & Pricing Framework en praktijkbewijs zijn nodig voordat promotie of concrete moduleprijzen worden voorgesteld.

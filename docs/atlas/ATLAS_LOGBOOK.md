@@ -41,3 +41,21 @@ Het Logboek bewaart betekenis, niet iedere activiteit. Voeg een notitie toe wann
 - **Betekenis:** Een betekenisvol praktijksignaal hoeft niet langer te vroeg een case te worden of buiten Atlas te blijven. Oriëntatie bewaart het signaal neutraal als `Nog niet toegewezen` totdat Donovan een expliciete bestemming bevestigt.
 - **Volgende stap:** Toets een volgend werkelijk praktijksignaal aan de nieuwe methode voordat een case-ID, snapshot, Workspace-plaatsing of Kompasprioriteit wordt bepaald.
 - **Herbruikbare les:** Een methode voorkomt vergeten niet door alles direct te structureren, maar door werkelijkheid eerst een neutrale, herleidbare verblijfplaats en een menselijke beslispoort te geven.
+
+### 2026-07-25 — De praktijk wordt opnieuw leidend
+
+- **Type:** beslissing en momentum
+- **Case:** Intern — Atlas / Oriëntatie Bij Cees
+- **Context:** De Recovery bracht de bestaande methode, implementatie en hiaten geordend in beeld. Daarna is de canonieke keten van praktijkbron via menselijk bevestigde context naar een praktijksignaal in `Oriëntatie · Nog niet toegewezen` voor het eerst werkelijk toegepast op Bij Cees. De aansluitende impactreview vond geen nieuw methodisch gat, geen canonieke wijziging en geen implementatiecandidate.
+- **Betekenis:** De Atlas-methode is voldoende stabiel als werkmethode om de nadruk te verleggen van verder methode- en architectuurontwerp naar implementatie en dagelijks praktijkgebruik. Dit is geen claim dat iedere latere fase al volledig is bewezen; juist werkelijk gebruik moet die fasen verder toetsen.
+- **Volgende stap:** Gebruik de bestaande methode in de praktijk. Een specifieke implementatie vereist nog steeds eigen scope en GO. Nieuwe architectuur of methodische wijziging ontstaat alleen wanneer aantoonbare praktijkwerkelijkheid laat zien dat de bestaande canon niet volstaat.
+- **Herbruikbare les:** Stabiliteit betekent niet dat Atlas nooit meer leert. Het betekent dat nieuwe methodische inzichten uit herleidbare praktijkvalidatie ontstaan en niet uit los idee-gedreven ontwerp.
+
+### 2026-08-05 — Atlas Workspace Sync krijgt GO / Afgerond
+
+- **Type:** momentum en les
+- **Case:** 0001 — We Build And Design / Intern — Atlas
+- **Context:** Project 001A en Project 001B zijn in de WBD Workspace afgesloten als GO / Afgerond. F00248 is de eerste definitieve WBD-factuur en Sport 2000 Sportpaleis B.V. de eerste officiële ontwikkelpartner. De daaropvolgende Atlas Workspace Sync is beoordeeld en expliciet goedgekeurd.
+- **Betekenis:** De sync heeft de status **GO / Afgerond**. De WBD Workspace is de centrale interne werkplek en de factuurworkflow de eerste praktisch gebruikte module. Atlas en WBD vertellen hetzelfde verhaal.
+- **Volgende stap:** Experience Polish wordt de actieve afzonderlijke werkstroom: de bestaande Experience behouden en visueel en inhoudelijk verfijnen. Project 002 blijft hierna en start pas na een afzonderlijke nieuwe chat.
+- **Herbruikbare les:** Status, prijsinzicht en Horizon moeten vanuit dezelfde bevestigde werkelijkheid worden bijgewerkt; een ontwikkelpartnerprijs wordt nooit stilzwijgend marktprijs en een volgende projectfase is geen impliciete uitvoerings-GO.
