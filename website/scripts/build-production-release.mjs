@@ -64,7 +64,7 @@ async function main() {
   if (!tag) throw new Error("Immutable tag ontbreekt.");
   if (git("status", "--porcelain")) throw new Error("Release build vereist een schone worktree.");
   const commit = git("rev-parse", "HEAD");
-  if (git("rev-parse", tag) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
+  if (git("rev-parse", `${tag}^{commit}`) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
 
   const explicit = [
     [path.join(websiteRoot, "package.json"), "app/package.json"],
