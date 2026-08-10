@@ -183,7 +183,7 @@ function loadApprovedInlineBrandAssets(brandConfig) {
   if (sha256(bytes) !== asset.sha256) throw new MailFoundationError("BRAND_ASSET_HASH_MISMATCH", "De goedgekeurde mailasset wijkt af van de owner-approved hash.", 500);
   return Object.freeze([Object.freeze({
     id: asset.id,
-    filename: "wbd-logo-mail-safe.png",
+    filename: brandConfig.organization_id === "we-build-and-design" ? "wbd-logo-mail-safe.png" : path.basename(sourcePath),
     mimeType: asset.media_type,
     contentId,
     sizeBytes: bytes.length,
@@ -893,12 +893,21 @@ export class MailFoundation {
   }
 }
 
-export function createMailOrganizations() {
+export function createMailOrganizations({ organizationIds } = {}) {
+  const requestedOrganizations = organizationIds === undefined ? null : new Set(organizationIds);
+  if (requestedOrganizations && [...requestedOrganizations].some((id) => !["sportpaleis", "we-build-and-design"].includes(id))) {
+    throw new MailFoundationError("PERMISSION_DENIED", "Onbekende organisatie voor de Mail Foundation.", 403);
+  }
   const brandRegistry = createOrganizationBrandRegistry();
   const sportpaleisBrandConfig = brandRegistry.get("sportpaleis");
+  const sportpaleisInlineAssets = !requestedOrganizations || requestedOrganizations.has("sportpaleis")
+    ? loadApprovedInlineBrandAssets(sportpaleisBrandConfig)
+    : [];
   const sportpaleisBrand = sportpaleisBrandConfig.brand;
   const wbdBrandConfig = brandRegistry.get("we-build-and-design");
-  const wbdInlineAssets = loadApprovedInlineBrandAssets(wbdBrandConfig);
+  const wbdInlineAssets = !requestedOrganizations || requestedOrganizations.has("we-build-and-design")
+    ? loadApprovedInlineBrandAssets(wbdBrandConfig)
+    : [];
   const wbdBrand = wbdBrandConfig.brand;
   const wbdGeneralPlainFooter = buildOrganizationPlainTextFooter({ brandConfig: wbdBrandConfig });
   const wbdInvoicePlainFooter = buildOrganizationPlainTextFooter({ brandConfig: wbdBrandConfig, email: "facturen@webuildanddesign.nl" });
@@ -1011,7 +1020,7 @@ export function createMailOrganizations() {
       }),
     },
   };
-  return {
+  const organizations = {
     "sportpaleis": {
       id: "sportpaleis", name: "Sport 2000 Sportpaleis B.V.", defaultSenderPolicy: "SPORTPALEIS_BEDRUKKING", senderPolicies: {
         SPORTPALEIS_BEDRUKKING: { key: "SPORTPALEIS_BEDRUKKING", name: "Sport 2000 Sportpaleis - Bedrukking", address: "bedrukking@sportpaleis.nl", status: "VDX_MAILBOX_AND_CONTROLLED_INBOX_CONFIRMED_AUTH_HEADERS_PENDING" },
@@ -1020,7 +1029,7 @@ export function createMailOrganizations() {
       messageIdDomain: "sportpaleis.nl",
       senderPolicyHeader: "X-Sportpaleis-Sender-Policy",
       brandConfig: sportpaleisBrandConfig,
-      inlineAssets: [],
+      inlineAssets: sportpaleisInlineAssets,
       branding: sportBranding,
       smtp: new DisabledSmtpTransport({ host: "mail.hostingserver.nl", port: 465, tls: "IMPLICIT_TLS_REQUIRED", usernameStatus: "REQUIRES_SECRET_REFERENCE" }),
       templates: sportTemplates,
@@ -1051,6 +1060,8 @@ export function createMailOrganizations() {
       permissions: { preview: { WBD_INVOICE_FINAL: ["owner"], WBD_GENERAL_SMTP_TEST: ["owner"] }, send: { WBD_INVOICE_FINAL: ["owner"], WBD_GENERAL_SMTP_TEST: ["owner"] }, history: { "*": ["owner"] } },
     },
   };
+  return Object.fromEntries(Object.entries(organizations)
+    .filter(([organizationId]) => !requestedOrganizations || requestedOrganizations.has(organizationId)));
 }
 
 export function createLocalMailFoundation({ stateFile, captureDirectory, simulation = "success" }) {

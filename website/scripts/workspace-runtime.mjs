@@ -10,6 +10,10 @@ import {
 import { verifyAtlasMariaDbBoundary } from "./atlas-mariadb-boundary.mjs";
 import { SportpaleisMariaDbStore } from "./sportpaleis-mariadb-store.mjs";
 import {
+  SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
+  createSportpaleisProductionMailFoundation,
+} from "./sportpaleis-production-mail.mjs";
+import {
   SportpaleisFileStore,
   SportpaleisPilotService,
   createSportpaleisPilotRequestHandler,
@@ -180,8 +184,15 @@ export async function createWorkspaceRuntimeServer(options = {}) {
             seedPasswords: seedPasswordsFromEnvironment(),
           }));
         activeSportpaleisStore = store;
+        const mailFoundation = config.nodeEnv === "production"
+          ? createSportpaleisProductionMailFoundation({
+            workspaceStore: store,
+            captureDirectory: SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
+          })
+          : options.mailFoundation;
         const service = new SportpaleisPilotService({
           store,
+          mailFoundation,
           releaseId: config.releaseId,
           secureCookies: config.nodeEnv === "production",
           allowedOrigin: new URL(config.workspaceBaseUrl).origin,

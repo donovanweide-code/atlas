@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
   createSportpaleisProductionBootstrap,
+  createSportpaleisPasswordRecord,
   SportpaleisFileStore,
   SportpaleisPilotService,
 } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { SportpaleisMariaDbStore } from "../scripts/sportpaleis-mariadb-store.mjs";
+import {
+  SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
+  createSportpaleisProductionMailFoundation,
+  sportpaleisProductionMailPolicy,
+} from "../scripts/sportpaleis-production-mail.mjs";
 import {
   parseWorkspaceRuntimeConfig,
   productionDatabaseCredentialsFromEnvironment,
@@ -116,6 +122,8 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
   const calls = [];
   const store = {
     async initialize() { calls.push("workspace"); },
+    async read() { throw new Error("not used"); },
+    async mutate() { throw new Error("not used"); },
     async close() {},
   };
   await createWorkspaceRuntimeServer({
@@ -127,7 +135,11 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
   await assert.rejects(
     createWorkspaceRuntimeServer({
       config,
-      sportpaleisStore: { async initialize() { throw new Error("database unavailable"); } },
+      sportpaleisStore: {
+        async initialize() { throw new Error("database unavailable"); },
+        async read() { throw new Error("not used"); },
+        async mutate() { throw new Error("not used"); },
+      },
       verifyAtlasBoundary: async () => undefined,
     }),
     /database unavailable/,
@@ -135,7 +147,18 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
   const source = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
   assert.match(source, /config\.nodeEnv === "production"[\s\S]*SportpaleisMariaDbStore/);
   assert.match(source, /config\.nodeEnv === "production"[\s\S]*await sportpaleisHandler\(\)/);
+  assert.match(source, /createSportpaleisProductionMailFoundation/);
+  assert.match(source, /SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY/);
   assert.doesNotMatch(source, /catch[\s\S]{0,200}SportpaleisFileStore/);
+  assert.doesNotMatch(source, /JsonMailStore|MemoryMailStore|createLocalMailFoundation/);
+  const releaseBuilder = await readFile(new URL("../scripts/build-production-release.mjs", import.meta.url), "utf8");
+  for (const required of [
+    "mail-foundation.mjs",
+    "organization-brand-foundation.mjs",
+    "sportpaleis-production-mail.mjs",
+    "sportpaleis-logo-mail-safe.png",
+  ]) assert.match(releaseBuilder, new RegExp(required.replaceAll(".", "\\.")));
+  assert.doesNotMatch(releaseBuilder, /wbd-logo-mail-safe/);
 });
 
 test("productiebootstrap bevat alleen goedgekeurde referentieconfiguratie en nul accounts/orders", () => {
@@ -169,6 +192,123 @@ test("MariaDB-store initialiseert leeg, bewaart transacties en overleeft een sto
   assert.equal(state.settings.processingDays, 6);
   assert.equal(state.revision, 2);
   assert.equal((await restarted.storageStatus()).engine, "mariadb");
+});
+
+test("production Mail Foundation legt ontvangst netwerkloos en restart-bestendig vast in Workspace MariaDB", async (context) => {
+  const captureDirectory = await mkdtemp(path.join(tmpdir(), "sportpaleis-production-mail-captures-"));
+  context.after(() => rm(captureDirectory, { recursive: true, force: true }));
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const firstStore = new SportpaleisMariaDbStore({ pool });
+  await firstStore.initialize();
+  const password = "Production-Mail-Capture-Only!";
+  await firstStore.mutate(async (state) => {
+    state.users.push({
+      id: "production-mail-admin",
+      name: "Production Mail Admin",
+      initials: "PM",
+      role: "admin",
+      email: "production-mail-admin@sportpaleis.test",
+      status: "Actief",
+      seatType: "customer",
+      salesNumber: null,
+      password: await createSportpaleisPasswordRecord(password),
+    });
+    return { state, value: undefined };
+  });
+
+  const firstFoundation = createSportpaleisProductionMailFoundation({
+    workspaceStore: firstStore,
+    captureDirectory,
+  });
+  assert.equal(firstFoundation.transport.name, "capture");
+  assert.equal(firstFoundation.transport.externalNetworkEnabled, false);
+  assert.equal(sportpaleisProductionMailPolicy.captureDirectory, SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY);
+  assert.equal(sportpaleisProductionMailPolicy.persistence, "workspace-mariadb-runtime-state");
+  const firstService = new SportpaleisPilotService({
+    store: firstStore,
+    mailFoundation: firstFoundation,
+    allowedOrigin: "http://127.0.0.1",
+    mailMode: "capture",
+  });
+  await firstService.initialize();
+  const session = await firstService.login({ email: "production-mail-admin@sportpaleis.test", password });
+  const created = (await firstService.createOrder(session.token, session.csrfToken, {
+    customer: "Capture Validatie",
+    customerEmail: "capture-validatie@example.test",
+    customerPhone: "0612345678",
+    standardPersonalization: {
+      initials: "CV",
+      initialsSemantic: { prefix: "Capture", infix: "", surname: "Validatie" },
+      name: "CAPTURE VALIDATIE",
+      backNumber: "10",
+      backNumberSizeClass: "SENIOR",
+      shortsNumber: "",
+    },
+    items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} }],
+  }, "production-mail-order-create")).value;
+
+  const preview = await firstService.previewOrderMail(session.token, created.id, { templateKey: "ORDER_RECEIVED" });
+  assert.equal(preview.transport, "capture");
+  assert.equal(preview.externalMailSent, false);
+  assert.equal(preview.inlineAssets.length, 1);
+  assert.equal(preview.inlineAssets[0].filename, "sportpaleis-logo-mail-safe.png");
+  assert.equal(preview.inlineAssets[0].sha256, "70c424dcd371bb7f690946d24b6f3aeeea3f7d0f276928c4707951eb8bdd4bb4");
+
+  const captured = await firstService.captureOrderMail(
+    session.token,
+    session.csrfToken,
+    created.id,
+    { templateKey: "ORDER_RECEIVED" },
+    "production-mail-receipt-capture",
+  );
+  assert.equal(captured.status, "CAPTURED");
+  assert.equal(captured.safeResult.confirmedNotSent, true);
+  const duplicate = await firstService.captureOrderMail(
+    session.token,
+    session.csrfToken,
+    created.id,
+    { templateKey: "ORDER_RECEIVED" },
+    "production-mail-receipt-capture",
+  );
+  assert.equal(duplicate.duplicate, true);
+  assert.equal((await firstService.orderMailHistory(session.token, created.id)).length, 1);
+
+  const captures = await readdir(captureDirectory);
+  assert.equal(captures.length, 1);
+  const capture = JSON.parse(await readFile(path.join(captureDirectory, captures[0]), "utf8"));
+  assert.equal(capture.externalNetworkUsed, false);
+  assert.equal(capture.transport, "capture");
+
+  const persisted = await firstStore.read();
+  assert.equal(persisted.mailFoundation.sportpaleis.attempts.length, 1);
+  assert.equal(persisted.orders.find(({ id }) => id === created.id).communication.receipt.status, "CAPTURED");
+
+  const restartedStore = new SportpaleisMariaDbStore({ pool });
+  await restartedStore.initialize();
+  const restartedFoundation = createSportpaleisProductionMailFoundation({
+    workspaceStore: restartedStore,
+    captureDirectory,
+  });
+  const restartedService = new SportpaleisPilotService({
+    store: restartedStore,
+    mailFoundation: restartedFoundation,
+    allowedOrigin: "http://127.0.0.1",
+    mailMode: "capture",
+  });
+  await restartedService.initialize();
+  const historyAfterRestart = await restartedService.orderMailHistory(session.token, created.id);
+  assert.equal(historyAfterRestart.length, 1);
+  assert.equal(historyAfterRestart[0].status, "CAPTURED");
+  const reopened = (await restartedService.bootstrap(session.token)).orders.find(({ id }) => id === created.id);
+  const advanced = await restartedService.advanceOrder(
+    session.token,
+    session.csrfToken,
+    created.id,
+    reopened.revision,
+    "production-mail-order-control",
+  );
+  assert.equal(advanced.value.stage, "CONTROL");
 });
 
 test("tussenvoegsel blijft persistent, heropenbaar en als volledige naam zichtbaar", async (context) => {
