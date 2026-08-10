@@ -8,7 +8,7 @@ function source(path, imagePath) {
   return {
     authority: "SPORTPALEIS_LIVE",
     url: `${BASE_URL}${path}`,
-    imageUrl: `${BASE_URL}${imagePath}`,
+    imageUrl: imagePath ? `${BASE_URL}${imagePath}` : null,
     checkedAt: SPORTPALEIS_LIVE_CATALOG_CHECKED_AT,
   };
 }
@@ -23,7 +23,7 @@ function liveArticle({ association = WATERWIJK_ASSOCIATION, sku, supplierArticle
     articleNumber: sku,
     supplierArticleNumber,
     name,
-    imageKey: `sp-live-${sku}`,
+    imageKey: imagePath ? `sp-live-${sku}` : "sp-live-placeholder",
     category,
     association,
     profileId,
@@ -50,11 +50,11 @@ function liveArticle({ association = WATERWIJK_ASSOCIATION, sku, supplierArticle
       fields: Object.fromEntries(supports.map((field) => [field, "optional"])),
     },
     validation: {
-      status: unresolvedOptions.length ? "PARTIAL" : "VALIDATED",
+      status: unresolvedOptions.length || !imagePath ? "PARTIAL" : "VALIDATED",
       source: `Sportpaleis.nl live · ${provenance.url} · gecontroleerd ${SPORTPALEIS_LIVE_CATALOG_CHECKED_AT}. Technische productievelden volgen uitsluitend info bedrukkingen 2026.xlsx; positie/afstand/rotatie/spiegeling zijn volgens human pilotbeleid niet-blokkerende aandachtspunten.`,
       name: "VALIDATED",
       sku: "VALIDATED",
-      image: "VALIDATED",
+      image: imagePath ? "VALIDATED" : "DATA_GAP",
       variants: "VALIDATED",
       sizes: "VALIDATED",
       personalization: unresolvedOptions.length ? "DATA_GAP" : "VALIDATED",
@@ -91,6 +91,8 @@ const SPORTPALEIS_LIVE_DETAILED_ARTICLES = [
   liveArticle({ sku: "123691", supplierArticleNumber: "410008", name: "ASC Waterwijk TRAINING/UIT SHIRT", path: "/asc-waterwijk-training-uit-shirt_78260.html", imagePath: "/img/asc-waterwijk-training-uit-shirt_1500x1500_145713.webp", sizes: FULL_TO_XXL, category: "Training", profileId: "profile-unmapped-number", options: [{ label: "Nummer", field: null, priceEur: 6.5 }] }),
   liveArticle({ association: "FC Almere", sku: "116597", supplierArticleNumber: "695904", name: "FC Almere Wedstrijdshirt", path: "/fc-almere-wedstrijdshirt_71242.html", imagePath: "/img/fc-almere-wedstrijdshirt_1500x1500_190298.webp", sizes: ["128", "140", "152", "164", "S", "M", "L", "XL", "XXL", "3XL", "3XL/S"], category: "Wedstrijd", profileId: "profile-fc-shirt-home", options: [{ label: "Rugnummer", field: "backNumber", priceEur: 6.5 }] }),
   liveArticle({ association: "FC Almere", sku: "141521", supplierArticleNumber: "420004", name: "FC Almere FC Almere Wedtrijd/training short", path: "/fc-almere-fc-almere-wedtrijd-training-short_96036.html", imagePath: "/img/fc-almere-fc-almere-wedtrijd-training-short_1500x1500_188306.webp", sizes: JR_TO_XXL, category: "Wedstrijd", profileId: "profile-fc-unmapped-number", options: [{ label: "Nummer", field: null, priceEur: 4 }] }),
+  liveArticle({ association: "DCG", sku: "116350", supplierArticleNumber: "105007", name: "DCG Trainingspak", path: "/dcg-trainingspak_70995.html?colorId=12051&size=23083-0", imagePath: null, sizes: ["116", "128", "140", "152", "164", "S", "M", "L", "XL"], category: "Training", profileId: "profile-dcg-initials-set", options: [{ label: "Initialen Trainingsbroek + Trainingstop", field: "initials", priceEur: 7.5 }] }),
+  liveArticle({ association: "MHC Lelystad", sku: "100664", supplierArticleNumber: "LADY AWAY", name: "MHC Lelystad Wedstrijdshirt Uit", path: "/mhc-lelystad-wedstrijdshirt-uit_43564.html?colorId=12022&size=23142-0", imagePath: null, sizes: ["128", "140", "152", "164", "XS", "S", "M", "L", "XL", "XXL"], category: "Wedstrijd", profileId: "profile-mhc-shirt-away", options: [{ label: "Naam opdruk", field: "name", priceEur: 8.5 }, { label: "Rugnummer", field: "backNumber", priceEur: 6.5 }] }),
   liveArticle({ association: "Almerer Pioneers", sku: "116386", supplierArticleNumber: "DM0Q3S25980", name: "Almere Pioneers Wedstrijdshirt Omkeerbaar", path: "/almere-pioneers-wedstrijdshirt-omkeerbaar_71030.html", imagePath: "/img/almere-pioneers-wedstrijdshirt-omkeerbaar_1500x1500_124014.webp", sizes: ["140", "152", "164", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL"], category: "Wedstrijd", profileId: "profile-pioneers-shirt", options: [{ label: "Rug / Borst / Short nummer", field: "backNumber", priceEur: null }, { label: "Naam", field: "name", priceEur: 8.5 }] }),
   liveArticle({ association: "Almerer Pioneers", sku: "116388", supplierArticleNumber: "FM703C25980", name: "Almere Pioneers Shooting Shirt", path: "/almere-pioneers-shooting-shirt_71032.html", imagePath: "/img/almere-pioneers-shooting-shirt_1500x1500_124016.webp", sizes: ["140", "152", "164", "S", "M", "L", "XL", "XXL", "4XL", "10"], category: "Training", profileId: "profile-pioneers-shirt", options: [{ label: "Rug / Borst / Short nummer", field: "backNumber", priceEur: null }, { label: "Naam", field: "name", priceEur: 8.5 }] }),
   liveArticle({ association: "Almerer Pioneers", sku: "116387", supplierArticleNumber: "FP713Z08260", name: "Almere Pioneers Wedstrijdshort", path: "/almere-pioneers-wedstrijdshort_71031.html", imagePath: "/img/almere-pioneers-wedstrijdshort_1500x1500_124015.webp", sizes: ["140", "152", "164", "S", "M", "L", "XL", "XXL", "3XL", "4XL"], category: "Wedstrijd", profileId: "profile-pioneers-shorts", options: [{ label: "Rug / Borst / Short nummer", field: "shortsNumber", priceEur: null }, { label: "Naam", field: "name", priceEur: 8.5 }] }),
@@ -170,11 +172,11 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
 export const SPORTPALEIS_LIVE_EXCLUDED_ARTICLES = [];
 
 export const SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS = [
-  ["A.S.C. Waterwijk", 41, "LIVE"], ["Echtnaton", 6, "LIVE"], ["Almerer Pioneers", 10, "LIVE"], ["Almere'81", 20, "LIVE"],
+  ["A.S.C. Waterwijk", 44, "LIVE"], ["Echtnaton", 6, "LIVE"], ["Almerer Pioneers", 8, "LIVE"], ["Almere'81", 20, "LIVE"],
   ["Almere City Jeugd", 15, "LIVE"], ["AS'80", 53, "LIVE"], ["Brouwer Sports", 8, "LIVE"], ["Buitenhout MHC", 22, "LIVE"],
-  ["DCG", 28, "LIVE"], ["DCG Selectie", 0, "SITE_ERROR_500"], ["EKVA", 17, "LIVE"], ["FC Almere", 31, "LIVE"],
+  ["DCG", 25, "LIVE"], ["DCG Selectie", 0, "SITE_ERROR_500"], ["EKVA", 17, "LIVE"], ["FC Almere", 32, "LIVE"],
   ["FC Almere Selectie", 21, "LIVE"], ["Hasselbaink Voetbal Academy", 6, "LIVE"], ["HBSA", 11, "LIVE"], ["Het Nieuwe Land", 19, "LIVE"],
-  ["Koriander", 14, "LIVE"], ["Najaden", 3, "LIVE"], ["MHC Lelystad", 19, "LIVE"], ["SC Buitenboys", 35, "LIVE"],
+  ["Koriander", 14, "LIVE"], ["Najaden", 3, "LIVE"], ["MHC Lelystad", 28, "LIVE"], ["SC Buitenboys", 35, "LIVE"],
   ["Sloeproeien Almere", 5, "LIVE"], ["s.v. Huizen", 20, "LIVE"], ["s.v. Huizen trainers", 27, "LIVE"], ["Sporting Almere", 26, "LIVE"],
   ["SV Geinburgia", 23, "LIVE"], ["United Dance Almere", 14, "LIVE"], ["VVA/Spartaan", 29, "LIVE"], ["Wooter Academy", 18, "LIVE"],
 ].map(([association, productCount, status]) => ({

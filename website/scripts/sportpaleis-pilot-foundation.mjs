@@ -17,7 +17,7 @@ const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 8;
-const PILOT_RELEASE_ID = "SPW-BEDRUKKING-PILOT-READINESS-007-20260810";
+const PILOT_RELEASE_ID = "SPW-LIVE-PILOT-CORRECTION-001-20260810";
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
 
@@ -42,6 +42,8 @@ PRODUCTION_PROFILES.push(
   { id: "profile-unmapped-number", name: "A.S.C. live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
   { id: "profile-fc-shirt-home", name: "FC Almere wedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A10:J10" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
   { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
+  { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
+  { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myrad pro - Bold / zie map 'Lelystad'", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
   { id: "profile-pioneers-shirt", name: "Almerer Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch · Pioneers cijfercontouren", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
   { id: "profile-pioneers-shorts", name: "Almerer Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch · Pioneers cijfercontouren", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
 );
@@ -67,6 +69,8 @@ for (const profile of PRODUCTION_PROFILES) {
     };
   }
   if (profile.id.startsWith("profile-fc-")) profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A10:J10. Positie, afstand, rotatie en spiegeling onbevestigd.";
+  if (profile.id === "profile-dcg-initials-set") profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A8:J8. Commerciële bedrukoptie: actuele live Sportpaleis-productpagina.";
+  if (profile.id === "profile-mhc-shirt-away") profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A13:J13. Commerciële bedrukopties: actuele live Sportpaleis-productpagina.";
 }
 const pioneersShirtProfile = PRODUCTION_PROFILES.find(({ id }) => id === "profile-pioneers-shirt");
 pioneersShirtProfile.validation = {
@@ -222,17 +226,21 @@ export function migrateSportpaleisPilotState(input) {
     state.associations = SPORTPALEIS_ASSOCIATIONS.map((sourceAssociation) => {
       const existing = state.associations.find(({ id, name }) => id === sourceAssociation.id || name === sourceAssociation.name);
       if (!existing) return structuredClone(sourceAssociation);
-      const validatedJunior = existing.juniorValidationStatus === "VALIDATED" && Number(existing.juniorPhysicalHeightMm) > 0;
+      const existingValidatedJunior = existing.juniorValidationStatus === "VALIDATED" && Number(existing.juniorPhysicalHeightMm) > 0;
       return {
         ...structuredClone(sourceAssociation),
         active: existing.active,
         notes: existing.notes,
+        fontProfile: existing.fontProfile ?? sourceAssociation.fontProfile,
+        foilColors: structuredClone(existing.foilColors ?? sourceAssociation.foilColors),
+        dimensionsCm: structuredClone(existing.dimensionsCm ?? sourceAssociation.dimensionsCm),
         revision: existing.revision ?? 1,
         updatedAt: existing.updatedAt,
         validationHistory: existing.validationHistory ?? [],
-        juniorValidationStatus: validatedJunior ? "VALIDATED" : "DATA_GAP",
-        juniorPhysicalHeightMm: validatedJunior ? Number(existing.juniorPhysicalHeightMm) : null,
-        juniorValidationNote: validatedJunior ? existing.juniorValidationNote : sourceAssociation.juniorValidationNote,
+        juniorValidationStatus: existingValidatedJunior ? "VALIDATED" : sourceAssociation.juniorValidationStatus,
+        juniorPhysicalHeightMm: existingValidatedJunior ? Number(existing.juniorPhysicalHeightMm) : sourceAssociation.juniorPhysicalHeightMm,
+        juniorGarmentSizes: structuredClone(existingValidatedJunior && Array.isArray(existing.juniorGarmentSizes) ? existing.juniorGarmentSizes : sourceAssociation.juniorGarmentSizes),
+        juniorValidationNote: existingValidatedJunior ? existing.juniorValidationNote : sourceAssociation.juniorValidationNote,
       };
     });
   }
@@ -240,6 +248,7 @@ export function migrateSportpaleisPilotState(input) {
     association.revision ??= 1;
     association.validationHistory ??= [];
     association.juniorPhysicalHeightMm ??= null;
+    association.juniorGarmentSizes ??= [];
     if (association.juniorValidationStatus === "VALIDATED" && !(Number(association.juniorPhysicalHeightMm) > 0)) {
       association.juniorValidationStatus = "DATA_GAP";
       association.juniorValidationNote = "Eerdere status had geen fysieke millimeterwaarde en is veilig teruggezet naar DATA_GAP.";
@@ -251,9 +260,10 @@ export function migrateSportpaleisPilotState(input) {
     state.productionProfiles ??= [];
     for (const profile of PRODUCTION_PROFILES) {
       const index = state.productionProfiles.findIndex(({ id }) => id === profile.id);
-      if (index >= 0) state.productionProfiles[index] = structuredClone(profile); else state.productionProfiles.push(structuredClone(profile));
+      if (index < 0) state.productionProfiles.push(structuredClone(profile));
+      else if (Number(state.productionProfiles[index].revision ?? 1) <= 1) state.productionProfiles[index] = structuredClone(profile);
     }
-    const warning = "Capability 003: verenigingsbron opnieuw toegepast; Junior blijft DATA_GAP en A.S.C. Senior staat op bronwaarde 220 mm";
+    const warning = "Correctieronde 1: verenigingsbron behouden; kledingmaten 116–164 gebruiken de human-confirmed Juniorregel van 200 mm";
     if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
   }
   if (previousSchemaVersion < 6) {
@@ -1187,12 +1197,29 @@ export class SportpaleisPilotService {
       if (!association) throw Object.assign(new Error("Vereniging niet gevonden."), { statusCode: 404, code: "ASSOCIATION_NOT_FOUND" });
       const expectedRevision = Number(payload.expectedRevision);
       if (expectedRevision !== Number(association.revision ?? 1)) throw Object.assign(new Error("De vereniging is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: association.revision ?? 1 });
-      const previous = { active: association.active, notes: association.notes, juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm ?? null, juniorValidationNote: association.juniorValidationNote };
+      const previous = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm ?? null, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote };
       if (payload.active !== undefined) association.active = Boolean(payload.active);
       if (payload.notes !== undefined) association.notes = requiredText(payload.notes, "Notitie", 1_000);
+      if (payload.fontProfile !== undefined) association.fontProfile = requiredText(payload.fontProfile, "Letterprofiel", 120);
+      if (payload.foilColors !== undefined) {
+        if (!Array.isArray(payload.foilColors) || payload.foilColors.length < 1 || payload.foilColors.length > 8) throw Object.assign(new Error("Leg minimaal één en maximaal acht foliekleuren vast."), { statusCode: 400, code: "FOIL_COLORS_REQUIRED" });
+        association.foilColors = [...new Set(payload.foilColors.map((color) => requiredText(color, "Foliekleur", 40)))];
+      }
+      if (payload.dimensionsCm !== undefined) association.dimensionsCm = {
+        initialsShirt: nullableNumber(payload.dimensionsCm.initialsShirt, "Initialen shirt", 0.1, 100),
+        backNumberJuniorSourceValue: nullableNumber(payload.dimensionsCm.backNumberJuniorSourceValue, "Junior bronwaarde", 0.1, 100),
+        backNumberSenior: nullableNumber(payload.dimensionsCm.backNumberSenior, "Senior rugnummer", 0.1, 100),
+        chestNumber: nullableNumber(payload.dimensionsCm.chestNumber, "Borstnummer", 0.1, 100),
+        shortsNumber: nullableNumber(payload.dimensionsCm.shortsNumber, "Shortnummer", 0.1, 100),
+        nameHeight: nullableNumber(payload.dimensionsCm.nameHeight, "Naamhoogte", 0.1, 100),
+      };
       if (payload.juniorValidationStatus !== undefined) association.juniorValidationStatus = allowedValue(payload.juniorValidationStatus, ["DATA_GAP", "VALIDATED"], "Juniorstatus");
       if (payload.juniorValidationNote !== undefined) association.juniorValidationNote = requiredText(payload.juniorValidationNote, "Validatiebron", 1_000);
       if (payload.juniorPhysicalHeightMm !== undefined) association.juniorPhysicalHeightMm = payload.juniorPhysicalHeightMm === null || payload.juniorPhysicalHeightMm === "" ? null : Number(payload.juniorPhysicalHeightMm);
+      if (payload.juniorGarmentSizes !== undefined) {
+        if (!Array.isArray(payload.juniorGarmentSizes) || payload.juniorGarmentSizes.length > 20) throw Object.assign(new Error("Ongeldige lijst Junior-kledingmaten."), { statusCode: 400, code: "JUNIOR_GARMENT_SIZES_INVALID" });
+        association.juniorGarmentSizes = [...new Set(payload.juniorGarmentSizes.map((size) => requiredText(size, "Junior-kledingmaat", 20)))];
+      }
       if (association.juniorValidationStatus === "VALIDATED") {
         if (!String(association.juniorValidationNote ?? "").trim()) throw Object.assign(new Error("Een gevalideerde Juniorstatus vereist een expliciete bronnotitie."), { statusCode: 400, code: "VALIDATION_SOURCE_REQUIRED" });
         if (!Number.isFinite(association.juniorPhysicalHeightMm) || association.juniorPhysicalHeightMm <= 0 || association.juniorPhysicalHeightMm > 500) throw Object.assign(new Error("Leg voor Junior een fysieke hoogte tussen 1 en 500 mm vast."), { statusCode: 400, code: "JUNIOR_PHYSICAL_MM_REQUIRED" });
@@ -1202,18 +1229,27 @@ export class SportpaleisPilotService {
       association.revision = (association.revision ?? 1) + 1;
       association.updatedAt = iso();
       association.validationHistory ??= [];
-      const next = { active: association.active, notes: association.notes, juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm, juniorValidationNote: association.juniorValidationNote };
+      const next = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote };
       association.validationHistory.unshift({ at: association.updatedAt, userId: user.id, field: "association", previous, next, source: association.juniorValidationNote || "Admin bevestiging in Workspace" });
-      const linkedProfileIds = new Set(state.articles.filter((article) => article.association === association.name && article.supports?.includes("backNumber")).map(({ profileId }) => profileId));
+      const linkedProfileIds = new Set(state.articles.filter((article) => article.association === association.name).map(({ profileId }) => profileId));
       for (const profile of state.productionProfiles.filter(({ id }) => linkedProfileIds.has(id))) {
-        profile.backNumberSizeClasses ??= {};
-        const previousJunior = structuredClone(profile.backNumberSizeClasses.JUNIOR ?? null);
-        profile.backNumberSizeClasses.JUNIOR = association.juniorValidationStatus === "VALIDATED"
-          ? { physicalHeightMm: association.juniorPhysicalHeightMm, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "VALIDATED", source: association.juniorValidationNote }
-          : { physicalHeightMm: null, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "DATA_GAP", source: association.juniorValidationNote };
+        const previousProfile = structuredClone(profile);
+        profile.fontProfile = association.fontProfile;
+        if (!association.foilColors.some((color) => color.toLocaleLowerCase("nl-NL") === profile.foilColor.toLocaleLowerCase("nl-NL"))) profile.foilColor = association.foilColors[0] ?? profile.foilColor;
+        profile.sizeLabel = associationProfileSizeLabel(association, profile);
+        if (profile.supports?.includes("backNumber")) {
+          profile.backNumberSizeClasses ??= {};
+          profile.backNumberSizeClasses.JUNIOR = association.juniorValidationStatus === "VALIDATED"
+            ? { physicalHeightMm: association.juniorPhysicalHeightMm, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "VALIDATED", source: association.juniorValidationNote }
+            : { physicalHeightMm: null, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "DATA_GAP", source: association.juniorValidationNote };
+        }
         profile.revision = Number(profile.revision ?? 1) + 1;
         profile.validationHistory ??= [];
-        profile.validationHistory.unshift({ at: association.updatedAt, userId: user.id, previous: previousJunior, next: structuredClone(profile.backNumberSizeClasses.JUNIOR), source: association.juniorValidationNote });
+        profile.validationHistory.unshift({ at: association.updatedAt, userId: user.id, previous: previousProfile, next: structuredClone(profile), source: association.juniorValidationNote });
+      }
+      for (const order of state.orders.filter(({ stage }) => stage !== "DONE")) for (const item of order.items.filter(({ association: itemAssociation }) => itemAssociation === association.name)) {
+        const profile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
+        if (profile) item.foilColor = profile.foilColor;
       }
       audit(state, user.id, "Verenigingsinstelling gewijzigd", association.name, { revision: association.revision });
       return { state, value: structuredClone(association) };
@@ -1456,9 +1492,38 @@ function validatePriority(value, user, at) {
   return { enabled: true, requestedBy: requiredText(value.requestedBy, "Aangevraagd door", 120), alignedWith: requiredText(value.alignedWith, "Afgestemd met", 120), reason, reasonLabel: labels[reason], explanation: String(value.explanation ?? "").trim().slice(0, 600), createdAt: at, createdBy: user.id, createdByName: user.name };
 }
 
-function resolveBackNumberProductionContext(profile, sizeClass) {
+function associationProfileSizeLabel(association, profile) {
+  const dimensions = association.dimensionsCm;
+  const labels = [];
+  if (profile.supports?.includes("initials") && dimensions.initialsShirt) labels.push(`Initialen ${dimensions.initialsShirt} cm`);
+  if (profile.supports?.includes("name") && dimensions.nameHeight) labels.push(`Naam ${dimensions.nameHeight} cm`);
+  if (profile.supports?.includes("backNumber")) {
+    if (dimensions.backNumberSenior) labels.push(`Rug Senior ${dimensions.backNumberSenior} cm`);
+    if (association.juniorValidationStatus === "VALIDATED") labels.push(`Rug Junior ${association.juniorPhysicalHeightMm} mm (${(association.juniorGarmentSizes ?? []).join("–")})`);
+  }
+  if (profile.supports?.includes("shortsNumber") && dimensions.shortsNumber) labels.push(`Short ${dimensions.shortsNumber} cm`);
+  return labels.join(" · ") || profile.sizeLabel;
+}
+
+function resolveBackNumberProductionContext(association, profile, sizeClass, garmentSize) {
   if (!sizeClass) return null;
+  if (sizeClass === "JUNIOR" && association?.juniorValidationStatus === "VALIDATED") {
+    const configuredSizes = association.juniorGarmentSizes ?? [];
+    if (configuredSizes.length && !configuredSizes.includes(garmentSize)) return {
+      sizeClass,
+      physicalHeightMm: null,
+      status: "DATA_GAP",
+      source: `De bevestigde Juniorregel geldt alleen voor kledingmaten ${configuredSizes.join(", ")}; maat ${garmentSize} vereist controle.`,
+    };
+    return { sizeClass, physicalHeightMm: association.juniorPhysicalHeightMm, status: "VALIDATED", source: association.juniorValidationNote };
+  }
   const configured = profile.backNumberSizeClasses?.[sizeClass];
+  if (sizeClass === "SENIOR" && configured?.status !== "VALIDATED" && Number(association?.dimensionsCm?.backNumberSenior) > 0) return {
+    sizeClass,
+    physicalHeightMm: Number(association.dimensionsCm.backNumberSenior) * 10,
+    status: "SOURCE_CONFIGURED",
+    source: `${association.source.file} · ${association.source.sheet}!${association.source.range}`,
+  };
   return {
     sizeClass,
     physicalHeightMm: configured?.physicalHeightMm ?? null,
@@ -1499,7 +1564,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         const personalization = populated.map(([key, entry]) => `${labels[key]} ${entry}${key === "backNumber" && appliedBackNumberSizeClass ? ` (${appliedBackNumberSizeClass === "JUNIOR" ? "Junior" : "Senior"})` : ""}`).join(" · ") || "Geen bedrukking";
         const size = String(variant.size ?? "Niet opgegeven").trim().slice(0, 20) || "Niet opgegeven";
         if (article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(size)) throw Object.assign(new Error(`${size} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
-        return { id: `variant-${randomBytes(5).toString("hex")}`, participantName: optional(variant.participantName, 120), quantity: variantQuantity, size, personalization, personalizationValues: applied, initialsSemantic: applied.initials ? (deviation && overrides.initialsSemantic ? overrides.initialsSemantic : standardPersonalization.initialsSemantic) : null, backNumberProduction: resolveBackNumberProductionContext(profile, appliedBackNumberSizeClass), deviation };
+        return { id: `variant-${randomBytes(5).toString("hex")}`, participantName: optional(variant.participantName, 120), quantity: variantQuantity, size, personalization, personalizationValues: applied, initialsSemantic: applied.initials ? (deviation && overrides.initialsSemantic ? overrides.initialsSemantic : standardPersonalization.initialsSemantic) : null, backNumberProduction: resolveBackNumberProductionContext(association, profile, appliedBackNumberSizeClass, size), deviation };
       });
       const distinctSizes = new Set(variants.map(({ size }) => size));
       const distinctPrinting = new Set(variants.map(({ personalization }) => personalization));

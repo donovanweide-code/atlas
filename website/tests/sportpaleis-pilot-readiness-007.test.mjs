@@ -33,10 +33,10 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
 
   await context.test("alle exact vastgelegde live artikelen zijn operationeel bereikbaar en de resterende live-brondekking blijft expliciet onvolledig", async () => {
     const liveInventoryCount = SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ status }) => status === "LIVE").reduce((sum, { productCount }) => sum + productCount, 0);
-    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 46);
+    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 48);
     assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.filter(({ association }) => association === "A.S.C. Waterwijk").length, 41);
     assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.every(({ active, catalogProvenance }) => active && catalogProvenance.authority === "SPORTPALEIS_LIVE"), true);
-    assert.equal(liveInventoryCount, 541);
+    assert.equal(liveInventoryCount, 549);
     assert.ok(SPORTPALEIS_LIVE_PILOT_ARTICLES.length < liveInventoryCount, "volledige live catalogusdekking mag niet ten onrechte als gereed worden gerapporteerd");
   });
 
@@ -117,12 +117,13 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     assert.equal(profile.validation.rotation, "DATA_GAP");
   });
 
-  await context.test("client en server bevatten de nieuwe policy zonder Waterwijk-only of bedrukbaar-only Teamorderfilter", async () => {
+  await context.test("client en server bevatten de nieuwe policy zonder Waterwijk-only cataloguslogica", async () => {
     const client = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
-    assert.match(client, /SPW-BEDRUKKING-PILOT-READINESS-007-20260810/);
+    assert.match(client, /SPW-LIVE-PILOT-CORRECTION-001-20260810/);
     assert.match(client, /Productie-inrichting volgt/);
-    assert.doesNotMatch(client, /active && supports\.length > 0/);
+    assert.match(client, /isBedrukkingRelevant/);
+    assert.doesNotMatch(client, /association === "A\.S\.C\. Waterwijk"/);
     assert.match(server, /const criticalLabels/);
     assert.match(server, /const advisoryLabels/);
     assert.match(server, /status: "ATTENTION"/);

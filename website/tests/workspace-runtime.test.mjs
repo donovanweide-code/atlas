@@ -103,6 +103,10 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.equal(sportpaleisOrder.status, 200);
   assert.match(await sportpaleisOrder.text(), /Workspace shell marker/);
 
+  const sportpaleisActivation = await fetch(`${origin}/workspace/sportpaleis/activeren`);
+  assert.equal(sportpaleisActivation.status, 200);
+  assert.match(await sportpaleisActivation.text(), /Workspace shell marker/);
+
   const unknown = await fetch(`${origin}/workspace/wbd/onbekend`);
   assert.equal(unknown.status, 404);
   assert.match(await unknown.text(), /Workspace shell marker/);

@@ -59,7 +59,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     await assert.rejects(() => service.updateArticle(admin.token, admin.csrfToken, before.id, { expectedRevision: before.revision, availableSizes: [], validation: articleValidation() }), (error) => error.code === "VALIDATED_SIZES_REQUIRED");
     article = await service.updateArticle(admin.token, admin.csrfToken, before.id, {
       expectedRevision: before.revision, active: true, name: before.name, articleNumber: before.articleNumber, imageKey: before.imageKey,
-      association: "A.S.C. Waterwijk", profileId: "profile-shirt", variantLabels: ["Thuis · zwart"], availableSizes: ["S", "M", "L", "XL"],
+      association: "A.S.C. Waterwijk", profileId: "profile-shirt", variantLabels: ["Thuis · zwart"], availableSizes: ["164", "S", "M", "L", "XL"],
       supports: ["initials", "name", "backNumber"], personalizationPolicy: { mode: "combination", fields: { initials: "optional", name: "optional", backNumber: "required" } }, validation: articleValidation(),
     });
     assert.equal(article.validation.status, "VALIDATED");
@@ -68,7 +68,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     const restarted = new SportpaleisFileStore({ filePath: store.filePath, backupDirectory: path.join(root, "backups") });
     await restarted.initialize();
     const persisted = (await restarted.read()).articles.find(({ id }) => id === before.id);
-    assert.deepEqual(persisted.availableSizes, ["S", "M", "L", "XL"]);
+    assert.deepEqual(persisted.availableSizes, ["164", "S", "M", "L", "XL"]);
     assert.equal(persisted.validationHistory[0].userId, "kevin");
     const row = articleToMariaDbRow(persisted, "2026-08-10T12:00:00.000Z");
     assert.deepEqual(mariaDbRowToArticle(row).validation, persisted.validation);
@@ -115,12 +115,13 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
 
   await context.test("Junior wordt pas na fysieke mm plus provenance in gekoppelde productiecontext gevalideerd", async () => {
     const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
-    await assert.rejects(() => service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "VALIDATED", juniorValidationNote: "Testbron zonder mm" }), (error) => error.code === "JUNIOR_PHYSICAL_MM_REQUIRED");
-    const updated = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Test-only fysieke meting 180 mm; geen productiebron" });
+    const reset = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "DATA_GAP", juniorValidationNote: "Test-only reset zonder fysieke mm" });
+    await assert.rejects(() => service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: reset.revision, juniorValidationStatus: "VALIDATED", juniorValidationNote: "Testbron zonder mm" }), (error) => error.code === "JUNIOR_PHYSICAL_MM_REQUIRED");
+    const updated = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: reset.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Test-only fysieke meting 180 mm; geen productiebron" });
     assert.equal(updated.juniorPhysicalHeightMm, 180);
     const profileAfter = (await service.bootstrap(admin.token)).productionProfiles.find(({ id }) => id === "profile-shirt");
     assert.deepEqual(profileAfter.backNumberSizeClasses.JUNIOR, { physicalHeightMm: 180, sourceValueMm: 200, status: "VALIDATED", source: "Test-only fysieke meting 180 mm; geen productiebron" });
-    const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Junior bevestigd", customerEmail: "junior-ok@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "S", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-junior-ok")).value;
+    const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Junior bevestigd", customerEmail: "junior-ok@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "164", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-junior-ok")).value;
     assert.equal(created.items[0].backNumberProduction.physicalHeightMm, 180);
     assert.equal(created.items[0].productionReadiness.status, "CONFIGURED");
     assert.equal(blockedJuniorOrder.items[0].backNumberProduction.status, "DATA_GAP", "bestaande order bewaart de eerdere veilige snapshot");
@@ -134,7 +135,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     const schema = await readFile(new URL("../sportpaleis-server/schema.mysql.sql", import.meta.url), "utf8");
     const migration = await readFile(new URL("../sportpaleis-server/migrations/pilot-readiness-005-to-live-catalog-006.sql", import.meta.url), "utf8");
     assert.match(source, /Artikelbeheer/); assert.match(source, /Validatie en provenance/); assert.match(source, /Fysieke Junior-hoogte \(mm\)/);
-    assert.match(source, /LIVE CATALOGUSBRON/); assert.match(source, /Productieblokkade actief/); assert.match(source, /SPW-BEDRUKKING-PILOT-READINESS-007-20260810/);
+    assert.match(source, /LIVE CATALOGUSBRON/); assert.match(source, /Productieblokkade actief/); assert.match(source, /SPW-LIVE-PILOT-CORRECTION-001-20260810/);
     assert.match(schema, /variant_labels_json/); assert.match(schema, /available_sizes_json/); assert.match(schema, /validation_history_json/);
     assert.match(migration, /catalog_metadata_json/); assert.match(migration, /No deployment or database mutation/);
   });

@@ -161,6 +161,7 @@ export interface AssociationConfiguration {
   };
   juniorValidationStatus: "DATA_GAP" | "VALIDATED";
   juniorPhysicalHeightMm?: number | null;
+  juniorGarmentSizes?: string[];
   juniorValidationNote: string;
   notes: string;
   articleCatalogStatus: string;

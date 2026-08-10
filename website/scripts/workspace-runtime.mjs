@@ -55,6 +55,7 @@ const exactWorkspaceRoutes = new Set([
   `${workspaceBoundary}/kennis`,
   `${workspaceBoundary}/tijdlijn`,
   sportpaleisHome,
+  `${sportpaleisBoundary}/activeren`,
   `${sportpaleisBoundary}/orders`,
   `${sportpaleisBoundary}/orders/nieuw`,
   `${sportpaleisBoundary}/productie`,

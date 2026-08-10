@@ -35,8 +35,8 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
   const { service, admin, operator, storeUser } = await fixture(context);
 
   await context.test("live inventaris vervangt demo-SKU's en bevat meerdere verenigingen", () => {
-    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 46);
-    assert.deepEqual([...new Set(SPORTPALEIS_LIVE_PILOT_ARTICLES.map(({ association }) => association))].sort(), ["A.S.C. Waterwijk", "Almerer Pioneers", "FC Almere"]);
+    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 48);
+    assert.deepEqual([...new Set(SPORTPALEIS_LIVE_PILOT_ARTICLES.map(({ association }) => association))].sort(), ["A.S.C. Waterwijk", "Almerer Pioneers", "DCG", "FC Almere", "MHC Lelystad"]);
     assert.equal(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ status }) => status === "LIVE").length, 27);
     assert.equal(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.find(({ association }) => association === "DCG Selectie").status, "SITE_ERROR_500");
     assert.equal(SPORTPALEIS_LIVE_EXCLUDED_ARTICLES.length, 0);

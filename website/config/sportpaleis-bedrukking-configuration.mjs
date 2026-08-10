@@ -1,4 +1,8 @@
-export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-004-20260810";
+export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-005-20260810";
+
+export const SPORTPALEIS_JUNIOR_GARMENT_SIZES = Object.freeze(["116", "128", "140", "152", "164"]);
+export const SPORTPALEIS_JUNIOR_PHYSICAL_HEIGHT_MM = 200;
+export const SPORTPALEIS_JUNIOR_RULE_SOURCE = "Human productbesluit Sportpaleis 2026-08-10: kledingmaten 116–164 gebruiken een fysiek rugnummer van 20 cm / 200 mm.";
 
 export const SPORTPALEIS_CONFIGURATION_SOURCES = Object.freeze({
   productionMatrix: Object.freeze({
@@ -47,9 +51,10 @@ const association = (row, name, sourceName, fontProfile, foilColors, dimensions 
     shortsNumber: dimensions.shortsNumber ?? null,
     nameHeight: dimensions.nameHeight ?? null,
   }),
-  juniorValidationStatus: "DATA_GAP",
-  juniorPhysicalHeightMm: null,
-  juniorValidationNote: "De bronwaarde is nog niet fysiek bevestigd door Sportpaleis productie en wordt daarom niet als productiemaat gebruikt.",
+  juniorValidationStatus: "VALIDATED",
+  juniorPhysicalHeightMm: SPORTPALEIS_JUNIOR_PHYSICAL_HEIGHT_MM,
+  juniorGarmentSizes: SPORTPALEIS_JUNIOR_GARMENT_SIZES,
+  juniorValidationNote: SPORTPALEIS_JUNIOR_RULE_SOURCE,
   notes,
   articleCatalogStatus: name === "A.S.C. Waterwijk"
     ? "PILOT_CATALOG_PRESERVED_SOURCE_VALIDATION_PARTIAL"
@@ -82,7 +87,7 @@ export const SPORTPALEIS_ASSOCIATIONS = Object.freeze([
 ]);
 
 export const SPORTPALEIS_DATA_GAPS = Object.freeze([
-  "Fysieke Junior-rugnummerhoogte per vereniging is nog niet door Sportpaleis productie bevestigd.",
+  "Junior-rugnummerhoogte buiten kledingmaten 116–164 is niet bevestigd; alleen 116, 128, 140, 152 en 164 gebruiken de gevalideerde 200 mm-regel.",
   "Artikelprijzen en bedrukkingsprijzen ontbreken in de beschikbare gevalideerde bronnen.",
   "Voor 18 van de 20 bekende verenigingen ontbreekt een gevalideerde artikelcatalogus.",
   "Het FC Almere-artikelnummer en de productafbeelding zijn nog niet gevalideerd.",

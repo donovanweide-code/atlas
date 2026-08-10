@@ -147,7 +147,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
     const schema = await readFile(new URL("../sportpaleis-server/schema.mysql.sql", import.meta.url), "utf8");
     const migration = await readFile(new URL("../sportpaleis-server/migrations/008a-to-pilot-001.sql", import.meta.url), "utf8");
-    assert.match(source, /SPW-BEDRUKKING-PILOT-READINESS-007-20260810/); assert.match(source, /Junior of senior/); assert.match(source, /preventScroll: true/);
+    assert.match(source, /SPW-LIVE-PILOT-CORRECTION-001-20260810/); assert.match(source, /Junior of senior/); assert.match(source, /preventScroll: true/);
     assert.match(source, /const draftOrderMeta = emptyOrderMeta\(\)/); assert.match(source, /editing\?\.customer \?\? draftOrderMeta\.customer/);
     assert.match(styles, /\.sp-selected-item\.has-deviation[^}]+var\(--sp-red\)/s); assert.match(styles, /390px|390 px/); assert.doesNotMatch(styles, /has-deviation[^}]+#d59b00/s);
     assert.match(schema, /back_number_size_classes_json/); assert.match(schema, /communication_json/); assert.match(schema, /sp_order_item_variants/);

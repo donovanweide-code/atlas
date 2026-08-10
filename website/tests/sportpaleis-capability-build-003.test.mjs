@@ -30,14 +30,16 @@ const emptyPrinting = { initials: "", name: "", backNumber: "", backNumberSizeCl
 test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
   const { root, store, service, admin, operator, storeUser } = await fixture(context);
 
-  await context.test("de echte verenigingsconfiguratie is server-owned en behoudt alle datagaten", async () => {
+  await context.test("de echte verenigingsconfiguratie is server-owned en behoudt alleen resterende datagaten", async () => {
     const state = await service.bootstrap(admin.token);
     assert.equal(state.schemaVersion, 8);
     assert.equal(state.associations.length, 20);
     assert.deepEqual(state.associations.map(({ name }) => name), SPORTPALEIS_ASSOCIATIONS.map(({ name }) => name));
     const asc = state.associations.find(({ name }) => name === "A.S.C. Waterwijk");
     assert.equal(asc.dimensionsCm.backNumberSenior, 22);
-    assert.equal(asc.juniorValidationStatus, "DATA_GAP");
+    assert.equal(asc.juniorValidationStatus, "VALIDATED");
+    assert.equal(asc.juniorPhysicalHeightMm, 200);
+    assert.deepEqual(asc.juniorGarmentSizes, ["116", "128", "140", "152", "164"]);
     assert.equal(state.productionProfiles.find(({ id }) => id === "profile-shirt").sizeLabel, "Senior rugnummer 22 cm");
     assert.equal(state.productionProfiles.find(({ id }) => id === "profile-shorts").sizeLabel, "Shortnummer 7,5 cm");
     assert.equal(state.productionProfiles.find(({ id }) => id === "profile-initials").sizeLabel, "Initialen 3 cm");

@@ -9,6 +9,7 @@ import type {
   OrderPersonalization,
   CatalogArticle,
   ProductionProfile,
+  AssociationConfiguration,
 } from "./workspace-data.ts";
 
 const API = "/api/sportpaleis/v1";
@@ -297,7 +298,7 @@ export class SportpaleisPilotApi {
     await responseBody(await this.#mutatingFetch(`${API}/admin/articles/${encodeURIComponent(articleId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateAssociation(associationId: string, input: { expectedRevision: number; active?: boolean; notes?: string; juniorValidationStatus?: "DATA_GAP" | "VALIDATED"; juniorPhysicalHeightMm?: number | null; juniorValidationNote?: string }): Promise<void> {
+  async updateAssociation(associationId: string, input: { expectedRevision: number; active?: boolean; notes?: string; fontProfile?: string; foilColors?: string[]; dimensionsCm?: AssociationConfiguration["dimensionsCm"]; juniorValidationStatus?: "DATA_GAP" | "VALIDATED"; juniorPhysicalHeightMm?: number | null; juniorGarmentSizes?: string[]; juniorValidationNote?: string }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/associations/${encodeURIComponent(associationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
