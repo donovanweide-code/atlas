@@ -67,7 +67,7 @@ async function main() {
   if (git("rev-parse", `${tag}^{commit}`) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
 
   const explicit = [
-    [path.join(websiteRoot, "package.json"), "app/package.json"],
+    [path.join(websiteRoot, "package.production.json"), "app/package.json"],
     [path.join(websiteRoot, "package-lock.json"), "app/package-lock.json"],
     [path.join(websiteRoot, "scripts", "workspace-runtime.mjs"), "app/scripts/workspace-runtime.mjs"],
     [path.join(websiteRoot, "scripts", "workspace-runtime-config.mjs"), "app/scripts/workspace-runtime-config.mjs"],
@@ -79,6 +79,7 @@ async function main() {
     [path.join(websiteRoot, "config", "sportpaleis-live-pilot-catalog.mjs"), "app/config/sportpaleis-live-pilot-catalog.mjs"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
+    [path.join(websiteRoot, ".env.production.example"), "deployment/production.env.example"],
   ].map(([absolute, archive]) => ({ absolute, archive }));
   const files = [
     ...explicit,
