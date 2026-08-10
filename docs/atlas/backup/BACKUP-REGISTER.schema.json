@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.webuildanddesign.nl/atlas/backup-register.schema.json",
+  "title": "Atlas Backup Register",
+  "description": "Provider-neutral, secret-free metadata for backup and recovery capabilities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "nullableDateTime": {
+      "oneOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "organisation_id",
+        "environment",
+        "service_capability",
+        "backup_type",
+        "source_system",
+        "storage_category",
+        "provider_dependency",
+        "frequency",
+        "expected_freshness",
+        "retention",
+        "encryption_status",
+        "owner",
+        "recovery_owner",
+        "last_successful_backup",
+        "last_integrity_check",
+        "last_restore_test",
+        "next_restore_due",
+        "recovery_objective",
+        "evidence_reference",
+        "current_status",
+        "attention_reason",
+        "notes"
+      ],
+      "properties": {
+        "organisation_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+        "environment": {
+          "type": "string",
+          "enum": ["local-development", "local-isolated-validation", "preview-public", "production-public", "production-application", "internal-workspace-local", "future"]
+        },
+        "service_capability": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "backup_type": {
+          "type": "string",
+          "enum": ["provider_backup", "application_database_backup", "off_provider_copy", "recovery_evidence", "configuration_dns_evidence"]
+        },
+        "source_system": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "storage_category": {
+          "type": "string",
+          "enum": ["primary_provider", "secondary_cloud_encrypted", "offline_encrypted_media", "local_encrypted", "git_repository", "evidence_only", "unknown"]
+        },
+        "provider_dependency": {
+          "type": "string",
+          "enum": ["primary_provider_only", "same_account_or_failure_domain", "independent_provider", "offline_independent", "not_applicable", "unknown"]
+        },
+        "frequency": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "expected_freshness": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "retention": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "encryption_status": {
+          "type": "string",
+          "enum": ["client_side_verified", "provider_managed_documented", "encrypted_not_verified", "not_required_public_reproducible", "unencrypted", "unknown"]
+        },
+        "owner": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "recovery_owner": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "last_successful_backup": { "$ref": "#/$defs/nullableDateTime" },
+        "last_integrity_check": { "$ref": "#/$defs/nullableDateTime" },
+        "last_restore_test": { "$ref": "#/$defs/nullableDateTime" },
+        "next_restore_due": { "$ref": "#/$defs/nullableDateTime" },
+        "recovery_objective": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "evidence_reference": {
+          "oneOf": [
+            { "type": "string", "minLength": 2, "maxLength": 240 },
+            { "type": "null" }
+          ]
+        },
+        "current_status": {
+          "type": "string",
+          "enum": ["verified", "documented_not_verified", "recovery_verified", "proposed", "attention", "urgent", "unknown", "retired"]
+        },
+        "attention_reason": {
+          "oneOf": [
+            { "type": "string", "minLength": 2, "maxLength": 240 },
+            { "type": "null" }
+          ]
+        },
+        "notes": { "type": "string", "maxLength": 500 }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,59 @@
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+*ed25519
+*.credentials.json
+service-account*.json
+client_secret_*.json
+/.secrets/
+/.credentials/
+
+# Known local credential stores (legacy; move outside the repository)
+/Wachtwoorden.txt
+/Analytics@webuildanddesign.nl.txt
+
+# Codex and task-local working artifacts
+/.codex-tmp/
+/tmp/
+/release/
+
+# Generated review and local runtime artefacts (kept locally, never released)
+/output/
+/outputs/
+/review/
+/data/
+/invoices/wbd/data/concepts/
+/invoices/wbd/data/sent/
+/website/output/
+/website/tmp/
+/website/design/previews/
+/website/design/reality/
+/website/design/validation/
+/website/dist-context-first/
+/website/dist-experience/
+/website/scripts/__pycache__/
+/ops/production/test/run-mariadb-integration.ps1
+
+# Local exports, backup by-products, and logs
+*.bak
+*.backup
+*.dump
+*.sql.gz
+*.export
+*.log
+
+# Editor and operating-system by-products
+~$*
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

@@ -1,0 +1,53 @@
+{
+  "candidate_version": "WBD-LOGO-CANDIDATE-004C1",
+  "status": "OWNER_APPROVED",
+  "owner_approved": true,
+  "logo_redesigned": false,
+  "created_on": "2026-08-09",
+  "approval": {
+    "approved_by": "owner / Donovan",
+    "approval_date": "2026-08-09",
+    "decision": "GO - WBD Mail 004C.2"
+  },
+  "origin": {
+    "website_component_commit": "ca3d1bd90128ae25c033eae2c9b73d95b0c1d512",
+    "website_component_date": "2026-07-26",
+    "invoice_vector_commit": "e91b80a0eddf1cf495d66587b1c71e0d081ac5da",
+    "invoice_vector_date": "2026-08-04",
+    "basis": "Exact geometry, type choices and proportions from invoices/wbd/brand.py, itself documented as the vector translation of the current public WBD mark."
+  },
+  "source_hashes_sha256": {
+    "website/src/public-pages.ts": "b5a51c6a8939afa7f44f43830506a9f35e987c81de23e0d41815b0b16a1a5657",
+    "website/src/styles/public-pages.css": "d01275c46d202dabbcada79ad21eaf0c7857574c9d9c9d47cdae8816382427d2",
+    "invoices/wbd/brand.py": "29218c287ddff7706a002d182a217d411d0bc5f2ff313e2e826432d877c516c4",
+    "invoices/wbd/invoice.py": "6d01a32aa2c992d7127599ab8546476b33a38c7a74cf915abf23c94e03bdeca7"
+  },
+  "derived_assets": {
+    "wbd-logo-light-candidate.svg": {
+      "sha256": "1e0f76446e922204b6ac36e01d5abb3daeed1dda43c49e6ef6464100789ad525",
+      "intended_usage": "owner-approved light derivative for night-green WBD surfaces"
+    },
+    "wbd-logo-mail-safe-dark-candidate.png": {
+      "sha256": "19fa7ab551dbefbd69f49733c5ccdd6c9aa046dc3d2d1d6e8c7d2d0df8ce6052",
+      "intended_usage": "owner-approved transparent dark raster derivative for light WBD surfaces"
+    },
+    "wbd-logo-mail-safe-light-candidate.png": {
+      "sha256": "342ecff3490157106f4a71161d54407b3f6aad71be48c09e5720bdc183e4d9f4",
+      "intended_usage": "owner-approved mail-safe CID derivative for WBD mail header and footer"
+    },
+    "wbd-logo-master-candidate.svg": {
+      "sha256": "b82bcb75111105cf5017c61ae9661be3ae7cccfdecd77e3f0f723585d99524c5",
+      "intended_usage": "owner-approved scalable WBD master authority"
+    }
+  },
+  "fonts": [
+    "Georgia Regular (C:/Windows/Fonts/georgia.ttf)",
+    "Arial Bold (C:/Windows/Fonts/arialbd.ttf)"
+  ],
+  "master_geometry": {
+    "source_coordinate_system": "0 0 118 43",
+    "export_viewbox": "-2 -2 122 47",
+    "source_aspect_ratio": 2.744186046511628,
+    "export_padding_units": 2
+  }
+}

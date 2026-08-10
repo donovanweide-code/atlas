@@ -16,6 +16,12 @@ De vormgeving vertaalt de huidige WBD-identiteit naar een rustige zakelijke toep
 
 De merkcomponent is herleidbaar naar `website/src/main.ts`, `website/src/styles/main.css` en `website/src/styles/public-pages.css`. Nieuwe zakelijke documenten gebruiken `brand.py` en bouwen geen eigen logovariant.
 
+## Invoer vanuit de WBD Workspace
+
+Voor normaal gebruik hoeft geen JSON-bestand te worden geopend. Ga naar `Business Foundation → Finance → Facturen → Nieuwe factuur`, technisch `/workspace/wbd/business-foundation/finance/facturen/nieuw`.
+
+De Workspace bewaart concepten onder `data/concepts/`, toont live totalen via dezelfde Decimal-berekening in `invoice.py` en roept voor de PDF dezelfde generator aan. Een concept kan vanuit het Facturen-overzicht opnieuw worden geopend en aangepast. Na expliciete bevestiging verplaatst `Factuur definitief maken` het document naar `data/sent/`; daar is het zowel in de interface als in de lokale bridge inhoudelijk vergrendeld. De definitieve PDF wordt tegelijk onder `output/pdf/sent/` gegenereerd en blijft vanuit de rechterkolom beschikbaar voor openen, downloaden en printen. Dit verstuurt nog geen e-mail en maakt geen boekhoudboeking. `Templates` heeft bewust nog geen workflow.
+
 ## Bedragen inclusief en exclusief btw
 
 Iedere regel heeft een expliciete `price_mode`:

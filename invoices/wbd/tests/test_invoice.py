@@ -8,7 +8,7 @@ from pathlib import Path
 MODULE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODULE_DIR))
 
-from invoice import calculate_invoice, calculate_line, validate_release_state  # noqa: E402
+from invoice import calculation_response, calculate_invoice, calculate_line, validate_release_state  # noqa: E402
 
 
 class InvoiceCalculationTests(unittest.TestCase):
@@ -67,6 +67,30 @@ class InvoiceCalculationTests(unittest.TestCase):
         self.assertEqual(line.net, Decimal("75.00"))
         self.assertEqual(line.vat, Decimal("15.75"))
         self.assertEqual(line.gross, Decimal("90.75"))
+
+    def test_workspace_calculation_response_uses_existing_decimal_logic(self):
+        response = calculation_response(
+            [
+                {
+                    "description": "Inclusive",
+                    "quantity": "1",
+                    "unit_price": "100.00",
+                    "vat_rate": "21",
+                    "price_mode": "inclusive",
+                },
+                {
+                    "description": "Exclusive",
+                    "quantity": "1",
+                    "unit_price": "75.00",
+                    "vat_rate": "21",
+                    "price_mode": "exclusive",
+                },
+            ]
+        )
+
+        self.assertEqual(response["lines"][0], {"net": "82.64", "vat": "17.36", "gross": "100.00"})
+        self.assertEqual(response["lines"][1], {"net": "75.00", "vat": "15.75", "gross": "90.75"})
+        self.assertEqual(response["totals"], {"exclusive": "157.64", "vat": "33.11", "inclusive": "190.75"})
 
     def test_final_document_is_blocked_while_blockers_remain(self):
         with self.assertRaisesRegex(ValueError, "validation blockers"):

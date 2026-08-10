@@ -5,14 +5,31 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:experience": "vite --config vite.experience.config.ts",
+    "dev:context-first": "vite --config vite.context-first.config.ts",
     "build": "tsc && vite build && node scripts/verify-public-build.mjs",
+    "build:workspace": "tsc && vite build --config vite.workspace.config.ts && node scripts/verify-workspace-build.mjs && node --check scripts/workspace-runtime-config.mjs && node --check scripts/workspace-runtime.mjs",
+    "build:experience": "tsc && vite build --config vite.experience.config.ts && node scripts/prepare-experience-package.mjs",
+    "build:context-first": "tsc && vite build --config vite.context-first.config.ts",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
+    "start:workspace": "node scripts/workspace-runtime.mjs",
+    "migrate:production": "node scripts/production-migrate.mjs",
+    "release:production": "node scripts/build-production-release.mjs",
     "verify:public-build": "node scripts/verify-public-build.mjs",
-    "validate:release": "node scripts/release-validation.mjs"
+    "validate:release": "node scripts/release-validation.mjs",
+    "sync:connector:wbd": "node --experimental-strip-types scripts/atlas-connector-sync.mjs",
+    "mail:smtp:controlled": "node scripts/wbd-controlled-smtp-validation.mjs",
+    "mail:smtp:sportpaleis:controlled": "node scripts/sportpaleis-controlled-smtp-validation.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
+  },
+  "dependencies": {
+    "mariadb": "^3.4.5"
   }
 }

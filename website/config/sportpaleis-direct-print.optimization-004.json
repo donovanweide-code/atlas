@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "optimization": "Sportpaleis Direct Print Optimization 004",
+  "batchingKey": "foilColor",
+  "absoluteMaxWidthMm": 450,
+  "preferredWorkingWidthMm": 440,
+  "minimumCutGapMm": 6.4,
+  "minimumCutGapStatus": "TEMPORARY_OFFLINE_TEST_VALUE_REQUIRES_PHYSICAL_VALIDATION",
+  "maxJobLengthMm": null,
+  "hardwareSendEnabled": false
+}

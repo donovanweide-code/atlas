@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "sourceId": "public-wbd-home-2026-08-04",
+  "organizationAliases": ["We Build And Design", "WBD"],
+  "canonicalUrl": "https://webuildanddesign.nl/",
+  "acceptedHosts": ["webuildanddesign.nl", "www.webuildanddesign.nl"],
+  "retrievedAt": "2026-08-04T04:15:13.8506430+02:00",
+  "acquisition": {
+    "method": "explicit-local-snapshot-from-live-public-source",
+    "homepageBytes": 2571,
+    "homepageSha256": "9E76676D983EE725892716644881EE16578C02C3CB3C2C0C886C7525616FF937",
+    "bundlePath": "/assets/index-BqT0vFtt.js",
+    "bundleBytes": 82156,
+    "bundleSha256": "B635124C28AB13FC9A8CFC6677572E9E8560ADDC35113961518989490CE94720"
+  },
+  "observations": [
+    {
+      "id": "public-home-positioning",
+      "statement": "De publieke homepage opent met begrijpen als vertrekpunt.",
+      "evidenceExcerpt": "Begrijpen is het vertrekpunt.",
+      "sourceUrl": "https://webuildanddesign.nl/#eerste-publieke-minuut"
+    },
+    {
+      "id": "public-home-method",
+      "statement": "We Build And Design zegt eerst te onderzoeken hoe een organisatie werkt, wat goed gaat en waar mensen vastlopen.",
+      "evidenceExcerpt": "We Build And Design onderzoekt eerst hoe een organisatie werkt, wat goed gaat en waar mensen vastlopen.",
+      "sourceUrl": "https://webuildanddesign.nl/#eerste-publieke-minuut"
+    },
+    {
+      "id": "public-home-entry",
+      "statement": "De zichtbare uitnodiging aan een ondernemer is om te vertellen wat er speelt.",
+      "evidenceExcerpt": "Vertel wat er speelt",
+      "sourceUrl": "https://webuildanddesign.nl/contact"
+    },
+    {
+      "id": "public-home-options",
+      "statement": "De site houdt de uiteindelijke oplossingsvorm bewust open tot de praktijk is begrepen.",
+      "evidenceExcerpt": "De juiste keuze ontstaat pas wanneer de praktijk voldoende is begrepen.",
+      "sourceUrl": "https://webuildanddesign.nl/#digitaal-fundament"
+    }
+  ],
+  "questionGrounding": {
+    "publicPromiseObservationId": "public-home-method",
+    "visibleEntryObservationId": "public-home-entry",
+    "unknown": "Hoe de eerste vrije beschrijving van een ondernemer wordt omgezet in een eerste gedeeld beeld van de organisatie."
+  }
+}

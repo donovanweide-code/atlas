@@ -1,0 +1,16 @@
+{
+  "bridgeId": "wbd-sportpaleis-bridge-001",
+  "hardwareSendEnabled": false,
+  "absoluteMaxWidthMm": 450,
+  "preferredWorkingWidthMm": 440,
+  "minimumCutGapMm": 6.4,
+  "pollIntervalMs": 2000,
+  "claimLeaseMs": 30000,
+  "device": {
+    "expectedModel": "Summa S75T",
+    "assetSerial": "410810-10007",
+    "logicalUsbPort": 1,
+    "expectedHardwareIds": [],
+    "expectedDriverProvider": "Summa"
+  }
+}

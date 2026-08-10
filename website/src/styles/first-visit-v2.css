@@ -1,0 +1,81 @@
+.first-visit {
+  min-height: 100svh;
+}
+
+.first-visit-mobile-preview body,
+.first-visit-mobile-preview #app {
+  width: 430px;
+  min-width: 430px;
+  max-width: 430px;
+  overflow-x: hidden;
+}
+
+.first-visit-mobile-preview .experience-workspace {
+  padding-inline: 1.15rem;
+}
+
+.first-visit-mobile-preview .experience-question h1 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 2.65rem;
+}
+
+.first-visit-mobile-preview .experience-question p,
+.first-visit-mobile-preview .first-visit__question-preview h2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.first-visit-mobile-preview .first-visit__question-preview h2 {
+  overflow-wrap: anywhere;
+  font-size: 1.45rem;
+}
+
+.first-visit__question,
+.first-visit__picture {
+  max-width: 44rem;
+}
+
+.first-visit .experience-button,
+.first-visit .experience-text-action {
+  min-height: 44px;
+}
+
+.first-visit__line {
+  max-width: 38rem;
+  color: var(--experience-muted);
+}
+
+.first-visit input {
+  width: 100%;
+  min-height: 3.25rem;
+  margin: 0.65rem 0 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--experience-cream) 28%, transparent);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--experience-cream);
+  font: inherit;
+  padding: 0.85rem 1rem;
+}
+
+.first-visit input:focus-visible {
+  border-color: var(--experience-gold);
+  outline: 2px solid color-mix(in srgb, var(--experience-gold) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.first-visit__question-preview {
+  margin: 2rem 0;
+  padding: 1.5rem 0;
+  border-block: 1px solid color-mix(in srgb, var(--experience-cream) 16%, transparent);
+}
+
+.first-visit__question-preview p {
+  color: var(--experience-muted);
+}
+
+.first-visit__question-preview h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.45rem, 4vw, 2.15rem);
+  line-height: 1.2;
+}

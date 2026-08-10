@@ -1,7 +1,9 @@
+@import "./variables.css";
+
 :root {
-  font-family: Arial, sans-serif;
-  color: #152019;
-  background: #f3f0e9;
+  font-family: var(--wbd-font-sans);
+  color: var(--wbd-ink);
+  background: var(--wbd-cream);
 }
 
 * {
@@ -26,6 +28,16 @@ a {
 button,
 a {
   font: inherit;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--wbd-focus-color);
+  outline-offset: 4px;
 }
 
 .page {

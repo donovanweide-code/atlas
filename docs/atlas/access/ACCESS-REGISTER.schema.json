@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.local/schemas/access-register.schema.json",
+  "title": "Atlas Access Register",
+  "description": "Secretvrij register van menselijke en machine-access capabilities. Secretwaarden en volledige accountidentifiers zijn verboden.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "register_status", "generated_at", "records"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "register_status": {
+      "enum": ["verified", "documented_but_not_verified", "unknown", "recommendation", "conflict", "human_verification_required"]
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/access_record" }
+    }
+  },
+  "$defs": {
+    "nullable_date": {
+      "anyOf": [{ "type": "string", "format": "date" }, { "type": "null" }]
+    },
+    "nullable_datetime": {
+      "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+    },
+    "access_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_id",
+        "organisation_id",
+        "environment",
+        "capability",
+        "system_provider",
+        "account_class",
+        "human_or_machine",
+        "owner",
+        "authority_role",
+        "privilege_scope",
+        "execution_boundary",
+        "authentication_method_class",
+        "secret_location_class",
+        "production_impact",
+        "provider_constraint",
+        "recovery_route_status",
+        "last_reviewed",
+        "expires_at",
+        "rotation_trigger",
+        "revocation_status",
+        "status",
+        "evidence_reference",
+        "notes"
+      ],
+      "properties": {
+        "access_id": {
+          "type": "string",
+          "pattern": "^access-[a-z0-9][a-z0-9-]{2,63}$"
+        },
+        "organisation_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+        },
+        "environment": {
+          "enum": ["local", "development", "preview", "staging", "production", "production_shared", "recovery", "future"]
+        },
+        "capability": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "system_provider": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "account_class": {
+          "enum": ["human_named", "human_shared_legacy", "machine_service", "temporary_task", "runtime_application", "provider_recovery", "none"]
+        },
+        "human_or_machine": {
+          "enum": ["human", "machine", "not_applicable"]
+        },
+        "owner": {
+          "description": "Rol of organisatie-eigenaar; geen loginnaam of e-mailadres.",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "authority_role": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "privilege_scope": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 240
+        },
+        "execution_boundary": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 240
+        },
+        "authentication_method_class": {
+          "enum": ["password_mfa", "password", "ssh_public_key", "api_token", "application_runtime_secret", "recovery_route", "not_applicable", "unknown"]
+        },
+        "secret_location_class": {
+          "enum": ["human_bitwarden", "temporary_restricted_local", "provider_private_config", "machine_secret_store", "not_applicable", "unknown"]
+        },
+        "production_impact": {
+          "enum": ["none", "low", "medium", "high", "critical"]
+        },
+        "provider_constraint": {
+          "type": "string",
+          "maxLength": 320
+        },
+        "recovery_route_status": {
+          "enum": ["verified", "documented_but_not_verified", "unknown", "not_configured", "not_applicable", "human_verification_required"]
+        },
+        "last_reviewed": { "$ref": "#/$defs/nullable_date" },
+        "expires_at": { "$ref": "#/$defs/nullable_datetime" },
+        "rotation_trigger": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["suspected_compromise", "role_or_owner_change", "repository_or_log_exposure", "provider_requirement", "privilege_change", "risk_review", "task_complete", "not_applicable"]
+          }
+        },
+        "revocation_status": {
+          "enum": ["not_applicable", "not_required", "planned", "active", "revoked", "expired", "unknown"]
+        },
+        "status": {
+          "enum": ["verified", "documented_but_not_verified", "unknown", "recommendation", "conflict", "human_verification_required"]
+        },
+        "evidence_reference": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 240 }
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 600
+        }
+      }
+    }
+  }
+}

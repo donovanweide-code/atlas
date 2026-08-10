@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.webuildanddesign.nl/atlas/dns-register.schema.json",
+  "title": "Atlas DNS Register",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "captured_at", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organisation_id", "zone", "record_name", "record_type", "ttl_seconds", "value_summary", "purpose", "owner", "provider", "environment", "web_dependency", "mail_dependency", "dnssec_dependency", "evidence_status", "evidence_reference", "last_verified_at", "change_class", "risk", "conflict", "human_verification_required", "notes"],
+      "properties": {
+        "organisation_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+        "zone": { "type": "string", "format": "hostname" },
+        "record_name": { "type": "string", "minLength": 1, "maxLength": 253 },
+        "record_type": { "type": "string", "enum": ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "CAA", "DS", "OTHER"] },
+        "ttl_seconds": { "type": ["integer", "null"], "minimum": 0 },
+        "value_summary": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "purpose": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "owner": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "provider": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "environment": { "type": "string", "enum": ["production-public", "production-application", "preview-public", "mail", "shared", "future"] },
+        "web_dependency": { "type": "boolean" },
+        "mail_dependency": { "type": "boolean" },
+        "dnssec_dependency": { "type": "boolean" },
+        "evidence_status": { "type": "string", "enum": ["verified", "documented_not_verified", "unknown", "recommendation", "conflict"] },
+        "evidence_reference": { "type": ["string", "null"], "maxLength": 240 },
+        "last_verified_at": { "type": ["string", "null"], "format": "date-time" },
+        "change_class": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "risk": { "type": "string", "enum": ["low", "medium", "high", "critical", "unknown"] },
+        "conflict": { "type": "boolean" },
+        "human_verification_required": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 500 }
+      }
+    }
+  }
+}
+

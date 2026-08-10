@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-07T08:00:00Z",
+  "entries": [
+    {
+      "organisation_id": "example-org",
+      "zone": "example.org",
+      "record_name": "@",
+      "record_type": "A",
+      "ttl_seconds": 300,
+      "value_summary": "public web target; value intentionally omitted",
+      "purpose": "canonical public website",
+      "owner": "organisation owner",
+      "provider": "example authoritative DNS provider",
+      "environment": "production-public",
+      "web_dependency": true,
+      "mail_dependency": false,
+      "dnssec_dependency": false,
+      "evidence_status": "verified",
+      "evidence_reference": "secret-free-public-dns-observation",
+      "last_verified_at": "2026-08-07T08:00:00Z",
+      "change_class": 2,
+      "risk": "high",
+      "conflict": false,
+      "human_verification_required": false,
+      "notes": "Example only; not an active change instruction."
+    },
+    {
+      "organisation_id": "example-org",
+      "zone": "example.org",
+      "record_name": "selector-c._domainkey",
+      "record_type": "CNAME",
+      "ttl_seconds": 3600,
+      "value_summary": "DKIM provider target; exact value omitted",
+      "purpose": "outbound mail authentication",
+      "owner": "mail owner",
+      "provider": "example mail provider",
+      "environment": "mail",
+      "web_dependency": false,
+      "mail_dependency": true,
+      "dnssec_dependency": false,
+      "evidence_status": "conflict",
+      "evidence_reference": "secret-free-dkim-resolution-check",
+      "last_verified_at": "2026-08-07T08:00:00Z",
+      "change_class": 3,
+      "risk": "high",
+      "conflict": true,
+      "human_verification_required": true,
+      "notes": "Do not remove until provider and representative mail headers identify active selectors."
+    }
+  ]
+}
+

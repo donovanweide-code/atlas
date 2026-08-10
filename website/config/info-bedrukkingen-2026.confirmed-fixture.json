@@ -1,0 +1,25 @@
+{
+  "source": { "file": "info bedrukkingen 2026.xlsx", "sheet": "Blad1", "range": "A1:J21", "capturedAt": "2026-08-10" },
+  "rows": [
+    { "row": 2, "name": "Almere'81", "fontProfile": "Myriad Pro - Italic", "foilColors": [], "dimensionsCm": {}, "notes": "Bedrukking volgens bron: doen we zelf." },
+    { "row": 3, "name": "Almerer Pioneers", "fontProfile": "FFF englisch | zie map 'Pioneers'", "foilColors": ["Wit"], "dimensionsCm": { "backNumberJuniorSourceValue": 16, "backNumberSenior": 20, "chestNumber": 8, "shortsNumber": 8, "nameHeight": 2 }, "notes": "Maximale naambreedte 9 cm; Caps Lock aan." },
+    { "row": 4, "name": "As,8o", "fontProfile": "Spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "shortsNumber": 7.5 }, "notes": "" },
+    { "row": 5, "name": "A.S.C. Waterwijk", "fontProfile": "schluber (spain = thuis wedstrijdshirt/short)", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "Wedstrijdshirt thuis is zwart; maximale breedte 22,5 cm." },
+    { "row": 6, "name": "Brouwersports", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "" },
+    { "row": 7, "name": "Buitenhout MHC", "fontProfile": "Myrad pro - Bold / zie map 'Buitenhout'", "foilColors": ["Wit"], "dimensionsCm": { "backNumberJuniorSourceValue": 20, "backNumberSenior": 20, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "Nummer is outline; naam met hoofdletter." },
+    { "row": 8, "name": "DCG", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "" },
+    { "row": 9, "name": "EKVA", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "chestNumber": 7.5, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "" },
+    { "row": 10, "name": "FC Almere", "fontProfile": "schluber (spain = thuis wedstrijdshirt/short)", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "" },
+    { "row": 11, "name": "FC Huizen", "fontProfile": "spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "chestNumber": 3, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "" },
+    { "row": 12, "name": "HBSA", "fontProfile": "Viking-Normal", "foilColors": ["Geel"], "dimensionsCm": { "nameHeight": 2 }, "notes": "Bedrukking volgens bron: doen we zelf." },
+    { "row": 13, "name": "MHC Lelystad", "fontProfile": "Myrad pro - Bold / zie map 'Lelystad'", "foilColors": ["Wit", "Zwart"], "dimensionsCm": { "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "nameHeight": 3.2 }, "notes": "Uit is zwart; thuis is wit. Nummer is outline; naam met hoofdletter." },
+    { "row": 14, "name": "Najaden", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 20, "chestNumber": 7.5, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "" },
+    { "row": 15, "name": "SC Buitenboys", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "Wedstrijdshirt thuis is navy blue." },
+    { "row": 16, "name": "SC Geinburgia", "fontProfile": "Spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3.5, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "" },
+    { "row": 17, "name": "Sporting Almere", "fontProfile": "Spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3.5, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "" },
+    { "row": 18, "name": "VVA / Spartaan", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "Wedstrijdshirt thuis is zwart." },
+    { "row": 19, "name": "Wooter", "fontProfile": "spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3.5 }, "notes": "" },
+    { "row": 20, "name": "Sloeproeien", "fontProfile": "X", "foilColors": ["Wit"], "dimensionsCm": {}, "notes": "" },
+    { "row": 21, "name": "Hasselbaink", "fontProfile": "Spain", "foilColors": ["Wit"], "dimensionsCm": { "backNumberJuniorSourceValue": 20, "backNumberSenior": 22 }, "notes": "" }
+  ]
+}

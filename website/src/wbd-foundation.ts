@@ -1,6 +1,7 @@
 import "./styles/wbd-foundation.css";
 import { wbdWorkspace } from "./workspace-config";
 import { renderWorkspaceSidebar } from "./workspace-shell";
+import { workspaceDocumentTitle } from "./workspace-routes";
 import {
   currentWorkstream,
   developmentHistory,
@@ -82,7 +83,7 @@ function renderShell(activeId: string, title: string, kicker: string, context: s
   return `<main class="atlas-workspace workspace-experience workspace-experience--wbd">
     <div class="workspace-shell">
       ${renderWorkspaceSidebar(wbdWorkspace, activeId)}
-      <div class="workspace-main wbd-dossier-main wbd-foundation-main">
+      <div class="workspace-main wbd-dossier-main wbd-foundation-main" id="workspace-main-content" tabindex="-1">
         <header class="workspace-header workspace-placeholder-header">
           <div><p class="workspace-kicker">${escapeHtml(kicker)}</p><h1>${escapeHtml(title)}</h1></div>
           <p class="workspace-date">${escapeHtml(context)}</p>
@@ -142,16 +143,16 @@ function projectCard(project: WbdProject, detailed = false): string {
 }
 
 function renderOverview(app: HTMLDivElement): void {
-  document.title = "Overzicht — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Home");
   const next = wbdProjects.find((project) => project.id === "002")!;
-  app.innerHTML = renderShell("overzicht", "De actuele bedrijfspraktijk", "We Build And Design · Overzicht", "5 augustus 2026", `
+  app.innerHTML = renderShell("overzicht", "Vandaag in de Workspace", "We Build And Design · Home", formatDate(today()), `
     <section class="wbd-foundation-opening" aria-labelledby="current-focus-title">
-      <div><p class="workspace-label">Verdient vandaag aandacht</p><h2 id="current-focus-title">${escapeHtml(currentWorkstream.title)} is de actieve werkstroom.</h2><p>${escapeHtml(currentWorkstream.summary)}</p></div>
-      <dl><div><dt>Afgerond</dt><dd>Atlas Workspace Sync · GO / Afgerond</dd></div><div><dt>Hierna</dt><dd>002 · Infrastructure Foundation</dd></div></dl>
+      <div><p class="workspace-label">Vastgelegde aandacht · Project 001C</p><h2 id="current-focus-title">${escapeHtml(currentWorkstream.title)} is de actieve werkstroom.</h2><p>${escapeHtml(currentWorkstream.summary)}</p></div>
+      <dl><div><dt>Datastatus</dt><dd>Lokale, handmatig vastgelegde projectstatus</dd></div><div><dt>Hierna</dt><dd>002 · Infrastructure Foundation</dd></div></dl>
     </section>
     <nav class="wbd-foundation-entry-grid" aria-label="Belangrijkste werkruimtes">
       <a href="/workspace/wbd/ontwikkelpartners"><span>01</span><strong>Ontwikkelpartner</strong><p>Sport 2000 Sportpaleis B.V. · actief</p></a>
-      <a href="/workspace/wbd/ontwikkeling/monitor"><span>02</span><strong>Ontwikkelmonitor</strong><p>${escapeHtml(currentWorkstream.nextStep)}</p></a>
+      <a data-tone="cream" href="/workspace/wbd/ontwikkeling/monitor"><span>02</span><strong>Ontwikkelmonitor</strong><p>${escapeHtml(currentWorkstream.nextStep)}</p></a>
       <a href="/workspace/wbd/business-foundation/finance"><span>03</span><strong>Financiën</strong><p>F00248 · € 331,01 inclusief btw</p></a>
       <a href="/workspace/wbd/infrastructuur"><span>04</span><strong>Infrastructuur</strong><p>${escapeHtml(next.nextValidatedStep)}</p></a>
     </nav>
@@ -159,7 +160,7 @@ function renderOverview(app: HTMLDivElement): void {
 }
 
 function renderProjects(app: HTMLDivElement): void {
-  document.title = "Projecten — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Projecten");
   app.innerHTML = renderShell("projecten", "Projecten", "We Build And Design · Roadmap", "Afgerond · Actief · Horizon", `
     <p class="wbd-page-intro">De projectvolgorde maakt zichtbaar wat afgerond is, wat nu aandacht verdient en wat bewust pas daarna start.</p>
     <section class="wbd-foundation-opening"><div><p class="workspace-label">Actieve werkstroom</p><h2>${escapeHtml(currentWorkstream.title)}</h2><p>${escapeHtml(currentWorkstream.summary)}</p></div><dl><div><dt>Grens</dt><dd>${escapeHtml(currentWorkstream.boundaries)}</dd></div></dl></section>
@@ -170,7 +171,7 @@ function renderProjects(app: HTMLDivElement): void {
 
 function renderPartners(app: HTMLDivElement): void {
   const partner = firstDevelopmentPartner;
-  document.title = "Ontwikkelpartners — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Ontwikkelpartners");
   app.innerHTML = renderShell("ontwikkelpartners", "Ontwikkelpartners", "We Build And Design · Praktijkvalidatie", "1 actieve ontwikkelpartner", `
     <p class="wbd-page-intro">Ontwikkelpartners brengen echte werksituaties in de ontwikkeling zonder eigenaar te worden van de WBD- of Atlas-fundering.</p>
     <article class="workspace-section wbd-foundation-partner">
@@ -186,7 +187,7 @@ function renderPartners(app: HTMLDivElement): void {
 }
 
 function renderMonitor(app: HTMLDivElement): void {
-  document.title = "Ontwikkelmonitor — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Ontwikkelmonitor");
   app.innerHTML = renderShell("ontwikkeling", "Ontwikkelmonitor", "Ontwikkeling · Aandacht", "Betekenis boven techniek", `
     ${renderDevelopmentNav("monitor")}
     <p class="wbd-page-intro">Een rustige monitor voor projecten en gevalideerde vervolgstappen. Technische activiteit blijft buiten beeld.</p>
@@ -196,7 +197,7 @@ function renderMonitor(app: HTMLDivElement): void {
 }
 
 function renderHistory(app: HTMLDivElement): void {
-  document.title = "Ontwikkelhistorie — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Ontwikkelhistorie");
   app.innerHTML = renderShell("ontwikkeling", "Ontwikkelhistorie", "Ontwikkeling · Betekenisvolle mijlpalen", "Van publieke basis naar infrastructuur", `
     ${renderDevelopmentNav("history")}
     <p class="wbd-page-intro">Deze historie beschrijft wat iedere stap voor de bedrijfspraktijk betekent. Onbekende historische datums zijn bewust niet ingevuld.</p>
@@ -213,7 +214,7 @@ function feedbackCard(entry: FeedbackEntry): string {
 }
 
 async function renderFeedback(app: HTMLDivElement): Promise<void> {
-  document.title = "Feedback — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Feedback");
   app.innerHTML = renderShell("ontwikkeling", "Feedback", "Ontwikkeling · Bewijs uit de praktijk", "Gescheiden van ideeën en roadmap", `
     ${renderDevelopmentNav("feedback")}
     <p class="wbd-page-intro">Leg concrete feedback uit echte werksituaties vast en verbind die met de juiste organisatie, het project en het onderdeel.</p>
@@ -283,7 +284,7 @@ function invoiceRow(invoice: InvoiceSummary, storage: "concept" | "sent", paymen
 }
 
 async function renderFinance(app: HTMLDivElement): Promise<void> {
-  document.title = "Financieel overzicht — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Financieel overzicht");
   app.innerHTML = renderShell("business-foundation", "Financieel overzicht", "Business Foundation · Finance", "Eenvoudige financiële basis", `
     ${renderBusinessNav("finance")}
     <p class="wbd-page-intro">Uitgaande facturen komen rechtstreeks uit de bestaande factuurworkflow. Alleen de betaalstatus wordt hier apart en handmatig bijgehouden.</p>
@@ -321,14 +322,14 @@ async function renderFinance(app: HTMLDivElement): Promise<void> {
 }
 
 function renderIncoming(app: HTMLDivElement): void {
-  document.title = "Inkomende facturen — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Inkomende facturen");
   app.innerHTML = renderShell("business-foundation", "Inkomende facturen", "Business Foundation · Finance", "Voorbereid, nog niet geautomatiseerd", `
     ${renderBusinessNav("incoming")}
     <section class="workspace-section wbd-foundation-empty-state"><span aria-hidden="true">IN</span><div><p class="workspace-label">Nog leeg</p><h2>Leveranciersfacturen krijgen hier later hun plek.</h2><p>Deze structuur is voorbereid voor facturen van onder andere TransIP, OpenAI en andere zakelijke leveranciers.</p><small>Geen e-mailimport, OCR, automatische verwerking of boekhoudexport actief.</small></div></section>`);
 }
 
 function renderBusinessFoundation(app: HTMLDivElement): void {
-  document.title = "Business Foundation — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Business Foundation");
   app.innerHTML = renderShell("business-foundation", "Business Foundation", "We Build And Design · Bedrijfsbasis", "Blijvende bedrijfsmiddelen", `
     ${renderBusinessNav("foundation")}
     <p class="wbd-page-intro">De blijvende basis voor bedrijfsgegevens, financiën en herbruikbare documenten. Projectbestanden blijven daarvan gescheiden.</p>
@@ -341,21 +342,21 @@ function renderBusinessFoundation(app: HTMLDivElement): void {
 }
 
 function renderCompany(app: HTMLDivElement): void {
-  document.title = "Bedrijfsgegevens — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Bedrijfsgegevens");
   app.innerHTML = renderShell("business-foundation", "Bedrijfsgegevens", "Business Foundation · Organisatie", "Bron voor zakelijke documenten", `
     ${renderBusinessNav("company")}
     <section class="workspace-section wbd-foundation-company"><header><div><p class="workspace-label">Vaste afzender</p><h2>We Build And Design</h2></div><span>Gedeeld door factuursjabloon</span></header><dl><div><dt>Vestigingsadres</dt><dd>Gerard Terborchstraat 35<br>1318 LE Almere</dd></div><div><dt>KvK</dt><dd>69326126</dd></div><div><dt>Btw-nummer</dt><dd>NL190255879B01</dd></div><div><dt>IBAN</dt><dd>NL16 KNAB 0603 6280 95</dd></div><div><dt>E-mail</dt><dd>info@webuildanddesign.nl</dd></div><div><dt>Website</dt><dd>webuildanddesign.nl</dd></div></dl><footer>Deze pagina leest de bevestigde bedrijfsbasis; wijzigingen horen gecontroleerd in de centrale templatebron plaats te vinden.</footer></section>`);
 }
 
 function renderTemplates(app: HTMLDivElement): void {
-  document.title = "Templates — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Templates");
   app.innerHTML = renderShell("business-foundation", "Templates", "Business Foundation · Hergebruik", "Eén vaste zakelijke basis", `
     ${renderBusinessNav("templates")}
     <section class="workspace-section wbd-foundation-template"><header><div><p class="workspace-label">Permanent bedrijfsmiddel</p><h2>WBD-factuursjabloon</h2></div><strong class="wbd-foundation-state" data-tone="positive">Actief</strong></header><p>De vaste branding, afzendergegevens, btw-berekening, validatie en PDF-opmaak vormen samen de herbruikbare basis voor WBD-facturen.</p><dl><div><dt>Werkplek</dt><dd>Business Foundation → Finance → Facturen</dd></div><div><dt>Doel</dt><dd>Consistente wettelijke en visuele facturen genereren.</dd></div><div><dt>Hergebruik</dt><dd>Basis voor toekomstige offertes en zakelijke documenten, zonder klantgebonden kopieën.</dd></div></dl><a href="/workspace/wbd/business-foundation/finance/facturen">Open factuurworkflow <span aria-hidden="true">→</span></a></section>`);
 }
 
 function renderInfrastructure(app: HTMLDivElement): void {
-  document.title = "Infrastructuur — We Build And Design Workspace";
+  document.title = workspaceDocumentTitle("Infrastructuur");
   app.innerHTML = renderShell("infrastructuur", "Infrastructuur", "We Build And Design · Hierna", "Project 002 · Nog niet gestart", `
     <p class="wbd-page-intro">De bekende toekomstige scope blijft zichtbaar, maar Experience Polish verdient eerst aandacht. Er zijn geen connectors of monitors actief.</p>
     <section class="workspace-section wbd-foundation-infrastructure"><header><div><p class="workspace-label">Infrastructure Foundation</p><h2>Van lokale Workspace naar een veilige online basis</h2></div><strong class="wbd-foundation-state" data-tone="waiting">Hierna</strong></header><div>${infrastructureItems.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong data-tone="${item.tone}">${escapeHtml(item.status)}</strong></article>`).join("")}</div><footer><p>Project 002 bevat later TransIP-hosting, domein en SSL, back-ups, infrastructuurinzicht en zakelijke e-mail via SMTP en later IMAP.</p><small>Niet gebouwd en niet gestart: servermonitoring, SMTP, IMAP of TransIP-connector.</small></footer></section>`);
@@ -384,5 +385,5 @@ export function renderWbdFoundation(app: HTMLDivElement): void {
   if (pathname === "/workspace/wbd/business-foundation/bedrijfsgegevens") return renderCompany(app);
   if (pathname === "/workspace/wbd/business-foundation/templates") return renderTemplates(app);
   if (pathname === "/workspace/wbd/infrastructuur") return renderInfrastructure(app);
-  renderOverview(app);
+  throw new Error("Onbekende WBD Foundation-route.");
 }

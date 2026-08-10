@@ -1,0 +1,16 @@
+<?php
+declare(strict_types=1);
+
+return [
+    'base_url' => 'https://experience.webuildanddesign.nl',
+    'database' => [
+        'dsn' => 'mysql:host=YOUR_TRANSIP_DATABASE_HOST;dbname=YOUR_DATABASE_NAME;charset=utf8mb4',
+        'username' => 'YOUR_DATABASE_USER',
+        'password' => 'YOUR_DATABASE_PASSWORD',
+    ],
+    // Maak deze hash buiten de documentroot met password_hash($password, PASSWORD_ARGON2ID)
+    // of PASSWORD_DEFAULT wanneer Argon2id op de hosting niet beschikbaar is.
+    'admin_password_hash' => 'REPLACE_WITH_PASSWORD_HASH',
+    'admin_session_name' => 'wbd_experience_observatory',
+    'participant_cookie_name' => 'wbd_experience_access',
+];

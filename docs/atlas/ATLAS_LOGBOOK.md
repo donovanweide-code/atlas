@@ -59,3 +59,12 @@ Het Logboek bewaart betekenis, niet iedere activiteit. Voeg een notitie toe wann
 - **Betekenis:** De sync heeft de status **GO / Afgerond**. De WBD Workspace is de centrale interne werkplek en de factuurworkflow de eerste praktisch gebruikte module. Atlas en WBD vertellen hetzelfde verhaal.
 - **Volgende stap:** Experience Polish wordt de actieve afzonderlijke werkstroom: de bestaande Experience behouden en visueel en inhoudelijk verfijnen. Project 002 blijft hierna en start pas na een afzonderlijke nieuwe chat.
 - **Herbruikbare les:** Status, prijsinzicht en Horizon moeten vanuit dezelfde bevestigde werkelijkheid worden bijgewerkt; een ontwikkelpartnerprijs wordt nooit stilzwijgend marktprijs en een volgende projectfase is geen impliciete uitvoerings-GO.
+
+### 2026-08-06 — Project 001 wordt inhoudelijk overgedragen aan Project 002
+
+- **Type:** beslissing en momentum
+- **Case:** 0001 — We Build And Design / Intern — Atlas
+- **Context:** UXA-01 tot en met UXA-06 en Project 001D hebben samen één geïntegreerde releasecandidate opgeleverd. De laatste kandidaatvalidatie slaagde met 244 van 244 regressietests, TypeScript, beide builds, de public-only-grens, browserconsole en diffcontrole. De productiepreflight bevestigde tegelijk dat structurele hosting van de interne Workspaces nog een infrastructuurafhankelijkheid is.
+- **Betekenis:** Project 001 is inhoudelijk en applicatietechnisch **GO / Afgerond**. Er zijn geen open product- of UX-blockers. Publicatie, hosting, toegang, monitoring, restore en rollback worden niet als productwerk heropend maar formeel gedragen door Project 002 — Infrastructure Foundation.
+- **Volgende stap:** Sluit eerst de eigen GO-poorten van Project 002B. Start Project 002C uitsluitend na een afzonderlijk besluit; verander de goedgekeurde productwerking niet stil om een infrastructuurbeperking te omzeilen.
+- **Herbruikbare les:** Productgereed en verantwoord online zijn twee verschillende kwaliteitsgrenzen. Een productfase kan inhoudelijk sluiten wanneer de resterende blokkade aantoonbaar infrastructuur betreft en met eigenaarschap, scope en heropeningscriteria is overgedragen.

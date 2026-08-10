@@ -63,7 +63,7 @@ export function mountObservationCapture(): void {
       </header>
       <p class="atlas-observe__support">Beschrijf de waarneming. De betekenis volgt later.</p>
       <form data-observe-form>
-        <label class="atlas-observe__text"><span class="sr-only">Waarneming</span><textarea name="text" rows="4" maxlength="1200" required></textarea></label>
+        <label class="atlas-observe__text"><span class="sr-only">Observatie</span><textarea name="text" rows="4" maxlength="1200" required></textarea></label>
         <section class="atlas-observe__context" aria-labelledby="atlas-observe-context-title">
           <div class="atlas-observe__context-heading">
             <div><p>Atlas herkent</p><h3 id="atlas-observe-context-title">Bevestig deze context</h3></div>
@@ -72,8 +72,8 @@ export function mountObservationCapture(): void {
           <dl>
             <div><dt>Pagina</dt><dd data-observe-page></dd></div>
             <div><dt>Ervaringsgrens</dt><dd><select name="boundary" aria-label="Betekenisvolle ervaringsgrens"></select></dd></div>
-            <div><dt>Case</dt><dd>0001 · We Build And Design</dd></div>
-            <div><dt>Sprint</dt><dd data-observe-sprint></dd></div>
+            <div><dt>Bron</dt><dd data-observe-source></dd></div>
+            <div><dt>Beoordeling</dt><dd data-observe-review-owner></dd></div>
             <div><dt>Viewport</dt><dd data-observe-viewport></dd></div>
           </dl>
         </section>
@@ -101,7 +101,8 @@ export function mountObservationCapture(): void {
   });
 
   root.querySelector<HTMLElement>("[data-observe-page]")!.textContent = page.label;
-  root.querySelector<HTMLElement>("[data-observe-sprint]")!.textContent = observingContext.sprintId;
+  root.querySelector<HTMLElement>("[data-observe-source]")!.textContent = observingContext.source.label;
+  root.querySelector<HTMLElement>("[data-observe-review-owner]")!.textContent = observingContext.ownership.reviewOwner;
 
   const refreshContext = () => {
     boundarySelect.value = detectedBoundary(boundaryElements);
@@ -141,6 +142,14 @@ export function mountObservationCapture(): void {
     textField.setCustomValidity("");
     const saved = saveObservation(localStorage, {
       text: textField.value,
+      source: {
+        id: `${observingContext.source.id}:${page.id}:${boundary.id}`,
+        kind: "surface",
+        label: `${observingContext.source.label} · ${page.label}`,
+        origin: observingContext.source.origin,
+        path,
+        locator: `${path}${boundary.hash}`,
+      },
       context: {
         surface: "public",
         path,
@@ -149,18 +158,17 @@ export function mountObservationCapture(): void {
         pageLabel: page.label,
         boundaryId: boundary.id,
         boundaryLabel: boundary.label,
-        caseId: "0001",
-        sprintId: observingContext.sprintId,
         viewport: { width: window.innerWidth, height: window.innerHeight },
       },
+      ownership: observingContext.ownership,
     });
     if (!saved) {
-      confirmation.textContent = "Waarneming kon niet lokaal worden bewaard.";
+      confirmation.textContent = "Observatie kon niet lokaal worden bewaard.";
       return;
     }
     form.reset();
     boundarySelect.value = boundary.id;
-    confirmation.textContent = "Waarneming bewaard · nog niet beoordeeld";
+    confirmation.textContent = "Observatie bewaard · nog niet beoordeeld";
     textField.focus();
   });
 

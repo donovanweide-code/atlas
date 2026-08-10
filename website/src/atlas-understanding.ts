@@ -1,3 +1,6 @@
+import { publicMethod } from "./public-method.ts";
+import type { Observation } from "./atlas-observations.ts";
+
 export const understandingKinds = [
   { id: "source", label: "Bron", plural: "Bronnen", description: "Waar komt deze informatie vandaan?" },
   { id: "observation", label: "Waarneming", plural: "Waarnemingen", description: "Wat is feitelijk gezien, gehoord of gebeurd?" },
@@ -13,6 +16,8 @@ export const understandingKinds = [
 ] as const;
 
 export type UnderstandingKind = (typeof understandingKinds)[number]["id"];
+
+export const understandingEntryKinds = understandingKinds.filter((kind) => kind.id !== "observation");
 
 export const understandingStatuses = [
   { id: "observed", label: "Waargenomen" },
@@ -46,6 +51,7 @@ export interface UnderstandingItem {
   visibility: UnderstandingVisibility;
   createdAt: string;
   updatedAt: string;
+  sourceObservationId?: string;
 }
 
 interface UnderstandingSnapshot {
@@ -55,6 +61,7 @@ interface UnderstandingSnapshot {
   status: UnderstandingStatus;
   uncertainty: UnderstandingItem["uncertainty"];
   visibility: UnderstandingVisibility;
+  sourceObservationId?: string;
 }
 
 export interface UnderstandingRevision {
@@ -100,6 +107,7 @@ export interface AddUnderstandingItemInput {
   uncertainty?: UnderstandingItem["uncertainty"];
   visibility?: UnderstandingVisibility;
   createdAt?: string;
+  sourceObservationId?: string;
 }
 
 export interface ReviseUnderstandingItemInput {
@@ -118,8 +126,8 @@ export const understandingStorageKey = "atlas.workspace.understanding.v1";
 
 export const understandingMethod = {
   phase: "Understanding",
-  publicTruth: "Een eerste antwoord is niet automatisch de werkelijke vraag.",
-  publicQuestion: "Wat moet er eerst helder worden voordat bouwen betekenis krijgt?",
+  publicTruth: publicMethod.truth,
+  publicQuestion: publicMethod.question,
   lineage: ["Bron", "Waarneming", "Vraag", "Patroon", "Inzicht", "Werkelijke vraag", "Volgende stap"],
 } as const;
 
@@ -156,7 +164,8 @@ const isItem = (value: unknown): value is UnderstandingItem =>
   isUncertainty(value.uncertainty) &&
   isVisibility(value.visibility) &&
   typeof value.createdAt === "string" && !Number.isNaN(Date.parse(value.createdAt)) &&
-  typeof value.updatedAt === "string" && !Number.isNaN(Date.parse(value.updatedAt));
+  typeof value.updatedAt === "string" && !Number.isNaN(Date.parse(value.updatedAt)) &&
+  (value.sourceObservationId === undefined || (typeof value.sourceObservationId === "string" && value.sourceObservationId.length > 0));
 
 const isSnapshot = (value: unknown): value is UnderstandingSnapshot =>
   isRecord(value) &&
@@ -165,7 +174,8 @@ const isSnapshot = (value: unknown): value is UnderstandingSnapshot =>
   typeof value.sourceLabel === "string" &&
   isStatus(value.status) &&
   isUncertainty(value.uncertainty) &&
-  isVisibility(value.visibility);
+  isVisibility(value.visibility) &&
+  (value.sourceObservationId === undefined || (typeof value.sourceObservationId === "string" && value.sourceObservationId.length > 0));
 
 const isRevision = (value: unknown): value is UnderstandingRevision =>
   isRecord(value) &&
@@ -211,6 +221,7 @@ function snapshot(item: UnderstandingItem): UnderstandingSnapshot {
     status: item.status,
     uncertainty: item.uncertainty,
     visibility: item.visibility,
+    sourceObservationId: item.sourceObservationId,
   };
 }
 
@@ -244,6 +255,7 @@ export function createInitialUnderstandingStore(): UnderstandingStore {
         visibility: "internal",
         createdAt,
         updatedAt: createdAt,
+        sourceObservationId: "legacy-u-0001-local-workspace",
       },
       {
         id: "u-0001-use-question",
@@ -309,6 +321,9 @@ export function saveUnderstanding(storage: Storage, store: UnderstandingStore): 
 export function addUnderstandingItem(store: UnderstandingStore, input: AddUnderstandingItemInput): UnderstandingItem {
   const text = input.text.trim();
   if (!text) throw new Error("Understanding-item requires text.");
+  if (input.kind === "observation" && !input.sourceObservationId?.trim()) {
+    throw new Error("Een observatie komt alleen via een menselijk beoordeelde Atlas-observatie in Understanding.");
+  }
   const createdAt = input.createdAt ?? new Date().toISOString();
   const item: UnderstandingItem = {
     id: input.id ?? id("understanding"),
@@ -322,10 +337,40 @@ export function addUnderstandingItem(store: UnderstandingStore, input: AddUnders
     visibility: input.visibility ?? "internal",
     createdAt,
     updatedAt: createdAt,
+    sourceObservationId: input.sourceObservationId?.trim() || undefined,
   };
   if (store.items.some((existing) => existing.id === item.id)) throw new Error(`Duplicate Understanding item: ${item.id}`);
   store.items.push(item);
   return item;
+}
+
+export function addReviewedObservationToUnderstanding(
+  store: UnderstandingStore,
+  observation: Observation,
+  caseId: UnderstandingCaseId,
+  reviewedBy: string,
+  createdAt = new Date().toISOString(),
+): UnderstandingItem {
+  if (observation.status === "unreviewed" || observation.status === "parked" || observation.status === "rejected") {
+    throw new Error("Alleen een menselijk beoordeelde relevante observatie kan naar Understanding.");
+  }
+  const actor = reviewedBy.trim();
+  if (!actor || !observation.history.some((entry) => entry.to === observation.status && entry.confirmedByHuman)) {
+    throw new Error("Menselijke beoordeling en eigenaar zijn verplicht voor Understanding.");
+  }
+  const existing = store.items.find((item) => item.sourceObservationId === observation.id && item.caseId === caseId);
+  if (existing) return existing;
+  return addUnderstandingItem(store, {
+    caseId,
+    kind: observation.status === "question" ? "question" : "observation",
+    text: observation.text,
+    sourceLabel: observation.source.label,
+    author: actor,
+    status: observation.status === "question" ? "uncertain" : "observed",
+    uncertainty: observation.status === "question" ? "high" : "medium",
+    createdAt,
+    sourceObservationId: observation.id,
+  });
 }
 
 export function relateUnderstandingItems(

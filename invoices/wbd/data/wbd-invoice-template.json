@@ -1,0 +1,39 @@
+{
+  "document_status": "concept",
+  "invoice": {
+    "number": "",
+    "date": "",
+    "payment_term_days": 14,
+    "project": "",
+    "reference": ""
+  },
+  "sender": {
+    "company_name": "We Build And Design",
+    "address": "Gerard Terborchstraat 35",
+    "postal_code": "1318 LE",
+    "city": "Almere",
+    "kvk": "69326126",
+    "vat_number": "NL190255879B01",
+    "iban": "NL16 KNAB 0603 6280 95",
+    "bic": "KNABNL2H",
+    "phone": "06 100 67 964",
+    "email": "info@webuildanddesign.nl",
+    "website": "webuildanddesign.nl"
+  },
+  "customer": {
+    "company_name": "",
+    "contact_person": "",
+    "address": "",
+    "postal_code": "",
+    "city": "",
+    "reference": ""
+  },
+  "lines": [],
+  "validation": {
+    "blockers": [
+      "Bevestig dat het ingevoerde factuurnummer daadwerkelijk beschikbaar is.",
+      "Bevestig het btw-nummer vanwege het historische conflict in F00247.",
+      "Bevestig dat het IBAN nog actief is en bij We Build And Design hoort."
+    ]
+  }
+}

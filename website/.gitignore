@@ -10,7 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-workspace
 *.local
+.atlas-data/
+.codex-tmp/
+data/sportpaleis-pilot/
+data/mail-foundation/
 
 # Editor directories and files
 .vscode/*

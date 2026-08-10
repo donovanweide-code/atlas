@@ -1,0 +1,26 @@
+:root {
+  --wbd-night: #08161a;
+  --wbd-night-deep: #071216;
+  --wbd-green: #17352f;
+  --wbd-green-soft: #24453f;
+  --wbd-cream: #f0e6d2;
+  --wbd-cream-bright: #f7f4ee;
+  --wbd-cream-muted: #d8cdbb;
+  --wbd-gold: #c7a166;
+  --wbd-gold-strong: #d4a86a;
+  --wbd-ink: #17221f;
+  --wbd-text-on-dark: #eee7db;
+  --wbd-muted-on-dark: #aab8b1;
+  --wbd-line-on-dark: rgba(240, 230, 210, 0.14);
+  --wbd-line-on-light: rgba(23, 34, 31, 0.14);
+  --wbd-cream-surface: rgba(240, 230, 210, 0.96);
+  --wbd-cream-wash: rgba(240, 230, 210, 0.075);
+  --wbd-focus-color: #e0b874;
+  --wbd-font-serif: Georgia, "Times New Roman", serif;
+  --wbd-font-sans: Arial, Helvetica, sans-serif;
+  --wbd-content-wide: 94rem;
+  --wbd-content-reading: 46rem;
+  --wbd-radius-small: 0.45rem;
+  --wbd-radius-medium: 0.75rem;
+  --wbd-shadow-soft: 0 1.25rem 3.5rem rgba(4, 12, 15, 0.18);
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.webuildanddesign.nl/atlas/sender-register.schema.json",
+  "title": "Atlas Mail Sender Register",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "senders"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "senders": { "type": "array", "items": { "$ref": "#/$defs/sender" } }
+  },
+  "$defs": {
+    "sender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organisation_id", "domain", "sender_identity", "mailbox_service", "provider", "use_case", "envelope_from", "header_from", "spf_source", "dkim_selector", "dmarc_alignment", "owner", "status", "evidence", "last_verified", "notes"],
+      "properties": {
+        "organisation_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+        "domain": { "type": "string", "format": "hostname" },
+        "sender_identity": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "mailbox_service": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "provider": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "use_case": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "envelope_from": { "type": ["string", "null"], "maxLength": 160 },
+        "header_from": { "type": ["string", "null"], "maxLength": 160 },
+        "spf_source": { "type": ["string", "null"], "maxLength": 160 },
+        "dkim_selector": { "type": ["string", "null"], "maxLength": 100 },
+        "dmarc_alignment": { "type": "string", "enum": ["verified_pass", "verified_fail", "documented", "not_applicable", "unknown"] },
+        "owner": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "status": { "type": "string", "enum": ["verified_sender", "documented_sender", "unknown_sender", "possible_legacy_sender", "proposed", "retired"] },
+        "evidence": { "type": ["string", "null"], "maxLength": 240 },
+        "last_verified": { "type": ["string", "null"], "format": "date-time" },
+        "notes": { "type": "string", "maxLength": 500 }
+      }
+    }
+  }
+}
+

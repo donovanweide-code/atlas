@@ -1,0 +1,14 @@
+{
+  "assetId": "sportpaleis-email-logo-2026",
+  "version": "SPORTPALEIS-LOGO-MAIL-SAFE-006",
+  "createdAt": "2026-08-10T00:00:00.000Z",
+  "source": "src/assets/images/sportpaleis/sportpaleis-logo-source-2026.png",
+  "sourceSha256": "86af858434b730eed9ee61d7e836bf9de3a020df3e7c5b2170311eaf6abda85c",
+  "authority": "Alle Sport2000 Sportpaleis logo's 2026.pdf voor de geselecteerde linker rood/zwart SPORT 2000 + SPORTPALEIS-variant; NEW2025-CID_Manual_BENE sep 25.pdf voor huisstijlregels",
+  "operation": "Directe rasteruitsnede van de bestaande gevalideerde implementatie; geen reconstructie, hertekening of redesign",
+  "cropBoxPx": [65, 625, 850, 845],
+  "output": "sportpaleis-logo-mail-safe.png",
+  "outputSha256": "70c424dcd371bb7f690946d24b6f3aeeea3f7d0f276928c4707951eb8bdd4bb4",
+  "usage": ["transactionele Sportpaleis-mailheader", "lokale review"],
+  "deploymentStatus": "NOT_DEPLOYED"
+}

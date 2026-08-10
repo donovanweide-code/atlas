@@ -1,5 +1,5 @@
 import "./styles/atlas-workspace.css";
-import { atlasWorkspace } from "./workspace-config";
+import { atlasWorkspace, getAtlasNavigationItem } from "./workspace-config";
 import { renderWorkspaceSidebar } from "./workspace-shell";
 import { atlasDailyBrief } from "./atlas-daily-brief";
 import { currentWorkstream, wbdProjects } from "./wbd-foundation-data";
@@ -11,8 +11,19 @@ import {
   deactivateObserving,
   loadObservationStore,
   loadObservingContext,
+  observationStatusLabel,
+  reviewObservation,
   type Observation,
 } from "./atlas-observations";
+import {
+  observationOriginLabel,
+  observationReviewOutcomes,
+  observationReviewTitle,
+  observationsNeedingReview,
+  observationSourceKindLabel,
+  prepareObservationReview,
+  type ObservationReviewOutcome,
+} from "./atlas-observation-review";
 import {
   type CaseId,
   type Idea,
@@ -43,6 +54,7 @@ import {
   saveUnderstanding,
   statusLabel,
   understandingRecommendation,
+  understandingEntryKinds,
   understandingKinds,
   understandingStatuses,
 } from "./atlas-understanding";
@@ -128,12 +140,37 @@ function caseOptions(selected: CaseId): string {
     <option value="0002" ${selected === "0002" ? "selected" : ""}>0002 · AquaFlask</option>`;
 }
 
-function understandingKindOptions(selected: UnderstandingKind): string {
-  return understandingKinds.map((kind) => `<option value="${kind.id}" ${kind.id === selected ? "selected" : ""}>${kind.label}</option>`).join("");
+function understandingKindOptions(
+  selected: UnderstandingKind,
+  kinds: readonly { id: UnderstandingKind; label: string }[] = understandingKinds,
+): string {
+  return kinds.map((kind) => `<option value="${kind.id}" ${kind.id === selected ? "selected" : ""}>${kind.label}</option>`).join("");
 }
 
 function understandingStatusOptions(selected: UnderstandingStatus): string {
   return understandingStatuses.map((status) => `<option value="${status.id}" ${status.id === selected ? "selected" : ""}>${status.label}</option>`).join("");
+}
+
+function renderAtlasFoundationPosition(app: HTMLDivElement): void {
+  document.title = "Fundament — Atlas Workspace";
+  app.innerHTML = `<main class="atlas-workspace">
+    <div class="workspace-shell">
+      ${renderWorkspaceSidebar(atlasWorkspace, "fundament")}
+      <div class="workspace-main workspace-main--foundation-position">
+        <header class="workspace-header"><div><p class="workspace-kicker">Atlas · secundaire route</p><h1>Fundament</h1></div></header>
+      </div>
+    </div>
+  </main>`;
+}
+
+function syncAtlasNavigation(app: HTMLDivElement): void {
+  const activeId = getAtlasNavigationItem(window.location.pathname, window.location.hash).id;
+  app.querySelectorAll<HTMLAnchorElement>("[data-navigation-id]").forEach((link) => {
+    const current = link.dataset.navigationId === activeId;
+    link.classList.toggle("is-current", current);
+    if (current) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
 }
 
 export function renderAtlasWorkspace(app: HTMLDivElement): void {
@@ -148,6 +185,11 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     document.head.append(robots);
   }
   robots.content = "noindex, nofollow";
+
+  if (window.location.pathname.replace(/\/+$/, "") === "/atlas/fundament") {
+    renderAtlasFoundationPosition(app);
+    return;
+  }
 
   const today = localDateKey();
   const focusLoad = loadFocus(localStorage, today);
@@ -196,17 +238,17 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const orientationSummary = confirmedOrientations.length === 1
     ? "1 bevestigd praktijksignaal wacht op menselijke toewijzing."
     : `${confirmedOrientations.length} bevestigde praktijksignalen wachten op menselijke toewijzing.`;
-  const reviewObservationItems: ReviewLayerItem[] = observationStore.observations.map((observation) => ({
+  const reviewObservationItems: ReviewLayerItem[] = observationStore.observations.filter((observation) => observation.status === "unreviewed").map((observation) => ({
     id: observation.id,
     lane: "review",
     title: observation.text,
-    why: `Vastgelegd tijdens Waarnemen bij ‘${observation.context.boundaryLabel}’ en nog niet inhoudelijk beoordeeld.`,
-    sourceLabel: `Case 0001 · ${observation.context.pageLabel} · Sprint ${observation.context.sprintId}`,
-    sourcePath: `${observation.context.path}${observation.context.hash}`,
+    why: `Als observatie vastgelegd bij ‘${observation.context.boundaryLabel}’ en nog niet inhoudelijk beoordeeld.`,
+    sourceLabel: `${observation.source.label} · ${observation.context.boundaryLabel}`,
+    sourcePath: observation.source.locator,
     type: "observation",
-    status: "Onbeoordeeld",
+    status: observationStatusLabel(observation.status),
     authority: "review-result",
-    nextReview: "Donovan beoordeelt welke betekenis deze Waarneming heeft; We Build And Design trekt hier nog geen conclusie.",
+    nextReview: `${observation.ownership.reviewOwner} beoordeelt welke betekenis deze Waarneming heeft; We Build And Design trekt hier nog geen conclusie.`,
     approval: "Betekenis en vervolg zijn nog niet bevestigd.",
   }));
   const reviewCandidateCards = workspaceReviewLayer.review.map(reviewLayerCard).join("");
@@ -255,78 +297,53 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     </article>`).join("");
 
   app.innerHTML = `<main class="atlas-workspace">
-    <section class="daily-opening" id="overzicht" aria-labelledby="daily-title">
-      <div class="daily-opening__frame">
-        <header class="daily-mast">
-          <a class="daily-brand" href="#overzicht" aria-label="Atlas Workspace">
-            <span class="daily-brand__mark">A</span>
-            <span><strong>Atlas</strong><small>Daily companion</small></span>
-          </a>
-          <p>${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p>
-        </header>
-
-        <div class="daily-opening__grid">
-          <div class="daily-opening__copy">
-            <p class="workspace-label">Goedemorgen, Donovan.</p>
-            <div class="daily-status"><span aria-hidden="true"></span>${escapeHtml(atlasDailyBrief.statusLabel)}</div>
-            <h1 id="daily-title">${escapeHtml(atlasDailyBrief.title)}</h1>
-            <p class="daily-opening__subtitle">${escapeHtml(atlasDailyBrief.subtitle)}</p>
-            <p class="daily-opening__summary">${escapeHtml(atlasDailyBrief.summary)}</p>
-            <dl class="daily-opening__meta">
-              <div><dt>Laatst beoordeeld</dt><dd>${escapeHtml(snapshotDate(atlasDailyBrief.reviewedAt))}</dd></div>
-              <div><dt>Terugkeertrigger</dt><dd>${escapeHtml(atlasDailyBrief.returnTrigger)}</dd></div>
-            </dl>
-            <details class="daily-disclosure daily-disclosure--evidence">
-              <summary><i aria-hidden="true">+</i> Waarom denkt Atlas dit?</summary>
-              <div>
-                <ul>${atlasDailyBrief.why.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-                <p><span>Bewijsbron</span>${escapeHtml(atlasDailyBrief.evidenceSource)}</p>
-                <p><span>Externe afhankelijkheid</span>${escapeHtml(atlasDailyBrief.externalDependency)}</p>
-              </div>
-            </details>
-          </div>
-          <div class="daily-opening__compass" aria-hidden="true">
-            ${compass()}
-            <span>Kompas</span>
-          </div>
-        </div>
-
-        <div class="daily-first-layer">
-          <article class="daily-focus" aria-labelledby="daily-focus-title">
-            <p class="workspace-label">Focus · wat vandaag betekenis heeft</p>
-            <h2 id="daily-focus-title">${escapeHtml(atlasDailyBrief.focus.title)}</h2>
-            <p>${escapeHtml(atlasDailyBrief.focus.summary)}</p>
-            <footer>
-              <a href="${escapeHtml(atlasDailyBrief.focus.actionHref)}">${escapeHtml(atlasDailyBrief.focus.actionLabel)} <span aria-hidden="true">↓</span></a>
-              <details class="daily-disclosure">
-                <summary><i aria-hidden="true">+</i> Hoe kwam Atlas tot deze keuze?</summary>
-                <div>
-                  <ul>${atlasDailyBrief.focus.explanation.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-                  <p>${escapeHtml(atlasDailyBrief.focus.nextStep)}</p>
-                </div>
-              </details>
-            </footer>
-          </article>
-          <aside class="daily-silence" aria-labelledby="daily-silence-title">
-            <p class="workspace-label">Stilte · bewust niet doen</p>
-            <h2 id="daily-silence-title">Rust is hier een besluit.</h2>
-            <ul>${dailySilence}</ul>
-          </aside>
-        </div>
-        <div hidden>
-          <span data-advice-title></span>
-          <span data-advice-reason></span>
-          <span data-guidance-prepared></span>
-          <a data-guidance-action href="/"><span data-guidance-action-label></span></a>
-        </div>
-      </div>
-    </section>
-
     <div class="workspace-shell">
-    ${renderWorkspaceSidebar(atlasWorkspace, "overzicht")}
+    ${renderWorkspaceSidebar(atlasWorkspace, getAtlasNavigationItem(window.location.pathname, window.location.hash).id)}
 
     <div class="workspace-main">
-      <header class="workspace-header"><div><p class="workspace-kicker">Verder in Atlas</p><h2>De werkelijkheid achter vandaag</h2></div><p class="workspace-date">${escapeHtml(atlasDailyBrief.changedSinceLast)}</p></header>
+      <section class="daily-opening" id="overzicht" aria-labelledby="daily-title">
+        <div class="daily-opening__frame">
+          <header class="daily-mast">
+            <div class="daily-mast__day">
+              <p class="workspace-kicker">Vandaag · ${new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p>
+              <p>Goedemorgen, Donovan.</p>
+            </div>
+            <div class="daily-status">
+              <span aria-hidden="true"></span>
+              <div><small>Actieve werkstroom</small><strong>${escapeHtml(atlasDailyBrief.title)}</strong><em>${escapeHtml(atlasDailyBrief.statusLabel)}</em></div>
+            </div>
+          </header>
+
+          <div class="daily-first-layer">
+            <article class="daily-focus" aria-labelledby="daily-title">
+              <header class="daily-focus__header">
+                <div><p class="workspace-label">Focus · wat vandaag betekenis heeft</p><h1 id="daily-title">${escapeHtml(atlasDailyBrief.focus.title)}</h1></div>
+                <div class="daily-focus__compass" aria-hidden="true">${compass()}<span>Richting</span></div>
+              </header>
+              <p>${escapeHtml(atlasDailyBrief.focus.summary)}</p>
+              <div class="daily-focus__boundary"><span>Eerstvolgende betekenisvolle stap</span><p>${escapeHtml(atlasDailyBrief.focus.nextStep)}</p></div>
+              <footer>
+                <a href="${escapeHtml(atlasDailyBrief.focus.actionHref)}">${escapeHtml(atlasDailyBrief.focus.actionLabel)} <span aria-hidden="true">↓</span></a>
+                <details class="daily-disclosure">
+                  <summary><i aria-hidden="true">+</i> Waarom verdient dit aandacht?</summary>
+                  <div><ul>${atlasDailyBrief.focus.explanation.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></div>
+                </details>
+              </footer>
+            </article>
+            <aside class="daily-silence" aria-labelledby="daily-silence-title">
+              <p class="workspace-label">Stilte · bewust niet doen</p>
+              <h2 id="daily-silence-title">Rust is hier een besluit.</h2>
+              <ul>${dailySilence}</ul>
+            </aside>
+          </div>
+          <div hidden>
+            <span data-advice-title></span>
+            <span data-advice-reason></span>
+            <span data-guidance-prepared></span>
+            <a data-guidance-action href="/"><span data-guidance-action-label></span></a>
+          </div>
+        </div>
+      </section>
       <div class="workspace-notice" data-notice role="status" aria-live="polite" hidden></div>
 
       <section class="workspace-position" id="werkelijkheid" aria-labelledby="workspace-position-title">
@@ -340,6 +357,23 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
           <div data-state="current"><dt>${escapeHtml(currentWorkstream.title)} · Actief</dt><dd>${escapeHtml(currentWorkstream.summary)}</dd></div>
           <div data-state="next"><dt>${escapeHtml(wbdProjects[2].id)} · Hierna</dt><dd>${escapeHtml(wbdProjects[2].nextValidatedStep)}</dd></div>
         </dl>
+        <nav class="workspace-room__routes atlas-reality-routes" aria-label="Werkelijkheid in Atlas">
+          <a href="#werkelijkheid"><span>Werkelijkheid</span><strong>Bevestigd actueel beeld</strong><i aria-hidden="true">↓</i></a>
+          <a href="#observatie-review"><span>Observaties</span><strong>Nog menselijk beoordelen</strong><i aria-hidden="true">↓</i></a>
+          <a href="#praktijkdossiers"><span>Praktijkbronnen</span><strong>Oriëntaties en leveringsbewijs</strong><i aria-hidden="true">↓</i></a>
+        </nav>
+      </section>
+
+      <section class="workspace-section workspace-observation-review" id="observatie-review" aria-labelledby="observation-review-title">
+        <header class="workspace-section__header">
+          <div><p class="workspace-label">Werkelijkheid · menselijke beoordeling</p><h2 id="observation-review-title">Welke ontvangen werkelijkheid vraagt nog om menselijk oordeel?</h2></div>
+          <p>Een observatie blijft zonder betekenis of kennis totdat jij bewust een beslissing bevestigt.</p>
+        </header>
+        <div class="observation-review-method" aria-label="Atlas-methode">
+          <span>Werkelijkheid</span><i aria-hidden="true">↓</i><strong>Observatie</strong><i aria-hidden="true">↓</i><strong>Menselijke beoordeling</strong><i aria-hidden="true">↓</i><span>Betekenis</span><i aria-hidden="true">↓</i><span>Kennis</span>
+        </div>
+        <div class="observation-review-queue__status" data-observation-review-status role="status" aria-live="polite"></div>
+        <div class="observation-review-queue" data-observation-review-list></div>
       </section>
 
       <section class="workspace-section daily-horizon" id="daily-horizon" aria-labelledby="daily-horizon-title">
@@ -413,19 +447,18 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
           <p>De volledige Atlas-werkelijkheid blijft beschikbaar, zonder de dagstart te belasten.</p>
         </header>
         <nav class="workspace-room__routes" aria-label="Verdiepende werkruimte">
-          <a href="#praktijkdossiers"><span>Praktijk</span><strong>Onderbouwing en leveringsbeeld</strong><i aria-hidden="true">↓</i></a>
-          <a href="#waarnemen"><span>Waarnemen</span><strong>Bewaar wat je ervaart</strong><i aria-hidden="true">↓</i></a>
-          <a href="#cases"><span>Relaties</span><strong>Werk met betekenis en context</strong><i aria-hidden="true">↓</i></a>
+          <a href="#cases"><span>Cases</span><strong>Werk met betekenis en context</strong><i aria-hidden="true">↓</i></a>
           <a href="#understanding"><span>Understanding</span><strong>Begrens het begrip</strong><i aria-hidden="true">↓</i></a>
+          <a href="/workspace/wbd/kennisvoorstellen"><span>Kennisvoorstellen</span><strong>Menselijk beoordelen vóór Knowledge</strong><i aria-hidden="true">↗</i></a>
           <a href="#ideeen"><span>Ideeën</span><strong>Bewaren zonder nu te bouwen</strong><i aria-hidden="true">↓</i></a>
           <a href="#logboek"><span>Logboek</span><strong>Bewaar wat betekenis heeft</strong><i aria-hidden="true">↓</i></a>
         </nav>
       </section>
 
       <section class="workspace-section workspace-orientation workspace-deep" id="praktijkdossiers" aria-labelledby="orientation-title">
-        <header class="workspace-section__header"><div><p class="workspace-label">Praktijkdossiers</p><h2 id="orientation-title">De onderbouwing blijft dichtbij.</h2></div><p>${orientationSummary}</p></header>
+        <header class="workspace-section__header"><div><p class="workspace-label">Praktijkbronnen · Oriëntaties</p><h2 id="orientation-title">De onderbouwing blijft dichtbij.</h2></div><p>${orientationSummary}</p></header>
         <details class="workspace-dossier">
-          <summary><span>Open de actuele praktijkdossiers</span><small>Oriëntatie en leveringsbewijs</small><i aria-hidden="true">+</i></summary>
+          <summary><span>Open de actuele praktijkbronnen</span><small>Oriëntatie en leveringsbewijs</small><i aria-hidden="true">+</i></summary>
           <div class="workspace-dossier__content">
         <div class="workspace-orientations">${orientationCards}</div>
         <article class="workspace-delivery-review" aria-labelledby="delivery-review-title">
@@ -477,24 +510,23 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
       </section>
 
       <section class="workspace-section workspace-observing" id="waarnemen" aria-labelledby="observing-title">
-        <header class="workspace-section__header"><div><p class="workspace-label">Waarnemen</p><h2 id="observing-title">Bewaar wat je ervaart, vóór je het beoordeelt.</h2></div><p data-observing-summary></p></header>
+        <header class="workspace-section__header"><div><p class="workspace-label">Broncapture · secundair</p><h2 id="observing-title">Waarnemen begint bij het oppervlak.</h2></div><p data-observing-summary></p></header>
         <div class="workspace-observing__control">
           <div class="workspace-observing__state">
             <span data-observing-indicator aria-hidden="true"></span>
             <div><p data-observing-status></p><small>Alleen actief in deze browser</small></div>
           </div>
-          <dl><div><dt>Case</dt><dd>0001 · We Build And Design</dd></div><div><dt>Sprint</dt><dd data-observing-sprint></dd></div></dl>
+          <dl><div><dt>Bron</dt><dd data-observing-source></dd></div><div><dt>Beoordeling</dt><dd>Menselijk · Atlas Werkelijkheid</dd></div></dl>
           <form data-observing-form>
-            <label>Bevestig sprint<input name="sprintId" value="${escapeHtml(observingContext?.sprintId ?? "001E")}" required maxlength="24"></label>
             <button type="submit" data-observing-start>Activeer Waarnemen</button>
           </form>
           <div class="workspace-observing__actions">
-            <a href="/" data-observing-open>Open publieke Experience <span aria-hidden="true">↗</span></a>
+            <a href="/" data-observing-open>Open publieke website <span aria-hidden="true">↗</span></a>
             <button type="button" data-observing-stop>Beëindig Waarnemen</button>
           </div>
         </div>
         <div class="workspace-observations" aria-labelledby="observations-title">
-          <header><div><p class="workspace-label">Vastgelegde werkelijkheid</p><h3 id="observations-title">Waarnemingen</h3></div><p>Betekenis en vervolg ontstaan pas na menselijke beoordeling.</p></header>
+          <header><div><p class="workspace-label">Bron en context bewaard</p><h3 id="observations-title">Observaties</h3></div><p>Betekenis en vervolg ontstaan pas na menselijke beoordeling.</p></header>
           <div data-observation-list></div>
         </div>
       </section>
@@ -598,7 +630,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
           <aside class="understanding-composer" aria-label="Voeg begrip toe">
             <p class="workspace-label">Vastleggen zonder conclusie</p><h3>Wat heb je gezien, gehoord of nog niet begrepen?</h3>
             <form data-understanding-form>
-              <label>Soort<select name="kind">${understandingKindOptions("observation")}</select></label>
+              <label>Soort<select name="kind">${understandingKindOptions("source", understandingEntryKinds)}</select></label>
               <label>Inhoud<textarea name="text" required maxlength="1600" rows="4" placeholder="Beschrijf zo concreet mogelijk, zonder de oplossing alvast in te vullen."></textarea></label>
               <label>Herkomst<input name="sourceLabel" maxlength="240" placeholder="Gesprek, document, observatie of link"></label>
               <div class="understanding-form-row"><label>Status<select name="status">${understandingStatusOptions("observed")}</select></label><label>Onzekerheid<select name="uncertainty"><option value="low">Laag</option><option value="medium" selected>Middel</option><option value="high">Hoog</option></select></label></div>
@@ -607,8 +639,8 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
               <button type="submit">Bewaar in Understanding</button>
             </form>
             <details class="understanding-relate"><summary>Leg een relatie tussen bestaand materiaal</summary><form data-relationship-form><label>Van<select name="fromId" required></select></label><label>Relatie<select name="type">${Object.entries(relationshipLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label><label>Naar<select name="toId" required></select></label><button type="submit">Bevestig relatie</button><small>Relaties worden alleen na jouw bevestiging vastgelegd.</small></form></details>
-            <form class="understanding-derived-form" data-insight-form hidden><p class="workspace-label">Menselijke duiding</p><h3>Welk inzicht ontstaat uit de selectie?</h3><textarea name="text" required maxlength="1600" rows="4"></textarea><div><button type="submit">Bewaar herleidbaar inzicht</button><button type="button" data-cancel-insight>Annuleren</button></div></form>
-            <form class="understanding-derived-form" data-next-step-form hidden><p class="workspace-label">Van inzicht naar handelen</p><h3>Welke kleine volgende stap wordt hierdoor gerechtvaardigd?</h3><input type="hidden" name="insightId"><textarea name="text" required maxlength="1600" rows="3"></textarea><div><button type="submit">Bewaar volgende stap</button><button type="button" data-cancel-next-step>Annuleren</button></div></form>
+            <form class="understanding-derived-form" data-insight-form hidden><p class="workspace-label">Menselijke duiding</p><h3 id="understanding-insight-label">Welk inzicht ontstaat uit de selectie?</h3><textarea name="text" aria-labelledby="understanding-insight-label" required maxlength="1600" rows="4"></textarea><div><button type="submit">Bewaar herleidbaar inzicht</button><button type="button" data-cancel-insight>Annuleren</button></div></form>
+            <form class="understanding-derived-form" data-next-step-form hidden><p class="workspace-label">Van inzicht naar handelen</p><h3 id="understanding-next-step-label">Welke kleine volgende stap wordt hierdoor gerechtvaardigd?</h3><input type="hidden" name="insightId"><textarea name="text" aria-labelledby="understanding-next-step-label" required maxlength="1600" rows="3"></textarea><div><button type="submit">Bewaar volgende stap</button><button type="button" data-cancel-next-step>Annuleren</button></div></form>
           </aside>
           </div>
         </details>
@@ -627,9 +659,60 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     </div>
     </div>
 
+    <dialog class="observation-review-dialog" data-observation-review-dialog aria-labelledby="observation-review-dialog-title">
+      <div class="observation-review-dialog__shell">
+        <header class="observation-review-dialog__header">
+          <div><p class="workspace-label">Observatiedetail</p><h2 id="observation-review-dialog-title">Menselijke beoordeling</h2></div>
+          <button type="button" data-observation-review-close aria-label="Sluit observatiedetail">Sluiten</button>
+        </header>
+        <div data-observation-review-detail></div>
+        <form class="observation-review-form" data-observation-review-form>
+          <input type="hidden" name="observationId">
+          <fieldset>
+            <legend>Welke menselijke beslissing past?</legend>
+            <p>Een keuze verandert nog niets. Pas de bevestigingsknop legt het besluit vast.</p>
+            <div class="observation-review-options">
+              ${observationReviewOutcomes.map((outcome, index) => `<label><input type="radio" name="status" value="${outcome.id}" ${index === 0 ? "required" : ""}><span><strong>${escapeHtml(outcome.label)}</strong><small>${escapeHtml(outcome.description)}</small></span></label>`).join("")}
+            </div>
+          </fieldset>
+          <div class="observation-review-form__fields">
+            <label>Beoordelaar<input name="reviewedBy" required maxlength="120" autocomplete="name" placeholder="Wie neemt dit besluit?"></label>
+            <label>Motivering<textarea name="rationale" required maxlength="800" rows="4" placeholder="Waarom past deze uitkomst bij de bron en context?"></textarea></label>
+            <label data-observation-review-case hidden>Koppel aan Case<select name="caseId"><option value="">Kies een bestaande Case</option><option value="0001">0001 · We Build And Design</option><option value="0002">0002 · AquaFlask</option></select></label>
+            <label data-observation-review-trigger hidden>Terugkeertrigger<input name="returnTrigger" maxlength="240" placeholder="Wanneer verdient dit opnieuw aandacht?"></label>
+          </div>
+          <p class="observation-review-form__error" data-observation-review-error role="alert" hidden></p>
+          <p class="observation-review-form__boundary">Deze beoordeling maakt geen kennisvoorstel en publiceert niets.</p>
+          <div class="observation-review-form__actions">
+            <button type="submit">Bevestig menselijke beoordeling</button>
+            <button type="button" data-observation-review-cancel>Annuleren</button>
+          </div>
+        </form>
+        <section class="observation-review-complete" data-observation-review-complete aria-live="polite" hidden>
+          <p class="workspace-label">Beoordeling bewaard</p>
+          <h3>De observatie heeft een menselijke uitkomst.</h3>
+          <p>Bron, context en eerdere historie blijven behouden. Er is geen kennis gevormd.</p>
+          <button type="button" data-observation-review-done>Sluit en ga terug naar de wachtrij</button>
+        </section>
+      </div>
+    </dialog>
     <dialog class="workspace-revision" data-revision-dialog><form data-revision-form><input type="hidden" name="itemId"><p class="workspace-label">Interpretatie verfijnen</p><h2>Bewaar de eerdere betekenis.</h2><label>Inhoud<textarea name="text" required maxlength="1600" rows="5"></textarea></label><div class="understanding-form-row"><label>Soort<select name="kind">${understandingKindOptions("observation")}</select></label><label>Status<select name="status">${understandingStatusOptions("observed")}</select></label></div><label>Reden voor wijziging<input name="reason" required maxlength="240" placeholder="Wat is er geleerd of opnieuw geclassificeerd?"></label><div><button type="submit">Bewaar revisie</button><button type="button" data-close-revision>Annuleren</button></div></form></dialog>
     <dialog class="workspace-day-start" data-day-start><form method="dialog"><p class="workspace-label">Nieuwe werkdag</p><h2>Hoe wil je vandaag beginnen?</h2><p>Gisteren bleven ${priorOpenItems.length} ${priorOpenItems.length === 1 ? "stap" : "stappen"} openstaan. Niets wordt stilzwijgend meegenomen.</p><div><button value="carry" ${priorOpenItems.length ? "" : "disabled"}>Neem onafgeronde stappen over</button><button value="empty">Begin leeg</button></div></form></dialog>
   </main>`;
+
+  const workspaceMain = app.querySelector<HTMLElement>(".workspace-main")!;
+  const horizonSection = app.querySelector<HTMLElement>("#daily-horizon")!;
+  const practiceSourcesSection = app.querySelector<HTMLElement>("#praktijkdossiers")!;
+  const observingSection = app.querySelector<HTMLElement>("#waarnemen")!;
+  const logbookSection = app.querySelector<HTMLElement>("#logboek")!;
+  practiceSourcesSection.dataset.atlasArea = "werkelijkheid";
+  horizonSection.before(practiceSourcesSection);
+  observingSection.dataset.atlasArea = "secundair";
+  logbookSection.after(observingSection);
+  workspaceMain.querySelectorAll<HTMLElement>("#werkelijkheid,#observatie-review").forEach((section) => { section.dataset.atlasArea = "werkelijkheid"; });
+  workspaceMain.querySelectorAll<HTMLElement>("#werkruimte,#cases,#case-wbd,#case-aquaflask,#understanding,#ideeen,#logboek").forEach((section) => { section.dataset.atlasArea = "werkruimte"; });
+  syncAtlasNavigation(app);
+  window.addEventListener("hashchange", () => syncAtlasNavigation(app));
 
   const notice = app.querySelector<HTMLElement>("[data-notice]")!;
   const notify = (message: string, error = false) => {
@@ -684,7 +767,7 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
   const observingStop = app.querySelector<HTMLButtonElement>("[data-observing-stop]")!;
   const observingOpen = app.querySelector<HTMLAnchorElement>("[data-observing-open]")!;
   const observingStatus = app.querySelector<HTMLElement>("[data-observing-status]")!;
-  const observingSprint = app.querySelector<HTMLElement>("[data-observing-sprint]")!;
+  const observingSource = app.querySelector<HTMLElement>("[data-observing-source]")!;
   const observingIndicator = app.querySelector<HTMLElement>("[data-observing-indicator]")!;
   const observingSummary = app.querySelector<HTMLElement>("[data-observing-summary]")!;
   const observationList = app.querySelector<HTMLElement>("[data-observation-list]")!;
@@ -693,41 +776,204 @@ export function renderAtlasWorkspace(app: HTMLDivElement): void {
     day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(observation.createdAt));
 
+  const observationReviewStatus = app.querySelector<HTMLElement>("[data-observation-review-status]")!;
+  const observationReviewList = app.querySelector<HTMLElement>("[data-observation-review-list]")!;
+  const observationReviewDialog = app.querySelector<HTMLDialogElement>("[data-observation-review-dialog]")!;
+  const observationReviewDetail = app.querySelector<HTMLElement>("[data-observation-review-detail]")!;
+  const observationReviewForm = app.querySelector<HTMLFormElement>("[data-observation-review-form]")!;
+  const observationReviewComplete = app.querySelector<HTMLElement>("[data-observation-review-complete]")!;
+  const observationReviewError = app.querySelector<HTMLElement>("[data-observation-review-error]")!;
+  const observationReviewCase = app.querySelector<HTMLElement>("[data-observation-review-case]")!;
+  const observationReviewTrigger = app.querySelector<HTMLElement>("[data-observation-review-trigger]")!;
+
+  const observationHistory = (observation: Observation) => observation.history.map((entry) => `<li>
+    <div><strong>${escapeHtml(observationStatusLabel(entry.to))}</strong><time datetime="${escapeHtml(entry.at)}">${escapeHtml(observationMoment({ ...observation, createdAt: entry.at }))}</time></div>
+    <p>${escapeHtml(entry.rationale)}</p>
+    <small>${entry.confirmedByHuman ? `Menselijk bevestigd door ${escapeHtml(entry.actor)}` : `Vastgelegd door ${escapeHtml(entry.actor)}`}</small>
+  </li>`).join("");
+
+  const observationReferences = (observation: Observation) => observation.supportingFiles.length
+    ? `<ul>${observation.supportingFiles.map((file) => `<li><span>${escapeHtml(file.kind)}</span><strong>${escapeHtml(file.label)}</strong><code>${escapeHtml(file.reference)}</code></li>`).join("")}</ul>`
+    : '<p>Geen aanvullende bronreferenties vastgelegd.</p>';
+
+  const observationRelations = (observation: Observation) => {
+    const layerLabels = { case: "Case", understanding: "Understanding", knowledge: "Knowledge" } as const;
+    return observation.relations.length
+      ? `<ul>${observation.relations.map((relation) => `<li>
+          <div><span>${escapeHtml(layerLabels[relation.layer])}</span><strong>${escapeHtml(relation.targetId)}</strong></div>
+          <p>${escapeHtml(relation.rationale)}</p>
+          <small>Menselijk bevestigd door ${escapeHtml(relation.linkedBy)} · <time datetime="${escapeHtml(relation.linkedAt)}">${escapeHtml(observationMoment({ ...observation, createdAt: relation.linkedAt }))}</time></small>
+        </li>`).join("")}</ul>`
+      : '<p>Er zijn nog geen menselijk bevestigde relaties.</p>';
+  };
+
+  const renderObservationReviewDetail = (observation: Observation) => `<article class="observation-review-detail">
+    <header><span>${escapeHtml(observationStatusLabel(observation.status))}</span><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></header>
+    <blockquote>${escapeHtml(observation.text)}</blockquote>
+    <p class="observation-review-detail__boundary">Dit is een observatie. Betekenis en kennis volgen alleen uit afzonderlijke menselijke beslissingen.</p>
+    <dl>
+      <div><dt>Bronsoort</dt><dd>${escapeHtml(observationSourceKindLabel(observation))}</dd></div>
+      <div><dt>Herkomst</dt><dd>${escapeHtml(observationOriginLabel(observation))}</dd></div>
+      <div><dt>Bron</dt><dd>${escapeHtml(observation.source.label)}</dd></div>
+      <div><dt>Oppervlak</dt><dd>${escapeHtml(observation.context.pageLabel)}</dd></div>
+      <div><dt>Context</dt><dd>${escapeHtml(observation.context.boundaryLabel)}</dd></div>
+      <div><dt>Revieweigenaar</dt><dd>${escapeHtml(observation.ownership.reviewOwner)}</dd></div>
+      <div><dt>Oorspronkelijke route</dt><dd><code>${escapeHtml(observation.source.locator)}</code></dd></div>
+      <div><dt>Viewport</dt><dd>${observation.context.viewport ? `${observation.context.viewport.width} × ${observation.context.viewport.height} px` : "Niet van toepassing"}</dd></div>
+    </dl>
+    ${observation.legacyContext ? `<section class="observation-review-detail__legacy"><h3>Historische context</h3><p>Deze bestaande observatie bewaart haar vroegere ontwikkelcontext zonder die als actuele toewijzing te behandelen.</p><dl><div><dt>Voormalige Case</dt><dd>${escapeHtml(observation.legacyContext.caseId ?? "Niet vastgelegd")}</dd></div><div><dt>Voormalige sprint</dt><dd>${escapeHtml(observation.legacyContext.sprintId ?? "Niet vastgelegd")}</dd></div></dl></section>` : ""}
+    <section class="observation-review-detail__relations"><h3>Menselijk bevestigde relaties</h3>${observationRelations(observation)}</section>
+    <section class="observation-review-detail__references"><h3>Bronreferenties</h3>${observationReferences(observation)}</section>
+    <details class="observation-review-detail__history" open><summary>Volledige geschiedenis · ${observation.history.length} ${observation.history.length === 1 ? "moment" : "momenten"}</summary><ol>${observationHistory(observation)}</ol></details>
+  </article>`;
+
+  const paintObservationReviewQueue = () => {
+    observationStore = loadObservationStore(localStorage);
+    const pending = observationsNeedingReview(observationStore);
+    observationReviewStatus.textContent = pending.length
+      ? `${pending.length} ${pending.length === 1 ? "observatie vraagt" : "observaties vragen"} om menselijke beoordeling.`
+      : "Er zijn momenteel geen observaties die om jouw beoordeling vragen.";
+    observationReviewList.innerHTML = pending.length
+      ? pending.map((observation) => `<article class="observation-review-card">
+          <div class="observation-review-card__main">
+            <header><span>${escapeHtml(observationStatusLabel(observation.status))}</span><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></header>
+            <h3>${escapeHtml(observationReviewTitle(observation))}</h3>
+            <p>${escapeHtml(observation.source.label)} · ${escapeHtml(observation.context.boundaryLabel)}</p>
+          </div>
+          <dl>
+            <div><dt>Bronsoort</dt><dd>${escapeHtml(observationSourceKindLabel(observation))}</dd></div>
+            <div><dt>Herkomst</dt><dd>${escapeHtml(observationOriginLabel(observation))}</dd></div>
+            <div><dt>Beoordelaar</dt><dd>${escapeHtml(observation.ownership.reviewOwner)}</dd></div>
+          </dl>
+          <button type="button" data-open-observation-review="${escapeHtml(observation.id)}">Open en beoordeel<span aria-hidden="true">→</span></button>
+        </article>`).join("")
+      : `<div class="observation-review-empty"><span aria-hidden="true">✓</span><div><h3>De wachtrij is rustig.</h3><p>Er zijn momenteel geen observaties die om jouw beoordeling vragen.</p></div></div>`;
+  };
+
+  const resetObservationReviewDialog = () => {
+    observationReviewForm.reset();
+    observationReviewForm.hidden = false;
+    observationReviewComplete.hidden = true;
+    observationReviewError.hidden = true;
+    observationReviewError.textContent = "";
+    observationReviewCase.hidden = true;
+    observationReviewTrigger.hidden = true;
+    (observationReviewCase.querySelector("select") as HTMLSelectElement).required = false;
+    (observationReviewTrigger.querySelector("input") as HTMLInputElement).required = false;
+  };
+
+  const openObservationReview = (observationId: string) => {
+    resetObservationReviewDialog();
+    const observation = observationsNeedingReview(loadObservationStore(localStorage)).find((item) => item.id === observationId);
+    if (!observation) {
+      observationReviewDetail.innerHTML = '<div class="observation-review-missing"><h3>Deze observatie is niet beschikbaar.</h3><p>De wachtrij is opnieuw geladen. Er zijn geen gegevens gewijzigd.</p></div>';
+      observationReviewForm.hidden = true;
+    } else {
+      observationReviewDetail.innerHTML = renderObservationReviewDetail(observation);
+      (observationReviewForm.elements.namedItem("observationId") as HTMLInputElement).value = observation.id;
+    }
+    observationReviewDialog.showModal();
+  };
+
+  const closeObservationReview = () => {
+    observationReviewDialog.close();
+    resetObservationReviewDialog();
+    paintObservationReviewQueue();
+  };
+
+  observationReviewList.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-open-observation-review]");
+    if (button?.dataset.openObservationReview) openObservationReview(button.dataset.openObservationReview);
+  });
+
+  observationReviewForm.addEventListener("change", () => {
+    const status = String(new FormData(observationReviewForm).get("status") ?? "") as ObservationReviewOutcome;
+    const caseSelect = observationReviewCase.querySelector("select") as HTMLSelectElement;
+    const triggerInput = observationReviewTrigger.querySelector("input") as HTMLInputElement;
+    observationReviewCase.hidden = status !== "linked";
+    observationReviewTrigger.hidden = status !== "parked";
+    caseSelect.required = status === "linked";
+    triggerInput.required = status === "parked";
+    observationReviewError.hidden = true;
+  });
+
+  observationReviewForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(observationReviewForm);
+    const observationId = String(data.get("observationId") ?? "");
+    const current = observationsNeedingReview(loadObservationStore(localStorage)).find((item) => item.id === observationId);
+    if (!current) {
+      observationReviewError.textContent = "Deze observatie wacht niet meer op beoordeling. De wachtrij is opnieuw geladen.";
+      observationReviewError.hidden = false;
+      paintObservationReviewQueue();
+      return;
+    }
+    try {
+      const decision = prepareObservationReview({
+        status: String(data.get("status") ?? "") as ObservationReviewOutcome,
+        reviewedBy: String(data.get("reviewedBy") ?? ""),
+        rationale: String(data.get("rationale") ?? ""),
+        caseId: String(data.get("caseId") ?? ""),
+        returnTrigger: String(data.get("returnTrigger") ?? ""),
+      });
+      const reviewed = reviewObservation(localStorage, observationId, decision);
+      if (!reviewed) throw new Error("De beoordeling kon niet worden bewaard. Controleer of de observatie nog openstaat.");
+      observationReviewDetail.innerHTML = renderObservationReviewDetail(reviewed);
+      observationReviewForm.hidden = true;
+      observationReviewComplete.hidden = false;
+      paintObservationReviewQueue();
+      paintObserving();
+    } catch (error) {
+      observationReviewError.textContent = error instanceof Error ? error.message : "De beoordeling kon niet worden bewaard.";
+      observationReviewError.hidden = false;
+    }
+  });
+
+  app.querySelectorAll<HTMLButtonElement>("[data-observation-review-close],[data-observation-review-cancel],[data-observation-review-done]").forEach((button) => button.addEventListener("click", closeObservationReview));
+  observationReviewDialog.addEventListener("cancel", () => resetObservationReviewDialog());
+
   const paintObserving = () => {
     observationStore = loadObservationStore(localStorage);
     observingContext = loadObservingContext(localStorage);
     const count = observationStore.observations.length;
+    const pendingCount = observationStore.observations.filter((observation) => observation.status === "unreviewed").length;
     observingStatus.textContent = observingContext ? "Waarnemen is actief" : "Waarnemen is beschikbaar";
-    observingSprint.textContent = observingContext?.sprintId ?? "Nog niet bevestigd";
+    observingSource.textContent = observingContext?.source.label ?? "Publieke WBD-website";
     observingIndicator.classList.toggle("is-active", Boolean(observingContext));
     observingStart.textContent = observingContext ? "Bevestig opnieuw" : "Activeer Waarnemen";
     observingStop.hidden = !observingContext;
     observingOpen.hidden = !observingContext;
-    observingSummary.textContent = count
-      ? `${count} ${count === 1 ? "waarneming wacht" : "waarnemingen wachten"} op menselijke beoordeling.`
-      : "Nog geen waarnemingen. Atlas houdt de betekenis bewust open.";
+    observingSummary.textContent = pendingCount
+      ? `${pendingCount} ${pendingCount === 1 ? "observatie wacht" : "observaties wachten"} op menselijke beoordeling.`
+      : count
+        ? "Geen observaties wachten op beoordeling. De geschiedenis blijft behouden."
+        : "Nog geen observaties. Atlas houdt de betekenis bewust open.";
     paintAdvice();
     observationList.innerHTML = count ? observationStore.observations.map((observation) => `<article class="workspace-observation">
-      <div class="workspace-observation__meaning"><span>Nog niet beoordeeld</span><blockquote>${escapeHtml(observation.text)}</blockquote><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></div>
+      <div class="workspace-observation__meaning"><span>${escapeHtml(observationStatusLabel(observation.status))}</span><blockquote>${escapeHtml(observation.text)}</blockquote><time datetime="${escapeHtml(observation.createdAt)}">${escapeHtml(observationMoment(observation))}</time></div>
       <dl>
         <div><dt>Pagina</dt><dd>${escapeHtml(observation.context.pageLabel)}</dd></div>
         <div><dt>Ervaringsgrens</dt><dd>${escapeHtml(observation.context.boundaryLabel)}</dd></div>
-        <div><dt>Context</dt><dd>Case ${escapeHtml(observation.context.caseId)} · Sprint ${escapeHtml(observation.context.sprintId)}</dd></div>
-        <div><dt>Viewport</dt><dd>${observation.context.viewport.width} × ${observation.context.viewport.height} px</dd></div>
+        <div><dt>Bron</dt><dd>${escapeHtml(observation.source.label)}</dd></div>
+        <div><dt>Eigenaar</dt><dd>${escapeHtml(observation.ownership.reviewOwner)}</dd></div>
+        <div><dt>Viewport</dt><dd>${observation.context.viewport ? `${observation.context.viewport.width} × ${observation.context.viewport.height} px` : "Niet van toepassing"}</dd></div>
       </dl>
-      <a href="${escapeHtml(`${observation.context.path}${observation.context.hash}`)}">Open oorspronkelijke route <span aria-hidden="true">↗</span></a>
+      <a href="${escapeHtml(observation.source.locator)}">Open oorspronkelijke route <span aria-hidden="true">↗</span></a>
     </article>`).join("") : '<p class="workspace-empty">Tijdens normaal gebruik kun je straks vastleggen wat je ziet of ervaart. Een waarneming blijft hier bewust nog zonder conclusie.</p>';
+    paintObservationReviewQueue();
   };
 
   observingForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const sprintId = String(new FormData(observingForm).get("sprintId") ?? "").trim();
-    const activated = activateObserving(localStorage, sprintId);
+    const activated = activateObserving(localStorage, {
+      source: { id: "public-wbd-website", label: "Publieke WBD-website", origin: "website" },
+      ownership: { captureOwner: "We Build And Design", reviewOwner: "Atlas · Werkelijkheid" },
+    });
     if (!activated) {
       notify("Waarnemen kon niet lokaal worden geactiveerd.", true);
       return;
     }
-    notify(`Waarnemen is actief voor Case 0001 · Sprint ${activated.sprintId}.`);
+    notify(`Waarnemen is actief voor ${activated.source.label}.`);
     paintObserving();
   });
 

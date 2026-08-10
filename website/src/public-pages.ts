@@ -351,7 +351,7 @@ function renderContact(route: PublicRoute): string {
   return `
     <section class="route-contact" id="contact-opnemen" aria-labelledby="route-contact-title" data-page-reveal>
       <div class="route-contact__identity">
-        <span class="route-contact__logo" aria-hidden="true">WBD.</span>
+        <span class="route-contact__logo brand__mark" aria-hidden="true"><span>W</span><i></i><span>BD</span></span>
         <p>Rechtstreeks contact met WBD</p>
       </div>
       <div class="route-contact__conversation">

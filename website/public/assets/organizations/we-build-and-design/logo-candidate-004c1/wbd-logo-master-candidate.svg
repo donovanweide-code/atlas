@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="122" height="47" viewBox="-2 -2 122 47" role="img" aria-labelledby="title desc">
+  <title id="title">We Build And Design logo candidate</title>
+  <desc id="desc">Existing W slash BD mark with the tracked company name, preserved from the current WBD website and invoice implementation.</desc>
+  <g fill="#08161A">
+    <text x="0" y="22" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-weight="400">W</text>
+    <text x="36.5" y="25.5" font-family="Georgia, 'Times New Roman', serif" font-size="8.8" font-weight="400">BD</text>
+    <text x="0" y="40.5" font-family="Arial, Helvetica, sans-serif" font-size="6.8" font-weight="700" letter-spacing="1.05">WE BUILD AND DESIGN</text>
+  </g>
+  <line x1="27" y1="25" x2="34.5" y2="5" stroke="#08161A" stroke-width="0.75" stroke-opacity="0.48"/>
+</svg>

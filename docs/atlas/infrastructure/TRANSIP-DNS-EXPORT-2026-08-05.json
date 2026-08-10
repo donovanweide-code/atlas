@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-05",
+  "source": "TransIP control panel (read-only inventory)",
+  "change_policy": "Export only; no DNS records were changed.",
+  "zones": [
+    {
+      "domain": "webuildanddesign.nl",
+      "nameservers": [
+        "ns0.transip.net",
+        "ns1.transip.nl",
+        "ns2.transip.eu"
+      ],
+      "dnssec": true,
+      "records": [
+        { "name": "*", "type": "A", "ttl": 300, "content": "85.10.159.158" },
+        { "name": "*", "type": "AAAA", "ttl": 300, "content": "2a01:7c8:f0:10e2::8c42:d0a3" },
+        { "name": "@", "type": "A", "ttl": 300, "content": "85.10.159.158" },
+        { "name": "@", "type": "AAAA", "ttl": 300, "content": "2a01:7c8:f0:10e2::8c42:d0a3" },
+        { "name": "@", "type": "MX", "ttl": 300, "priority": 10, "content": "mx.transip.email." },
+        { "name": "@", "type": "TXT", "ttl": 300, "content": "v=spf1 include:_spf.transip.email ~all" },
+        { "name": "autoconfig", "type": "CNAME", "ttl": 300, "content": "autoconfig.transip.email." },
+        { "name": "autodiscover", "type": "CNAME", "ttl": 300, "content": "autodiscover.transip.email." },
+        { "name": "experience", "type": "A", "ttl": 3600, "content": "85.10.159.158" },
+        { "name": "experience", "type": "AAAA", "ttl": 3600, "content": "2a01:7c8:f0:10e2::8c42:d0a3" },
+        { "name": "preview", "type": "A", "ttl": 3600, "content": "85.10.159.158" },
+        { "name": "preview", "type": "AAAA", "ttl": 3600, "content": "2a01:7c8:f0:10e2::8c42:d0a3" },
+        { "name": "transip-a._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-A.transip.email." },
+        { "name": "transip-b._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-B.transip.email." },
+        { "name": "transip-c._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-C.transip.email." },
+        { "name": "www", "type": "CNAME", "ttl": 300, "content": "@" },
+        { "name": "x-transip-mail-auth", "type": "TXT", "ttl": 300, "content": "536b42eb89075224cbae57dcc59224a077113aa642379d738e46683a665aaf65" },
+        { "name": "x-transip-mail-auth", "type": "TXT", "ttl": 300, "content": "c96d183a6816582d54e1e0345817f959e57a7ffaa325bde337ccbdd2ed6fda9a" },
+        { "name": "_dmarc", "type": "TXT", "ttl": 300, "content": "v=DMARC1; p=none;" }
+      ],
+      "observed_http_behavior": {
+        "http_to_https": true,
+        "www_redirects_to_apex": false,
+        "notes": "The wildcard records also resolve undeclared subdomains; atlas.webuildanddesign.nl showed a TLS-name mismatch during the inventory."
+      }
+    },
+    {
+      "domain": "faraouderenzorg.nl",
+      "nameservers": [
+        "ns0.transip.net",
+        "ns1.transip.nl",
+        "ns2.transip.eu"
+      ],
+      "dnssec": true,
+      "records": [
+        { "name": "*", "type": "A", "ttl": 3600, "content": "85.10.159.86" },
+        { "name": "*", "type": "AAAA", "ttl": 3600, "content": "2a01:7c8:f0:1081::8acf:1e0d" },
+        { "name": "@", "type": "A", "ttl": 3600, "content": "85.10.159.86" },
+        { "name": "@", "type": "AAAA", "ttl": 3600, "content": "2a01:7c8:f0:1081::8acf:1e0d" },
+        { "name": "@", "type": "MX", "ttl": 3600, "priority": 10, "content": "mx.transip.email." },
+        { "name": "@", "type": "TXT", "ttl": 3600, "content": "v=spf1 include:_spf.transip.email ~all" },
+        { "name": "autoconfig", "type": "CNAME", "ttl": 3600, "content": "autoconfig.transip.email." },
+        { "name": "autodiscover", "type": "CNAME", "ttl": 3600, "content": "autodiscover.transip.email." },
+        { "name": "ftp", "type": "CNAME", "ttl": 3600, "content": "@" },
+        { "name": "transip-A._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-A.transip.email." },
+        { "name": "transip-B._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-B.transip.email." },
+        { "name": "transip-C._domainkey", "type": "CNAME", "ttl": 3600, "content": "_dkim-C.transip.email." },
+        { "name": "www", "type": "CNAME", "ttl": 3600, "content": "@" },
+        { "name": "x-transip-mail-auth", "type": "TXT", "ttl": 300, "content": "536b42eb89075224cbae57dcc59224a077113aa642379d738e46683a665aaf65" },
+        { "name": "x-transip-mail-auth", "type": "TXT", "ttl": 300, "content": "c96d183a6816582d54e1e0345817f959e57a7ffaa325bde337ccbdd2ed6fda9a" },
+        { "name": "_dmarc", "type": "TXT", "ttl": 3600, "content": "v=DMARC1; p=none;" }
+      ],
+      "observed_http_behavior": {
+        "http_to_https": true,
+        "notes": "No redirect was configured in DNS during this inventory."
+      }
+    }
+  ]
+}

@@ -57,8 +57,8 @@ export const currentWorkstream = {
   title: "Experience Polish",
   attentionState: "Verdient vandaag aandacht",
   phase: "Actieve werkstroom",
-  summary: "De bestaande Experience behouden en verfijnen op visuele kwaliteit, inhoud en de gevalideerde WBD-werkelijkheid.",
-  nextStep: "De Experience Polish als afzonderlijke, begrensde werkstroom openen; deze sync voert nog geen polish uit.",
+  summary: "Website, Experience, WBD Workspace en Atlas Workspace worden als één ontwerpfamilie verfijnd, met behoud van gevalideerde inhoud en workflows.",
+  nextStep: "De vier omgevingen samen polijsten en daarna als één geïntegreerde kandidaat beoordelen.",
   boundaries: "Geen herontwerp vanaf nul en geen inhoudelijke start van Project 002.",
 } as const;
 

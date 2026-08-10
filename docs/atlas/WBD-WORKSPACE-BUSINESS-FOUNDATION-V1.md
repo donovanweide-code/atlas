@@ -4,6 +4,13 @@
 **Geregistreerd:** 4 augustus 2026  
 **Eerste toepassing:** Project 001A - WBD-factuursjabloon  
 **Eigenaar:** We Build And Design
+**Projectstatus 001A:** GO / Afgerond op 5 augustus 2026
+
+## Officiële afsluiting Project 001A
+
+Project `001A — WBD Factuur Foundation` is afgerond met de status **GO / Afgerond**. Het opgeleverde resultaat omvat het herbruikbare WBD-factuursjabloon, invoer vanuit de Workspace, inclusief- en exclusief-btwberekeningen, conceptopslag, definitief maken, server-side vergrendeling, verplaatsing naar Verzonden en de acties PDF openen, PDF downloaden en printen.
+
+De eerste definitieve factuur is `F00248` voor `Sport 2000 Sportpaleis B.V.`. Toekomstige automatiseringen zijn nadrukkelijk geen onderdeel van Project 001A. De afgeronde workflow wordt alleen gewijzigd wanneer regressieherstel noodzakelijk is.
 
 ## Doel
 
@@ -17,7 +24,13 @@ Dit is een blijvend bedrijfsmiddel van We Build And Design. Het is geen Sportpal
 |---|---|---|
 | Officiële documentbranding | `invoices/wbd/brand.py` | Eén vectoriële implementatie van het actuele officiële WBD-logo voor zakelijke documenten |
 | Factuurtemplate | `invoices/wbd/invoice.py` | A4-layout, Nederlandse notatie, btw-berekening en releasevalidatie |
+| Leeg WBD-invoermodel | `invoices/wbd/data/wbd-invoice-template.json` | Vaste afzendergegevens, documentstatus en menselijke controlepunten voor iedere nieuwe factuur |
 | Factuurdata | `invoices/wbd/data/*.json` | Afzender-, klant-, factuur- en regeldata per document, los van de layout |
+| Workspace-invoer | `website/src/wbd-invoices.ts` | Normale invoerplek voor factuur-, klant- en regelgegevens; de gebruiker werkt niet rechtstreeks in JSON |
+| Lokale generatorbridge | `website/scripts/wbd-invoice-development-api.mjs` | Bewaart concepten en roept voor berekening en PDF de bestaande Python-generator aan |
+| Conceptopslag | `invoices/wbd/data/concepts/` | Lokale, heropenbare factuurconcepten onder Business Foundation → Finance → Facturen |
+| Definitieve opslag | `invoices/wbd/data/sent/` | Bevestigde, inhoudelijk vergrendelde facturen onder Facturen → Verzonden |
+| Definitieve PDF-uitvoer | `output/pdf/sent/` | Direct bereikbare PDF's voor openen, downloaden en printen vanuit Verzonden |
 | Rekentests | `invoices/wbd/tests/` | Inclusieve en exclusieve btw-invoer, afronding en blockerbewaking |
 | Definitieve uitvoer | `output/pdf/` | Gegenereerde, gecontroleerde PDF-artefacten |
 | Visuele controle | `output/pdf/screenshots/` | Gerenderde pagina's voor layoutreview |
@@ -68,6 +81,26 @@ Berekeningen gebruiken decimale centafronding per regel. Verwachte totalen kunne
 - totaal inclusief btw: € 331,01.
 
 Deze bedragen, klantnaam en projectreferentie behoren tot de Sportpaleis-conceptfactuur. De generator, branding, tests en documentprincipes blijven eigendom en bedrijfsfundering van We Build And Design.
+
+## Workspace-invoerlaag
+
+De normale ingang voor nieuwe facturen is:
+
+`Business Foundation → Finance → Facturen → Nieuwe factuur`
+
+Technische route: `/workspace/wbd/business-foundation/finance/facturen/nieuw`.
+
+De invoerlaag verzamelt factuurgegevens, klantgegevens en een willekeurig aantal factuurregels. Iedere regel heeft een expliciete keuze tussen inclusief en exclusief btw. De live bedragen komen via `--calculate-stdin` rechtstreeks uit `invoices/wbd/invoice.py`; de browser bevat geen tweede btw-algoritme. Bij PDF-generatie bewaart de Workspace eerst hetzelfde volledige factuurdatamodel en roept vervolgens de bestaande generator aan. Daardoor blijven A4-layout, WBD-logo, validatie en afronding centraal beheerd.
+
+Concepten worden lokaal onder `invoices/wbd/data/concepts/` opgeslagen en zijn vanuit het Facturen-overzicht opnieuw te openen en te bewerken. Gegenereerde concept-PDF's staan onder `output/pdf/concepts/`. De JSON-bestanden zijn een interne opslagvorm van de bestaande generator; Donovan hoeft ze voor normaal gebruik niet te openen of aan te passen.
+
+`Concepten` en de statusovergang naar `Verzonden` zijn functioneel. `Templates` is alleen als begrensde opslagstructuur zichtbaar. Verzending, betaalstatus, klantbeheer, automatische nummering en boekhoudkoppelingen blijven buiten scope.
+
+### Factuur definitief maken
+
+Een bestaand concept heeft de expliciete actie `Factuur definitief maken`. Na een tweede bevestiging controleert de Workspace de verplichte gegevens, tijdelijke placeholders en eventuele vastgelegde controletotalen. De oorspronkelijke blockers worden als menselijk bevestigd vastgelegd, `document_status` wordt `final`, het bestand verhuist veilig van `data/concepts/` naar `data/sent/` en krijgt een blijvende server-side vergrendeling.
+
+Een definitieve factuur blijft leesbaar onder `Facturen → Verzonden`, maar inhoudsvelden, factuurregels en opslagacties zijn uitgeschakeld. Ook een rechtstreekse opslagpoging via de lokale bridge wordt geweigerd. Tijdens de statusovergang maakt de bestaande WBD-generator de definitieve PDF onder `output/pdf/sent/`. De rechterkolom houdt deze PDF daarna direct beschikbaar voor openen, downloaden en printen; ontbrekende oudere definitieve PDF's worden bij het openen veilig opnieuw opgebouwd. De overgang verstuurt geen e-mail en maakt geen boekhoudboeking.
 
 ## Governance en grens
 

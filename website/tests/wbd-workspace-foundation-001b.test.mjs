@@ -63,12 +63,12 @@ test("legt de modulevorm en commerciële prijsgrens vast zonder prijzen te bepal
   assert.match(insights, /Value & Pricing Framework/i);
 });
 
-test("markeert de sync GO en maakt Experience Polish actief zonder Project 002 te starten", () => {
+test("houdt de sync afgesloten en maakt Project 001C actief zonder Project 002 te starten", () => {
   assert.equal(atlasDailyBrief.reviewedAt, "2026-08-05");
-  assert.match(atlasDailyBrief.statusLabel, /GO \/ AFGEROND/);
+  assert.match(atlasDailyBrief.statusLabel, /PROJECT 001C · ACTIEF/);
   assert.match(atlasDailyBrief.title, /Experience Polish/);
-  assert.match(atlasDailyBrief.subtitle, /Project 002 blijft bewust de fase hierna/i);
-  assert.match(atlasDailyBrief.focus.nextStep, /geen Experience-wijzigingen/i);
+  assert.match(atlasDailyBrief.subtitle, /publieke en interne omgevingen/i);
+  assert.match(atlasDailyBrief.focus.nextStep, /één kandidaat/i);
   for (const fact of ["001A", "001B", "F00248", "Sport 2000 Sportpaleis B.V."]) {
     assert.match(atlasDailyBrief.why.join(" "), new RegExp(fact.replaceAll(".", "\\.")));
   }

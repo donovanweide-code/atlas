@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://webuildanddesign.nl/schemas/monitoring-target-register-v1.json",
+  "title": "Atlas Monitoring Target Register",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "updatedAt", "targets"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    }
+  },
+  "$defs": {
+    "nullableDateTime": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "organizationId",
+        "environmentId",
+        "serviceId",
+        "capability",
+        "endpoint",
+        "expectedState",
+        "monitoringMethod",
+        "owner",
+        "severity",
+        "status",
+        "lastCheckAt",
+        "lastIncidentAt",
+        "notes",
+        "activationBlockedBy"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "organizationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "environmentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "serviceId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "capability": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "endpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "url"],
+          "properties": {
+            "method": {
+              "enum": ["GET", "HEAD"]
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            }
+          }
+        },
+        "expectedState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "statusCodes",
+            "followRedirects",
+            "redirectLocation",
+            "timeoutMs",
+            "bodyIncludes",
+            "headersInclude",
+            "headersExclude",
+            "tls"
+          ],
+          "properties": {
+            "statusCodes": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              }
+            },
+            "followRedirects": {
+              "type": "boolean"
+            },
+            "redirectLocation": {
+              "type": ["string", "null"],
+              "format": "uri"
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 30000
+            },
+            "bodyIncludes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "headersInclude": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "headersExclude": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["required", "hostnameMatch", "expiryWarningDays"],
+              "properties": {
+                "required": {
+                  "type": "boolean"
+                },
+                "hostnameMatch": {
+                  "type": "boolean"
+                },
+                "expiryWarningDays": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 90
+                  }
+                }
+              }
+            }
+          }
+        },
+        "monitoringMethod": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "provider",
+            "providerMonitorId",
+            "intervalSeconds",
+            "failureThreshold",
+            "recoveryThreshold",
+            "confirmationLocations"
+          ],
+          "properties": {
+            "type": {
+              "enum": ["external-https", "external-application-health"]
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "providerMonitorId": {
+              "type": ["string", "null"],
+              "maxLength": 200
+            },
+            "intervalSeconds": {
+              "type": "integer",
+              "minimum": 30,
+              "maximum": 86400
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 10
+            },
+            "recoveryThreshold": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 10
+            },
+            "confirmationLocations": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role"],
+          "properties": {
+            "role": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        },
+        "severity": {
+          "enum": ["info", "attention", "urgent"]
+        },
+        "status": {
+          "enum": ["proposed", "approved", "active", "paused", "retired", "unknown"]
+        },
+        "lastCheckAt": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "lastIncidentAt": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "activationBlockedBy": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        }
+      }
+    }
+  }
+}

@@ -53,13 +53,13 @@ if (route === "/") {
         ${renderSceneWorld("scene-001")}
         <div class="hero__content" data-home-reveal>
           <p class="route-label"><span>01</span> Overzicht</p>
-          <p class="hero__eyebrow hero__descriptor">Praktische digitale verbeteringen die beginnen met begrip</p>
+          <p class="hero__eyebrow hero__descriptor">Websites en digitale werkplekken die beginnen met begrip</p>
 
           <h1 class="hero__title" id="hero-title">Begrijpen is het vertrekpunt.</h1>
 
           <p class="hero__text">
             We Build And Design onderzoekt eerst hoe je organisatie werkt, wat al goed gaat en waar
-            mensen vastlopen. Daarna bepalen we samen welke praktische digitale verbetering helpt.
+            mensen vastlopen. Daarna ontwerpen en bouwen we de website of digitale werkplek die werkelijk helpt.
           </p>
 
           <a class="hero__step" href="#begrijpen">

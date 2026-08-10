@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-07T08:00:00Z",
+  "senders": [
+    {
+      "organisation_id": "example-org",
+      "domain": "example.org",
+      "sender_identity": "human role mailbox",
+      "mailbox_service": "hosted mailbox",
+      "provider": "example mail provider",
+      "use_case": "human business correspondence",
+      "envelope_from": "same organisational domain; exact mailbox omitted",
+      "header_from": "same organisational domain; exact mailbox omitted",
+      "spf_source": "provider SPF include",
+      "dkim_selector": null,
+      "dmarc_alignment": "documented",
+      "owner": "mail owner",
+      "status": "documented_sender",
+      "evidence": "provider documentation; representative header pending",
+      "last_verified": null,
+      "notes": "Generic example without a real mailbox address or message header."
+    },
+    {
+      "organisation_id": "future-org",
+      "domain": "future.example",
+      "sender_identity": "transactional service",
+      "mailbox_service": "not selected",
+      "provider": "not selected",
+      "use_case": "future application notifications",
+      "envelope_from": null,
+      "header_from": null,
+      "spf_source": null,
+      "dkim_selector": null,
+      "dmarc_alignment": "unknown",
+      "owner": "future organisation owner",
+      "status": "proposed",
+      "evidence": null,
+      "last_verified": null,
+      "notes": "NO-GO for sending until provider, consent, authentication and ownership are approved."
+    }
+  ]
+}
+

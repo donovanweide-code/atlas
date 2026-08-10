@@ -7,6 +7,9 @@
 **Stabiele productie-directory:** `/sites/wbd-20260726-ca3d1bd`
 **Onderzoeksstatus:** afgerond
 **Productiestatus:** stabiele rollbackversie actief
+**Production Publication:** **HOLD – Wacht op reactie TransIP**
+**Openstaand extern actiepunt:** TransIP moet de activatie van de DocumentRoot
+op `linweb412` verklaren voordat dit traject wordt heropend.
 **Deployment of DocumentRoot-wijziging tijdens dit onderzoek:** niet uitgevoerd
 
 ## Executive summary

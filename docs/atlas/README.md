@@ -16,6 +16,17 @@ Deze map vertaalt de Foundation naar dagelijks gebruik:
 10. [`PRINCIPLES.md`](PRINCIPLES.md) — groeiboek van Candidate via Decision naar Foundation.
 11. [`WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md`](WBD-WORKSPACE-BUSINESS-FOUNDATION-V1.md) — permanente merk- en documentbasis voor WBD-facturen en toekomstige zakelijke documenten.
 12. [`WBD-WORKSPACE-FOUNDATION-001B.md`](WBD-WORKSPACE-FOUNDATION-001B.md) — afgesloten WBD Workspace Foundation en Atlas Workspace Sync, actuele ontwikkelpartner en grens van Experience Polish naar Project 002.
+13. [`PROJECT-002A-INFRASTRUCTURE-FOUNDATION-TRANSIP.md`](PROJECT-002A-INFRASTRUCTURE-FOUNDATION-TRANSIP.md) — read-only inventarisatie, risicoanalyse, doelarchitectuur en gefaseerd implementatieplan voor de TransIP-infrastructuur.
+14. [`PROJECT-002B-SECURITY-BASELINE-RECOVERY-READINESS.md`](PROJECT-002B-SECURITY-BASELINE-RECOVERY-READINESS.md) — credentialhygiëne, TransIP-accountbeveiliging, DNS-export, backup-/herstelbaseline, eigenaarschap en GO/NO-GO voor Project 002C.
+15. [`PROJECT-001-FINAL-RELEASE-REVIEW-2026-08-05.md`](PROJECT-001-FINAL-RELEASE-REVIEW-2026-08-05.md) — laatste geïntegreerde releasecandidatevalidatie van Project 001.
+16. [`PROJECT-001-FINAL-HANDOFF-TO-PROJECT-002.md`](PROJECT-001-FINAL-HANDOFF-TO-PROJECT-002.md) — canonieke inhoudelijke afsluiting van Project 001, infrastructuuroverdracht en heropeningscriteria.
+17. [`PROJECT-002C-PRODUCTION-INFRASTRUCTURE-ASSESSMENT.md`](PROJECT-002C-PRODUCTION-INFRASTRUCTURE-ASSESSMENT.md) — canonieke productie-infrastructuurbeoordeling en gefaseerde doelrichting voor Project 002C.
+18. [`PROJECT-002C-ENVIRONMENT-RELEASE-CONTROL-BASELINE.md`](PROJECT-002C-ENVIRONMENT-RELEASE-CONTROL-BASELINE.md) — minimale professionele environment-, release-, bewijs- en rollbackbaseline van Project 002C.2.
+19. [`PROJECT-002C-EXTERNAL-MONITORING-BASELINE.md`](PROJECT-002C-EXTERNAL-MONITORING-BASELINE.md) — onafhankelijke availability-, SSL-, application-health- en attentionbaseline van Project 002C.3, zonder externe activatie.
+20. [`PROJECT-002C-BACKUP-OFF-PROVIDER-RECOVERY-BASELINE.md`](PROJECT-002C-BACKUP-OFF-PROVIDER-RECOVERY-BASELINE.md) — providerneutraal backupregister, off-provider recovery-, RPO/RTO-, restore- en attentionbeleid van Project 002C.4, zonder data-export of opslagactivatie.
+21. [`PROJECT-002C-DNS-CANONICAL-MAIL-AUTH-HYGIENE.md`](PROJECT-002C-DNS-CANONICAL-MAIL-AUTH-HYGIENE.md) — publieke DNS-, canonical-, SPF-, DKIM-, DMARC-, MX-, CAA- en DNSSEC-baseline van Project 002C.5, zonder record- of productiewijzigingen.
+22. [`PROJECT-002C-ACCESS-DEPLOYMENT-CREDENTIAL-OPERATIONS.md`](PROJECT-002C-ACCESS-DEPLOYMENT-CREDENTIAL-OPERATIONS.md) — access-, deploymentcredential-, least-privilege-, recovery- en auditbaseline van Project 002C.6, zonder login of account-, credential- en productiewijzigingen.
+23. [`PROJECT-002C-CLOUDFLARE-FREE-PREFLIGHT.md`](PROJECT-002C-CLOUDFLARE-FREE-PREFLIGHT.md) — Cloudflare Free-waarde-, DNS-, DNSSEC-, proxy-, TLS-, WAF-, cache-, privacy-, cutover- en rollbackpreflight van Project 002C.7, zonder account, zone of productiehandeling.
 
 Klantgebonden feiten blijven in het betreffende dossier onder [`../../clients/`](../../clients/). De Atlas-map bewaart methode, besluiten, sprintgeschiedenis en herbruikbare lessen; zij dupliceert geen volledige klantdossiers.
 

@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-07T00:00:00Z",
+  "targets": [
+    {
+      "id": "wbd-prod-public-web",
+      "organizationId": "wbd",
+      "environmentId": "production-public",
+      "serviceId": "public-site",
+      "capability": "public-website",
+      "endpoint": {
+        "method": "GET",
+        "url": "https://webuildanddesign.nl/"
+      },
+      "expectedState": {
+        "statusCodes": [200],
+        "followRedirects": false,
+        "redirectLocation": null,
+        "timeoutMs": 10000,
+        "bodyIncludes": ["We Build And Design"],
+        "headersInclude": {},
+        "headersExclude": {
+          "x-robots-tag": "noindex"
+        },
+        "tls": {
+          "required": true,
+          "hostnameMatch": true,
+          "expiryWarningDays": [30, 14, 7]
+        }
+      },
+      "monitoringMethod": {
+        "type": "external-https",
+        "provider": "unselected",
+        "providerMonitorId": null,
+        "intervalSeconds": 60,
+        "failureThreshold": 2,
+        "recoveryThreshold": 2,
+        "confirmationLocations": 2
+      },
+      "owner": {
+        "role": "wbd-primary-administrator"
+      },
+      "severity": "urgent",
+      "status": "proposed",
+      "lastCheckAt": null,
+      "lastIncidentAt": null,
+      "notes": [
+        "Repositoryvoorbeeld; geen actieve providerconfiguratie.",
+        "Eenmalige read-only controle gaf HTTP 200 op 2026-08-07."
+      ],
+      "activationBlockedBy": [
+        "Menselijke provider-, contract- en privacykeuze.",
+        "Expliciete GO MONITORING ACTIVATION."
+      ]
+    },
+    {
+      "id": "wbd-prod-experience-entry",
+      "organizationId": "wbd",
+      "environmentId": "production-experience",
+      "serviceId": "experience",
+      "capability": "experience-entry",
+      "endpoint": {
+        "method": "GET",
+        "url": "https://experience.webuildanddesign.nl/ervaar"
+      },
+      "expectedState": {
+        "statusCodes": [200],
+        "followRedirects": false,
+        "redirectLocation": null,
+        "timeoutMs": 10000,
+        "bodyIncludes": ["/assets/experience-"],
+        "headersInclude": {
+          "cache-control": "no-store",
+          "x-robots-tag": "noindex"
+        },
+        "headersExclude": {},
+        "tls": {
+          "required": true,
+          "hostnameMatch": true,
+          "expiryWarningDays": [30, 14, 7]
+        }
+      },
+      "monitoringMethod": {
+        "type": "external-https",
+        "provider": "unselected",
+        "providerMonitorId": null,
+        "intervalSeconds": 60,
+        "failureThreshold": 2,
+        "recoveryThreshold": 2,
+        "confirmationLocations": 2
+      },
+      "owner": {
+        "role": "wbd-primary-administrator"
+      },
+      "severity": "urgent",
+      "status": "proposed",
+      "lastCheckAt": null,
+      "lastIncidentAt": null,
+      "notes": [
+        "Repositoryvoorbeeld; geen actieve providerconfiguratie.",
+        "Probe maakt geen sessie en gebruikt geen token of deelnemerroute."
+      ],
+      "activationBlockedBy": [
+        "Menselijke provider-, contract- en privacykeuze.",
+        "Expliciete GO MONITORING ACTIVATION."
+      ]
+    },
+    {
+      "id": "wbd-prod-public-www-canonical",
+      "organizationId": "wbd",
+      "environmentId": "production-public",
+      "serviceId": "public-site",
+      "capability": "canonical-redirect",
+      "endpoint": {
+        "method": "GET",
+        "url": "https://www.webuildanddesign.nl/"
+      },
+      "expectedState": {
+        "statusCodes": [301, 308],
+        "followRedirects": false,
+        "redirectLocation": "https://webuildanddesign.nl/",
+        "timeoutMs": 10000,
+        "bodyIncludes": [],
+        "headersInclude": {},
+        "headersExclude": {},
+        "tls": {
+          "required": true,
+          "hostnameMatch": true,
+          "expiryWarningDays": [30, 14, 7]
+        }
+      },
+      "monitoringMethod": {
+        "type": "external-https",
+        "provider": "unselected",
+        "providerMonitorId": null,
+        "intervalSeconds": 86400,
+        "failureThreshold": 2,
+        "recoveryThreshold": 2,
+        "confirmationLocations": 1
+      },
+      "owner": {
+        "role": "wbd-primary-administrator"
+      },
+      "severity": "attention",
+      "status": "proposed",
+      "lastCheckAt": null,
+      "lastIncidentAt": null,
+      "notes": [
+        "Huidige read-only controle gaf 200; activeer dit target pas na Project 002C.5."
+      ],
+      "activationBlockedBy": [
+        "Project 002C.5 canonicalisatie is nog niet uitgevoerd.",
+        "Expliciete DNS/hosting-GO en afzonderlijke monitoringactivatie."
+      ]
+    },
+    {
+      "id": "wbd-prod-experience-health",
+      "organizationId": "wbd",
+      "environmentId": "production-experience",
+      "serviceId": "experience",
+      "capability": "application-health",
+      "endpoint": {
+        "method": "GET",
+        "url": "https://experience.webuildanddesign.nl/api/health"
+      },
+      "expectedState": {
+        "statusCodes": [200],
+        "followRedirects": false,
+        "redirectLocation": null,
+        "timeoutMs": 10000,
+        "bodyIncludes": ["{\"status\":\"ok\"}"],
+        "headersInclude": {
+          "cache-control": "no-store"
+        },
+        "headersExclude": {},
+        "tls": {
+          "required": true,
+          "hostnameMatch": true,
+          "expiryWarningDays": [30, 14, 7]
+        }
+      },
+      "monitoringMethod": {
+        "type": "external-application-health",
+        "provider": "unselected",
+        "providerMonitorId": null,
+        "intervalSeconds": 300,
+        "failureThreshold": 2,
+        "recoveryThreshold": 2,
+        "confirmationLocations": 2
+      },
+      "owner": {
+        "role": "wbd-primary-administrator"
+      },
+      "severity": "urgent",
+      "status": "proposed",
+      "lastCheckAt": null,
+      "lastIncidentAt": null,
+      "notes": [
+        "Het endpoint bestaat niet en is in Project 002C.3 niet geïmplementeerd.",
+        "Het toekomstige responsecontract bevat geen dependency- of foutdetails."
+      ],
+      "activationBlockedBy": [
+        "Afzonderlijke implementatie, tests, release-evidence en Human GO voor /api/health.",
+        "Daarna afzonderlijke GO MONITORING ACTIVATION."
+      ]
+    }
+  ]
+}

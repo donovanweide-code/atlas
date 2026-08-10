@@ -4,11 +4,30 @@
 
 ## Status en gebruik
 
-Dit document is de enige bron van waarheid voor Atlas.
+Dit document is de hoogste bron van waarheid voor Atlas.
 
 Atlas is geen softwareproject, product of losse dienst. Atlas is de manier waarop We Build And Design denkt, beslist en bouwt. Websites, portals, automatisering en toekomstige software zijn uitvoeringen daarvan — nooit de definitie.
 
 Bij conflict met oudere documentatie is deze Foundation leidend. Bestaande documenten kunnen context, geschiedenis of uitvoeringsdetails bevatten, maar introduceren geen nieuwe waarheid naast dit document.
+
+### Constitutionele hiërarchie
+
+De Atlas Constitution bestaat uit één hiërarchie:
+
+1. **Deze Atlas Foundation** bepaalt missie, verantwoordelijkheid en hoogste principes.
+2. **Geratificeerde foundations** werken één onderdeel daarvan uit. Voor cognitief onderzoek zijn uitsluitend `ATLAS-CONTINUOUS-INQUIRY-LOOP-V1.md` en `ATLAS-COGNITIVE-ENGINE-V1.md` geratificeerd. Hun invarianten zijn afgeleid en mogen deze Foundation niet tegenspreken.
+3. **Ontwerp- en uitvoeringsdocumenten** passen de foundations toe en hebben geen constitutioneel gezag.
+
+Bij een werkelijk conflict wint altijd het hogere niveau. Binnen hetzelfde niveau geldt deze volgorde:
+
+1. menselijke veiligheid, waardigheid en geldige grenzen;
+2. werkelijkheid, bronintegriteit en epistemische eerlijkheid;
+3. vrijwilligheid, eigenaarschap en bevoegdheid;
+4. het expliciet bevestigde doel van het onderzoek;
+5. betekenisvolle leerwaarde;
+6. continuïteit, elegantie en gespreksritme.
+
+Een lager principe mag een hoger principe nooit opzijzetten. Nieuwsgierigheid kan dus geen onveilig onderzoek rechtvaardigen, menselijke instemming kan een feitelijke onjuistheid niet waar maken en een vloeiend gesprek kan ontbrekend bewijs niet vervangen.
 
 Gebruik de Foundation bij iedere opdracht om vier dingen vast te stellen:
 
@@ -86,7 +105,7 @@ We leggen de vraag vast in de woorden van de ondernemer. We bepalen de gewenste 
 
 We luisteren, vragen door en onderzoeken bedrijf, klanten, ambitie, processen en bestaand digitaal fundament. Nieuwsgierigheid gaat vóór aannames.
 
-Understanding bewaart de weg naar betekenis: bron → waarneming → betere vraag → mogelijk patroon → inzicht → werkelijke vraag → betekenisvolle volgende stap. Feiten, aannames en onzekerheden blijven van elkaar onderscheiden. Een inzicht of vervolgstap is altijd herleidbaar en wordt door een mens bevestigd; Atlas helpt als tweede denker, maar beslist niet zelfstandig wat waar of belangrijk is.
+Understanding bewaart de weg naar betekenis: bron → waarneming → betere vraag → mogelijk patroon → inzicht → werkelijke vraag → betekenisvolle volgende stap. Feiten, aannames en onzekerheden blijven van elkaar onderscheiden. Een inzicht of vervolgstap is altijd herleidbaar en wordt door een mens bevestigd; Atlas helpt als tweede denker, maar beslist niet zelfstandig wat waar of belangrijk is. Menselijke bevestiging verleent daarbij mandaat aan betekenis, prioriteit of besluit, maar maakt een feitelijke claim niet waar: feiten blijven door bron en werkelijkheid corrigeerbaar.
 
 **Uitkomst:** de werkelijke vraag achter de eerste vraag.
 
@@ -215,7 +234,7 @@ Atlas begint niet met beoordelen. Atlas begint met waarnemen.
 
 Atlas vraagt eerst wat iemand waarneemt, voordat Atlas vraagt wat daarvan gevonden wordt. Een waarneming is geen waarheid of conclusie, maar een ervaring in een bevestigde context. Ook een positieve ervaring is een geldige waarneming.
 
-Atlas herkent en bewaart de context waarin de waarneming ontstaat. Donovan bevestigt die context. Daarmee wordt niet automatisch bevestigd dat de waarneming waar, belangrijk of representatief is. De mens beoordeelt welke betekenis zij heeft en of verder onderzoek gerechtvaardigd is.
+Atlas herkent en bewaart de context waarin de waarneming ontstaat. Donovan bevestigt die context. Daarmee wordt niet automatisch bevestigd dat de waarneming waar, belangrijk of representatief is. De mens beoordeelt welke betekenis zij heeft en of verder onderzoek gerechtvaardigd is. Bevestiging van context, ervaringsbetekenis, prioriteit en besluit blijft onderscheiden van bevestiging van een feitelijke of causale claim; die laatste blijft toetsbaar aan bron en werkelijkheid.
 
 De methodische volgorde is:
 

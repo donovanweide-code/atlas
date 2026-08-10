@@ -1,11 +1,11 @@
 export const atlasDailyBrief = {
   reviewedAt: "2026-08-05",
-  status: "completed",
-  statusLabel: "GO / AFGEROND · Workspace Sync",
-  title: "Experience Polish verdient nu aandacht.",
-  subtitle: "De Workspace Sync is afgerond; Project 002 blijft bewust de fase hierna.",
+  status: "active",
+  statusLabel: "PROJECT 001C · ACTIEF",
+  title: "Experience Polish is nu actief.",
+  subtitle: "Eén samenhangende polishronde voor de publieke en interne omgevingen.",
   summary:
-    "Atlas en de WBD Workspace vertellen weer hetzelfde verhaal. De bestaande Experience wordt de volgende begrensde werkstroom en blijft het vertrekpunt voor verdere verfijning.",
+    "De basis is gevalideerd. Nu worden website, Experience en Workspaces naar hetzelfde kwaliteitsniveau gebracht; Project 002 blijft bewust hierna.",
   why: [
     "Project 001A · WBD Factuur Foundation is GO / Afgerond; F00248 is de eerste definitieve WBD-factuur.",
     "Project 001B · WBD Workspace Foundation is GO / Afgerond.",
@@ -16,13 +16,13 @@ export const atlasDailyBrief = {
   evidenceSource: "Atlas Workspace Sync · GO / Afgerond · 2026-08-05",
   externalDependency: "Geen",
   returnTrigger:
-    "Open Experience Polish als afzonderlijke werkstroom; Project 002 keert pas terug na afronding en goedkeuring daarvan.",
+    "Project 001C blijft actief tot de geïntegreerde kandidaat gezamenlijk is beoordeeld; Project 002 keert pas daarna terug.",
   focus: {
-    title: "Open Experience Polish als volgende werkstroom.",
+    title: "Breng alle vier omgevingen naar één kwaliteitsniveau.",
     summary:
-      "Behoud de bestaande Experience en verfijn alleen visuele kwaliteit, inhoud en aansluiting op de gevalideerde WBD-werkelijkheid.",
-    nextStep: "Start de polish in een afzonderlijk afgebakende opdracht; deze afronding voert nog geen Experience-wijzigingen uit.",
-    actionLabel: "Bekijk de afgeronde synchronisatie",
+      "Behoud de bestaande Experience en workflows; verfijn hiërarchie, licht, leesbaarheid, focus en samenhang als één geheel.",
+    nextStep: "Werk centraal waar het kan en per omgeving waar hun eigen rol daarom vraagt. Lever daarna één kandidaat op voor review.",
+    actionLabel: "Bekijk de gedeelde werkelijkheid",
     actionHref: "#werkelijkheid",
     explanation: [
       "De WBD Workspace is inmiddels de centrale interne werkplek.",
@@ -78,5 +78,5 @@ export const atlasDailyBrief = {
     },
   ],
   changedSinceLast:
-    "De Workspace Sync is GO / Afgerond; Experience Polish is actief en Project 002 blijft hierna.",
+    "Project 001C is de actieve geïntegreerde polishronde; de Workspace Sync blijft GO / Afgerond en Project 002 blijft hierna.",
 } as const;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -132,6 +133,25 @@ def calculate_invoice(lines: list[dict[str, Any]]) -> tuple[list[CalculatedLine]
         gross=money(sum((line.gross for line in calculated), Decimal("0"))),
     )
     return calculated, totals
+
+
+def calculation_response(lines: list[dict[str, Any]]) -> dict[str, Any]:
+    calculated, totals = calculate_invoice(lines)
+    return {
+        "lines": [
+            {
+                "net": f"{line.net:.2f}",
+                "vat": f"{line.vat:.2f}",
+                "gross": f"{line.gross:.2f}",
+            }
+            for line in calculated
+        ],
+        "totals": {
+            "exclusive": f"{totals.net:.2f}",
+            "vat": f"{totals.vat:.2f}",
+            "inclusive": f"{totals.gross:.2f}",
+        },
+    }
 
 
 def validate_expected_totals(data: dict[str, Any], totals: InvoiceTotals) -> None:
@@ -628,9 +648,18 @@ def load_data(path: Path) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a fixed WBD invoice PDF from JSON data")
-    parser.add_argument("data", type=Path, help="Path to invoice JSON data")
-    parser.add_argument("output", type=Path, help="Path for the generated PDF")
+    parser.add_argument("--calculate-stdin", action="store_true", help="Calculate invoice lines supplied as JSON on stdin")
+    parser.add_argument("data", nargs="?", type=Path, help="Path to invoice JSON data")
+    parser.add_argument("output", nargs="?", type=Path, help="Path for the generated PDF")
     args = parser.parse_args()
+
+    if args.calculate_stdin:
+        payload = json.load(sys.stdin)
+        print(json.dumps(calculation_response(payload.get("lines", [])), ensure_ascii=False))
+        return
+
+    if args.data is None or args.output is None:
+        parser.error("data and output are required unless --calculate-stdin is used")
 
     data = load_data(args.data)
     totals = build_pdf(data, args.output)

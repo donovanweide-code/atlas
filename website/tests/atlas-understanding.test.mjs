@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  addReviewedObservationToUnderstanding,
   addUnderstandingItem,
   createInitialUnderstandingStore,
   createInsight,
@@ -11,6 +12,7 @@ import {
   reviseUnderstandingItem,
   saveUnderstanding,
   understandingRecommendation,
+  understandingEntryKinds,
   understandingStorageKey,
 } from "../src/atlas-understanding.ts";
 
@@ -44,11 +46,45 @@ test("Atlas vormt een begrensd oordeel voordat Understanding om organisatie vraa
 
 test("observaties en vragen kunnen expliciet aan elkaar worden gerelateerd", () => {
   const store = { version: 1, items: [], relationships: [], revisions: [] };
-  const observation = addUnderstandingItem(store, { id: "observation", caseId: "0001", kind: "observation", text: "Een waarneming", createdAt: "2026-07-21T09:00:00.000Z" });
+  const observation = addUnderstandingItem(store, { id: "observation", caseId: "0001", kind: "observation", text: "Een waarneming", sourceObservationId: "atlas-observation-1", createdAt: "2026-07-21T09:00:00.000Z" });
   const question = addUnderstandingItem(store, { id: "question", caseId: "0001", kind: "question", text: "Welke vraag volgt hieruit?", createdAt: "2026-07-21T09:01:00.000Z" });
   const relation = relateUnderstandingItems(store, observation.id, question.id, "questions", "2026-07-21T09:02:00.000Z");
   assert.equal(relation.confirmedByHuman, true);
   assert.equal(relation.type, "questions");
+});
+
+test("Understanding maakt niet langer een tweede zelfstandige observatiewaarheid", () => {
+  const store = { version: 1, items: [], relationships: [], revisions: [] };
+  assert.equal(understandingEntryKinds.some((kind) => kind.id === "observation"), false);
+  assert.throws(
+    () => addUnderstandingItem(store, { caseId: "0001", kind: "observation", text: "Losse dubbele waarneming" }),
+    /alleen via een menselijk beoordeelde Atlas-observatie/,
+  );
+});
+
+test("een menselijk beoordeelde observatie wordt als herleidbare bron aan Understanding toegewezen", () => {
+  const store = { version: 1, items: [], relationships: [], revisions: [] };
+  const observation = {
+    version: 2,
+    id: "atlas-observation-reviewed",
+    text: "De primaire actie wordt op mobiel later gezien.",
+    createdAt: "2026-08-05T09:00:00.000Z",
+    status: "confirmed",
+    source: { id: "website-contact", kind: "surface", label: "Publieke website · Contact", origin: "website", path: "/contact", locator: "/contact#contact-verkenning", capturedAt: "2026-08-05T09:00:00.000Z" },
+    context: { surface: "public", path: "/contact", hash: "#contact-verkenning", pageId: "public.contact", pageLabel: "Contact", boundaryId: "public.contact.exploration", boundaryLabel: "Contact en verkenning", viewport: { width: 430, height: 932 } },
+    ownership: { captureOwner: "We Build And Design", reviewOwner: "Atlas · Werkelijkheid" },
+    supportingFiles: [],
+    relations: [],
+    history: [
+      { id: "captured", from: null, to: "unreviewed", at: "2026-08-05T09:00:00.000Z", actor: "We Build And Design", rationale: "Vastgelegd bij de bron", confirmedByHuman: false },
+      { id: "reviewed", from: "unreviewed", to: "confirmed", at: "2026-08-05T10:00:00.000Z", actor: "Donovan", rationale: "Bron en context gecontroleerd", confirmedByHuman: true },
+    ],
+  };
+  const item = addReviewedObservationToUnderstanding(store, observation, "0002", "Donovan", "2026-08-05T10:05:00.000Z");
+  assert.equal(item.sourceObservationId, observation.id);
+  assert.equal(item.caseId, "0002");
+  assert.equal(item.kind, "observation");
+  assert.equal(addReviewedObservationToUnderstanding(store, observation, "0002", "Donovan").id, item.id);
 });
 
 test("een inzicht en betekenisvolle volgende stap blijven naar hun bronnen herleidbaar", () => {
