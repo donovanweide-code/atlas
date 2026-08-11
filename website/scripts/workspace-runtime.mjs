@@ -132,7 +132,6 @@ function sendHtml(response, statusCode, body, method = "GET") {
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
-  response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
   response.setHeader("Content-Length", Buffer.byteLength(body));
   response.end(method === "HEAD" ? undefined : body);
 }
@@ -160,6 +159,7 @@ async function serveAsset(response, method, pathname, distRoot) {
   response.setHeader("Content-Type", mimeTypes.get(path.extname(candidate).toLowerCase()) ?? "application/octet-stream");
   response.setHeader("Content-Length", details.size);
   response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
   response.setHeader("Cache-Control", pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache");
   if (method === "HEAD") {
     response.end();

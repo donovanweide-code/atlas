@@ -123,11 +123,13 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   const asset = await fetch(`${origin}/assets/workspace-test.js`);
   assert.equal(asset.status, 200);
   assert.equal(asset.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assert.equal(asset.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 
   const robots = await fetch(`${origin}/robots.txt`);
   assert.equal(robots.status, 200);
   assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
   assert.equal(robots.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal(robots.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 
   const sitemap = await fetch(`${origin}/sitemap.xml`);
   assert.equal(sitemap.status, 404);
