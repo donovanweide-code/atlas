@@ -1,0 +1,303 @@
+{
+  "buildId": "SPW-PHYSICAL-MULTI-ORDER-001-20260811",
+  "result": "PASS_OFFLINE_BATCH_GEOMETRY",
+  "fullProductionFlow": "PARTIAL_MANUAL_WINPLOT_FLIP_REQUIRED",
+  "cutReady": false,
+  "preExport": {
+    "groups": 10,
+    "closedPaths": 16,
+    "openPaths": 0,
+    "anchors": 234,
+    "preMirrored": false
+  },
+  "postIllustratorReopen": {
+    "groups": 10,
+    "closedPaths": 16,
+    "openPaths": 0,
+    "anchors": 234,
+    "preMirrored": false
+  },
+  "independentGeometry": {
+    "groups": 10,
+    "paths": 16,
+    "anchors": 234,
+    "closedFilledPaths": 16,
+    "openPaths": 0,
+    "zeroLengthSegments": [],
+    "duplicateSegments": [],
+    "selfIntersections": [],
+    "minimumInterGroupContourDistanceMm": 6.399953885000002,
+    "closestPair": {
+      "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+      "right": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+      "distanceMm": 6.399953885000002
+    },
+    "pairDistances": [
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 6.399953885000002
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 6.399953885000002
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 6.399953885000002
+      },
+      {
+        "left": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 6.399953885000002
+      },
+      {
+        "left": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 6.399953885000002
+      },
+      {
+        "left": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 6.408566623000013
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 6.408911133000004
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 6.408911133000004
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 6.409255642000005
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 6.409600151999939
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 6.40994466099994
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 9.050901582729423
+      },
+      {
+        "left": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 9.057480965639973
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 12.226057679945017
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 14.540804329884807
+      },
+      {
+        "left": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 18.213959294210127
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 18.215249467103867
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 21.26414478783685
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 26.638986302763893
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 60.09214515017384
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 60.09247430224073
+      },
+      {
+        "left": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 108.64280870200002
+      },
+      {
+        "left": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 111.86810709600002
+      },
+      {
+        "left": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 122.67912500692303
+      },
+      {
+        "left": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 157.7708068020149
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 224.73356933599996
+      },
+      {
+        "left": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 224.73356933600002
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 224.73460286399995
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 227.95886773
+      },
+      {
+        "left": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 228.04869917689922
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 235.46487255513026
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD",
+        "distanceMm": 238.68865108672995
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 268.6980293755819
+      },
+      {
+        "left": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 326.96677788600005
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 330.19276529900003
+      },
+      {
+        "left": "SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 340.8961246744227
+      },
+      {
+        "left": "SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 366.39421313762836
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 443.05891655799996
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 446.28387044299996
+      },
+      {
+        "left": "SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 446.3297624370535
+      },
+      {
+        "left": "SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD",
+        "right": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "distanceMm": 456.973000170124
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 548.517078993
+      },
+      {
+        "left": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 548.517078993
+      },
+      {
+        "left": "SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 548.5544182362815
+      },
+      {
+        "left": "SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD",
+        "right": "SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD",
+        "distanceMm": 562.4227589442396
+      }
+    ],
+    "flatteningToleranceMm": 0.001
+  },
+  "nesting": {
+    "material": "HTV-WHITE / white foil",
+    "workingWidthMm": 440,
+    "usedWidthIncludingMarginsMm": 416.400390625,
+    "usedLengthMm": 872.716417101,
+    "objectGroups": 10,
+    "closedCutContours": 16,
+    "anchorPoints": 234,
+    "minimumContourGapTargetMm": 6.4,
+    "minimumContourGapMeasuredMm": 6.399953885000002,
+    "edgeMarginMm": 5,
+    "strategy": "DETERMINISTIC_MULTI_HEURISTIC_CONTOUR_SAFE_NO_SCALE",
+    "scale": 1,
+    "preMirrored": false
+  },
+  "optimization": {
+    "exactSizeSimpleShelfBaselineLengthMm": 875.914599609,
+    "optimizedIllustratorLengthMm": 872.716417101,
+    "savedLengthVsExactBaselineMm": 3.1981825079999453,
+    "engineQuantizedBaselineLengthMm": 875.925,
+    "engineQuantizedOptimizedLengthMm": 872.7,
+    "boundingBoxEfficiencyPercent": 87.36592265362485,
+    "estimatedFoilAreaMm2": 383995.22352444,
+    "totalObjectBoundingAreaMm2": 335480.9699779761,
+    "estimatedBoundingWasteMm2": 48514.25354646391,
+    "metricCaveat": "Efficiency/waste is a bounding-box material indicator, not measured peeled foil mass."
+  },
+  "files": {
+    "Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai": {
+      "sha256": "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B",
+      "bytes": 260039
+    },
+    "ILLUSTRATOR-GEOMETRY-AUDIT.tsv": {
+      "sha256": "C6004E2E53361592EC048ED83D7BEFF19C4DC13AA7979D350B3EF48D230D0BA5",
+      "bytes": 9825
+    }
+  },
+  "hardwareActionPerformed": false,
+  "humanAcceptance": "PENDING"
+}

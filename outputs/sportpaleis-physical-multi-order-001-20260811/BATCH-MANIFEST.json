@@ -1,0 +1,222 @@
+{
+  "buildId": "SPW-PHYSICAL-MULTI-ORDER-001-20260811",
+  "status": "READY_FOR_ILLUSTRATOR_TO_WINPLOT_HUMAN_ACCEPTANCE",
+  "ordersRequested": 10,
+  "distinctReliableNumbers": [
+    "2",
+    "34",
+    "77"
+  ],
+  "repetitionReason": "Only the complete Pioneers 2, 34 and 77 compositions have reliable local source geometry and spacing; no other numbers were invented.",
+  "orders": [
+    {
+      "orderId": "SPW-HA-01",
+      "number": "2",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 99.05820855,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 211.400195313,
+        "y": 663.2,
+        "width": 200.000195312,
+        "height": 99.05820855
+      },
+      "expectedClosedContours": 1,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-02",
+      "number": "34",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 215.141389974,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 5.0,
+        "y": 5,
+        "width": 200.000195312,
+        "height": 215.141389974
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-03",
+      "number": "77",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 211.915402561,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 211.400195313,
+        "y": 226.55,
+        "width": 200.000195312,
+        "height": 211.915402561
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-04",
+      "number": "2",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 99.05820855,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 5.0,
+        "y": 666.425,
+        "width": 200.000195312,
+        "height": 99.05820855
+      },
+      "expectedClosedContours": 1,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-05",
+      "number": "34",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 215.141389974,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 211.400195313,
+        "y": 5,
+        "width": 200.000195312,
+        "height": 215.141389974
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-06",
+      "number": "77",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 211.915402561,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 211.400195313,
+        "y": 444.875,
+        "width": 200.000195312,
+        "height": 211.915402561
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-07",
+      "number": "2",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 99.05820855,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 5.0,
+        "y": 768.65820855,
+        "width": 200.000195312,
+        "height": 99.05820855
+      },
+      "expectedClosedContours": 1,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-08",
+      "number": "34",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 215.141389974,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 5.0,
+        "y": 226.55,
+        "width": 200.000195312,
+        "height": 215.141389974
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-09",
+      "number": "77",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 211.915402561,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 5.0,
+        "y": 448.1,
+        "width": 200.000195312,
+        "height": 211.915402561
+      },
+      "expectedClosedContours": 2,
+      "preMirrored": false,
+      "scale": 1
+    },
+    {
+      "orderId": "SPW-HA-10",
+      "number": "2",
+      "quantity": 1,
+      "expectedUprightSizeMm": {
+        "width": 99.05820855,
+        "height": 200.000195312
+      },
+      "placedRotatedBoundsMm": {
+        "x": 211.400195313,
+        "y": 768.65820855,
+        "width": 200.000195312,
+        "height": 99.05820855
+      },
+      "expectedClosedContours": 1,
+      "preMirrored": false,
+      "scale": 1
+    }
+  ],
+  "production": {
+    "material": "HTV-WHITE / white foil",
+    "workingWidthMm": 440,
+    "usedWidthIncludingMarginsMm": 416.400390625,
+    "usedLengthMm": 872.716417101,
+    "objectGroups": 10,
+    "closedCutContours": 16,
+    "anchorPoints": 234,
+    "minimumContourGapTargetMm": 6.4,
+    "minimumContourGapMeasuredMm": 6.399953885000002,
+    "edgeMarginMm": 5,
+    "strategy": "DETERMINISTIC_MULTI_HEURISTIC_CONTOUR_SAFE_NO_SCALE",
+    "scale": 1,
+    "preMirrored": false
+  },
+  "optimization": {
+    "exactSizeSimpleShelfBaselineLengthMm": 875.914599609,
+    "optimizedIllustratorLengthMm": 872.716417101,
+    "savedLengthVsExactBaselineMm": 3.1981825079999453,
+    "engineQuantizedBaselineLengthMm": 875.925,
+    "engineQuantizedOptimizedLengthMm": 872.7,
+    "boundingBoxEfficiencyPercent": 87.36592265362485,
+    "estimatedFoilAreaMm2": 383995.22352444,
+    "totalObjectBoundingAreaMm2": 335480.9699779761,
+    "estimatedBoundingWasteMm2": 48514.25354646391,
+    "metricCaveat": "Efficiency/waste is a bounding-box material indicator, not measured peeled foil mass."
+  },
+  "productionRoute": "Adobe Illustrator -> File -> Summa -> Send To WinPlot -> manual Flip Horizontally -> physical output",
+  "humanGoRequiredBeforePhysicalOutput": true
+}

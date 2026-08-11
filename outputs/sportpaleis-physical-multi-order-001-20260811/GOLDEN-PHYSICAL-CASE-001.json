@@ -1,0 +1,38 @@
+{
+  "caseId": "GOLDEN-PHYSICAL-CASE-001",
+  "name": "Almerer Pioneers rugnummer 2 - 200 mm",
+  "frozenAt": "2026-08-11",
+  "status": {
+    "geometryPhysicalCut": "PASS",
+    "fullProductionFlow": "PARTIAL",
+    "partialReason": "Manual Flip Horizontally in WinPlot was required before physical output."
+  },
+  "provenRoute": [
+    "Generated V3 vector/PDF",
+    "Adobe Illustrator",
+    "Summa plugin: File -> Summa -> Send To WinPlot",
+    "WinPlot: manual Flip Horizontally",
+    "Summa cutter",
+    "Foil"
+  ],
+  "humanEvidence": {
+    "contourAndFormCorrect": true,
+    "winPlotReportedWidthMm": 99.06,
+    "winPlotReportedHeightMm": 200.0,
+    "physicalHeightApproximatelyMm": 200,
+    "outerAndInnerContourActuallyCutCorrectly": true,
+    "scaleOneToOnePassed": true
+  },
+  "acceptedRouteCorrection": "Direct PDF open/import in WinPlot is not the accepted production route.",
+  "immutableGeometry": [
+    "source geometry",
+    "scale",
+    "anchors",
+    "Bezier handles",
+    "contour construction"
+  ],
+  "goldenPdf": "output/pdf/sportpaleis-winplot-vector-pdf-003-20260811/pioneers-number-2-200mm-1to1-v3.pdf",
+  "goldenPdfSha256": "E1056776DE98673BE07058FD9C8D4F28AF1EF9A41E70B882AA465AE54FF03571",
+  "validatedIllustratorSource": "outputs/Sportpaleis-Snijtest-001/Sportpaleis-Snijtest-001-2-34-77.ai",
+  "validatedIllustratorSourceSha256": "4DBA141DC0CF8FA5260CF8360608A314794F839932D4A421EAC036CF86668A7B"
+}

@@ -93,6 +93,7 @@ test("PRE-PILOT MASTER — zichtbaar contract en PWA-grens", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const service = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   const manifest = JSON.parse(await readFile(new URL("../workspace-public/sportpaleis.webmanifest", import.meta.url), "utf8"));
+  const pwaIcon = await readFile(new URL("../workspace-public/sportpaleis-pwa-icon.svg", import.meta.url), "utf8");
   const positions = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Artikelen</h2>", "<h2>Bedrukking</h2>", "<h2>Controleren</h2>"].map((marker) => source.indexOf(marker));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
   assert.match(source, /data-action="add-article"/);
@@ -102,6 +103,10 @@ test("PRE-PILOT MASTER — zichtbaar contract en PWA-grens", async () => {
   assert.match(service, /const initials = optional\(value\.initials, 5\)/);
   assert.equal(manifest.start_url, "/workspace/sportpaleis/overzicht");
   assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.icons[0].src, "/sportpaleis-pwa-icon.svg");
+  assert.match(source, /icon\.href = "\/sportpaleis-pwa-icon\.svg"/);
+  assert.match(pwaIcon, /Sportpaleis Workspace/);
+  assert.doesNotMatch(pwaIcon, /\bWBD\b/);
 });
 
 test("PRE-PILOT CORRECTION — snelle PIN is begrensd, gehasht en geaudit", async (context) => {

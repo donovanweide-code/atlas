@@ -1,0 +1,143 @@
+field	value
+build_id	SPW-GOLDEN-BATCH-001-AUTO-MIRROR-AB-001-20260811
+source_file	C:\Users\donov\Documents\Atlas\outputs\sportpaleis-physical-multi-order-001-20260811\Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai
+transform	global horizontal reflection across Golden Batch content bounds
+content_axis_x_mm	208.200125461
+scale	1
+nesting_changed	false
+pre_mirrored	true
+manual_winplot_flip_allowed	false
+pre_export_0_name	SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD
+pre_export_0_left_mm	211.400016276
+pre_export_0_top_mm	4.999867079
+pre_export_0_width_mm	200.000195312
+pre_export_0_height_mm	215.141389974
+pre_export_0_metric_delta_pt	0
+pre_export_1_name	SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD
+pre_export_1_left_mm	5.000039334
+pre_export_1_top_mm	4.999867079
+pre_export_1_width_mm	200.000023058
+pre_export_1_height_mm	215.141389974
+pre_export_1_metric_delta_pt	0.00048828199999
+pre_export_2_name	SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD
+pre_export_2_left_mm	211.400016276
+pre_export_2_top_mm	226.550168186
+pre_export_2_width_mm	200.000195312
+pre_export_2_height_mm	215.141389974
+pre_export_2_metric_delta_pt	0
+pre_export_3_name	SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD
+pre_export_3_left_mm	5.000039334
+pre_export_3_top_mm	226.550168186
+pre_export_3_width_mm	200.000023058
+pre_export_3_height_mm	211.915402561
+pre_export_3_metric_delta_pt	0.000488281
+pre_export_4_name	SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD
+pre_export_4_left_mm	5.000039334
+pre_export_4_top_mm	444.874826389
+pre_export_4_width_mm	200.000023058
+pre_export_4_height_mm	211.915402561
+pre_export_4_metric_delta_pt	0.000488281
+pre_export_5_name	SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD
+pre_export_5_left_mm	211.400016276
+pre_export_5_top_mm	448.100124783
+pre_export_5_width_mm	200.000195312
+pre_export_5_height_mm	211.915402561
+pre_export_5_metric_delta_pt	0
+pre_export_6_name	SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD
+pre_export_6_left_mm	5.000039334
+pre_export_6_top_mm	663.200173611
+pre_export_6_width_mm	200.000023058
+pre_export_6_height_mm	99.05820855
+pre_export_6_metric_delta_pt	0.000488281
+pre_export_7_name	SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD
+pre_export_7_left_mm	211.400016276
+pre_export_7_top_mm	666.425127496
+pre_export_7_width_mm	200.000195312
+pre_export_7_height_mm	99.05820855
+pre_export_7_metric_delta_pt	0
+pre_export_8_name	SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD
+pre_export_8_left_mm	211.400016276
+pre_export_8_top_mm	768.658336046
+pre_export_8_width_mm	200.000195312
+pre_export_8_height_mm	99.05820855
+pre_export_8_metric_delta_pt	0
+pre_export_9_name	SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD
+pre_export_9_left_mm	5.000039334
+pre_export_9_top_mm	768.658336046
+pre_export_9_width_mm	200.000023058
+pre_export_9_height_mm	99.05820855
+pre_export_9_metric_delta_pt	0.000488281
+pre_export_groups	10
+pre_export_paths	16
+pre_export_closed_paths	16
+pre_export_open_paths	0
+pre_export_anchors	234
+pre_export_filled_paths	16
+pre_export_stroked_paths	0
+post_reopen_0_name	SPW-HA-02 | Rugnummer 34 | NIET GESPIEGELD
+post_reopen_0_left_mm	211.400016276
+post_reopen_0_top_mm	4.999867079
+post_reopen_0_width_mm	200.000195312
+post_reopen_0_height_mm	215.141389974
+post_reopen_0_metric_delta_pt	0
+post_reopen_1_name	SPW-HA-05 | Rugnummer 34 | NIET GESPIEGELD
+post_reopen_1_left_mm	5.000039334
+post_reopen_1_top_mm	4.999867079
+post_reopen_1_width_mm	200.000023058
+post_reopen_1_height_mm	215.141389974
+post_reopen_1_metric_delta_pt	0.00048828199999
+post_reopen_2_name	SPW-HA-08 | Rugnummer 34 | NIET GESPIEGELD
+post_reopen_2_left_mm	211.400016276
+post_reopen_2_top_mm	226.550168186
+post_reopen_2_width_mm	200.000195312
+post_reopen_2_height_mm	215.141389974
+post_reopen_2_metric_delta_pt	0
+post_reopen_3_name	SPW-HA-03 | Rugnummer 77 | NIET GESPIEGELD
+post_reopen_3_left_mm	5.000039334
+post_reopen_3_top_mm	226.550168186
+post_reopen_3_width_mm	200.000023058
+post_reopen_3_height_mm	211.915402561
+post_reopen_3_metric_delta_pt	0.000488281
+post_reopen_4_name	SPW-HA-06 | Rugnummer 77 | NIET GESPIEGELD
+post_reopen_4_left_mm	5.000039334
+post_reopen_4_top_mm	444.874826389
+post_reopen_4_width_mm	200.000023058
+post_reopen_4_height_mm	211.915402561
+post_reopen_4_metric_delta_pt	0.000488281
+post_reopen_5_name	SPW-HA-09 | Rugnummer 77 | NIET GESPIEGELD
+post_reopen_5_left_mm	211.400016276
+post_reopen_5_top_mm	448.100124783
+post_reopen_5_width_mm	200.000195312
+post_reopen_5_height_mm	211.915402561
+post_reopen_5_metric_delta_pt	0
+post_reopen_6_name	SPW-HA-01 | Rugnummer 2 | NIET GESPIEGELD
+post_reopen_6_left_mm	5.000039334
+post_reopen_6_top_mm	663.200173611
+post_reopen_6_width_mm	200.000023058
+post_reopen_6_height_mm	99.05820855
+post_reopen_6_metric_delta_pt	0.000488281
+post_reopen_7_name	SPW-HA-04 | Rugnummer 2 | NIET GESPIEGELD
+post_reopen_7_left_mm	211.400016276
+post_reopen_7_top_mm	666.425127496
+post_reopen_7_width_mm	200.000195312
+post_reopen_7_height_mm	99.05820855
+post_reopen_7_metric_delta_pt	0
+post_reopen_8_name	SPW-HA-07 | Rugnummer 2 | NIET GESPIEGELD
+post_reopen_8_left_mm	211.400016276
+post_reopen_8_top_mm	768.658336046
+post_reopen_8_width_mm	200.000195312
+post_reopen_8_height_mm	99.05820855
+post_reopen_8_metric_delta_pt	0
+post_reopen_9_name	SPW-HA-10 | Rugnummer 2 | NIET GESPIEGELD
+post_reopen_9_left_mm	5.000039334
+post_reopen_9_top_mm	768.658336046
+post_reopen_9_width_mm	200.000023058
+post_reopen_9_height_mm	99.05820855
+post_reopen_9_metric_delta_pt	0.000488281
+post_reopen_groups	10
+post_reopen_paths	16
+post_reopen_closed_paths	16
+post_reopen_open_paths	0
+post_reopen_anchors	234
+post_reopen_filled_paths	16
+post_reopen_stroked_paths	0

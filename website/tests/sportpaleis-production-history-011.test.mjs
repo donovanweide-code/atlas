@@ -20,23 +20,36 @@ async function fixture(context) {
 test("Production history 011 — immutable Golden evidence and auditable replot", async (context) => {
   const { store, service, admin, operator, storeUser } = await fixture(context);
 
-  await context.test("alleen de twee expliciete Golden-combinaties zijn fysiek gevalideerd", async () => {
+  await context.test("alleen de twee expliciete Golden-combinaties zijn fysiek gevalideerd en de A/B-route is WinPlot-gevalideerd", async () => {
     const bootstrap = await service.bootstrap(admin.token);
     assert.equal(bootstrap.schemaVersion, 12);
-    assert.equal(bootstrap.productionJobs.length, 2);
-    assert.deepEqual(bootstrap.productionJobs.map(({ proofStatus }) => proofStatus), ["PHYSICALLY_VALIDATED", "PHYSICALLY_VALIDATED"]);
+    assert.equal(bootstrap.productionJobs.length, 3);
+    assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "PHYSICALLY_VALIDATED").length, 2);
+    assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "WINPLOT_VALIDATED").length, 1);
     const batch = bootstrap.productionJobs.find(({ id }) => id === "production-job-golden-batch-001");
+    const autoMirror = bootstrap.productionJobs.find(({ id }) => id === "production-job-golden-batch-001-auto-mirror-ab");
     assert.ok(batch);
+    assert.ok(autoMirror);
     assert.equal(batch.snapshot.artifact.sha256, "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B");
     assert.equal(batch.snapshot.layout.objectCount, 10);
     assert.equal(batch.snapshot.orientation.manualHorizontalFlipInWinPlot, true);
     assert.equal(batch.snapshot.hardwareSendPerformedByWorkspace, false);
+    assert.equal(autoMirror.humanAcceptance.status, "PASS");
+    assert.equal(autoMirror.snapshot.orientation.preMirrored, true);
+    assert.equal(autoMirror.snapshot.orientation.manualHorizontalFlipInWinPlot, false);
+    assert.equal(autoMirror.snapshot.artifact.sha256, "2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4");
+    const firstDownload = await service.productionJobArtifact(operator.token, autoMirror.id);
+    const secondDownload = await service.productionJobArtifact(operator.token, autoMirror.id);
+    assert.equal(firstDownload.filename, autoMirror.snapshot.artifact.filename);
+    assert.equal(firstDownload.sha256, autoMirror.snapshot.artifact.sha256);
+    assert.deepEqual(secondDownload.bytes, firstDownload.bytes);
+    await assert.rejects(service.productionJobArtifact(storeUser.token, autoMirror.id), (error) => error.code === "FORBIDDEN");
     assert.equal((await service.bootstrap(storeUser.token)).productionJobs.length, 0);
   });
 
   await context.test("herplot is een nieuwe uitvoering met exact dezelfde snapshot en idempotente audit", async () => {
     const before = await store.read();
-    const original = before.productionJobs.find(({ id }) => id === "production-job-golden-batch-001");
+    const original = before.productionJobs.find(({ id }) => id === "production-job-golden-batch-001-auto-mirror-ab");
     const originalCopy = structuredClone(original);
     const key = "production-history-replot-001";
     const first = await service.replotProductionJob(operator.token, operator.csrfToken, original.id, { reason: "Folie beschadigd tijdens pellen" }, key);
@@ -52,6 +65,10 @@ test("Production history 011 — immutable Golden evidence and auditable replot"
     assert.equal(first.value.humanAcceptance.status, "PENDING");
     assert.equal(first.value.status, "AWAITING_HUMAN_CHECK");
     assert.equal(first.value.reason, "Folie beschadigd tijdens pellen");
+    const originalDownload = await service.productionJobArtifact(operator.token, original.id);
+    const replotDownload = await service.productionJobArtifact(operator.token, first.value.id);
+    assert.equal(replotDownload.sha256, originalDownload.sha256);
+    assert.deepEqual(replotDownload.bytes, originalDownload.bytes);
     const after = await store.read();
     assert.equal(after.productionJobs.length, before.productionJobs.length + 1);
     assert.deepEqual(after.productionJobs.find(({ id }) => id === original.id), originalCopy);
@@ -72,6 +89,9 @@ test("Production history UX is vindbaar, mobile-first en hardware-safe", async (
   assert.match(source, /Plot-\/printhistorie/);
   assert.match(source, /data-production-job-search/);
   assert.match(source, /data-replot-form/);
+  assert.match(source, /AI-productieopmaak downloaden/);
+  assert.match(source, /production-jobs\/\$\{encodeURIComponent\(job\.id\)\}\/artifact/);
+  assert.match(source, /immutable SHA-256/);
   assert.match(source, /Workspace verstuurt niets automatisch naar Illustrator, WinPlot, Summa of hardware/);
   assert.match(source, /Andere verenigingen, profielen of contouren erven dit bewijs niet/);
   assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.sp-production-job-facts \{ grid-template-columns:1fr; \}/);

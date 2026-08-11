@@ -23,7 +23,7 @@ export function createSportpaleisPilotDevelopmentMiddleware(options = {}) {
         const service = new SportpaleisPilotService({
           store,
           mailFoundation: options.mailFoundation,
-          releaseId: options.releaseId ?? process.env.RELEASE_ID ?? "SPW-FUNCTIONAL-PILOT-FREEZE-001-20260811",
+          releaseId: options.releaseId ?? process.env.RELEASE_ID ?? "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811",
           secureCookies: false,
           allowedOrigin: options.allowedOrigin ?? process.env.SPORTPALEIS_ALLOWED_ORIGIN ?? "http://127.0.0.1:5173",
           demoMode: options.demoMode ?? process.env.SPORTPALEIS_REVIEW_DEMO === "true",

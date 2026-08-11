@@ -1,0 +1,74 @@
+{
+  "buildId": "SPW-WINPLOT-VECTOR-PDF-003-20260811",
+  "result": "PASS_OFFLINE_GEOMETRY_AND_PDF_STRUCTURE",
+  "cutReady": false,
+  "winPlotHumanAcceptance": "PENDING",
+  "hardGeometryGates": {
+    "closedContours": 1,
+    "endpointContinuityMaximumGapMm": 0.0,
+    "explicitFinalSegmentReturnsToStart": true,
+    "unintendedGaps": 0,
+    "zeroLengthSegments": 0,
+    "duplicateSegments": 0,
+    "overlappingStraightSegments": 0,
+    "unwantedSelfIntersections": 0,
+    "straightSegmentsEncodedAsPdfLineOperators": 15,
+    "originalBezierSegmentsEncodedAsPdfCubicOperators": 3,
+    "expectedCutContours": 1,
+    "analyticBoundsMm": {
+      "minX": 5.000039334,
+      "minY": 5.000132920999988,
+      "maxX": 104.058075629,
+      "maxY": 205.00032823299998,
+      "width": 99.058036295,
+      "height": 200.000195312
+    },
+    "scale": "1:1",
+    "illustratorRigidTransformMaximumDeltaPt": 0.000488281
+  },
+  "pdfReopen": {
+    "pypdfPages": 1,
+    "pdfiumPages": 1,
+    "mediaBoxPt": [
+      309.1413785669,
+      595.2761441915
+    ],
+    "pdfiumPageSizePt": [
+      309.1413879394531,
+      595.276123046875
+    ],
+    "operators": [
+      "rg",
+      "m",
+      "l",
+      "c",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "c",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "c",
+      "l",
+      "l",
+      "h",
+      "f"
+    ],
+    "resources": [],
+    "renderedForVisualInspection": "tmp/pdfs/pioneers-number-2-200mm-1to1-v3-render.png"
+  },
+  "sourceHashes": {
+    "validatedIllustratorSource": "4DBA141DC0CF8FA5260CF8360608A314794F839932D4A421EAC036CF86668A7B",
+    "illustratorObjectAudit": "7CF989ECFC12561BC7E8604BA7D88B782B69D2A92071205F70FC3014A46D7CCF",
+    "failedPdfV1HistoricalEvidence": "DF825578A2FE9B74AAC91BC2F92AF3ACED082802A304025A53B1292DB93017D6",
+    "winPlotScreenshot": "A09A46F792AD25CA7CD18969D4DE8F35EE9235A2227CEB8B303786EE0067F35E"
+  },
+  "pdfSha256": "E1056776DE98673BE07058FD9C8D4F28AF1EF9A41E70B882AA465AE54FF03571"
+}

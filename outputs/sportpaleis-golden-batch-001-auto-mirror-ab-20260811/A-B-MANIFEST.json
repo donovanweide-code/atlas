@@ -1,0 +1,41 @@
+{
+  "buildId": "SPW-GOLDEN-BATCH-001-AUTO-MIRROR-AB-001-20260811",
+  "status": "READY_FOR_HUMAN_ACCEPTANCE",
+  "sourceGoldenBatch": "GOLDEN-PHYSICAL-BATCH-001",
+  "sourceArtifact": {
+    "path": "outputs/sportpaleis-physical-multi-order-001-20260811/Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai",
+    "sha256": "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B"
+  },
+  "outputArtifact": {
+    "path": "outputs/sportpaleis-golden-batch-001-auto-mirror-ab-20260811/Sportpaleis-Golden-Physical-Batch-001-Auto-Mirrored-AB-001.ai",
+    "sha256": "2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4",
+    "bytes": 259978
+  },
+  "onlyControlledDifference": "Global horizontal reflection across the complete Golden Physical Batch 001 content bounds",
+  "unchanged": {
+    "scale": 1,
+    "objectGroups": 10,
+    "closedContours": 16,
+    "openContours": 0,
+    "anchorPoints": 234,
+    "workingWidthMm": 440,
+    "usedWidthIncludingMarginsMm": 416.400390625,
+    "usedLengthMm": 872.716417101,
+    "minimumContourGapMm": 6.399953885000002,
+    "edgeMarginMm": 5,
+    "nestingChanged": false
+  },
+  "orientation": {
+    "preMirrored": true,
+    "manualHorizontalFlipInWinPlotAllowed": false
+  },
+  "validation": {
+    "illustratorPreExport": "PASS",
+    "illustratorPostReopen": "PASS",
+    "independentGeometry": "PASS",
+    "maximumMirrorCoordinateErrorMm": 0.000172255,
+    "maximumVerticalCoordinateErrorMm": 0,
+    "humanAcceptance": "PENDING"
+  },
+  "hardwareActionPerformed": false
+}

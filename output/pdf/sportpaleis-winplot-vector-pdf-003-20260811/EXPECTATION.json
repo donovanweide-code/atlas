@@ -1,0 +1,29 @@
+{
+  "buildId": "SPW-WINPLOT-VECTOR-PDF-003-20260811",
+  "status": "READY_FOR_WINPLOT_HUMAN_ACCEPTANCE_NOT_CUT_READY",
+  "file": "pioneers-number-2-200mm-1to1-v3.pdf",
+  "sha256": "E1056776DE98673BE07058FD9C8D4F28AF1EF9A41E70B882AA465AE54FF03571",
+  "element": "Pioneers rugnummer 2",
+  "quantity": 1,
+  "scale": "1:1; rigid rotation and translation only; no redraw and no output scaling",
+  "expectedContourHeightMm": 200.000195312,
+  "expectedContourHeightDisplayAtTwoDecimalsMm": 200.0,
+  "expectedContourWidthMm": 99.058036296,
+  "expectedContourWidthDisplayAtTwoDecimalsMm": 99.06,
+  "pageSizeMm": {
+    "width": 109.05820855,
+    "height": 210.000195312
+  },
+  "positioning": "Upright with 5 mm carrier margin; no nesting",
+  "contours": 1,
+  "anchors": 18,
+  "segments": {
+    "total": 18,
+    "straight": 15,
+    "cubicBezier": 3
+  },
+  "closed": true,
+  "filled": true,
+  "stroked": false,
+  "humanAcceptanceBoundary": "Donovan must reopen this exact file in the actual Sportpaleis WinPlot installation. No plot/cut/hardware send is authorized."
+}

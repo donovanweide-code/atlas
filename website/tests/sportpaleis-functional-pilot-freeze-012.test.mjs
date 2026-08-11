@@ -12,7 +12,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-freeze-012-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -28,7 +28,7 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
   await context.test("winkel ziet een toegestane echte fontbron maar geen logo-library of jobhistorie", async () => {
     const view = await service.bootstrap(storeUser.token);
     assert.equal(view.schemaVersion, 12);
-    assert.equal(view.releaseId, "SPW-FUNCTIONAL-PILOT-FREEZE-001-20260811");
+    assert.equal(view.releaseId, "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811");
     assert.equal(view.productionFonts.length, 1);
     assert.equal(view.productionFonts[0].sha256, "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F");
     assert.equal(view.productionFonts[0].sourceDataBase64, undefined);
@@ -100,8 +100,8 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     assert.equal(job.snapshot.scale, 1);
     assert.equal(job.snapshot.layout.strategy, "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW");
     assert.ok(job.snapshot.layout.usedWidthMm <= 440);
-    assert.equal(job.snapshot.orientation.preMirrored, false);
-    assert.equal(job.snapshot.orientation.manualHorizontalFlipInWinPlot, true);
+    assert.equal(job.snapshot.orientation.preMirrored, true);
+    assert.equal(job.snapshot.orientation.manualHorizontalFlipInWinPlot, false);
     assert.equal(job.snapshot.hardwareSendPerformedByWorkspace, false);
     assert.equal(job.snapshot.fontSources[0].sha256, font.sha256);
     assert.deepEqual(job.snapshot.productionLines[0].source, freeOrder.productionLines[0].source);

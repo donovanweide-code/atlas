@@ -2,6 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { mkdir, open, readFile, rename, stat, unlink, writeFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import {
   SPORTPALEIS_ASSOCIATIONS,
   SPORTPALEIS_CONFIGURATION_VERSION,
@@ -18,7 +19,8 @@ const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 12;
-const PILOT_RELEASE_ID = "SPW-FUNCTIONAL-PILOT-FREEZE-001-20260811";
+const PILOT_RELEASE_ID = "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811";
+const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
 const PRODUCTION_PROOF_STATUSES = new Set(["CONFIGURED", "GEOMETRY_VALIDATED", "WINPLOT_VALIDATED", "PHYSICALLY_VALIDATED", "DATA_GAP"]);
@@ -185,9 +187,16 @@ function createGoldenProductionJobs(recordedAt = iso()) {
     orientation: { preMirrored: false, manualHorizontalFlipInWinPlot: true },
     artifact: { filename: "Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai", format: "AI", version: "SPW-PHYSICAL-MULTI-ORDER-001-20260811", sha256: "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B", path: "outputs/sportpaleis-physical-multi-order-001-20260811/Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai" },
   };
+  const autoMirrorBatchSnapshot = {
+    ...structuredClone(physicalBatchSnapshot),
+    acceptedSourceDate: "2026-08-11",
+    orientation: { preMirrored: true, manualHorizontalFlipInWinPlot: false },
+    artifact: { filename: "Sportpaleis-Golden-Physical-Batch-001-Auto-Mirrored-AB-001.ai", format: "AI", version: "SPW-GOLDEN-BATCH-001-AUTO-MIRROR-AB-001-20260811", sha256: "2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4", path: "outputs/sportpaleis-golden-batch-001-auto-mirror-ab-20260811/Sportpaleis-Golden-Physical-Batch-001-Auto-Mirrored-AB-001.ai" },
+  };
   return [
     immutableProductionJob({ id: "production-job-golden-case-001", jobNumber: "PLOT-2026-0001", createdAt: recordedAt, initiatedBy: actor, snapshot: physicalCaseSnapshot, status: "COMPLETED", proofStatus: "PHYSICALLY_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "Golden Physical Case 001; handmatige horizontale spiegeling in WinPlot was onderdeel van de geslaagde route." } }),
     immutableProductionJob({ id: "production-job-golden-batch-001", jobNumber: "PLOT-2026-0002", createdAt: recordedAt, initiatedBy: actor, snapshot: physicalBatchSnapshot, status: "COMPLETED", proofStatus: "PHYSICALLY_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "Golden Physical Batch 001; volledige batch fysiek geslaagd via Illustrator, Summa Send To WinPlot en handmatige horizontale spiegeling." } }),
+    immutableProductionJob({ id: "production-job-golden-batch-001-auto-mirror-ab", jobNumber: "PLOT-2026-0003", createdAt: recordedAt, initiatedBy: actor, snapshot: autoMirrorBatchSnapshot, status: "COMPLETED", proofStatus: "WINPLOT_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "A/B-spiegel Human Acceptance door Donovan: vooraf gespiegeld AI-bestand kwam via Illustrator en Summa Send To WinPlot direct correct in WinPlot binnen; geen handmatige spiegeling of andere correctie nodig." } }),
   ];
 }
 
@@ -276,7 +285,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     organizationId: "sport-2000-sportpaleis-bv",
     revision: 1,
     nextOrderSequence: 1,
-    nextProductionJobSequence: 3,
+    nextProductionJobSequence: 4,
     users: [],
     sessions: [],
     loginAttempts: {},
@@ -392,7 +401,7 @@ export function migrateSportpaleisPilotState(input) {
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
   const highestJobSequence = state.productionJobs.reduce((highest, { jobNumber }) => Math.max(highest, Number(String(jobNumber ?? "").match(/(\d+)$/u)?.[1] ?? 0)), 0);
-  state.nextProductionJobSequence = Math.max(Number(state.nextProductionJobSequence ?? 1), highestJobSequence + 1, 3);
+  state.nextProductionJobSequence = Math.max(Number(state.nextProductionJobSequence ?? 1), highestJobSequence + 1, 4);
   if (previousSchemaVersion < 3 || previousConfigurationVersion !== SPORTPALEIS_CONFIGURATION_VERSION) {
     state.productionProfiles ??= [];
     for (const profile of PRODUCTION_PROFILES) {
@@ -753,7 +762,7 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, mailMode = "capture" }) {
+  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.releaseId = releaseId;
@@ -763,6 +772,7 @@ export class SportpaleisPilotService {
     this.demoMode = demoMode === true;
     this.uploadsEnabled = uploadsEnabled === true;
     this.mailMode = mailMode;
+    this.artifactRoot = path.resolve(artifactRoot);
   }
 
   async initialize() {
@@ -995,6 +1005,22 @@ export class SportpaleisPilotService {
     if (!font || font.status !== "TECHNICALLY_VALID") throw Object.assign(new Error("Fontbron niet gevonden."), { statusCode: 404, code: "PRODUCTION_FONT_NOT_FOUND" });
     if (!font.sourceDataBase64) return { redirect: font.sourceUrl };
     return { bytes: Buffer.from(font.sourceDataBase64, "base64"), mimeType: font.mimeType, filename: font.originalFilename, sha256: font.sha256 };
+  }
+
+  async productionJobArtifact(token, productionJobId) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const job = state.productionJobs.find(({ id }) => id === productionJobId);
+    if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+    const artifact = job.snapshot?.artifact;
+    if (!artifact?.path || String(artifact.path).startsWith("immutable://")) throw Object.assign(new Error("Voor deze productiejob is geen downloadbaar productieartefact vastgelegd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_NOT_AVAILABLE" });
+    const candidate = path.resolve(this.artifactRoot, artifact.path);
+    const allowedRoots = [path.resolve(this.artifactRoot, "output"), path.resolve(this.artifactRoot, "outputs")];
+    if (!allowedRoots.some((root) => candidate.startsWith(`${root}${path.sep}`))) throw Object.assign(new Error("Het productieartefact valt buiten de immutable artefactgrens."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+    let bytes; try { bytes = await readFile(candidate); } catch { throw Object.assign(new Error("Het vastgelegde productieartefact ontbreekt."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_MISSING" }); }
+    const hash = sha256(bytes).toUpperCase();
+    if (hash !== artifact.sha256) throw Object.assign(new Error("Het vastgelegde productieartefact wijkt af van de immutable hash."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
+    const mimeType = artifact.format === "AI" ? "application/illustrator" : artifact.format === "PDF" ? "application/pdf" : "application/octet-stream";
+    return { bytes, mimeType, filename: artifact.filename, sha256: hash, disposition: "attachment" };
   }
 
   async createProductionJob(token, csrfToken, payload, idempotencyKey) {
@@ -2439,7 +2465,7 @@ function json(response, statusCode, payload) {
 }
 
 function binary(response, statusCode, payload) {
-  securityHeaders(response); response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); response.end(payload.bytes);
+  securityHeaders(response); response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `${payload.disposition === "attachment" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); response.end(payload.bytes);
 }
 
 function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
@@ -2568,6 +2594,11 @@ export function createSportpaleisPilotRequestHandler(service) {
       const productionJobReplotMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/replot$/);
       if (productionJobReplotMatch && method === "POST") {
         json(response, 201, await service.replotProductionJob(token, csrf, decodeURIComponent(productionJobReplotMatch[1]), await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const productionJobArtifactMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/artifact$/);
+      if (productionJobArtifactMatch && method === "GET") {
+        binary(response, 200, await service.productionJobArtifact(token, decodeURIComponent(productionJobArtifactMatch[1])));
         return true;
       }
       if (route === "/api/sportpaleis/v1/production-jobs" && method === "POST") {

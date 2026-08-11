@@ -1,0 +1,65 @@
+{
+  "batchId": "GOLDEN-PHYSICAL-BATCH-001",
+  "sourceBuildId": "SPW-PHYSICAL-MULTI-ORDER-001-20260811",
+  "frozenAt": "2026-08-11T17:05:00+02:00",
+  "status": "PHYSICALLY_VALIDATED",
+  "humanAcceptance": "PASS",
+  "acceptedRoute": [
+    "Generated AI production plate",
+    "Adobe Illustrator",
+    "Summa plugin: File -> Summa -> Send To WinPlot",
+    "WinPlot: manual Flip Horizontally",
+    "Human control",
+    "Physical production"
+  ],
+  "manualHorizontalFlipWasPartOfAcceptedRun": true,
+  "immutableScope": [
+    "source geometry",
+    "Bezier anchors and handles",
+    "scale 1:1",
+    "ten order groups and sixteen closed contours",
+    "nesting and relative placement",
+    "working width, used length, margins and spacing",
+    "source artifacts and their recorded hashes"
+  ],
+  "production": {
+    "orders": ["2", "34", "77", "2", "34", "77", "2", "34", "77", "2"],
+    "objectGroups": 10,
+    "closedCutContours": 16,
+    "anchorPoints": 234,
+    "workingWidthMm": 440,
+    "usedWidthIncludingMarginsMm": 416.400390625,
+    "usedLengthMm": 872.716417101,
+    "edgeMarginMm": 5,
+    "minimumContourGapMm": 6.399953885000002,
+    "scale": 1,
+    "preMirrored": false
+  },
+  "frozenArtifacts": {
+    "Sportpaleis-Pioneers-10-Orders-Human-Acceptance-001.ai": {
+      "bytes": 260039,
+      "sha256": "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B"
+    },
+    "BATCH-MANIFEST.json": {
+      "bytes": 5843,
+      "sha256": "04E3B73386DE09DC1AB47A0874B683E81C458B4FE195BC7FA41102BE8EDFB325"
+    },
+    "VALIDATION.json": {
+      "bytes": 10636,
+      "sha256": "557AAA65B3C7C34C89F2D4121578AFCC60FE7081E4B46FC5B968743DFC8ED041"
+    },
+    "ILLUSTRATOR-GEOMETRY-AUDIT.tsv": {
+      "bytes": 9825,
+      "sha256": "C6004E2E53361592EC048ED83D7BEFF19C4DC13AA7979D350B3EF48D230D0BA5"
+    },
+    "HUMAN-REVIEW.md": {
+      "bytes": 3169,
+      "sha256": "A9AE12AFB8BC38A76831E2BC3D6D3FABA579338C6DB4D54E920E0A8C2BC5A9FA"
+    },
+    "GOLDEN-PHYSICAL-CASE-001.json": {
+      "bytes": 1421,
+      "sha256": "C22A9EFCB8A5338CA7F190C2B36DD1A254CEB1CF3D37CA0DE74FE76AC7C0B6B0"
+    }
+  },
+  "evidenceRule": "This batch is physically validated only for the recorded profile, source contours, dimensions and route. No other association, profile or contour combination inherits this status."
+}
