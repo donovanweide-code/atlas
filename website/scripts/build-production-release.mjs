@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { createSportpaleisProductionBootstrap } from "./sportpaleis-pilot-foundation.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -53,6 +54,48 @@ async function collect(directory, prefix) {
   return files;
 }
 
+async function collectReferencedProductionArtifacts() {
+  const state = createSportpaleisProductionBootstrap(new Date("2026-08-11T00:00:00.000Z"));
+  const byPath = new Map();
+  const references = [];
+  for (const job of state.productionJobs ?? []) {
+    const artifact = job.snapshot?.artifact;
+    if (!artifact?.path || String(artifact.path).startsWith("immutable://")) continue;
+    const relative = String(artifact.path).replaceAll("\\", "/");
+    const normalized = path.posix.normalize(relative);
+    if (relative !== normalized || path.posix.isAbsolute(normalized) || (!normalized.startsWith("output/") && !normalized.startsWith("outputs/"))) {
+      throw new Error(`PlotJob ${job.jobNumber} bevat een ongeldig artefactpad.`);
+    }
+    if (!/^[A-F0-9]{64}$/u.test(String(artifact.sha256 ?? ""))) {
+      throw new Error(`PlotJob ${job.jobNumber} mist een geldige immutable SHA-256.`);
+    }
+    const absolute = path.resolve(repositoryRoot, ...normalized.split("/"));
+    const allowedRoots = [path.resolve(repositoryRoot, "output"), path.resolve(repositoryRoot, "outputs")];
+    if (!allowedRoots.some((root) => absolute.startsWith(`${root}${path.sep}`))) {
+      throw new Error(`PlotJob ${job.jobNumber} valt buiten de productieartefactgrens.`);
+    }
+    const bytes = await readFile(absolute);
+    const actualHash = sha256(bytes).toUpperCase();
+    if (actualHash !== artifact.sha256) throw new Error(`PlotJob ${job.jobNumber} artefacthash wijkt af.`);
+    const previous = byPath.get(normalized);
+    if (previous && previous.sha256 !== actualHash) throw new Error(`Conflicterende PlotJob-artefactreferentie: ${normalized}`);
+    byPath.set(normalized, { absolute, archive: normalized, sha256: actualHash });
+    references.push({
+      productionJobId: job.id,
+      jobNumber: job.jobNumber,
+      path: normalized,
+      filename: artifact.filename,
+      format: artifact.format,
+      version: artifact.version,
+      sha256: actualHash,
+    });
+  }
+  return {
+    files: [...byPath.values()].map(({ absolute, archive }) => ({ absolute, archive })),
+    references: references.sort((left, right) => left.jobNumber.localeCompare(right.jobNumber)),
+  };
+}
+
 function git(...args) {
   return execFileSync("git", args, { cwd: repositoryRoot, encoding: "utf8" }).trim();
 }
@@ -60,11 +103,13 @@ function git(...args) {
 async function main() {
   const releaseId = process.argv[2];
   const tag = process.argv[3];
+  const baseFreezeTag = process.argv[4] ?? tag;
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(releaseId ?? "")) throw new Error("Release-ID ontbreekt of is ongeldig.");
   if (!tag) throw new Error("Immutable tag ontbreekt.");
   if (git("status", "--porcelain")) throw new Error("Release build vereist een schone worktree.");
   const commit = git("rev-parse", "HEAD");
   if (git("rev-parse", `${tag}^{commit}`) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
+  const baseFreezeCommit = git("rev-parse", `${baseFreezeTag}^{commit}`);
 
   const explicit = [
     [path.join(websiteRoot, "package.production.json"), "app/package.json"],
@@ -82,13 +127,16 @@ async function main() {
     [path.join(websiteRoot, "config", "sportpaleis-bedrukking-configuration.mjs"), "app/config/sportpaleis-bedrukking-configuration.mjs"],
     [path.join(websiteRoot, "config", "sportpaleis-live-pilot-catalog.mjs"), "app/config/sportpaleis-live-pilot-catalog.mjs"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
+    [path.join(repositoryRoot, "ops", "production", "nginx-workspace-sportpaleis-predeployment.conf"), "deployment/nginx-workspace-sportpaleis-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
     [path.join(websiteRoot, ".env.production.example"), "deployment/production.env.example"],
   ].map(([absolute, archive]) => ({ absolute, archive }));
+  const productionArtifacts = await collectReferencedProductionArtifacts();
   const files = [
     ...explicit,
     ...await collect(path.join(websiteRoot, "dist-workspace"), "app/dist-workspace"),
     ...await collect(path.join(websiteRoot, "sportpaleis-server", "production-migrations"), "app/sportpaleis-server/production-migrations"),
+    ...productionArtifacts.files,
   ].sort((left, right) => left.archive.localeCompare(right.archive));
 
   const entries = [];
@@ -101,12 +149,14 @@ async function main() {
     if (padding) tarParts.push(Buffer.alloc(padding));
   }
   const embeddedManifest = Buffer.from(`${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     releaseId,
     commit,
     tag,
-    sourceDate: "2026-08-10",
+    baseFreeze: { tag: baseFreezeTag, commit: baseFreezeCommit },
+    sourceDate: "2026-08-11",
     files: entries,
+    persistentProductionArtifacts: productionArtifacts.references,
     productionPolicy: {
       persistence: "mariadb-only",
       fileFallback: false,
@@ -133,7 +183,9 @@ async function main() {
   await writeFile(artifactPath, artifact);
   const externalManifest = {
     releaseId, commit, tag, artifact: artifactName, artifactBytes: artifact.length, artifactSha256: sha256(artifact),
-    reproducibleCommand: `node website/scripts/build-production-release.mjs ${releaseId} ${tag}`,
+    baseFreezeTag, baseFreezeCommit,
+    persistentProductionArtifactCount: productionArtifacts.references.length,
+    reproducibleCommand: `node website/scripts/build-production-release.mjs ${releaseId} ${tag} ${baseFreezeTag}`,
     embeddedManifestSha256: sha256(embeddedManifest),
   };
   const manifestPath = path.join(releaseRoot, `${releaseId}.manifest.json`);

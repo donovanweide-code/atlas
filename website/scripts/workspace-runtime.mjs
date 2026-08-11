@@ -33,6 +33,12 @@ const workspaceAliases = new Map([
   [`${workspaceBoundary}/ontwikkeling`, `${workspaceBoundary}/ontwikkeling/monitor`],
   [`${workspaceBoundary}/business-foundation/finance/facturen/concepten`, `${workspaceBoundary}/business-foundation/finance/facturen`],
 ]);
+const workspaceRootAssets = new Set([
+  "/robots.txt",
+  "/sportpaleis.webmanifest",
+  "/sportpaleis-sw.js",
+  "/sportpaleis-pwa-icon.svg",
+]);
 
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
@@ -85,6 +91,8 @@ const mimeTypes = new Map([
   [".json", "application/json; charset=utf-8"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
+  [".txt", "text/plain; charset=utf-8"],
+  [".webmanifest", "application/manifest+json; charset=utf-8"],
   [".webp", "image/webp"],
   [".woff2", "font/woff2"],
 ]);
@@ -123,6 +131,7 @@ function sendHtml(response, statusCode, body, method = "GET") {
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
   response.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
   response.setHeader("Content-Length", Buffer.byteLength(body));
   response.end(method === "HEAD" ? undefined : body);
@@ -254,7 +263,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       response.end();
       return;
     }
-    if (pathname.startsWith("/assets/") && await serveAsset(response, method, pathname, distRoot)) return;
+    if ((workspaceRootAssets.has(pathname) || pathname.startsWith("/assets/"))
+      && await serveAsset(response, method, pathname, distRoot)) return;
     if (isKnownWorkspaceRoute(pathname)) {
       sendHtml(response, 200, workspaceHtml, method);
       return;

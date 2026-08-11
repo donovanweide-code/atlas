@@ -157,7 +157,11 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     "organization-brand-foundation.mjs",
     "sportpaleis-production-mail.mjs",
     "sportpaleis-logo-mail-safe.png",
+    "collectReferencedProductionArtifacts",
+    "persistentProductionArtifacts",
+    "nginx-workspace-sportpaleis-predeployment.conf",
   ]) assert.match(releaseBuilder, new RegExp(required.replaceAll(".", "\\.")));
+  assert.doesNotMatch(releaseBuilder, /collect\(path\.join\(repositoryRoot, "outputs?"\)/);
   assert.doesNotMatch(releaseBuilder, /wbd-logo-mail-safe/);
 });
 

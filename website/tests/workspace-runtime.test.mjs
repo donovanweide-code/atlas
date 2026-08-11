@@ -55,6 +55,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   await mkdir(path.join(temporary, "assets"));
   await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
   await writeFile(path.join(temporary, "assets", "workspace-test.js"), "export const ok=true;\n");
+  await writeFile(path.join(temporary, "robots.txt"), "User-agent: *\nDisallow: /\n");
 
   const config = parseWorkspaceRuntimeConfig({
     NODE_ENV: "test",
@@ -122,6 +123,15 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   const asset = await fetch(`${origin}/assets/workspace-test.js`);
   assert.equal(asset.status, 200);
   assert.equal(asset.headers.get("content-type"), "text/javascript; charset=utf-8");
+
+  const robots = await fetch(`${origin}/robots.txt`);
+  assert.equal(robots.status, 200);
+  assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
+  assert.equal(robots.headers.get("content-type"), "text/plain; charset=utf-8");
+
+  const sitemap = await fetch(`${origin}/sitemap.xml`);
+  assert.equal(sitemap.status, 404);
+  assert.equal(sitemap.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 
   const rejectedMethod = await fetch(`${origin}/health`, { method: "POST" });
   assert.equal(rejectedMethod.status, 405);

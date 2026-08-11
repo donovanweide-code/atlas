@@ -21,6 +21,10 @@ function fail(message) {
 const files = await filesBelow(outputRoot);
 const htmlPath = path.join(outputRoot, "workspace.html");
 if (!files.includes(htmlPath)) fail("workspace.html ontbreekt");
+const robotsPath = path.join(outputRoot, "robots.txt");
+if (!files.includes(robotsPath)) fail("Workspace-specifieke robots.txt ontbreekt");
+if ((await readFile(robotsPath, "utf8")).trim() !== "User-agent: *\nDisallow: /") fail("Workspace robots.txt moet alle crawling blokkeren");
+if (files.some((file) => path.basename(file).toLowerCase() === "sitemap.xml")) fail("Workspace-release mag geen publieke sitemap bevatten");
 if (files.some((file) => file.endsWith(".map"))) fail("source maps horen niet in het runtimeartefact");
 const rasterFiles = files.filter((file) => /\.(?:jpe?g|png|webp)$/i.test(file));
 if (rasterFiles.some((file) => !file.endsWith(".webp"))) fail("alleen lokaal beheerde WebP-catalogusassets zijn toegestaan in het Workspace-artefact");
