@@ -311,7 +311,7 @@ test("production Mail Foundation legt ontvangst netwerkloos en restart-bestendig
   assert.equal(advanced.value.stage, "CONTROL");
 });
 
-test("tussenvoegsel blijft persistent, heropenbaar en als volledige naam zichtbaar", async (context) => {
+test("letterlijke initialen blijven persistent zonder formuliergedreven naamopbouw", async (context) => {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-infix-regression-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
@@ -335,11 +335,9 @@ test("tussenvoegsel blijft persistent, heropenbaar en als volledige naam zichtba
   const restarted = new SportpaleisFileStore({ filePath: store.filePath, backupDirectory: store.backupDirectory, seedPasswords: undefined });
   await restarted.initialize();
   const reopened = (await restarted.read()).orders.find(({ id }) => id === created.value.id);
-  assert.deepEqual(reopened.standardPersonalization.initialsSemantic, {
-    prefix: "Donovan", infix: "van de", surname: "Weide", typographyManagedByProfile: true,
-  });
+  assert.equal(reopened.standardPersonalization.initials, "DvdW");
+  assert.equal(reopened.standardPersonalization.initialsSemantic, null);
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  for (const label of ["Voornaam", "Tussenvoegsel", "Achternaam", "data-semantic-full-name", "semanticFullName"]) assert.match(source, new RegExp(label));
-  assert.match(source, /standard\.initialsSemantic\?\.infix/);
-  assert.match(source, /Initialen voor/);
+  assert.doesNotMatch(source, /data-standard-field="initialPrefix"|Berekende initialen/);
+  assert.match(source, /maxlength="\$\{field === "initials" \? 5/);
 });

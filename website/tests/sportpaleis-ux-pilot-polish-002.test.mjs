@@ -5,9 +5,10 @@ import test from "node:test";
 test("Pilot polish 002 gebruikt gewone werktaal en een herkenbare ordervolgorde", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   for (const label of ["<h2>Klant</h2>", "<h2>Bedrukking</h2>", "<h2>Vereniging</h2>", "<h2>Artikelen</h2>", "<h2>Controleren</h2>"]) assert.match(source, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.ok(source.indexOf("<h2>Klant</h2>") < source.indexOf("<h2>Bedrukking</h2>"));
-  assert.ok(source.indexOf("<h2>Bedrukking</h2>") < source.indexOf("<h2>Vereniging</h2>"));
+  assert.ok(source.indexOf("<h2>Klant</h2>") < source.indexOf("<h2>Vereniging</h2>"));
   assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Artikelen</h2>"));
+  assert.ok(source.indexOf("<h2>Artikelen</h2>") < source.indexOf("<h2>Bedrukking</h2>"));
+  assert.ok(source.indexOf("<h2>Bedrukking</h2>") < source.indexOf("<h2>Controleren</h2>"));
   assert.doesNotMatch(source, /Naam \/ initialen controleren/);
   assert.doesNotMatch(source, /Wie staat er aan de balie\?/);
   assert.doesNotMatch(source, /KLANT · VERPLICHT/);

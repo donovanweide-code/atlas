@@ -79,7 +79,8 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
     ] }] }), "variants-007b")).value;
     assert.equal(variantOrder.totalPieces, 3); assert.equal(variantOrder.items[0].size, "Meerdere maten"); assert.equal(variantOrder.items[0].variants.length, 2);
     assert.match(variantOrder.items[0].variants[1].personalization, /Rug 14/);
-    assert.deepEqual(variantOrder.standardPersonalization.initialsSemantic, { prefix: "Sanne", infix: "de", surname: "Boer", typographyManagedByProfile: true });
+    assert.equal(variantOrder.standardPersonalization.initialsSemantic, null);
+    assert.equal(variantOrder.standardPersonalization.initials, "SB");
   });
 
   await context.test("notitie, aandacht en prioriteitsuitzondering zijn geaudit", async () => {

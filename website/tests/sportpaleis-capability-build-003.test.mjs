@@ -32,7 +32,7 @@ test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
 
   await context.test("de echte verenigingsconfiguratie is server-owned en behoudt alleen resterende datagaten", async () => {
     const state = await service.bootstrap(admin.token);
-    assert.equal(state.schemaVersion, 8);
+    assert.equal(state.schemaVersion, 12);
     assert.equal(state.associations.length, 20);
     assert.deepEqual(state.associations.map(({ name }) => name), SPORTPALEIS_ASSOCIATIONS.map(({ name }) => name));
     const asc = state.associations.find(({ name }) => name === "A.S.C. Waterwijk");

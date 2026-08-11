@@ -129,7 +129,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
 
   await context.test("schema-1 migratie en MariaDB mapping bewaren bestaande data zonder Junior/Senior te gokken", async () => {
     const migrated = migrateSportpaleisPilotState({ schemaVersion: 1, organizationId: "sport-2000-sportpaleis-bv", orders: [{ id: "LEGACY-1", revision: 1, customer: "Bestaand", customerEmail: "bestaand@example.nl", association: "A.S.C. Waterwijk", createdAt: "2026-08-01T00:00:00.000Z", stage: "ORDER", owner: "Patrick", totalPieces: 1, standardPersonalization: { initials: "", name: "", backNumber: "9", shortsNumber: "" }, items: [] }], users: [], audit: [] });
-    assert.equal(migrated.schemaVersion, 8); assert.equal(migrated.orders[0].standardPersonalization.backNumberSizeClass, "");
+    assert.equal(migrated.schemaVersion, 12); assert.equal(migrated.orders[0].standardPersonalization.backNumberSizeClass, "");
     assert.equal(migrated.orders[0].communication.requiredForIndividualOrder, false); assert.match(migrated.migrationWarnings[0], /geen gevalideerde/);
 
     const latest = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === order.id);
@@ -139,7 +139,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.deepEqual(roundTrip.items[0].backNumberProduction, latest.items[0].backNumberProduction);
 
     const restarted = new SportpaleisFileStore({ filePath: store.filePath, backupDirectory: path.join(root, "backups"), seedPasswords: undefined });
-    await restarted.initialize(); assert.equal((await restarted.read()).schemaVersion, 8);
+    await restarted.initialize(); assert.equal((await restarted.read()).schemaVersion, 12);
   });
 
   await context.test("UI en schema borgen rode afwijking, 390px, focusbehoud, release en reproduceerbare migratie", async () => {

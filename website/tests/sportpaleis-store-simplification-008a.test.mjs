@@ -88,9 +88,10 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     assert.match(order.items[0].productionReadiness.reason, /Noodzakelijke productiegegevens/);
   });
 
-  await context.test("tussenvoegsel blijft semantisch en typografie blijft profielgestuurd", async () => {
+  await context.test("letterlijke initialen vervangen de oude semantische naamopbouw", async () => {
     const order = (await create([{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} }], "infix-order-008a")).value;
-    assert.deepEqual(order.standardPersonalization.initialsSemantic, { prefix: "Donovan", infix: "van de", surname: "Weide", typographyManagedByProfile: true });
+    assert.equal(order.standardPersonalization.initials, "DvdW");
+    assert.equal(order.standardPersonalization.initialsSemantic, null);
   });
 
   await context.test("kassa-overzicht rekent bekende prijzen exact en blokkeert aannames bij ontbrekende prijzen", () => {
@@ -107,9 +108,10 @@ test("008A - Winkelmedewerker simplification", async (context) => {
   await context.test("UI-bron borgt storevolgorde, rolstatus, artikel-first, prijsgrens en focus", async () => {
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
-    assert.ok(source.indexOf('"Nieuwe order", current') < source.indexOf('"Overzicht", current'));
+    assert.match(source, /"Mijn werk"/);
     for (const label of ["In behandeling", "Klaar", "Klant geïnformeerd", "Opgehaald", "Klaar voor productie"]) assert.match(source, new RegExp(label));
-    assert.ok(source.indexOf("<h2>Bedrukking</h2>") < source.indexOf("<h2>Vereniging</h2>"));
+    assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Artikelen</h2>"));
+    assert.ok(source.indexOf("<h2>Artikelen</h2>") < source.indexOf("<h2>Bedrukking</h2>"));
     for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "Andere bedrukking", "Andere maat of bedrukking", "Controleren", "Totaal voor de kassa", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(source, /Naam \/ initialen controleren/);
     assert.match(source, /association === activeAssociation/);

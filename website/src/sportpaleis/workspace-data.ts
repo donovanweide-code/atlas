@@ -1,7 +1,41 @@
 export type SportpaleisRole = "admin" | "operator" | "store" | "support";
+export type SportpaleisWorkContext = "ORGANISATION" | "STORE" | "WEBSHOP" | "PRODUCTION" | "ALL";
+export type SportpaleisOrderSource = "STORE" | "WEBSHOP_XPRT" | "TEAM_MAIL" | "INVOICE" | "MANUAL";
 export type OrderStage = "ORDER" | "CONTROL" | "PRINT" | "DONE";
 export type BackNumberSizeClass = "JUNIOR" | "SENIOR";
 export type ValidationStatus = "VALIDATED" | "SOURCE_CONFIGURED" | "DATA_GAP";
+export type ProductionProofStatus = "CONFIGURED" | "GEOMETRY_VALIDATED" | "WINPLOT_VALIDATED" | "PHYSICALLY_VALIDATED" | "DATA_GAP";
+export type ProductionLineType = "TEXT" | "INITIALS" | "NUMBER" | "LOGO" | "PRODUCTION_ELEMENT";
+
+export interface SportpaleisProductionFont {
+  id: string;
+  name: string;
+  originalFilename: string;
+  version: string;
+  sha256: string;
+  mimeType: "font/ttf" | "font/otf" | "font/woff" | "font/woff2";
+  sizeBytes: number;
+  addedAt: string;
+  uploadedBy: { userId: string; name: string };
+  provenance: string;
+  status: "TECHNICALLY_VALID" | "REJECTED" | "INACTIVE";
+  allowedInStore: boolean;
+  sourceUrl: string;
+}
+
+export interface SportpaleisProductionLine {
+  id: string;
+  type: ProductionLineType;
+  content: string;
+  source: { kind: "FONT" | "PROFILE" | "PRODUCTION_ELEMENT"; id: string; version: string; sha256?: string };
+  widthMm: number;
+  heightMm: number;
+  quantity: number;
+  preview: { kind: "LIVE_FONT" | "PROFILE_REFERENCE" | "ASSET_REFERENCE"; label: string; aspectRatioLocked: boolean };
+  provenance: string;
+  proofStatus: ProductionProofStatus;
+  validation: { status: "VALID" | "BLOCKED"; reason: string | null };
+}
 
 export interface BackNumberProductionContext {
   sizeClass: BackNumberSizeClass;
@@ -19,6 +53,10 @@ export interface SportpaleisUser {
   status: "Actief" | "Inactief" | "Uitgenodigd";
   seatType?: "customer" | "support";
   salesNumber?: string | null;
+  personType?: "HUMAN" | "FUNCTION" | "SYSTEM";
+  workContexts?: SportpaleisWorkContext[];
+  defaultContext?: SportpaleisWorkContext;
+  quickAuth?: { mode: "PASSWORD" | "PIN"; pinEnrolled: boolean };
 }
 
 export interface OrderAcceptedBy {
@@ -204,17 +242,140 @@ export interface WorkspaceOrder {
   orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM" | "LEGACY";
   owner: string;
   acceptedBy?: OrderAcceptedBy;
+  salesAttribution?: { salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
+  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL" };
   totalPieces: number;
   attention?: string;
   productionReference?: "SNIJTEST-001";
   foilStates?: { color: string; status: "READY" | "HOLD" }[];
   items: WorkspaceOrderItem[];
+  productionLines?: SportpaleisProductionLine[];
   notes?: { id: string; scope: "order" | "customer"; kind: "internal" | "attention"; text: string; authorId: string; authorName: string; createdAt: string }[];
   priority?: { requestedBy: string; alignedWith: string; reason: string; explanation: string; createdAt: string } | null;
   communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null }; production?: { status: string; updatedAt?: string; providerReference?: string | null }; ready: { status: string; updatedAt?: string; providerReference?: string | null } };
   barcode?: { value: string; featureEnabled: false; hardwareValidated: false };
   pickup?: { status: "NOT_PICKED_UP" | "PICKED_UP"; pickedUpAt: string | null; pickedUpBy: string | null };
-  eventHistory?: { type: string; at: string; userId: string; userName: string; source: string }[];
+  payment?: { status: "UNKNOWN" | "DUE" | "PAID" | "REGISTER_PROCESSED"; updatedAt: string | null; updatedBy: string | null; source: "MANUAL_WORKSPACE" | "ACA_XPRT" | "UNKNOWN" };
+  fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null };
+  operationalFacts?: Partial<Record<"PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED", { at: string; userId: string; userName: string; source: "MANUAL_WORKSPACE" }>>;
+  eventHistory?: { type: string; at: string; userId: string; userName: string; source: string; details?: Record<string, unknown> }[];
+}
+
+export interface SportpaleisMailbatch {
+  id: string;
+  sourceMessageId: string;
+  source: "WEBSHOP_XPRT" | "TEAM_MAIL";
+  scheduledWindow: "08:30" | "12:00" | "14:00" | "16:00";
+  importedAt: string;
+  importedBy: string;
+  status: "IMPORTED" | "REVIEW_REQUIRED";
+  provenance: string;
+  input?: { filename: string; format: "CSV" | "TSV" | "STRUCTURED"; sha256: string; rowCount: number; sourceStatus: "REAL_EXPORT_UNCONFIRMED" | "MANUAL_STRUCTURED" };
+  records: { externalId: string; externalReference: string; customer: string; association: string | null; changes: string[]; productionConcept: boolean; transactionalAuthority: "ACA_XPRT" | "EXTERNAL" }[];
+}
+
+export interface SportpaleisProductionElement {
+  id: string;
+  name: string;
+  ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND";
+  ownerName: string;
+  sourceAsset: string;
+  sourceStatus: "AVAILABLE" | "REFERENCE_ONLY" | "DATA_GAP";
+  sourceLayers?: {
+    visualSource: { filename: string; mimeType: string; sha256: string } | null;
+    vectorSource: { filename: string; mimeType: string; sha256: string } | null;
+    validatedCutContour: { sourceId: string; version: string; sha256: string } | null;
+    physicallyProvenContour: { sourceId: string; version: string; sha256: string } | null;
+  };
+  revision: number;
+  variants: {
+    id: string;
+    label: string;
+    widthMm: number | null;
+    heightMm: number | null;
+    productionMode: "INTERNAL_PLOT" | "EXTERNAL";
+    currentStock: number | null;
+    minimumStock: number | null;
+    targetStock: number | null;
+  }[];
+}
+
+export interface SportpaleisProductionElementRequirement {
+  id: string;
+  orderId: string;
+  variantId: string;
+  quantity: number;
+  recordedAt: string;
+  recordedBy: string;
+}
+
+export interface SportpaleisProductionInventoryView {
+  elementId: string;
+  elementName: string;
+  ownerName: string;
+  variantId: string;
+  variantLabel: string;
+  productionMode: "INTERNAL_PLOT" | "EXTERNAL";
+  currentStock: number | null;
+  openDemand: number;
+  projectedFreeStock: number | null;
+  minimumStock: number | null;
+  targetStock: number | null;
+  shortage: boolean;
+  suggestedReplenishment: number | null;
+  dataGaps: string[];
+}
+
+export interface ProductionJobSnapshot {
+  organizationId: string;
+  association: string;
+  acceptedSourceDate?: string;
+  orderIds: string[];
+  elements: {
+    type: string;
+    value: string;
+    quantity: number;
+    widthMm: number;
+    heightMm: number;
+    contourCount?: number;
+    contourCountPerObject?: number;
+  }[];
+  productionLines?: SportpaleisProductionLine[];
+  fontSources?: { id: string; name: string; version: string; sha256: string; originalFilename: string }[];
+  logoSources?: { id: string; revision: number; sourceLayers: NonNullable<SportpaleisProductionElement["sourceLayers"]> }[];
+  productionProfile: { id: string; revision: number; name: string };
+  sourceContours: { id: string; version: string; proofStatus: ProductionProofStatus; immutable: true }[];
+  productionGroup: { foilColor: string; material: string; workingWidthMm: number };
+  layout: {
+    strategy: string;
+    objectCount: number;
+    closedContourCount?: number;
+    anchorCount?: number;
+    usedWidthMm: number;
+    usedLengthMm: number;
+    edgeMarginMm: number | null;
+    minimumGapMm: number | null;
+  };
+  orientation: { preMirrored: boolean; manualHorizontalFlipInWinPlot: boolean };
+  scale: 1;
+  artifact: { filename: string; format: "AI" | "PDF" | "EPS" | "MANIFEST"; version: string; sha256: string; path: string };
+  humanControlRequiredBeforeHardware: true;
+  hardwareSendPerformedByWorkspace: false;
+}
+
+export interface ProductionJob {
+  id: string;
+  jobNumber: string;
+  createdAt: string;
+  initiatedBy: { userId: string; name: string; role: SportpaleisRole };
+  kind: "ORIGINAL" | "REPLOT";
+  originJobId: string | null;
+  reason: string | null;
+  snapshot: ProductionJobSnapshot;
+  snapshotHash: string;
+  status: "AWAITING_HUMAN_CHECK" | "COMPLETED" | "FAILED" | "CANCELLED";
+  proofStatus: ProductionProofStatus;
+  humanAcceptance: { status: "PENDING" | "PASS" | "FAIL"; acceptedSourceDate?: string; sourceProofStatus?: ProductionProofStatus; note: string };
 }
 
 export interface WorkspaceFeedback {
@@ -222,11 +383,13 @@ export interface WorkspaceFeedback {
   page: string;
   module: string;
   userId: string;
+  userRole: SportpaleisRole;
   createdAt: string;
-  category: "Vraag" | "Verbetering" | "Probleem";
+  category: "Vraag" | "Verbetering" | "Probleem" | "Operationele blokkade";
   description: string;
   releaseId?: string;
   orderId?: string | null;
+  associationContext?: string | null;
   attachments?: { id: string; filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; sizeBytes: number }[];
 }
 
@@ -261,7 +424,7 @@ export interface WorkspaceAuditEntry {
 }
 
 export interface SportpaleisWorkspaceState {
-  schemaVersion: 6;
+  schemaVersion: 12;
   configurationVersion?: string;
   revision: number;
   currentUserId: string;
@@ -274,6 +437,11 @@ export interface SportpaleisWorkspaceState {
   foilRolls: FoilRoll[];
   feedback: WorkspaceFeedback[];
   extraUserRequests: ExtraUserRequest[];
+  mailbatches: SportpaleisMailbatch[];
+  productionElements: SportpaleisProductionElement[];
+  productionFonts: SportpaleisProductionFont[];
+  productionElementRequirements: SportpaleisProductionElementRequirement[];
+  productionJobs: ProductionJob[];
   preferences: Record<string, WorkspacePreference>;
   audit: WorkspaceAuditEntry[];
   appliedActionIds: string[];
@@ -305,7 +473,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
     { id: "collega", name: "Winkelmedewerker", initials: "WM", role: "store", email: "collega@sportpaleis.nl", status: "Actief" },
   ];
   return {
-    schemaVersion: 6,
+    schemaVersion: 12,
     revision: 1,
     currentUserId: "kevin",
     users,
@@ -372,12 +540,17 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
       },
     ],
     associations: [],
+    productionFonts: [],
     articles: [],
     productionProfiles: [],
     settings: { processingDays: 5 },
     foilRolls: [],
     feedback: [],
     extraUserRequests: [],
+    mailbatches: [],
+    productionElements: [],
+    productionElementRequirements: [],
+    productionJobs: [],
     preferences: Object.fromEntries(users.map(({ id }) => [id, structuredClone(DEFAULT_PREFERENCE)])),
     audit: [
       { id: "audit-seed-1", at: "2026-08-07T08:24:00.000Z", userId: "patrick", action: "Order gecontroleerd", subject: "SP-2026-0104" },

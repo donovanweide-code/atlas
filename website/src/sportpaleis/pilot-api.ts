@@ -10,10 +10,18 @@ import type {
   CatalogArticle,
   ProductionProfile,
   AssociationConfiguration,
+  SportpaleisMailbatch,
+  SportpaleisOrderSource,
+  SportpaleisProductionElement,
+  SportpaleisProductionElementRequirement,
+  SportpaleisProductionInventoryView,
+  ProductionJob,
+  SportpaleisProductionFont,
+  SportpaleisProductionLine,
 } from "./workspace-data.ts";
 
 const API = "/api/sportpaleis/v1";
-const CACHE_KEY = "sportpaleis.workspace.readonly-cache.007";
+const CACHE_KEY = "sportpaleis.workspace.readonly-cache.012";
 
 interface ApiErrorBody {
   error?: string;
@@ -37,6 +45,7 @@ export class PilotApiError extends Error {
 
 export interface PilotBootstrap extends SportpaleisWorkspaceState {
   currentUser: SportpaleisUser;
+  switchableUsers: SportpaleisUser[];
   csrfToken?: string;
   capabilities: {
     admin: boolean;
@@ -50,7 +59,12 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     hardwareSendEnabled: false;
     barcodeEnabled: false;
     barcodeHardwareValidated: false;
+    workContexts: NonNullable<SportpaleisUser["workContexts"]>;
+    deviceMode: "SHARED" | "PERSONAL";
+    authMethod: "PASSWORD" | "PIN" | "DEMO";
+    quickPinEnabled: boolean;
   };
+  productionInventory: SportpaleisProductionInventoryView[];
   releaseId: string;
   commercialAdministration?: CommercialAdministration;
   readOnlyFallback?: boolean;
@@ -110,14 +124,21 @@ function idempotencyKey(prefix: string): string {
 export class SportpaleisPilotApi {
   #csrfToken = "";
 
-  async login(email: string, password: string): Promise<SportpaleisUser> {
+  async login(email: string, password: string, deviceMode: "SHARED" | "PERSONAL" = "SHARED"): Promise<SportpaleisUser> {
     const result = await responseBody<{ user: SportpaleisUser; csrfToken: string }>(await fetch(`${API}/auth/login`, {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, deviceMode }),
     }));
     this.#csrfToken = result.csrfToken;
+    return result.user;
+  }
+
+  async fastSwitch(targetUserId: string, credential: { authMode: "PIN"; pin: string } | { authMode: "PASSWORD"; password: string }, deviceMode: "SHARED" | "PERSONAL"): Promise<SportpaleisUser> {
+    const result = await responseBody<{ user: SportpaleisUser; csrfToken: string }>(await this.#mutatingFetch(`${API}/auth/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId, ...credential, deviceMode }) }));
+    this.#csrfToken = result.csrfToken;
+    sessionStorage.removeItem(CACHE_KEY);
     return result.user;
   }
 
@@ -184,6 +205,12 @@ export class SportpaleisPilotApi {
     internalNote?: string;
     noteKind?: "internal" | "attention";
     priority?: { enabled?: boolean; requestedBy?: string; alignedWith?: string; reason?: string; explanation?: string };
+    salesNumber?: string | null;
+    source?: SportpaleisOrderSource;
+    externalReference?: string;
+    provenance?: string;
+    deliveryMode?: "PICKUP" | "DELIVERY";
+    productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; quantity: number; previewLabel?: string; provenance?: string }[];
   }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders`, {
       method: "POST",
@@ -208,7 +235,7 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async updateOrder(order: WorkspaceOrder, input: { customer?: string; customerEmail?: string; customerPhone?: string; standardPersonalization?: OrderPersonalization; items?: readonly EditableOrderItemInput[]; correctionReason?: string }): Promise<WorkspaceOrder> {
+  async updateOrder(order: WorkspaceOrder, input: { customer?: string; customerEmail?: string; customerPhone?: string; deliveryMode?: "PICKUP" | "DELIVERY"; standardPersonalization?: OrderPersonalization; items?: readonly EditableOrderItemInput[]; correctionReason?: string }): Promise<WorkspaceOrder> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, expectedRevision: order.revision }) }));
   }
 
@@ -222,6 +249,14 @@ export class SportpaleisPilotApi {
 
   async confirmPickup(order: WorkspaceOrder): Promise<WorkspaceOrder> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/pickup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision }) }));
+  }
+
+  async recordOperationalEvent(order: WorkspaceOrder, action: "PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED"): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/operational-event`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("operation") }, body: JSON.stringify({ action, expectedRevision: order.revision }) }));
+  }
+
+  async importMailbatch(input: { sourceMessageId: string; source: "WEBSHOP_XPRT" | "TEAM_MAIL"; scheduledWindow: "08:30" | "12:00" | "14:00" | "16:00"; provenance: string; records?: { externalId: string; externalReference: string; customer: string; association?: string; changes: string[] }[]; filename?: string; rawExportText?: string }): Promise<{ duplicate: boolean; value: SportpaleisMailbatch }> {
+    return responseBody(await this.#mutatingFetch(`${API}/mailbatches/import`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("mailbatch") }, body: JSON.stringify(input) }));
   }
 
   async previewOrderMail(orderId: string, templateKey: "ORDER_RECEIVED" | "ORDER_IN_PRODUCTION" | "ORDER_READY" | "ORDER_QUESTION", question = ""): Promise<MailPreview> {
@@ -245,7 +280,7 @@ export class SportpaleisPilotApi {
     return result.history;
   }
 
-  async submitFeedback(input: Omit<WorkspaceFeedback, "id" | "userId" | "createdAt" | "attachments"> & { attachments?: { filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; dataBase64: string }[] }): Promise<{ duplicate: boolean; value: WorkspaceFeedback }> {
+  async submitFeedback(input: Omit<WorkspaceFeedback, "id" | "userId" | "userRole" | "createdAt" | "attachments"> & { attachments?: { filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; dataBase64: string }[] }): Promise<{ duplicate: boolean; value: WorkspaceFeedback }> {
     return responseBody(await this.#mutatingFetch(`${API}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("feedback") },
@@ -273,11 +308,43 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateUser(userId: string, input: { role?: "admin" | "operator" | "store"; status?: "Actief" | "Inactief" | "Uitgenodigd"; salesNumber?: string | null }): Promise<SportpaleisUser> {
+  async updateUser(userId: string, input: { role?: "admin" | "operator" | "store"; status?: "Actief" | "Inactief" | "Uitgenodigd"; salesNumber?: string | null; workContexts?: NonNullable<SportpaleisUser["workContexts"]>; defaultContext?: NonNullable<SportpaleisUser["defaultContext"]> }): Promise<SportpaleisUser> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
+    }));
+  }
+
+  async setQuickPin(userId: string, input: { pin?: string; disable?: boolean }): Promise<SportpaleisUser> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/quick-pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async upsertProductionElement(input: Omit<SportpaleisProductionElement, "id" | "revision" | "sourceLayers"> & { id?: string; expectedRevision?: number; sourceLayers?: { visualSource?: { filename: string; mimeType: string; dataBase64: string }; vectorSource?: { filename: string; mimeType: string; dataBase64: string } } }): Promise<SportpaleisProductionElement> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-elements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async setProductionElementRequirement(input: Omit<SportpaleisProductionElementRequirement, "id" | "recordedAt" | "recordedBy">): Promise<SportpaleisProductionInventoryView[]> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-element-requirements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async replotProductionJob(productionJobId: string, reason = ""): Promise<{ duplicate: boolean; value: ProductionJob }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}/replot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("replot") },
+      body: JSON.stringify({ reason }),
+    }));
+  }
+
+  async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean }): Promise<SportpaleisProductionFont> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async createProductionJob(orders: readonly WorkspaceOrder[]): Promise<{ duplicate: boolean; value: ProductionJob }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("plotjob") },
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })) }),
     }));
   }
 
@@ -298,8 +365,16 @@ export class SportpaleisPilotApi {
     await responseBody(await this.#mutatingFetch(`${API}/admin/articles/${encodeURIComponent(articleId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
+  async createArticle(input: { name: string; articleNumber: string; imageKey: string; association: string; profileId: string; source: string }): Promise<CatalogArticle> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/articles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
   async updateAssociation(associationId: string, input: { expectedRevision: number; active?: boolean; notes?: string; fontProfile?: string; foilColors?: string[]; dimensionsCm?: AssociationConfiguration["dimensionsCm"]; juniorValidationStatus?: "DATA_GAP" | "VALIDATED"; juniorPhysicalHeightMm?: number | null; juniorGarmentSizes?: string[]; juniorValidationNote?: string }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/associations/${encodeURIComponent(associationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async createAssociation(input: { name: string; sourceName: string; provenance: string }): Promise<AssociationConfiguration> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/associations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
   async updateProductionProfile(profileId: string, input: {

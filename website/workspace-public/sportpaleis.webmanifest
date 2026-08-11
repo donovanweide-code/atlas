@@ -1,0 +1,15 @@
+{
+  "id": "/workspace/sportpaleis/",
+  "name": "Sport 2000 Sportpaleis Workspace",
+  "short_name": "Sportpaleis",
+  "description": "Dagelijkse werkplek voor Sport 2000 Sportpaleis B.V.",
+  "lang": "nl-NL",
+  "start_url": "/workspace/sportpaleis/overzicht",
+  "scope": "/workspace/sportpaleis/",
+  "display": "standalone",
+  "background_color": "#f3efe5",
+  "theme_color": "#071216",
+  "icons": [
+    { "src": "/sportpaleis-pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -20,7 +20,9 @@
     "validate:release": "node scripts/release-validation.mjs",
     "sync:connector:wbd": "node --experimental-strip-types scripts/atlas-connector-sync.mjs",
     "mail:smtp:controlled": "node scripts/wbd-controlled-smtp-validation.mjs",
-    "mail:smtp:sportpaleis:controlled": "node scripts/sportpaleis-controlled-smtp-validation.mjs"
+    "mail:smtp:sportpaleis:controlled": "node scripts/sportpaleis-controlled-smtp-validation.mjs",
+    "generate:sportpaleis:prepilot-winplot": "node --experimental-strip-types scripts/generate-sportpaleis-prepilot-winplot-acceptance.mjs",
+    "generate:sportpaleis:production-gap-matrix": "node scripts/generate-sportpaleis-production-gap-matrix.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
