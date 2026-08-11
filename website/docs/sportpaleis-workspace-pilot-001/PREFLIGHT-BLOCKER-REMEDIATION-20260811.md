@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 
-Build ID: `SPW-PILOT-PREFLIGHT-REMEDIATION-001-20260811`
+Build ID: `SPW-PILOT-PREFLIGHT-REMEDIATION-002-20260811`
 
 Base freeze commit: `9d095aeba3c10bf0d8dc382dcaba73545ed00420`
 
@@ -73,6 +73,8 @@ Expected allowlist:
 3. Golden Physical Batch 001 pre-mirror A/B AI — `2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4`.
 
 The embedded release manifest records the base freeze, remediation release commit/tag, each selected PlotJob reference and every packaged file hash.
+
+Release candidate 001 stopped before artefact creation because the immutable A/B filename exceeded the legacy 100-byte TAR name field. Candidate 002 uses the standard USTAR prefix field and preserves the complete original path and filename.
 
 ## Still requires separate deployment GO
 

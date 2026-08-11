@@ -24,9 +24,18 @@ function writeText(buffer, offset, length, value) {
 }
 
 function tarHeader(name, size, mode = 0o644) {
-  if (Buffer.byteLength(name) > 100) throw new Error(`Tar path te lang: ${name}`);
+  let entryName = name;
+  let prefix = "";
+  if (Buffer.byteLength(entryName) > 100) {
+    const separators = [...entryName.matchAll(/\//gu)].map(({ index }) => index).reverse();
+    const splitAt = separators.find((index) => Buffer.byteLength(entryName.slice(index + 1)) <= 100
+      && Buffer.byteLength(entryName.slice(0, index)) <= 155);
+    if (splitAt === undefined) throw new Error(`Tar path past niet binnen USTAR: ${name}`);
+    prefix = entryName.slice(0, splitAt);
+    entryName = entryName.slice(splitAt + 1);
+  }
   const header = Buffer.alloc(512);
-  writeText(header, 0, 100, name);
+  writeText(header, 0, 100, entryName);
   writeText(header, 100, 8, octal(mode, 8));
   writeText(header, 108, 8, octal(0, 8));
   writeText(header, 116, 8, octal(0, 8));
@@ -38,6 +47,7 @@ function tarHeader(name, size, mode = 0o644) {
   writeText(header, 263, 2, "00");
   writeText(header, 265, 32, "root");
   writeText(header, 297, 32, "root");
+  writeText(header, 345, 155, prefix);
   const checksum = header.reduce((sum, byte) => sum + byte, 0);
   writeText(header, 148, 8, `${checksum.toString(8).padStart(6, "0")}\0 `);
   return header;
