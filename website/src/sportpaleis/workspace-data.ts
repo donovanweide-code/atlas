@@ -111,6 +111,7 @@ export interface OrderPersonalization {
 export interface CatalogArticle {
   id: string; articleNumber: string; name: string; imageKey: string; category: string;
   association: string; profileId: string; supports: (keyof OrderPersonalization)[]; active: boolean;
+  displayOrder?: number;
   supplierArticleNumber?: string;
   commercialPrintOptions?: { sourceLabel: string; canonicalField: keyof OrderPersonalization | null; priceEur: number | null; status: "VALIDATED" | "DATA_GAP" }[];
   catalogProvenance?: { authority: "SPORTPALEIS_LIVE"; url: string; imageUrl: string; checkedAt: string };
@@ -203,6 +204,14 @@ export interface AssociationConfiguration {
   juniorValidationNote: string;
   notes: string;
   articleCatalogStatus: string;
+  workspaceLogo?: {
+    filename: string;
+    mimeType: "image/png" | "image/jpeg" | "image/webp";
+    dataBase64: string;
+    sha256: string;
+    updatedAt: string;
+    updatedBy: string;
+  } | null;
   revision?: number;
   updatedAt?: string;
   validationHistory?: { at: string; userId: string; field: string; previous: unknown; next: unknown; source: string }[];
@@ -256,7 +265,7 @@ export interface WorkspaceOrder {
   barcode?: { value: string; featureEnabled: false; hardwareValidated: false };
   pickup?: { status: "NOT_PICKED_UP" | "PICKED_UP"; pickedUpAt: string | null; pickedUpBy: string | null };
   payment?: { status: "UNKNOWN" | "DUE" | "PAID" | "REGISTER_PROCESSED"; updatedAt: string | null; updatedBy: string | null; source: "MANUAL_WORKSPACE" | "ACA_XPRT" | "UNKNOWN" };
-  fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null };
+  fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null; feeEur?: number; address?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" } | null };
   operationalFacts?: Partial<Record<"PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED", { at: string; userId: string; userName: string; source: "MANUAL_WORKSPACE" }>>;
   eventHistory?: { type: string; at: string; userId: string; userName: string; source: string; details?: Record<string, unknown> }[];
 }

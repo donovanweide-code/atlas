@@ -122,8 +122,8 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
 test("Functional pilot freeze UX is context-first, preview-safe and responsive", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
-  assert.match(source, /Verenigingsbedrukking/);
-  assert.match(source, /Vrije bedrukking/);
+  assert.match(source, />Bedrukken</);
+  assert.match(source, /Vrije opdruk/);
   assert.match(source, /Logo's zijn hier bewust niet beschikbaar/);
   assert.match(source, /new FontFace/);
   assert.match(source, /data-font-ready="false"/);

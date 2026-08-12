@@ -54,21 +54,26 @@ test("PRE-PILOT MASTER — organisatie, sessies, operatie en intake", async (con
   await context.test("orderactor, verkooptoerekening, bron, betaling en levering blijven losse feiten", async () => {
     const currentAdmin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
     await service.updateUser(currentAdmin.token, currentAdmin.csrfToken, "kevin", { salesNumber: "705" });
-    const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ salesNumber: "705", deliveryMode: "DELIVERY" }), "prepilot-order-separate-facts")).value;
+    const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ salesNumber: "705", deliveryMode: "DELIVERY", deliveryAddress: { postalCode: "1315 XC", houseNumber: "1", houseNumberSuffix: "", street: "Fictieve straat", city: "Almere", lookupStatus: "MANUAL_FALLBACK" } }), "prepilot-order-separate-facts")).value;
     assert.equal(created.acceptedBy.userId, "collega");
     assert.deepEqual({ number: created.salesAttribution.salesNumber, label: created.salesAttribution.label }, { number: "705", label: "Kevin" });
     assert.equal(created.sourceContext.transactionalAuthority, "WORKSPACE");
     assert.equal(created.payment.status, "UNKNOWN");
-    assert.deepEqual({ mode: created.fulfillment.mode, status: created.fulfillment.status }, { mode: "DELIVERY", status: "PENDING" });
+    assert.deepEqual({ mode: created.fulfillment.mode, status: created.fulfillment.status, fee: created.fulfillment.feeEur }, { mode: "DELIVERY", status: "PENDING", fee: 3.95 });
   });
 
   await context.test("contextuele acties registreren actor/tijd en maken betaald niet gelijk aan opgehaald", async () => {
-    const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload(), "prepilot-operation-order")).value;
+    const activeAdmin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
+    const individual = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload(), "prepilot-operation-individual")).value;
+    await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, individual.id, { action: "PAID", expectedRevision: individual.revision }, "prepilot-paid-individual"), (error) => error.code === "PAYMENT_ACTION_NOT_AVAILABLE");
+    await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, individual.id, { action: "PICKED_UP", expectedRevision: individual.revision }, "prepilot-early-pickup"), (error) => error.code === "ORDER_NOT_READY");
+    let created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ orderKind: "TEAM" }), "prepilot-operation-team")).value;
+    await store.mutate(async (state) => { const order = state.orders.find(({ id }) => id === created.id); order.communication.receipt.status = "CAPTURED"; return { state, value: undefined }; });
+    for (const key of ["control", "print", "done"]) created = (await service.advanceOrder(activeAdmin.token, activeAdmin.csrfToken, created.id, created.revision, `prepilot-team-${key}`)).value;
     const paid = (await service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, created.id, { action: "PAID", expectedRevision: created.revision }, "prepilot-paid-event")).value;
     assert.equal(paid.payment.status, "PAID");
     assert.equal(paid.pickup.status, "NOT_PICKED_UP");
     assert.equal(paid.operationalFacts.PAID.userId, "collega");
-    await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, paid.id, { action: "PICKED_UP", expectedRevision: paid.revision }, "prepilot-early-pickup"), (error) => error.code === "ORDER_NOT_READY");
   });
 
   await context.test("XPRT blijft transactionele autoriteit voor webshoporders", async () => {
@@ -95,14 +100,15 @@ test("PRE-PILOT MASTER — zichtbaar contract en PWA-grens", async () => {
   const entry = await readFile(new URL("../sportpaleis.html", import.meta.url), "utf8");
   const manifest = JSON.parse(await readFile(new URL("../workspace-public/sportpaleis.webmanifest", import.meta.url), "utf8"));
   const pwaIcon = await readFile(new URL("../workspace-public/sportpaleis-pwa-icon.svg", import.meta.url), "utf8");
-  const positions = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Artikelen</h2>", "<h2>Bedrukking</h2>", "<h2>Controleren</h2>"].map((marker) => source.indexOf(marker));
+  const positions = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Wat moet erop?</h2>", "<h2>Artikelen en exemplaren</h2>", "<h2>Levering en afronden</h2>"].map((marker) => source.indexOf(marker));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
   assert.match(source, /data-action="add-article"/);
   assert.match(source, /maxlength="\$\{field === "initials" \? 5/);
   assert.doesNotMatch(source, /Berekende initialen|data-standard-field="initialPrefix"/);
-  for (const marker of ["Mijn werk", "Webshop", "Alles", "data-fast-switch-form", "Kassa verwerkt", "Uitgeleverd"]) assert.match(source, new RegExp(marker));
+  for (const marker of ["Mijn werk", "Webshop", "Alles", "data-fast-switch-form", "Teamorder", "Uitgeleverd"]) assert.match(source, new RegExp(marker));
   assert.match(service, /const initials = optional\(value\.initials, 5\)/);
-  assert.equal(manifest.start_url, "/workspace/sportpaleis/overzicht");
+  assert.equal(manifest.start_url, "/overzicht");
+  assert.equal(manifest.scope, "/");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.icons[0].src, "/sportpaleis-pwa-icon.svg");
   assert.match(source, /icon\.href = "\/sportpaleis-pwa-icon\.svg"/);

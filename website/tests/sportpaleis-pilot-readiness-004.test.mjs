@@ -89,7 +89,8 @@ test("Sportpaleis final pilot readiness 004", async (context) => {
     assert.match(source, /productie\/voorstel/);
     assert.match(source, /Technische profielen bekijken/);
     assert.match(source, /de exacte bestandshandoff is niet als brongevalideerde Workspace-stap vastgelegd/);
-    assert.match(source, /Productiedata ontbreekt\. Vul of valideer deze eerst in Beheer; GO blijft geblokkeerd\./);
+    assert.match(source, /Nog niet maakbaar/);
+    assert.match(source, /Bekijk wat nodig is/);
     assert.match(source, /Kies minimaal één bedrukking/);
     assert.match(css, /sp-team-row--prepared/);
     assert.match(css, /sp-association-admin-list > div \{ max-height:none; overflow:visible/);

@@ -105,19 +105,19 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     ]), { totalEur: null, missingPriceCount: 1 });
   });
 
-  await context.test("UI-bron borgt storevolgorde, rolstatus, artikel-first, prijsgrens en focus", async () => {
+  await context.test("UI-bron borgt herstelde storevolgorde, exemplaren, prijsgrens en focus", async () => {
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
     assert.match(source, /"Mijn werk"/);
     for (const label of ["In behandeling", "Klaar", "Klant geïnformeerd", "Opgehaald", "Klaar voor productie"]) assert.match(source, new RegExp(label));
-    assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Artikelen</h2>"));
-    assert.ok(source.indexOf("<h2>Artikelen</h2>") < source.indexOf("<h2>Bedrukking</h2>"));
-    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "Andere bedrukking", "Andere maat of bedrukking", "Controleren", "Totaal voor de kassa", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
+    assert.ok(source.indexOf("<h2>Wat moet erop?</h2>") < source.indexOf("<h2>Artikelen en exemplaren</h2>"));
+    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "+ Voeg exemplaar toe", "Leeg = standaardbedrukking", "Levering en afronden", "Totaal voor de kassa", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(source, /Naam \/ initialen controleren/);
     assert.match(source, /association === activeAssociation/);
     assert.match(source, /beheer\/verenigingen/);
     assert.match(source, /articleFields\(article\)/); assert.match(source, /personalizationPolicy/); assert.match(source, /priceConfiguration/);
     assert.match(source, /render\(\{ preserveScroll: true, focusArticleId:/); assert.match(source, /focus\(\{ preventScroll: true \}\)/);
-    assert.match(styles, /sp-card-quantity/); assert.match(styles, /sp-store-status/); assert.match(styles, /sp-price-total/);
+    assert.match(styles, /sp-exemplar-row/); assert.match(styles, /sp-store-status/); assert.match(styles, /sp-price-total/);
   });
 });

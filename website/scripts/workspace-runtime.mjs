@@ -117,6 +117,12 @@ export function isKnownWorkspaceRoute(pathname) {
   return exactWorkspaceRoutes.has(normalized) || parameterizedWorkspaceRoutes.some((pattern) => pattern.test(normalized));
 }
 
+function isCanonicalSportpaleisRoute(pathname) {
+  const normalized = normalizePathname(pathname);
+  return ["/overzicht", "/winkel", "/webshop", "/alles", "/orders", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren"]
+    .some((root) => normalized === root || normalized.startsWith(`${root}/`));
+}
+
 function sendJson(response, statusCode, payload, method = "GET") {
   const body = `${JSON.stringify(payload)}\n`;
   response.statusCode = statusCode;
@@ -177,6 +183,8 @@ function log(config, level, event, fields = {}) {
 
 export async function createWorkspaceRuntimeServer(options = {}) {
   const config = options.config ?? parseWorkspaceRuntimeConfig(process.env);
+  const configuredWorkspaceUrl = new URL(config.workspaceBaseUrl);
+  const canonicalSportpaleisHost = configuredWorkspaceUrl.pathname === "/" ? configuredWorkspaceUrl.hostname : null;
   const distRoot = path.resolve(websiteRoot, config.distDir);
   const workspaceHtmlPath = path.join(distRoot, "workspace.html");
   const workspaceHtml = await readFile(workspaceHtmlPath, "utf8");
@@ -232,6 +240,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     const method = request.method ?? "GET";
     const requestUrl = new URL(request.url ?? "/", "http://workspace.runtime");
     const pathname = normalizePathname(requestUrl.pathname);
+    const requestHost = String(request.headers.host ?? "").split(":")[0].toLowerCase();
+    const canonicalSportpaleisRequest = Boolean(canonicalSportpaleisHost && requestHost === canonicalSportpaleisHost);
 
     if (pathname.startsWith("/api/sportpaleis/v1/")
       || pathname === "/health/sportpaleis"
@@ -257,6 +267,14 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       sendJson(response, 200, { status: "ready" }, method);
       return;
     }
+    if (canonicalSportpaleisRequest && (pathname === "/" || pathname === sportpaleisBoundary || pathname.startsWith(`${sportpaleisBoundary}/`))) {
+      const target = pathname === "/" || pathname === sportpaleisBoundary ? "/overzicht" : pathname.slice(sportpaleisBoundary.length);
+      response.statusCode = 308;
+      response.setHeader("Location", `${target}${requestUrl.search}`);
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+      return;
+    }
     const aliasTarget = workspaceAliases.get(pathname);
     if (aliasTarget) {
       response.statusCode = 308;
@@ -267,6 +285,10 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     }
     if ((workspaceRootAssets.has(pathname) || pathname.startsWith("/assets/"))
       && await serveAsset(response, method, pathname, distRoot)) return;
+    if (canonicalSportpaleisRequest && isCanonicalSportpaleisRoute(pathname)) {
+      sendHtml(response, 200, sportpaleisHtml, method);
+      return;
+    }
     if (isKnownWorkspaceRoute(pathname)) {
       sendHtml(response, 200, pathname.startsWith("/workspace/sportpaleis/") ? sportpaleisHtml : workspaceHtml, method);
       return;

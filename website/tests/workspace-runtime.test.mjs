@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { request as httpRequest } from "node:http";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -141,4 +142,29 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
 
   const rejectedMethod = await fetch(`${origin}/health`, { method: "POST" });
   assert.equal(rejectedMethod.status, 405);
+});
+
+test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links met query", async (context) => {
+  const temporary = await mkdtemp(path.join(tmpdir(), "spw-clean-route-runtime-"));
+  context.after(() => rm(temporary, { recursive: true, force: true }));
+  await mkdir(path.join(temporary, "assets"));
+  await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
+  await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><div id=app></div>");
+  const config = parseWorkspaceRuntimeConfig({ NODE_ENV: "test", APP_ENV: "test", PORT: "0", WORKSPACE_DIST_DIR: temporary, WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", RELEASE_ID: "spw-clean-routes" });
+  const server = await createWorkspaceRuntimeServer({ config });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address(); assert.ok(address && typeof address === "object");
+  const request = (route) => new Promise((resolve, reject) => {
+    const outbound = httpRequest({ hostname: "127.0.0.1", port: address.port, path: route, headers: { Host: "workspace.sportpaleis.nl" } }, (response) => {
+      const chunks = []; response.on("data", (chunk) => chunks.push(chunk)); response.on("end", () => resolve({ status: response.statusCode, location: response.headers.location, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    outbound.on("error", reject); outbound.end();
+  });
+  const root = await request("/?bron=bookmark");
+  assert.equal(root.status, 308); assert.equal(root.location, "/overzicht?bron=bookmark");
+  const legacy = await request("/workspace/sportpaleis/orders/SP-2026-0005?tab=detail");
+  assert.equal(legacy.status, 308); assert.equal(legacy.location, "/orders/SP-2026-0005?tab=detail");
+  const clean = await request("/productie");
+  assert.equal(clean.status, 200); assert.match(clean.body, /Sportpaleis Workspace/);
 });

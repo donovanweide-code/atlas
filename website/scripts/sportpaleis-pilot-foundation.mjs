@@ -337,7 +337,9 @@ export function migrateSportpaleisPilotState(input) {
     order.salesAttribution ??= { salesNumber: order.acceptedBy.salesNumber ?? null, label: order.acceptedBy.name ?? "Niet toegewezen", accountType: order.acceptedBy.salesNumber ? "HUMAN" : "UNASSIGNED", selectedByUserId: order.acceptedBy.userId ?? "unknown", selectedAt: order.acceptedBy.at ?? order.createdAt };
     order.sourceContext ??= { source: "STORE", label: "Winkel", externalReference: null, provenance: "Bestaande Workspace-order", transactionalAuthority: "WORKSPACE" };
     order.payment ??= { status: "UNKNOWN", updatedAt: null, updatedBy: null, source: "UNKNOWN" };
-    order.fulfillment ??= { mode: "PICKUP", status: order.pickup?.status === "PICKED_UP" ? "PICKED_UP" : "PENDING", updatedAt: order.pickup?.pickedUpAt ?? null, updatedBy: order.pickup?.pickedUpBy ?? null };
+    order.fulfillment ??= { mode: "PICKUP", status: order.pickup?.status === "PICKED_UP" ? "PICKED_UP" : "PENDING", updatedAt: order.pickup?.pickedUpAt ?? null, updatedBy: order.pickup?.pickedUpBy ?? null, feeEur: 0, address: null };
+    order.fulfillment.feeEur ??= order.fulfillment.mode === "DELIVERY" ? 3.95 : 0;
+    order.fulfillment.address ??= null;
     order.operationalFacts ??= {};
     order.communication ??= { receipt: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt }, production: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt }, ready: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt } };
     order.communication.production ??= { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt };
@@ -1122,6 +1124,7 @@ export class SportpaleisPilotService {
           transactionalAuthority: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : source === "STORE" || source === "MANUAL" ? "WORKSPACE" : "EXTERNAL",
         };
         const fulfillmentMode = allowedValue(payload.deliveryMode ?? "PICKUP", ["PICKUP", "DELIVERY"], "Leverwijze");
+        const deliveryAddress = validDeliveryAddress(payload.deliveryAddress, fulfillmentMode);
         const order = {
           id,
           revision: 1,
@@ -1147,7 +1150,7 @@ export class SportpaleisPilotService {
           barcode: { value: `SPW:${id}`, featureEnabled: false, hardwareValidated: false },
           pickup: { status: "NOT_PICKED_UP", pickedUpAt: null, pickedUpBy: null },
           payment: { status: "UNKNOWN", updatedAt: null, updatedBy: null, source: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : "UNKNOWN" },
-          fulfillment: { mode: fulfillmentMode, status: "PENDING", updatedAt: null, updatedBy: null },
+          fulfillment: { mode: fulfillmentMode, status: "PENDING", updatedAt: null, updatedBy: null, feeEur: fulfillmentMode === "DELIVERY" ? 3.95 : 0, address: deliveryAddress },
           operationalFacts: {},
           eventHistory: [{ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "button" }],
           totalPieces: items.reduce((sum, item) => sum + item.quantity, 0),
@@ -1255,6 +1258,7 @@ export class SportpaleisPilotService {
         customerEmail: order.customerEmail ?? "",
         customerPhone: order.customerPhone ?? "",
         deliveryMode: order.fulfillment?.mode ?? "PICKUP",
+        deliveryAddress: order.fulfillment?.address ?? null,
         itemSummary: order.items.map(({ product, quantity, size, personalization }) => ({ product, quantity, size: size ?? "", personalization })),
       };
       if (contentChanged && order.stage !== "ORDER") throw Object.assign(new Error("Artikel- en bedrukinhoud is vanaf controle vergrendeld."), { statusCode: 409, code: "ORDER_CONTENT_LOCKED" });
@@ -1265,7 +1269,8 @@ export class SportpaleisPilotService {
       if (payload.deliveryMode !== undefined) {
         if (order.sourceContext?.transactionalAuthority === "ACA_XPRT") throw Object.assign(new Error("Wijzig de bezorgwijze van deze webshoporder in ACA XPRT."), { statusCode: 409, code: "XPRT_TRANSACTIONAL_AUTHORITY" });
         const mode = allowedValue(payload.deliveryMode, ["PICKUP", "DELIVERY"], "Bezorgwijze");
-        order.fulfillment = { mode, status: "PENDING", updatedAt: iso(), updatedBy: user.id };
+        const address = mode === "DELIVERY" ? validDeliveryAddress(payload.deliveryAddress ?? order.fulfillment?.address, mode) : null;
+        order.fulfillment = { mode, status: "PENDING", updatedAt: iso(), updatedBy: user.id, feeEur: mode === "DELIVERY" ? 3.95 : 0, address };
       }
       if (contentChanged) {
         const strictPilotContract = order.orderKind === "INDIVIDUAL" || order.communication?.requiredForIndividualOrder === true;
@@ -1289,6 +1294,7 @@ export class SportpaleisPilotService {
         customerEmail: order.customerEmail ?? "",
         customerPhone: order.customerPhone ?? "",
         deliveryMode: order.fulfillment?.mode ?? "PICKUP",
+        deliveryAddress: order.fulfillment?.address ?? null,
         itemSummary: order.items.map(({ product, quantity, size, personalization }) => ({ product, quantity, size: size ?? "", personalization })),
       };
       const changes = Object.keys(previous).filter((field) => JSON.stringify(previous[field]) !== JSON.stringify(next[field])).map((field) => ({ field, from: previous[field], to: next[field] }));
@@ -1329,7 +1335,7 @@ export class SportpaleisPilotService {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
       if (order.stage !== "DONE") throw Object.assign(new Error("Alleen een gereedgemelde order kan worden afgehaald."), { statusCode: 409, code: "ORDER_NOT_READY" });
-      const at = iso(); order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id, exception: String(payload.exception ?? "").trim() || null }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id }; order.operationalFacts ??= {}; order.operationalFacts.PICKED_UP = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" }; order.revision += 1; order.updatedAt = at;
+      const at = iso(); order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id, exception: String(payload.exception ?? "").trim() || null }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; order.operationalFacts ??= {}; order.operationalFacts.PICKED_UP = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" }; order.revision += 1; order.updatedAt = at;
       order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PICKED_UP", at, userId: user.id, userName: user.name, source: payload.source === "barcode-emulation" ? "barcode-emulation" : "button" });
       audit(state, user.id, "Order afgehaald", order.id); return { state, value: structuredClone(order) };
     }); return result.value;
@@ -1343,13 +1349,14 @@ export class SportpaleisPilotService {
         const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
         if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         if (["PICKED_UP", "DELIVERED"].includes(action) && order.stage !== "DONE") throw Object.assign(new Error("Uitleveren kan pas nadat de order gereed is."), { statusCode: 409, code: "ORDER_NOT_READY" });
+        if (action === "PAID" && (order.orderKind !== "TEAM" || order.stage !== "DONE" || order.fulfillment?.mode === "DELIVERY")) throw Object.assign(new Error("Betaling wordt in Workspace alleen bij een gereed teamorder voor afhalen vastgelegd."), { statusCode: 409, code: "PAYMENT_ACTION_NOT_AVAILABLE" });
         if (action === "PICKED_UP" && order.fulfillment?.mode === "DELIVERY") throw Object.assign(new Error("Deze order staat op bezorgen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
         if (action === "DELIVERED" && order.fulfillment?.mode !== "DELIVERY") throw Object.assign(new Error("Deze order staat op afhalen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
         const at = iso(); order.operationalFacts ??= {}; order.operationalFacts[action] = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" };
         if (action === "REGISTER_PROCESSED") order.payment = { status: "REGISTER_PROCESSED", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
         if (action === "PAID") order.payment = { status: "PAID", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
-        if (action === "PICKED_UP") { order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id }; }
-        if (action === "DELIVERED") order.fulfillment = { mode: "DELIVERY", status: "DELIVERED", updatedAt: at, updatedBy: user.id };
+        if (action === "PICKED_UP") { order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; }
+        if (action === "DELIVERED") order.fulfillment = { ...(order.fulfillment ?? {}), mode: "DELIVERY", status: "DELIVERED", updatedAt: at, updatedBy: user.id, feeEur: 3.95 };
         order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
         order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: action, at, userId: user.id, userName: user.name, source: "manual-workspace" });
         audit(state, user.id, `Operationele status: ${action}`, order.id, { action });
@@ -1788,13 +1795,19 @@ export class SportpaleisPilotService {
   async updateArticle(token, csrfToken, articleId, payload) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin"]);
+    const reorderOnly = Object.keys(payload).every((key) => ["expectedRevision", "displayOrder"].includes(key));
+    assertRole(user, reorderOnly ? ["admin", "operator"] : ["admin"]);
     const result = await this.store.mutate(async (state) => {
       const article = state.articles.find(({ id }) => id === articleId);
       if (!article) throw Object.assign(new Error("Artikel niet gevonden."), { statusCode: 404, code: "ARTICLE_NOT_FOUND" });
       const expectedRevision = Number(payload.expectedRevision);
       if (expectedRevision !== Number(article.revision ?? 1)) throw Object.assign(new Error("Het artikel is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: article.revision ?? 1 });
       const previous = structuredClone(article);
+      if (payload.displayOrder !== undefined) {
+        const displayOrder = Number(payload.displayOrder);
+        if (!Number.isInteger(displayOrder) || displayOrder < 0 || displayOrder > 9999) throw Object.assign(new Error("Artikelvolgorde moet een geheel getal tussen 0 en 9999 zijn."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        article.displayOrder = displayOrder;
+      }
       if (payload.active !== undefined) article.active = Boolean(payload.active);
       if (payload.name !== undefined) article.name = requiredText(payload.name, "Artikelnaam", 120);
       if (payload.articleNumber !== undefined) article.articleNumber = requiredText(payload.articleNumber, "Artikelnummer", 80);
@@ -1838,7 +1851,7 @@ export class SportpaleisPilotService {
       article.validationHistory ??= [];
       const changedAt = iso();
       article.validationHistory.unshift({ at: changedAt, userId: user.id, previous, next: structuredClone(article), source: article.validation?.source ?? "Adminwijziging in Workspace" });
-      audit(state, user.id, "Artikelinstelling gewijzigd", article.id, { revision: article.revision, active: article.active, profileId: article.profileId, association: article.association, validationStatus: article.validation?.status ?? "DATA_GAP" });
+      audit(state, user.id, reorderOnly ? "Artikelvolgorde gewijzigd" : "Artikelinstelling gewijzigd", article.id, { revision: article.revision, displayOrder: article.displayOrder ?? null, active: article.active, profileId: article.profileId, association: article.association, validationStatus: article.validation?.status ?? "DATA_GAP" });
       return { state, value: structuredClone(article) };
     });
     return result.value;
@@ -1853,7 +1866,7 @@ export class SportpaleisPilotService {
       if (!association) throw Object.assign(new Error("Vereniging niet gevonden."), { statusCode: 404, code: "ASSOCIATION_NOT_FOUND" });
       const expectedRevision = Number(payload.expectedRevision);
       if (expectedRevision !== Number(association.revision ?? 1)) throw Object.assign(new Error("De vereniging is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: association.revision ?? 1 });
-      const previous = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm ?? null, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote };
+      const previous = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm ?? null, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote, workspaceLogoSha256: association.workspaceLogo?.sha256 ?? null };
       if (payload.active !== undefined) association.active = Boolean(payload.active);
       if (payload.notes !== undefined) association.notes = requiredText(payload.notes, "Notitie", 1_000);
       if (payload.fontProfile !== undefined) association.fontProfile = requiredText(payload.fontProfile, "Letterprofiel", 120);
@@ -1876,6 +1889,22 @@ export class SportpaleisPilotService {
         if (!Array.isArray(payload.juniorGarmentSizes) || payload.juniorGarmentSizes.length > 20) throw Object.assign(new Error("Ongeldige lijst Junior-kledingmaten."), { statusCode: 400, code: "JUNIOR_GARMENT_SIZES_INVALID" });
         association.juniorGarmentSizes = [...new Set(payload.juniorGarmentSizes.map((size) => requiredText(size, "Junior-kledingmaat", 20)))];
       }
+      if (payload.workspaceLogo !== undefined) {
+        if (payload.workspaceLogo === null) association.workspaceLogo = null;
+        else {
+          if (!this.uploadsEnabled) throw Object.assign(new Error("Logo-uploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+          const mimeType = allowedValue(payload.workspaceLogo.mimeType, ["image/png", "image/jpeg", "image/webp"], "Logo-bestandstype");
+          const encoded = requiredText(payload.workspaceLogo.dataBase64, "Logo-inhoud", 3_000_000).replace(/^data:[^;]+;base64,/, "");
+          if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw Object.assign(new Error("Ongeldige logo-inhoud."), { statusCode: 400, code: "ASSOCIATION_LOGO_INVALID" });
+          const bytes = Buffer.from(encoded, "base64");
+          if (!bytes.length || bytes.length > 2 * 1024 * 1024) throw Object.assign(new Error("Een verenigingslogo moet 1 byte tot 2 MB zijn."), { statusCode: 400, code: "ASSOCIATION_LOGO_INVALID" });
+          const png = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+          const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+          const webp = bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+          if ((mimeType === "image/png" && !png) || (mimeType === "image/jpeg" && !jpeg) || (mimeType === "image/webp" && !webp)) throw Object.assign(new Error("De bestandsinhoud past niet bij het gekozen logoformaat."), { statusCode: 400, code: "ASSOCIATION_LOGO_SIGNATURE_INVALID" });
+          association.workspaceLogo = { filename: requiredText(payload.workspaceLogo.filename, "Logo-bestandsnaam", 180), mimeType, dataBase64: bytes.toString("base64"), sha256: sha256(bytes).toUpperCase(), updatedAt: iso(), updatedBy: user.id };
+        }
+      }
       if (association.juniorValidationStatus === "VALIDATED") {
         if (!String(association.juniorValidationNote ?? "").trim()) throw Object.assign(new Error("Een gevalideerde Juniorstatus vereist een expliciete bronnotitie."), { statusCode: 400, code: "VALIDATION_SOURCE_REQUIRED" });
         if (!Number.isFinite(association.juniorPhysicalHeightMm) || association.juniorPhysicalHeightMm <= 0 || association.juniorPhysicalHeightMm > 500) throw Object.assign(new Error("Leg voor Junior een fysieke hoogte tussen 1 en 500 mm vast."), { statusCode: 400, code: "JUNIOR_PHYSICAL_MM_REQUIRED" });
@@ -1885,7 +1914,7 @@ export class SportpaleisPilotService {
       association.revision = (association.revision ?? 1) + 1;
       association.updatedAt = iso();
       association.validationHistory ??= [];
-      const next = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote };
+      const next = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote, workspaceLogoSha256: association.workspaceLogo?.sha256 ?? null };
       association.validationHistory.unshift({ at: association.updatedAt, userId: user.id, field: "association", previous, next, source: association.juniorValidationNote || "Admin bevestiging in Workspace" });
       const linkedProfileIds = new Set(state.articles.filter((article) => article.association === association.name).map(({ profileId }) => profileId));
       for (const profile of state.productionProfiles.filter(({ id }) => linkedProfileIds.has(id))) {
@@ -2040,6 +2069,20 @@ function validEmail(value) {
   const email = requiredText(value, "E-mailadres", 180).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(email)) throw Object.assign(new Error("Vul een geldig e-mailadres in."), { statusCode: 400, code: "INVALID_EMAIL" });
   return email;
+}
+
+function validDeliveryAddress(value, mode) {
+  if (mode === "PICKUP") return null;
+  const postalCode = requiredText(value?.postalCode, "Postcode", 12).toUpperCase().replace(/\s+/gu, "");
+  if (!/^[1-9][0-9]{3}[A-Z]{2}$/u.test(postalCode)) throw Object.assign(new Error("Vul een geldige Nederlandse postcode in."), { statusCode: 400, code: "INVALID_POSTAL_CODE" });
+  return {
+    postalCode: `${postalCode.slice(0, 4)} ${postalCode.slice(4)}`,
+    houseNumber: requiredText(value?.houseNumber, "Huisnummer", 10),
+    houseNumberSuffix: optional(value?.houseNumberSuffix, 12),
+    street: requiredText(value?.street, "Straat", 120),
+    city: requiredText(value?.city, "Plaats", 120),
+    lookupStatus: allowedValue(value?.lookupStatus ?? "MANUAL_FALLBACK", ["VERIFIED", "MANUAL_FALLBACK"], "Adresstatus"),
+  };
 }
 
 function allowedValue(value, allowed, label) {

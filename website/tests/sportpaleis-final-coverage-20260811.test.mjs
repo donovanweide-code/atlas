@@ -50,11 +50,13 @@ test("FINAL COVERAGE — admin kan vereniging en verborgen DATA_GAP-artikel veil
 test("FINAL COVERAGE — correcties bewaren oud/nieuw en respecteren XPRT-autoriteit", async (context) => {
   const { service, admin, operator } = await fixture(context);
   const created = (await service.createOrder(admin.token, admin.csrfToken, orderPayload(), "coverage-correction-order")).value;
-  const corrected = await service.updateOrder(operator.token, operator.csrfToken, created.id, { customerPhone: "0687654321", deliveryMode: "DELIVERY", correctionReason: "Klant bevestigde bezorging" }, created.revision);
+  const corrected = await service.updateOrder(operator.token, operator.csrfToken, created.id, { customerPhone: "0687654321", deliveryMode: "DELIVERY", deliveryAddress: { postalCode: "1315 XC", houseNumber: "1", houseNumberSuffix: "", street: "Fictieve straat", city: "Almere", lookupStatus: "MANUAL_FALLBACK" }, correctionReason: "Klant bevestigde bezorging" }, created.revision);
   const details = corrected.eventHistory.at(-1).details;
   assert.equal(details.productionImpact, true);
   assert.ok(details.changes.some(({ field, from, to }) => field === "customerPhone" && from === "0612345678" && to === "0687654321"));
   assert.ok(details.changes.some(({ field, from, to }) => field === "deliveryMode" && from === "PICKUP" && to === "DELIVERY"));
+  assert.equal(corrected.fulfillment.feeEur, 3.95);
+  assert.equal(corrected.fulfillment.address.postalCode, "1315 XC");
 
   const xprt = (await service.createOrder(admin.token, admin.csrfToken, orderPayload({ source: "WEBSHOP_XPRT", externalReference: "XPRT-COVERAGE", provenance: "Lokale gestructureerde testimport" }), "coverage-xprt-order")).value;
   await assert.rejects(service.updateOrder(operator.token, operator.csrfToken, xprt.id, { deliveryMode: "DELIVERY" }, xprt.revision), (error) => error.code === "XPRT_TRANSACTIONAL_AUTHORITY");
