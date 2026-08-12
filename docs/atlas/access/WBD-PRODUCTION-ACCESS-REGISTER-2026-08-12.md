@@ -1,6 +1,6 @@
 # WBD production access register
 
-Status: active human recovery access; temporary deployment access revoked after the 2026-08-12 Sportpaleis deployment attempt.
+Status: active human recovery access; all temporary deployment access revoked after the 2026-08-12 Sportpaleis production deployment.
 
 Target: `wbd-platform-prod` (`149.210.228.199`)
 
@@ -11,6 +11,7 @@ Target: `wbd-platform-prod` (`149.210.228.199`)
 | `wbdadmin` | Permanent, human-controlled WBD/Donovan production recovery | `SHA256:ce+eZH8kJDlo1LWl9swrGcGgTPWSDHo+TKsvilU5YBA` | Ed25519 public key; account password locked | `sudo` through `/etc/sudoers.d/90-wbdadmin` | Active |
 | `wbdops` | Pre-existing production access identity; preserve until ownership and lifecycle are separately reconciled | `SHA256:HFSv3Cd7H6FyjvtCcW4HgjDD2F8OWyGF/QOLN4LrqWw` | Ed25519 public key | No `sudo` group observed on 2026-08-12 | Active, pre-existing |
 | `wbddeploy` | Temporary RC-005/Sportpaleis deployment identity | `SHA256:B3THiznBDc8kWVCo8Xzj59eZFEiHsEMFBuSkRQv0xFY` | Separate Ed25519 public key; account password locked | Temporary `sudo` through `/etc/sudoers.d/91-wbddeploy-temporary` | Revoked after rollback |
+| `wbddeploy` | Temporary `SPW-FINAL-PILOT-REMEDIATION-001-20260812` deployment identity | `SHA256:LFqT1B8qnWe3hQDACmwXJwWYdyoioNZTQDbhHW+GuGc` | Separate Ed25519 public key; account password locked | Time-boxed `sudo` through `/etc/sudoers.d/91-wbddeploy-temporary` | Revoked after production PASS; rejected with exit 255; local copies removed |
 
 The permanent private key belongs in Donovan-controlled encrypted storage outside Git, project documentation, Workspace data and Codex output. Temporary deployment private keys must never replace the permanent recovery key and must be destroyed after revocation.
 
@@ -52,10 +53,12 @@ The permanent private key belongs in Donovan-controlled encrypted storage outsid
 
 ## Break-glass and rollback evidence
 
-- Current encrypted database backup: `/var/backups/wbd-mariadb/wbd-mariadb-20260811T210202Z.sql.enc`
-- Database backup SHA-256: `5CE769D9B561D82E9A0A0406EF307B8F4A4AF4F8AD07F172222ED69AF27393F9`
-- Pre-change origin rollback archive: `/srv/wbd/shared/deploy-rollbacks/SPW-PILOT-PREFLIGHT-REMEDIATION-003-20260811-prechange.tar.gz`
-- Origin rollback SHA-256: `563BB1A9E58F0E9BEF624DB354912559B91EE932797ADA8CE130D2B08C7ED758`
+- Current encrypted database backup: `/var/backups/wbd-mariadb/wbd-mariadb-20260812T012701Z.sql.enc`
+- Database backup SHA-256: `B71918B7FA2CEAFE67CEC7F020FE22CCF41AE978D536BB02DA2241714A1AFAC7`
+- Off-provider encrypted copy: `C:\Users\donov\WBD-Recovery\Project-002\2026-08-12\wbd-mariadb-20260812T012701Z.sql.enc`; same SHA-256 verified.
+- Pre-change origin rollback archive: `/srv/wbd/shared/deploy-rollbacks/SPW-FINAL-PILOT-REMEDIATION-001-20260812-prechange.tar.gz`
+- Origin rollback SHA-256: `EB8866690632DAE6C161C721D1D88BAA9D2ED39876E09B873EB0EC09DE41DFFA`
+- Previous backup and rollback artefacts remain retained as historical evidence.
 - Rescue-time account and SSH backups carry suffix `.pre-wbd-access-20260812` on the VPS root filesystem.
 
 No plaintext password, private key, PIN or database credential belongs in this register.
