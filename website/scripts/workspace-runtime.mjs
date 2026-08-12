@@ -180,6 +180,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   const distRoot = path.resolve(websiteRoot, config.distDir);
   const workspaceHtmlPath = path.join(distRoot, "workspace.html");
   const workspaceHtml = await readFile(workspaceHtmlPath, "utf8");
+  const sportpaleisHtmlPath = path.join(distRoot, "sportpaleis.html");
+  const sportpaleisHtml = await readFile(sportpaleisHtmlPath, "utf8");
   const outsideBoundaryHtml = "<!doctype html><html lang=\"nl\"><head><meta charset=\"utf-8\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Route niet gevonden</title></head><body><main><h1>Route niet gevonden</h1></main></body></html>";
   let sportpaleisHandlerPromise;
   let activeSportpaleisStore;
@@ -266,11 +268,11 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     if ((workspaceRootAssets.has(pathname) || pathname.startsWith("/assets/"))
       && await serveAsset(response, method, pathname, distRoot)) return;
     if (isKnownWorkspaceRoute(pathname)) {
-      sendHtml(response, 200, workspaceHtml, method);
+      sendHtml(response, 200, pathname.startsWith("/workspace/sportpaleis/") ? sportpaleisHtml : workspaceHtml, method);
       return;
     }
     if (isWorkspaceBoundaryPath(pathname)) {
-      sendHtml(response, 404, workspaceHtml, method);
+      sendHtml(response, 404, pathname.startsWith("/workspace/sportpaleis/") ? sportpaleisHtml : workspaceHtml, method);
       return;
     }
     sendHtml(response, 404, outsideBoundaryHtml, method);

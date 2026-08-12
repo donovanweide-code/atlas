@@ -21,12 +21,13 @@ async function fixture(context) {
   return {
     service,
     admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }),
+    operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }),
     storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }),
   };
 }
 
 test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (context) => {
-  const { service, admin, storeUser } = await fixture(context);
+  const { service, admin, operator, storeUser } = await fixture(context);
 
   await context.test("activatiecontract is voor beheerder, winkelmedewerker en productiemedewerker gelijk en eenmalig", async () => {
     for (const role of ["admin", "store", "operator"]) {
@@ -35,6 +36,14 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
       assert.match(invited.activationPath, /^\/workspace\/sportpaleis\/activeren#token=/);
       assert.equal(invited.delivery, "LOCAL_HANDOFF_ONLY");
     }
+    await assert.rejects(
+      service.createInvitedUser(operator.token, operator.csrfToken, { name: "Niet toegestaan", email: "operator-denied@example.test", role: "operator" }),
+      (error) => error.code === "FORBIDDEN",
+    );
+    await assert.rejects(
+      service.createInvitedUser(storeUser.token, storeUser.csrfToken, { name: "Niet toegestaan", email: "store-denied@example.test", role: "store" }),
+      (error) => error.code === "FORBIDDEN",
+    );
   });
 
   await context.test("live-confirmed bedrukbare records van DCG en MHC Lelystad zijn vereniging-onafhankelijk orderbaar", async () => {

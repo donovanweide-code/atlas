@@ -21,6 +21,17 @@ function fail(message) {
 const files = await filesBelow(outputRoot);
 const htmlPath = path.join(outputRoot, "workspace.html");
 if (!files.includes(htmlPath)) fail("workspace.html ontbreekt");
+const sportpaleisHtmlPath = path.join(outputRoot, "sportpaleis.html");
+if (!files.includes(sportpaleisHtmlPath)) fail("sportpaleis.html ontbreekt");
+const sportpaleisHtml = await readFile(sportpaleisHtmlPath, "utf8");
+for (const required of [
+  "<title>Sportpaleis Workspace</title>",
+  'rel="icon" type="image/svg+xml" href="/sportpaleis-pwa-icon.svg"',
+  'rel="manifest" href="/sportpaleis.webmanifest"',
+]) {
+  if (!sportpaleisHtml.includes(required)) fail(`Sportpaleis-identiteitsmarker ontbreekt: ${required}`);
+}
+if (sportpaleisHtml.includes("WBD Workspace")) fail("Sportpaleis-entrypoint bevat WBD-identiteit");
 const robotsPath = path.join(outputRoot, "robots.txt");
 if (!files.includes(robotsPath)) fail("Workspace-specifieke robots.txt ontbreekt");
 if ((await readFile(robotsPath, "utf8")).trim() !== "User-agent: *\nDisallow: /") fail("Workspace robots.txt moet alle crawling blokkeren");

@@ -164,7 +164,7 @@ async function main() {
     commit,
     tag,
     baseFreeze: { tag: baseFreezeTag, commit: baseFreezeCommit },
-    sourceDate: "2026-08-11",
+    sourceDate: "2026-08-12",
     files: entries,
     persistentProductionArtifacts: productionArtifacts.references,
     productionPolicy: {

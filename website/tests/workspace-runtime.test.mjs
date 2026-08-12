@@ -54,6 +54,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   context.after(() => rm(temporary, { recursive: true, force: true }));
   await mkdir(path.join(temporary, "assets"));
   await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
+  await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><link rel=icon href=/sportpaleis-pwa-icon.svg><div id=app></div>");
   await writeFile(path.join(temporary, "assets", "workspace-test.js"), "export const ok=true;\n");
   await writeFile(path.join(temporary, "robots.txt"), "User-agent: *\nDisallow: /\n");
 
@@ -102,11 +103,14 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
 
   const sportpaleisOrder = await fetch(`${origin}/workspace/sportpaleis/orders/SNIJTEST-001`);
   assert.equal(sportpaleisOrder.status, 200);
-  assert.match(await sportpaleisOrder.text(), /Workspace shell marker/);
+  const sportpaleisOrderHtml = await sportpaleisOrder.text();
+  assert.match(sportpaleisOrderHtml, /<title>Sportpaleis Workspace<\/title>/);
+  assert.match(sportpaleisOrderHtml, /sportpaleis-pwa-icon\.svg/);
+  assert.doesNotMatch(sportpaleisOrderHtml, /WBD Workspace/);
 
   const sportpaleisActivation = await fetch(`${origin}/workspace/sportpaleis/activeren`);
   assert.equal(sportpaleisActivation.status, 200);
-  assert.match(await sportpaleisActivation.text(), /Workspace shell marker/);
+  assert.match(await sportpaleisActivation.text(), /<title>Sportpaleis Workspace<\/title>/);
 
   const unknown = await fetch(`${origin}/workspace/wbd/onbekend`);
   assert.equal(unknown.status, 404);

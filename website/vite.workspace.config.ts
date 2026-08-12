@@ -26,6 +26,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         workspace: "workspace.html",
+        sportpaleis: "sportpaleis.html",
       },
       output: {
         entryFileNames: "assets/workspace-[hash].js",
