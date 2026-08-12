@@ -167,4 +167,8 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   assert.equal(legacy.status, 308); assert.equal(legacy.location, "/orders/SP-2026-0005?tab=detail");
   const clean = await request("/productie");
   assert.equal(clean.status, 200); assert.match(clean.body, /Sportpaleis Workspace/);
+  const users = await request("/beheer/gebruikers");
+  assert.equal(users.status, 200); assert.match(users.body, /Sportpaleis Workspace/);
+  const unknown = await request("/publieke-onbekende-route");
+  assert.equal(unknown.status, 404);
 });

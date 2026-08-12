@@ -203,10 +203,30 @@ function createGoldenProductionJobs(recordedAt = iso()) {
     orientation: { preMirrored: true, manualHorizontalFlipInWinPlot: false },
     artifact: { filename: "Sportpaleis-Golden-Physical-Batch-001-Auto-Mirrored-AB-001.ai", format: "AI", version: "SPW-GOLDEN-BATCH-001-AUTO-MIRROR-AB-001-20260811", sha256: "2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4", path: "outputs/sportpaleis-golden-batch-001-auto-mirror-ab-20260811/Sportpaleis-Golden-Physical-Batch-001-Auto-Mirrored-AB-001.ai" },
   };
+  const cutjobSvgPhysicalSnapshot = {
+    ...shared,
+    acceptedSourceDate: "2026-08-12",
+    orderIds: ["SP-2026-0105"],
+    elements: [{ type: "BACK_NUMBER", value: "2", quantity: 1, widthMm: 99.05, heightMm: 200, sourceId: "pioneers-rugnummer-2-200mm", sourceVersion: "Sportpaleis-Snijtest-001" }],
+    sourceContours: [{ id: "pioneers-rugnummer-2-200mm", version: "Sportpaleis-Snijtest-001", sourceSetId: "pioneers-senior-rugnumber-200mm", proofStatus: "PHYSICALLY_VALIDATED", immutable: true }],
+    layout: { strategy: "DETERMINISTIC_MULTI_HEURISTIC_CONTOUR_SAFE_NO_SCALE", objectCount: 1, usedWidthMm: 440, usedLengthMm: 109.05, edgeMarginMm: 5, minimumGapMm: 6.4 },
+    orientation: { preMirrored: true, manualHorizontalFlipInWinPlot: false },
+    outputWriter: { id: "cutjob-svg", version: "1", format: "SVG", proofStatus: "GEOMETRY_VALIDATED", physicalRouteStatus: "HUMAN_VALIDATION_REQUIRED" },
+    artifact: { filename: "PLOT-2026-0004-production.svg", format: "SVG", version: "cutjob-svg@1", sha256: "26C326E26A34049CB7C3D270D335F1BEE03776E9865E94F9C81462817AEF9FD6", path: "outputs/sportpaleis-plotjobs/PLOT-2026-0004/PLOT-2026-0004-production.svg", productionDataHash: "28A2633F5E0953825A67D40258196F45006ACDD33329E062BDAFB61E72942C14" },
+    physicalRouteEvidence: {
+      validator: "Donovan",
+      validationDate: "2026-08-12",
+      route: ["PLOT-2026-0004-production.svg", "Adobe Illustrator", "Summa Send To WinPlot", "Summa", "fysieke snede"],
+      machineContext: { productionComputer: "Sportpaleis productie-pc", cutterBrand: "Summa", exactModel: "DATA_GAP" },
+      result: "PASS",
+      scope: "Uitsluitend deze immutable SVG, cutjob-svg@1, Pioneers rugnummer 2 bronversie en de werkelijk gebruikte Illustrator/WinPlot/Summa-route; geen bewijs voor andere cijfers, fonts, verenigingen, contouren of machines.",
+    },
+  };
   return [
     immutableProductionJob({ id: "production-job-golden-case-001", jobNumber: "PLOT-2026-0001", createdAt: recordedAt, initiatedBy: actor, snapshot: physicalCaseSnapshot, status: "COMPLETED", proofStatus: "PHYSICALLY_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "Golden Physical Case 001; handmatige horizontale spiegeling in WinPlot was onderdeel van de geslaagde route." } }),
     immutableProductionJob({ id: "production-job-golden-batch-001", jobNumber: "PLOT-2026-0002", createdAt: recordedAt, initiatedBy: actor, snapshot: physicalBatchSnapshot, status: "COMPLETED", proofStatus: "PHYSICALLY_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "Golden Physical Batch 001; volledige batch fysiek geslaagd via Illustrator, Summa Send To WinPlot en handmatige horizontale spiegeling." } }),
     immutableProductionJob({ id: "production-job-golden-batch-001-auto-mirror-ab", jobNumber: "PLOT-2026-0003", createdAt: recordedAt, initiatedBy: actor, snapshot: autoMirrorBatchSnapshot, status: "COMPLETED", proofStatus: "WINPLOT_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-11", note: "A/B-spiegel Human Acceptance door Donovan: vooraf gespiegeld AI-bestand kwam via Illustrator en Summa Send To WinPlot direct correct in WinPlot binnen; geen handmatige spiegeling of andere correctie nodig." } }),
+    immutableProductionJob({ id: "production-job-cutjob-svg-physical-001", jobNumber: "PLOT-2026-0004", createdAt: recordedAt, initiatedBy: actor, snapshot: cutjobSvgPhysicalSnapshot, status: "COMPLETED", proofStatus: "PHYSICALLY_VALIDATED", humanAcceptance: { status: "PASS", acceptedSourceDate: "2026-08-12", note: "Donovan heeft exact artifact PLOT-2026-0004-production.svg fysiek gevalideerd via Adobe Illustrator, Summa Send To WinPlot en de echte Sportpaleis-Summa. Bewijs blijft begrensd tot de gekoppelde Pioneers-2 bron en deze route." } }),
   ];
 }
 
@@ -295,7 +315,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     organizationId: "sport-2000-sportpaleis-bv",
     revision: 1,
     nextOrderSequence: 1,
-    nextProductionJobSequence: 4,
+    nextProductionJobSequence: 5,
     users: [],
     employees: [],
     sessions: [],
@@ -438,7 +458,7 @@ export function migrateSportpaleisPilotState(input) {
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
   const highestJobSequence = state.productionJobs.reduce((highest, { jobNumber }) => Math.max(highest, Number(String(jobNumber ?? "").match(/(\d+)$/u)?.[1] ?? 0)), 0);
-  state.nextProductionJobSequence = Math.max(Number(state.nextProductionJobSequence ?? 1), highestJobSequence + 1, 4);
+  state.nextProductionJobSequence = Math.max(Number(state.nextProductionJobSequence ?? 1), highestJobSequence + 1, 5);
   if (previousSchemaVersion < 3 || previousConfigurationVersion !== SPORTPALEIS_CONFIGURATION_VERSION) {
     state.productionProfiles ??= [];
     for (const profile of PRODUCTION_PROFILES) {

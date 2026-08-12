@@ -20,16 +20,18 @@ async function fixture(context) {
 test("Production history 011 — immutable Golden evidence and auditable replot", async (context) => {
   const { store, service, admin, operator, storeUser } = await fixture(context);
 
-  await context.test("alleen de twee expliciete Golden-combinaties zijn fysiek gevalideerd en de A/B-route is WinPlot-gevalideerd", async () => {
+  await context.test("alleen expliciet vastgelegde Golden- en SVG-combinaties dragen hun eigen begrensde fysieke bewijs", async () => {
     const bootstrap = await service.bootstrap(admin.token);
     assert.equal(bootstrap.schemaVersion, 12);
-    assert.equal(bootstrap.productionJobs.length, 3);
-    assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "PHYSICALLY_VALIDATED").length, 2);
+    assert.equal(bootstrap.productionJobs.length, 4);
+    assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "PHYSICALLY_VALIDATED").length, 3);
     assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "WINPLOT_VALIDATED").length, 1);
     const batch = bootstrap.productionJobs.find(({ id }) => id === "production-job-golden-batch-001");
     const autoMirror = bootstrap.productionJobs.find(({ id }) => id === "production-job-golden-batch-001-auto-mirror-ab");
+    const cutjobSvg = bootstrap.productionJobs.find(({ id }) => id === "production-job-cutjob-svg-physical-001");
     assert.ok(batch);
     assert.ok(autoMirror);
+    assert.ok(cutjobSvg);
     assert.equal(batch.snapshot.artifact.sha256, "B226A6B7637BEE219FAB5E646D2DE8E9BA7421DB6822FC82629B8FA5175F507B");
     assert.equal(batch.snapshot.layout.objectCount, 10);
     assert.equal(batch.snapshot.orientation.manualHorizontalFlipInWinPlot, true);
@@ -38,6 +40,16 @@ test("Production history 011 — immutable Golden evidence and auditable replot"
     assert.equal(autoMirror.snapshot.orientation.preMirrored, true);
     assert.equal(autoMirror.snapshot.orientation.manualHorizontalFlipInWinPlot, false);
     assert.equal(autoMirror.snapshot.artifact.sha256, "2FDADD9022E379BAAC3902103577F45D8F1C409FCF465DE2C342E0E5DB3ADDD4");
+    assert.equal(cutjobSvg.jobNumber, "PLOT-2026-0004");
+    assert.equal(cutjobSvg.snapshot.artifact.sha256, "26C326E26A34049CB7C3D270D335F1BEE03776E9865E94F9C81462817AEF9FD6");
+    assert.deepEqual(cutjobSvg.snapshot.outputWriter, { id: "cutjob-svg", version: "1", format: "SVG", proofStatus: "GEOMETRY_VALIDATED", physicalRouteStatus: "HUMAN_VALIDATION_REQUIRED" });
+    assert.equal(cutjobSvg.snapshot.sourceContours[0].id, "pioneers-rugnummer-2-200mm");
+    assert.equal(cutjobSvg.snapshot.sourceContours[0].version, "Sportpaleis-Snijtest-001");
+    assert.equal(cutjobSvg.snapshot.physicalRouteEvidence.result, "PASS");
+    assert.equal(cutjobSvg.snapshot.physicalRouteEvidence.machineContext.exactModel, "DATA_GAP");
+    const cutjobDownload = await service.productionJobArtifact(operator.token, cutjobSvg.id);
+    assert.equal(cutjobDownload.sha256, cutjobSvg.snapshot.artifact.sha256);
+    assert.equal(cutjobDownload.filename, "PLOT-2026-0004-production.svg");
     const firstDownload = await service.productionJobArtifact(operator.token, autoMirror.id);
     const secondDownload = await service.productionJobArtifact(operator.token, autoMirror.id);
     assert.equal(firstDownload.filename, autoMirror.snapshot.artifact.filename);
