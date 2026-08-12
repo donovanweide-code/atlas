@@ -89,7 +89,7 @@ test("Production history UX is vindbaar, mobile-first en hardware-safe", async (
   assert.match(source, /Plot-\/printhistorie/);
   assert.match(source, /data-production-job-search/);
   assert.match(source, /data-replot-form/);
-  assert.match(source, /AI-productieopmaak downloaden/);
+  assert.match(source, /productiebestand downloaden/);
   assert.match(source, /production-jobs\/\$\{encodeURIComponent\(job\.id\)\}\/artifact/);
   assert.match(source, /immutable SHA-256/);
   assert.match(source, /Workspace verstuurt niets automatisch naar Illustrator, WinPlot, Summa of hardware/);

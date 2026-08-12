@@ -87,30 +87,17 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     assert.equal(order.productionLines[0].validation.status, "VALID");
   });
 
-  await context.test("Human GO maakt één PlotJob met minimale-rollengte-layout en wijzigt Golden evidence niet", async () => {
+  await context.test("Human GO weigert een fontpreview zonder werkelijk vectorartefact en wijzigt Golden evidence niet", async () => {
     const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, freeOrder.id, freeOrder.revision, "freeze-to-control")).value;
     assert.equal(controlled.stage, "CONTROL");
     await assert.rejects(service.createProductionJob(storeUser.token, storeUser.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-store-job"), (error) => error.code === "FORBIDDEN");
-    const created = await service.createProductionJob(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-human-go-001");
-    const duplicate = await service.createProductionJob(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-human-go-001");
-    assert.equal(created.duplicate, false);
-    assert.equal(duplicate.duplicate, true);
-    const job = created.value;
-    assert.equal(job.snapshot.artifact.format, "MANIFEST");
-    assert.equal(job.snapshot.scale, 1);
-    assert.equal(job.snapshot.layout.strategy, "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW");
-    assert.ok(job.snapshot.layout.usedWidthMm <= 440);
-    assert.equal(job.snapshot.orientation.preMirrored, true);
-    assert.equal(job.snapshot.orientation.manualHorizontalFlipInWinPlot, false);
-    assert.equal(job.snapshot.hardwareSendPerformedByWorkspace, false);
-    assert.equal(job.snapshot.fontSources[0].sha256, font.sha256);
-    assert.deepEqual(job.snapshot.productionLines[0].source, freeOrder.productionLines[0].source);
-    assert.equal((await store.read()).orders.find(({ id }) => id === freeOrder.id).stage, "PRINT");
+    await assert.rejects(service.createProductionJob(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-human-go-001"), (error) => error.code === "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE");
+    assert.equal((await store.read()).orders.find(({ id }) => id === freeOrder.id).stage, "CONTROL");
     assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), goldenBefore);
   });
 
-  await context.test("replot blijft een nieuwe uitvoering vanuit exact dezelfde immutable snapshot", async () => {
-    const state = await store.read(); const original = state.productionJobs.find(({ snapshot }) => snapshot.orderIds.includes(freeOrder.id));
+  await context.test("replot blijft een nieuwe uitvoering vanuit een bestaande Golden immutable snapshot", async () => {
+    const state = await store.read(); const original = state.productionJobs.find(({ id }) => id === "production-job-golden-batch-001-auto-mirror-ab");
     const replot = (await service.replotProductionJob(admin.token, admin.csrfToken, original.id, { reason: "Folie beschadigd" }, "freeze-replot-001")).value;
     assert.equal(replot.originJobId, original.id);
     assert.equal(replot.snapshotHash, original.snapshotHash);

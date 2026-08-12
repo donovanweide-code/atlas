@@ -63,7 +63,7 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
       items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "readiness-007-attention")).value;
     assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
-    assert.match(created.items[0].productionReadiness.reason, /Productie past tijdens de pilot zelf toe/);
+    assert.match(created.items[0].productionReadiness.reason, /contour\/fontbestand/u);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "readiness-007-attention-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
     const advanced = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-attention-advance")).value;

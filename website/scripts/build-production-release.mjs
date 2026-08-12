@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createSportpaleisProductionBootstrap } from "./sportpaleis-pilot-foundation.mjs";
+import { collectRuntimeDependencyGraph } from "./release-runtime-graph.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -121,21 +122,23 @@ async function main() {
   if (git("rev-parse", `${tag}^{commit}`) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
   const baseFreezeCommit = git("rev-parse", `${baseFreezeTag}^{commit}`);
 
+  const runtimeDependencies = await collectRuntimeDependencyGraph({
+    websiteRoot,
+    entrypoints: [
+      path.join(websiteRoot, "scripts", "workspace-runtime.mjs"),
+      path.join(websiteRoot, "scripts", "production-migrate.mjs"),
+    ],
+    allowedRoots: [
+      path.join(websiteRoot, "scripts"),
+      path.join(websiteRoot, "config"),
+      path.join(websiteRoot, "src", "sportpaleis"),
+    ],
+  });
+
   const explicit = [
     [path.join(websiteRoot, "package.production.json"), "app/package.json"],
     [path.join(websiteRoot, "package-lock.json"), "app/package-lock.json"],
-    [path.join(websiteRoot, "scripts", "workspace-runtime.mjs"), "app/scripts/workspace-runtime.mjs"],
-    [path.join(websiteRoot, "scripts", "workspace-runtime-config.mjs"), "app/scripts/workspace-runtime-config.mjs"],
-    [path.join(websiteRoot, "scripts", "mail-foundation.mjs"), "app/scripts/mail-foundation.mjs"],
-    [path.join(websiteRoot, "scripts", "organization-brand-foundation.mjs"), "app/scripts/organization-brand-foundation.mjs"],
-    [path.join(websiteRoot, "scripts", "sportpaleis-pilot-foundation.mjs"), "app/scripts/sportpaleis-pilot-foundation.mjs"],
-    [path.join(websiteRoot, "scripts", "sportpaleis-mariadb-store.mjs"), "app/scripts/sportpaleis-mariadb-store.mjs"],
-    [path.join(websiteRoot, "scripts", "sportpaleis-production-mail.mjs"), "app/scripts/sportpaleis-production-mail.mjs"],
     [path.join(websiteRoot, "public", "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png"), "app/public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png"],
-    [path.join(websiteRoot, "scripts", "atlas-mariadb-boundary.mjs"), "app/scripts/atlas-mariadb-boundary.mjs"],
-    [path.join(websiteRoot, "scripts", "production-migrate.mjs"), "app/scripts/production-migrate.mjs"],
-    [path.join(websiteRoot, "config", "sportpaleis-bedrukking-configuration.mjs"), "app/config/sportpaleis-bedrukking-configuration.mjs"],
-    [path.join(websiteRoot, "config", "sportpaleis-live-pilot-catalog.mjs"), "app/config/sportpaleis-live-pilot-catalog.mjs"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
     [path.join(repositoryRoot, "ops", "production", "nginx-workspace-sportpaleis-predeployment.conf"), "deployment/nginx-workspace-sportpaleis-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
@@ -144,6 +147,7 @@ async function main() {
   const productionArtifacts = await collectReferencedProductionArtifacts();
   const files = [
     ...explicit,
+    ...runtimeDependencies,
     ...await collect(path.join(websiteRoot, "dist-workspace"), "app/dist-workspace"),
     ...await collect(path.join(websiteRoot, "sportpaleis-server", "production-migrations"), "app/sportpaleis-server/production-migrations"),
     ...productionArtifacts.files,
@@ -167,6 +171,10 @@ async function main() {
     sourceDate: "2026-08-12",
     files: entries,
     persistentProductionArtifacts: productionArtifacts.references,
+    runtimeDependencyGraph: {
+      entrypoints: ["app/scripts/workspace-runtime.mjs", "app/scripts/production-migrate.mjs"],
+      files: runtimeDependencies.map(({ archive }) => archive),
+    },
     productionPolicy: {
       persistence: "mariadb-only",
       fileFallback: false,
@@ -194,6 +202,7 @@ async function main() {
   const externalManifest = {
     releaseId, commit, tag, artifact: artifactName, artifactBytes: artifact.length, artifactSha256: sha256(artifact),
     baseFreezeTag, baseFreezeCommit,
+    runtimeDependencyCount: runtimeDependencies.length,
     persistentProductionArtifactCount: productionArtifacts.references.length,
     reproducibleCommand: `node website/scripts/build-production-release.mjs ${releaseId} ${tag} ${baseFreezeTag}`,
     embeddedManifestSha256: sha256(embeddedManifest),

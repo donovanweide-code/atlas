@@ -27,6 +27,7 @@ export function createSportpaleisPilotDevelopmentMiddleware(options = {}) {
           secureCookies: false,
           allowedOrigin: options.allowedOrigin ?? process.env.SPORTPALEIS_ALLOWED_ORIGIN ?? "http://127.0.0.1:5173",
           demoMode: options.demoMode ?? process.env.SPORTPALEIS_REVIEW_DEMO === "true",
+          uploadsEnabled: options.uploadsEnabled ?? process.env.SPORTPALEIS_UPLOADS_ENABLED === "true",
         });
         await service.initialize();
         return createSportpaleisPilotRequestHandler(service);

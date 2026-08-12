@@ -28,16 +28,16 @@ test("Orders scheiden status, aandacht en gereed werk", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /activeOrderFilter/);
   assert.match(source, /data-action="order-filter"/);
-  assert.match(source, /sp-attention-badge/);
-  assert.match(source, /ORDER: "Open", CONTROL: "Klaar voor productie", PRINT: "In productie", DONE: "Gereed"/);
+  assert.match(source, /function productionPill/);
+  assert.match(source, /ATTENTION: "Aandacht nodig", READY: "Klaar om te produceren", IN_PRODUCTION: "In productie", DONE: "Gereed"/);
   assert.doesNotMatch(source, /if \(order\.attention\) return \{ label: "Aandacht nodig"/);
 });
 
 test("Productie scheidt geblokkeerd en maakbaar werk en verbergt ontwikkelaarstaal", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /stage === "CONTROL" \|\| stage === "PRINT"/);
+  assert.match(source, /productionStatus === "READY" \|\| productionStatus === "IN_PRODUCTION"/);
   assert.match(source, /Nog niet maakbaar/);
-  assert.match(source, /Klaar voor productie/);
+  assert.match(source, /Klaar om te produceren/);
   assert.match(source, /Bekijk wat nodig is/);
   for (const phrase of ["Keyboard-wedge datamodel voorbereid", "BARCODE FOUNDATION", "hardwareSendEnabled=false", "FEATURE FLAG UIT"]) assert.doesNotMatch(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

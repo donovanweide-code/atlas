@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   createSportpaleisProductionBootstrap,
   createSportpaleisPasswordRecord,
@@ -22,6 +23,7 @@ import {
   WorkspaceRuntimeConfigError,
 } from "../scripts/workspace-runtime-config.mjs";
 import { createWorkspaceRuntimeServer } from "../scripts/workspace-runtime.mjs";
+import { collectRuntimeDependencyGraph } from "../scripts/release-runtime-graph.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/001-runtime-state.sql", import.meta.url);
 const passwords = { kevin: "Test-Kevin-Production!", patrick: "Test-Patrick-Production!", collega: "Test-Collega-Production!", "donovan-support": "Test-Support-Production!" };
@@ -153,16 +155,44 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
   assert.doesNotMatch(source, /JsonMailStore|MemoryMailStore|createLocalMailFoundation/);
   const releaseBuilder = await readFile(new URL("../scripts/build-production-release.mjs", import.meta.url), "utf8");
   for (const required of [
-    "mail-foundation.mjs",
-    "organization-brand-foundation.mjs",
-    "sportpaleis-production-mail.mjs",
     "sportpaleis-logo-mail-safe.png",
     "collectReferencedProductionArtifacts",
     "persistentProductionArtifacts",
     "nginx-workspace-sportpaleis-predeployment.conf",
+    "collectRuntimeDependencyGraph",
+    "runtimeDependencyGraph",
   ]) assert.match(releaseBuilder, new RegExp(required.replaceAll(".", "\\.")));
   assert.doesNotMatch(releaseBuilder, /collect\(path\.join\(repositoryRoot, "outputs?"\)/);
   assert.doesNotMatch(releaseBuilder, /wbd-logo-mail-safe/);
+});
+
+test("releasebuilder volgt de gecontroleerde production runtime-importgraph zonder tests of reviewdata", async () => {
+  const websiteRoot = fileURLToPath(new URL("..", import.meta.url));
+  const graph = await collectRuntimeDependencyGraph({
+    websiteRoot,
+    entrypoints: [
+      fileURLToPath(new URL("../scripts/workspace-runtime.mjs", import.meta.url)),
+      fileURLToPath(new URL("../scripts/production-migrate.mjs", import.meta.url)),
+    ],
+    allowedRoots: [
+      fileURLToPath(new URL("../scripts", import.meta.url)),
+      fileURLToPath(new URL("../config", import.meta.url)),
+      fileURLToPath(new URL("../src/sportpaleis", import.meta.url)),
+    ],
+  });
+  const packaged = new Set(graph.map(({ archive }) => archive));
+  for (const required of [
+    "app/scripts/workspace-runtime.mjs",
+    "app/scripts/mail-foundation.mjs",
+    "app/scripts/organization-brand-foundation.mjs",
+    "app/scripts/sportpaleis-production-mail.mjs",
+    "app/scripts/sportpaleis-pilot-foundation.mjs",
+    "app/src/sportpaleis/production-sources.ts",
+    "app/src/sportpaleis/direct-print/index.ts",
+    "app/src/sportpaleis/direct-print/cut-job.ts",
+    "app/src/sportpaleis/direct-print/reference-2-34-77.ts",
+  ]) assert.ok(packaged.has(required), `${required} ontbreekt in runtimegraph`);
+  assert.ok([...packaged].every((archive) => !archive.includes("/tests/") && !archive.includes(".codex-tmp")));
 });
 
 test("productiebootstrap bevat alleen goedgekeurde referentieconfiguratie en nul accounts/orders", () => {

@@ -16,8 +16,10 @@ import type {
   SportpaleisProductionElementRequirement,
   SportpaleisProductionInventoryView,
   ProductionJob,
+  ProductionProposal,
   SportpaleisProductionFont,
   SportpaleisProductionLine,
+  SportpaleisEmployee,
 } from "./workspace-data.ts";
 
 const API = "/api/sportpaleis/v1";
@@ -211,7 +213,7 @@ export class SportpaleisPilotApi {
     provenance?: string;
     deliveryMode?: "PICKUP" | "DELIVERY";
     deliveryAddress?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" };
-    productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; quantity: number; previewLabel?: string; provenance?: string }[];
+    productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; quantity: number; previewLabel?: string; provenance?: string; placementRole?: string; placementRule?: Pick<NonNullable<SportpaleisProductionLine["placementRule"]>, "compositionId" | "compositeText" | "segmentIndex" | "segmentCount" | "alignment"> }[];
   }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders`, {
       method: "POST",
@@ -317,6 +319,14 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async upsertEmployee(input: { id?: string; expectedRevision?: number; name: string; salesNumber: string; active: boolean; userId?: string | null }): Promise<SportpaleisEmployee> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/employees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }));
+  }
+
   async setQuickPin(userId: string, input: { pin?: string; disable?: boolean }): Promise<SportpaleisUser> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/quick-pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
@@ -341,10 +351,18 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createProductionJob(orders: readonly WorkspaceOrder[]): Promise<{ duplicate: boolean; value: ProductionJob }> {
+  async createProductionJob(orders: readonly WorkspaceOrder[], proposalId?: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
     return responseBody(await this.#mutatingFetch(`${API}/production-jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("plotjob") },
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), proposalId }),
+    }));
+  }
+
+  async createProductionProposal(orders: readonly WorkspaceOrder[]): Promise<{ duplicate: boolean; value: ProductionProposal }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-proposals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-proposal") },
       body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })) }),
     }));
   }
@@ -363,6 +381,7 @@ export class SportpaleisPilotApi {
     personalizationPolicy?: CatalogArticle["personalizationPolicy"];
     validation?: CatalogArticle["validation"];
     displayOrder?: number;
+    priceConfiguration?: CatalogArticle["priceConfiguration"];
   }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/articles/${encodeURIComponent(articleId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
@@ -389,12 +408,13 @@ export class SportpaleisPilotApi {
     rotationDeg?: number | null;
     mirror?: boolean | null;
     instruction?: string;
+    initialsInfixRule?: { active: boolean; heightMm: number | null; horizontalSpacingMm?: number | null; baselineOffsetMm?: number | null; /** Legacy call-site compatibility only. */ verticalOffsetMm?: number | null };
     validation?: ProductionProfile["validation"];
   }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/production-profiles/${encodeURIComponent(profileId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateSettings(input: { processingDays?: number; receiptMailText?: string; readyMailText?: string }): Promise<void> {
+  async updateSettings(input: { processingDays?: number; deliveryFeeEur?: number; receiptMailText?: string; readyMailText?: string }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

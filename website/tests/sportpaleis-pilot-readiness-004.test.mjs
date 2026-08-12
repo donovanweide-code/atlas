@@ -28,8 +28,9 @@ async function fixture(context) {
 test("Sportpaleis final pilot readiness 004", async (context) => {
   const { service, store, admin, operator, storeUser } = await fixture(context);
 
-  await context.test("normale order vereist minimaal één bedrukking en shortnummer erft zonder visuele of semantische uitval", async () => {
-    await assert.rejects(() => service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Geen bedrukking", customerEmail: "geen@example.nl", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-134826", size: "M", quantity: 1, deviation: false, overrides: {} }] }, "readiness-no-printing-004"), (error) => error.code === "PERSONALIZATION_REQUIRED");
+  await context.test("normale order mag bewust zonder bedrukking en shortnummer erft zonder visuele of semantische uitval", async () => {
+    const withoutPrinting = await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Geen bedrukking", customerEmail: "geen@example.nl", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-134826", size: "M", quantity: 1, deviation: false, overrides: {} }] }, "readiness-no-printing-004");
+    assert.match(withoutPrinting.value.items[0].personalization, /Geen bedrukking/u);
     const created = await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Short zes", customerEmail: "short@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, shortsNumber: "6" }, items: [{ articleId: "sp-live-134826", size: "M", quantity: 1, deviation: false, overrides: {} }] }, "readiness-short-six-004");
     assert.match(created.value.items[0].personalization, /Short 6/);
     assert.equal(created.value.items[0].personalizationValues.shortsNumber, "6");
@@ -88,10 +89,10 @@ test("Sportpaleis final pilot readiness 004", async (context) => {
     assert.match(source, /select-order-count/);
     assert.match(source, /productie\/voorstel/);
     assert.match(source, /Technische profielen bekijken/);
-    assert.match(source, /de exacte bestandshandoff is niet als brongevalideerde Workspace-stap vastgelegd/);
+    assert.match(source, /werkelijk productieartefact|werkelijke productiepreview/iu);
     assert.match(source, /Nog niet maakbaar/);
     assert.match(source, /Bekijk wat nodig is/);
-    assert.match(source, /Kies minimaal één bedrukking/);
+    assert.match(source, /confirm-without-print/);
     assert.match(css, /sp-team-row--prepared/);
     assert.match(css, /sp-association-admin-list > div \{ max-height:none; overflow:visible/);
   });

@@ -123,7 +123,8 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     assert.deepEqual(profileAfter.backNumberSizeClasses.JUNIOR, { physicalHeightMm: 180, sourceValueMm: 200, status: "VALIDATED", source: "Test-only fysieke meting 180 mm; geen productiebron" });
     const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Junior bevestigd", customerEmail: "junior-ok@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "164", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-junior-ok")).value;
     assert.equal(created.items[0].backNumberProduction.physicalHeightMm, 180);
-    assert.equal(created.items[0].productionReadiness.status, "CONFIGURED");
+    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
+    assert.match(created.items[0].productionReadiness.reason, /contour\/fontbestand/u);
     assert.equal(blockedJuniorOrder.items[0].backNumberProduction.status, "DATA_GAP", "bestaande order bewaart de eerdere veilige snapshot");
   });
 

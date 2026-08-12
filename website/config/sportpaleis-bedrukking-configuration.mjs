@@ -58,8 +58,8 @@ const association = (row, name, sourceName, fontProfile, foilColors, dimensions 
   notes,
   articleCatalogStatus: name === "A.S.C. Waterwijk"
     ? "PILOT_CATALOG_PRESERVED_SOURCE_VALIDATION_PARTIAL"
-    : name === "FC Almere"
-      ? "PARTIAL_SINGLE_ARTICLE_SOURCE_VALIDATION_REQUIRED"
+    : ["Almerer Pioneers", "DCG", "FC Almere", "MHC Lelystad"].includes(name)
+      ? "PARTIAL_VALIDATED_ARTICLE_SOURCE"
       : "NO_VALIDATED_ARTICLES",
 });
 
@@ -88,9 +88,8 @@ export const SPORTPALEIS_ASSOCIATIONS = Object.freeze([
 
 export const SPORTPALEIS_DATA_GAPS = Object.freeze([
   "Junior-rugnummerhoogte buiten kledingmaten 116–164 is niet bevestigd; alleen 116, 128, 140, 152 en 164 gebruiken de gevalideerde 200 mm-regel.",
-  "Artikelprijzen en bedrukkingsprijzen ontbreken in de beschikbare gevalideerde bronnen.",
-  "Voor 18 van de 20 bekende verenigingen ontbreekt een gevalideerde artikelcatalogus.",
-  "Het FC Almere-artikelnummer en de productafbeelding zijn nog niet gevalideerd.",
+  "Artikelbasisprijzen ontbreken in de beschikbare gevalideerde bronnen; alleen bronbevestigde bedrukkingsprijzen worden ingevuld.",
+  "Voor 15 van de 20 bekende verenigingen ontbreekt nog een lokaal gevalideerde artikelcatalogus; de bekende productie-inrichting blijft wel beschikbaar.",
   "Garment-positionering en referentieafstanden zijn niet voor iedere vereniging afzonderlijk bronbevestigd.",
   "Folie-inkoopprijzen, leveranciers/types en oorspronkelijke rollengtes ontbreken.",
 ]);

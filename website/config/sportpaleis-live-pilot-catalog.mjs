@@ -38,6 +38,11 @@ function liveArticle({ association = WATERWIJK_ASSOCIATION, sku, supplierArticle
       priceEur,
       status: field ? "VALIDATED" : "DATA_GAP",
     })),
+    priceConfiguration: {
+      articleUnitPriceEur: null,
+      personalizationUnitPricesEur: Object.fromEntries(canonicalOptions.map(({ field, priceEur }) => [field, priceEur])),
+      sourceLabel: `Bevestigde zichtbare bedrukopties Sportpaleis.nl · gecontroleerd ${SPORTPALEIS_LIVE_CATALOG_CHECKED_AT}; artikelbasisprijs niet als bronfeit vastgelegd`,
+    },
     catalogProvenance: provenance,
     productionDataGaps: [
       ...(unresolvedOptions.length ? [`Betekenis van live optie ${unresolvedOptions.map(({ label }) => `“${label}”`).join(" / ")} is niet bevestigd als rug-, borst- of shortnummer.`] : []),
@@ -135,6 +140,11 @@ export const SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES = ADDITIONAL_LIVE_ARTICLE_SOUR
   variantLabels: [],
   availableSizes: [],
   commercialPrintOptions: [],
+  priceConfiguration: {
+    articleUnitPriceEur: null,
+    personalizationUnitPricesEur: {},
+    sourceLabel: `DATA_GAP: geen bevestigde artikel- of bedrukkingsprijs in de vastgelegde bron · gecontroleerd ${SPORTPALEIS_LIVE_CATALOG_CHECKED_AT}`,
+  },
   catalogProvenance: {
     authority: "SPORTPALEIS_LIVE",
     url: `${BASE_URL}${path}`,

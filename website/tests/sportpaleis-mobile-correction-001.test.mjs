@@ -13,7 +13,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-mobile-correction-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-MOBILE-CORRECTION-001-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, releaseId: "SPW-HUMAN-REVIEW-CORRECTION-002-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -43,6 +43,45 @@ test("mobile correction — operator mag alleen de artikelvolgorde wijzigen", as
   await assert.rejects(service.updateArticle(operator.token, operator.csrfToken, article.id, { expectedRevision: reordered.revision, name: "Onbevoegde naamwijziging" }), (error) => error.code === "FORBIDDEN");
 });
 
+test("human review correction — kledingmaat is optioneel, ook per exemplaar", async (context) => {
+  const { service, storeUser } = await fixture(context);
+  const withoutSize = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "optional-size-single")).value;
+  assert.equal(withoutSize.items[0].size, "Niet opgegeven");
+  assert.notEqual(withoutSize.items[0].productionReadiness.status, "DATA_GAP");
+
+  const mixed = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", quantity: 3, variants: [{ size: "", quantity: 1, deviation: false, overrides: empty }, { size: "152", quantity: 1, deviation: false, overrides: empty }, { size: "", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "12", backNumberSizeClass: "SENIOR" } }] }] }), "optional-size-mixed")).value;
+  assert.deepEqual(mixed.items[0].variants.map(({ size }) => size), ["Niet opgegeven", "152", "Niet opgegeven"]);
+  assert.ok(mixed.items[0].variants.every(({ backNumberProduction }) => backNumberProduction?.sizeClass === "SENIOR"));
+});
+
+test("human review correction — productievoorstel weigert een globale preview zonder vectorbron", async (context) => {
+  const { service, admin, storeUser } = await fixture(context);
+  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "proposal-order")).value;
+  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "proposal-not-ready"), (error) => error.code === "ORDER_NOT_READY" && error.message.includes(created.id));
+  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "test-capture" }, created.revision);
+  const ready = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "proposal-ready")).value;
+  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-missing"), (error) => error.code === "ORDER_NOT_READY" && /contour\/fontbestand/u.test(error.message));
+  assert.equal((await service.bootstrap(admin.token)).productionProposals.length, 0);
+});
+
+test("human review correction — admin beheert feitelijke artikel- en bedrukkingsprijzen", async (context) => {
+  const { service, admin } = await fixture(context);
+  const article = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-137294");
+  const updated = await service.updateArticle(admin.token, admin.csrfToken, article.id, { expectedRevision: article.revision, priceConfiguration: { articleUnitPriceEur: 49.95, personalizationUnitPricesEur: { initials: 4.5, name: null, backNumber: 9.95, shortsNumber: null }, sourceLabel: "Human Review testbron" } });
+  assert.equal(updated.priceConfiguration.articleUnitPriceEur, 49.95);
+  assert.equal(updated.priceConfiguration.personalizationUnitPricesEur.name, null);
+  assert.equal(updated.priceConfiguration.sourceLabel, "Human Review testbron");
+});
+
+test("human review correction - admin beheert bezorgkosten en nieuwe orders bewaren het bedrag", async (context) => {
+  const { service, admin, storeUser } = await fixture(context);
+  await service.updateSettings(admin.token, admin.csrfToken, { deliveryFeeEur: 6.25 });
+  const bootstrap = await service.bootstrap(storeUser.token);
+  assert.equal(bootstrap.settings.deliveryFeeEur, 6.25);
+  const delivered = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ deliveryMode: "DELIVERY", deliveryAddress: { postalCode: "1315 XC", houseNumber: "1", houseNumberSuffix: "", street: "Fictieve straat", city: "Almere", lookupStatus: "MANUAL_FALLBACK" } }), "managed-delivery-fee")).value;
+  assert.equal(delivered.fulfillment.feeEur, 6.25);
+});
+
 test("mobile correction — beheerlogo is afzonderlijk, geaudit en inhoudsgevalideerd", async (context) => {
   const { service, admin, storeUser } = await fixture(context);
   const association = (await service.bootstrap(admin.token)).associations[0];
@@ -64,11 +103,18 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   assert.match(source, /inheritBackNumberClass/);
   assert.match(source, /productionAttentionCopy/);
   assert.match(source, /workspaceTerminology/);
+  assert.match(source, /aria-label="Volledig menu"/);
+  assert.match(source, /orders\/team`, "Teamorder"/);
+  assert.match(source, /class="\$\{name === selected \? "is-active" : ""\}"/);
   assert.match(source, /const workAudit = state\.audit\.filter/);
   assert.match(source, /ingelogd\|uitgelogd\|login\|sessie/);
   assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.sp-mobile-nav \.sp-nav__item\.is-active/);
   assert.match(css, /background:var\(--sp-red\)/);
+  assert.match(css, /\.sp-menu-button\{grid-column:1;grid-row:1;color:#fff\}/);
+  assert.match(source, /createProductionProposal/);
+  assert.match(source, /Klaar voor productie op productie-pc/);
+  assert.doesNotMatch(source, /Maat gecontroleerd|Controleer eerst de maat/);
   assert.equal(manifest.start_url, "/overzicht");
   assert.equal(manifest.scope, "/");
 });
