@@ -110,12 +110,29 @@ export class SportpaleisMariaDbStore {
           [state.organizationId, state.schemaVersion, state.revision, JSON.stringify(state)],
         );
       } else {
-        const state = validateSportpaleisPilotState(jsonValue(rows[0].state_json));
+        const persistedState = jsonValue(rows[0].state_json);
+        const state = validateSportpaleisPilotState(structuredClone(persistedState));
         if (Number(rows[0].revision) !== Number(state.revision)) {
           throw new SportpaleisMariaDbStoreError(
             "Workspace-state heeft een ongeldige revisie.",
             "DATABASE_REVISION_MISMATCH",
           );
+        }
+        const persistedProductionJobIds = new Set((persistedState.productionJobs ?? []).map(({ id }) => id));
+        const addedImmutableEvidence = state.productionJobs.filter(({ id }) => !persistedProductionJobIds.has(id));
+        if (addedImmutableEvidence.length > 0) {
+          const previousRevision = state.revision;
+          state.revision = previousRevision + 1;
+          const update = await connection.query(
+            "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
+            [state.schemaVersion, state.revision, JSON.stringify(state), state.organizationId, previousRevision],
+          );
+          if (Number(update.affectedRows) !== 1) {
+            throw new SportpaleisMariaDbStoreError(
+              "Immutable productie-evidence kon niet duurzaam worden geregistreerd.",
+              "DATABASE_EVIDENCE_MIGRATION_CONFLICT",
+            );
+          }
         }
       }
       await connection.commit();

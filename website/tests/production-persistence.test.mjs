@@ -228,6 +228,27 @@ test("MariaDB-store initialiseert leeg, bewaart transacties en overleeft een sto
   assert.equal((await restarted.storageStatus()).engine, "mariadb");
 });
 
+test("MariaDB-store registreert ontbrekende immutable productie-evidence exact eenmaal", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const persisted = JSON.parse(pool.row.state_json);
+  persisted.productionJobs = persisted.productionJobs.filter(({ jobNumber }) => jobNumber !== "PLOT-2026-0004");
+  persisted.nextProductionJobSequence = 4;
+  pool.row = { revision: persisted.revision, state_json: JSON.stringify(persisted) };
+
+  await store.initialize();
+  const migrated = JSON.parse(pool.row.state_json);
+  assert.equal(migrated.revision, persisted.revision + 1);
+  assert.equal(migrated.nextProductionJobSequence, 5);
+  assert.equal(migrated.productionJobs.filter(({ jobNumber }) => jobNumber === "PLOT-2026-0004").length, 1);
+  assert.equal(migrated.productionJobs.find(({ jobNumber }) => jobNumber === "PLOT-2026-0004").humanAcceptance.status, "PASS");
+
+  await store.initialize();
+  assert.equal(JSON.parse(pool.row.state_json).revision, migrated.revision);
+});
+
 test("production Mail Foundation legt ontvangst netwerkloos en restart-bestendig vast in Workspace MariaDB", async (context) => {
   const captureDirectory = await mkdtemp(path.join(tmpdir(), "sportpaleis-production-mail-captures-"));
   context.after(() => rm(captureDirectory, { recursive: true, force: true }));
