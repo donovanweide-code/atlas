@@ -78,7 +78,9 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.match(junior.attention, /Kritieke productiedata ontbreekt/);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, junior.id, { templateKey: "ORDER_RECEIVED" }, "pilot-junior-receipt");
     const juniorReady = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === junior.id);
-    await assert.rejects(service.advanceOrder(patrick.token, patrick.csrfToken, junior.id, juniorReady.revision, "pilot-junior-data-block"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    const controlled = (await service.advanceOrder(patrick.token, patrick.csrfToken, junior.id, juniorReady.revision, "pilot-junior-to-control")).value;
+    assert.equal(controlled.stage, "CONTROL");
+    await assert.rejects(service.advanceOrder(patrick.token, patrick.csrfToken, junior.id, controlled.revision, "pilot-junior-data-block"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
   });
 
   await context.test("individuele order kan niet naar Controle vóór de verplichte ontvangstbevestiging", async () => {

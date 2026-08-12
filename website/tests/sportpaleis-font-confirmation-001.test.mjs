@@ -1,0 +1,102 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import {
+  SPORTPALEIS_ASSOCIATIONS,
+  SPORTPALEIS_FONT_ASSET_INVENTORY,
+  SPORTPALEIS_FONT_CONFIRMATION,
+} from "../config/sportpaleis-bedrukking-configuration.mjs";
+import {
+  createSportpaleisProductionBootstrap,
+  migrateSportpaleisPilotState,
+} from "../scripts/sportpaleis-pilot-foundation.mjs";
+
+const byAssociation = Object.fromEntries(SPORTPALEIS_ASSOCIATIONS.map((association) => [association.name, association]));
+
+test("human-confirmed verenigingfonts zijn canoniek vastgelegd zonder assetclaims", () => {
+  const expected = {
+    "Almere'81": "Myriad Pro Italic",
+    "Almerer Pioneers": "FFF englisch",
+    "As,8o": "Spain",
+    "A.S.C. Waterwijk": "Schluber",
+    Brouwersports: "Schluber",
+    "Buitenhout MHC": "Myriad Pro Bold",
+    DCG: "Schluber",
+    EKVA: "Schluber",
+    "FC Almere": "Schluber",
+    "FC Huizen": "Spain",
+    "MHC Lelystad": "Myriad Pro Bold",
+    Najaden: "Schluber",
+    "SC Buitenboys": "Schluber",
+    "SC Geinburgia": "Spain",
+    "Sporting Almere": "Spain",
+    "VVA / Spartaan": "Schluber",
+    Wooter: "Spain",
+    Hasselbaink: "Spain",
+  };
+  for (const [association, font] of Object.entries(expected)) {
+    assert.equal(byAssociation[association].fontProfile, font, association);
+    assert.equal(byAssociation[association].fontEvidence.confirmationStatus, "MATCH", association);
+    assert.equal(byAssociation[association].fontEvidence.assetStatus, "DATA_GAP", association);
+    assert.equal(byAssociation[association].fontEvidence.assetId, null, association);
+  }
+  assert.equal(byAssociation.Sloeproeien.fontProfile, "DATA_GAP");
+  assert.equal(byAssociation.Sloeproeien.fontEvidence.confirmationStatus, "DATA_GAP");
+  assert.equal(byAssociation.HBSA.fontProfile, "Viking-Normal");
+  assert.equal(byAssociation.HBSA.fontEvidence.confirmationStatus, "MISMATCH");
+  assert.equal(byAssociation.HBSA.fontEvidence.applied, false);
+  assert.match(byAssociation.HBSA.fontEvidence.reason, /FSA.*HBSA/u);
+});
+
+test("vectorverwijzingen worden niet als fontbestand gepromoveerd", () => {
+  assert.equal(SPORTPALEIS_FONT_ASSET_INVENTORY.length, 6);
+  for (const font of SPORTPALEIS_FONT_ASSET_INVENTORY) {
+    assert.equal(font.fontAssetStatus, "DATA_GAP", font.canonicalName);
+    assert.equal(font.registeredFontAssetId, null, font.canonicalName);
+  }
+  const pioneers = SPORTPALEIS_FONT_ASSET_INVENTORY.find(({ canonicalName }) => canonicalName === "FFF englisch");
+  assert.deepEqual(pioneers.referenceAsset, {
+    filename: "Pioneers nummers.ai",
+    format: "AI_VECTOR_REFERENCE",
+    sha256: "FB2D8FF0939ACAE08FF4264C02775A317988F21DD09B6CA4F5DF178A1F7A3582",
+    status: "PRESENT_NOT_A_FONT_FILE",
+  });
+  const myriadBold = SPORTPALEIS_FONT_ASSET_INVENTORY.find(({ canonicalName }) => canonicalName === "Myriad Pro Bold");
+  assert.equal(myriadBold.referenceAsset.sha256, "DE29A4CA4B77D429327E2A5758993687DB3A34C57CA3D7951763BD15F4FCF6B8");
+});
+
+test("fontmigratie wijzigt alleen aantoonbare fontvelden en houdt productieparameters gelijk", () => {
+  const current = createSportpaleisProductionBootstrap(new Date("2026-08-12T12:00:00.000Z"));
+  const legacy = structuredClone(current);
+  delete legacy.fontConfirmationVersion;
+  legacy.associations.find(({ name }) => name === "A.S.C. Waterwijk").fontProfile = "schluber (spain = thuis wedstrijdshirt/short)";
+  legacy.productionProfiles.find(({ id }) => id === "profile-pioneers-shirt").fontProfile = "FFF englisch · Pioneers cijfercontouren";
+  const beforeAssociation = structuredClone(legacy.associations.find(({ name }) => name === "A.S.C. Waterwijk"));
+  const beforeProfile = structuredClone(legacy.productionProfiles.find(({ id }) => id === "profile-pioneers-shirt"));
+
+  const migrated = migrateSportpaleisPilotState(legacy);
+  const association = migrated.associations.find(({ name }) => name === "A.S.C. Waterwijk");
+  const profile = migrated.productionProfiles.find(({ id }) => id === "profile-pioneers-shirt");
+  assert.equal(migrated.fontConfirmationVersion, SPORTPALEIS_FONT_CONFIRMATION.id);
+  assert.equal(association.fontProfile, "Schluber");
+  assert.deepEqual(association.dimensionsCm, beforeAssociation.dimensionsCm);
+  assert.deepEqual(association.foilColors, beforeAssociation.foilColors);
+  assert.equal(profile.fontProfile, "FFF englisch");
+  assert.equal(profile.sizeLabel, beforeProfile.sizeLabel);
+  assert.equal(profile.foilColor, beforeProfile.foilColor);
+  assert.deepEqual(profile.backNumberSizeClasses, beforeProfile.backNumberSizeClasses);
+  assert.equal(profile.productionSourceSetId, beforeProfile.productionSourceSetId);
+  assert.equal(profile.outputWriterId, beforeProfile.outputWriterId);
+});
+
+test("alleen Liberation Sans is als echt lokaal productiefont geregistreerd", async () => {
+  const source = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
+  assert.equal(source.byteLength, 139512);
+  const state = createSportpaleisProductionBootstrap();
+  assert.deepEqual(state.productionFonts.map(({ name, sha256 }) => ({ name, sha256 })), [{
+    name: "Liberation Sans Regular",
+    sha256: "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F",
+  }]);
+  assert.ok(!SPORTPALEIS_FONT_ASSET_INVENTORY.some(({ canonicalName }) => canonicalName === "Liberation Sans Regular"));
+});

@@ -29,7 +29,7 @@ test("alle 20 verenigingen behouden iedere beschikbare bronwaarde afzonderlijk",
     const actual = state.associations.find(({ name }) => name === source.name); assert.ok(actual, source.name);
     assert.equal(actual.fontProfile, source.fontProfile); assert.deepEqual(actual.foilColors, source.foilColors); assert.deepEqual(actual.dimensionsCm, source.dimensionsCm);
   }
-  assert.equal(state.articles.length, 48);
+  assert.equal(state.articles.filter(({ printRelevance }) => printRelevance?.status === "CONFIRMED_VISIBLE_PERSONALIZATION").length, 183);
   const knownPrices = state.articles.flatMap((article) => Object.values(article.priceConfiguration?.personalizationUnitPricesEur ?? {}).filter((value) => typeof value === "number"));
   assert.ok(knownPrices.length >= 27); assert.ok(state.articles.every((article) => article.priceConfiguration));
   assert.ok(state.employees.some(({ name, salesNumber, active }) => name === "Donovan" && salesNumber === "45" && active));
@@ -65,10 +65,10 @@ test("Pioneers 2 loopt van normale order tot byte-identiek SVG-productieartefact
 
 test("normale Bedrukken-invoer volgt de werkelijk ingerichte artikelregels", async () => {
   const pioneers = associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, "Almerer Pioneers");
-  assert.equal(pioneers.articles.length, 3);
-  assert.deepEqual(pioneers.fields, ["backNumber", "name", "shortsNumber"]);
+  assert.equal(pioneers.articles.length, 4);
+  assert.deepEqual(pioneers.fields, ["backNumber", "shortsNumber", "name"]);
   assert.ok(pioneers.articles.every((article) => pioneers.fields.some((field) => article.personalizationPolicy.fields[field])));
-  const withoutArticles = associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, "SC Buitenboys");
+  const withoutArticles = associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, "Almere'81");
   assert.deepEqual(withoutArticles, { articles: [], fields: [] });
   const workspaceSource = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(workspaceSource, /associationPersonalizationModel\(state\.articles, activeAssociation\)/u);

@@ -31,12 +31,12 @@ async function fixture(context) {
 test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
   const { service, storeUser, operator } = await fixture(context);
 
-  await context.test("alle exact vastgelegde live artikelen zijn operationeel bereikbaar en de resterende live-brondekking blijft expliciet onvolledig", async () => {
+  await context.test("alle 183 actuele artikelen met bestelbare personalisatie zijn operationeel bereikbaar; de 267 overige blijven buiten Bedrukken", async () => {
     const liveInventoryCount = SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ status }) => status === "LIVE").reduce((sum, { productCount }) => sum + productCount, 0);
-    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 48);
-    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.filter(({ association }) => association === "A.S.C. Waterwijk").length, 41);
+    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 183);
+    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.filter(({ association }) => association === "A.S.C. Waterwijk").length, 22);
     assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.every(({ active, catalogProvenance }) => active && catalogProvenance.authority === "SPORTPALEIS_LIVE"), true);
-    assert.equal(liveInventoryCount, 549);
+    assert.equal(liveInventoryCount, 450);
     assert.ok(SPORTPALEIS_LIVE_PILOT_ARTICLES.length < liveInventoryCount, "volledige live catalogusdekking mag niet ten onrechte als gereed worden gerapporteerd");
   });
 
@@ -56,13 +56,13 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     assert.match(migrated.productionProfiles.find(({ id }) => id === "profile-shirt").instruction, /PILOT-AANDACHT/);
   });
 
-  await context.test("positie, referentieafstand, rotatie en spiegeling zijn aandachtspunten en blokkeren een Senior-order niet", async () => {
+  await context.test("onbekende contour- en fontbronnen blijven DATA_GAP maar blokkeren orderinvoer en controle niet", async () => {
     const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Pilot aandacht", customerEmail: "aandacht@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "readiness-007-attention")).value;
-    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
+    assert.equal(created.items[0].productionReadiness.status, "DATA_GAP");
     assert.match(created.items[0].productionReadiness.reason, /contour\/fontbestand/u);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "readiness-007-attention-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
@@ -73,14 +73,16 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
   await context.test("werkelijk noodzakelijke maat- en bedrukdata blijven server-side geblokkeerd terwijl opslaan en productiecontext wel werken", async () => {
     const pending = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Live pending", customerEmail: "pending@example.nl", customerPhone: "0612345678",
-      standardPersonalization: empty,
-      items: [{ articleId: "sp-live-134827", size: "M", quantity: 1, deviation: false, overrides: empty }],
+      standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "SENIOR" },
+      items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "readiness-007-pending")).value;
     assert.equal(pending.items[0].productionReadiness.status, "DATA_GAP");
-    assert.match(pending.items[0].productionReadiness.reason, /fysieke maatvoering|letterprofiel|foliekleur/);
+    assert.match(pending.items[0].productionReadiness.reason, /contour|fontbestand/);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, pending.id, { templateKey: "ORDER_RECEIVED" }, "readiness-007-pending-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === pending.id);
-    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-pending-advance"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-pending-control")).value;
+    assert.equal(controlled.stage, "CONTROL");
+    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-007-pending-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
   });
 
   await context.test("normale multi-verenigingsorder bewaart per artikel de eigen live bron en gaat met niet-blokkerende aandacht naar Controle", async () => {
@@ -93,8 +95,8 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
       ],
     }, "readiness-007-multi")).value;
     assert.deepEqual(new Set(created.items.map(({ association }) => association)), new Set(["A.S.C. Waterwijk", "FC Almere"]));
-    assert.equal(created.items.every(({ sourceProvenance }) => sourceProvenance.includes("Sportpaleis.nl")), true);
-    assert.equal(created.items.every(({ productionReadiness }) => productionReadiness.status === "ATTENTION"), true);
+    assert.equal(created.items.every(({ sourceProvenance }) => sourceProvenance.includes("Sportpaleis")), true);
+    assert.equal(created.items.every(({ productionReadiness }) => productionReadiness.status === "DATA_GAP"), true);
   });
 
   await context.test("Teamorder gebruikt dezelfde catalogus en houdt Senior uitvoer niet tegen op aanvullende positioneringskennis", async () => {
@@ -105,7 +107,7 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     }, "readiness-007-team")).value;
     assert.equal(created.items[0].variants.length, 18);
     assert.equal(created.items[0].variants.at(-1).personalizationValues.backNumber, "77");
-    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
+    assert.equal(created.items[0].productionReadiness.status, "DATA_GAP");
   });
 
   await context.test("Pioneers-provenance blijft beperkt tot de bewezen Senior 200 mm snijlijnen", async () => {

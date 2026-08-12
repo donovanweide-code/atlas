@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   SPORTPALEIS_ASSOCIATIONS,
   SPORTPALEIS_CONFIGURATION_VERSION,
+  SPORTPALEIS_FONT_CONFIRMATION,
+  SPORTPALEIS_JUNIOR_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
 import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
@@ -60,28 +62,83 @@ const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
 const ARTICLE_IMAGE_KEYS = new Set(ARTICLE_CATALOG.map(({ imageKey }) => imageKey));
 
 const PRODUCTION_PROFILES = [
-  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-keeper", name: "A.S.C. keeperstrui · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-shorts", name: "A.S.C. wedstrijdshort · pijp", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
-  { id: "profile-initials", name: "A.S.C. initialen · borst", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-keeper", name: "A.S.C. keeperstrui · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-shorts", name: "A.S.C. wedstrijdshort · pijp", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-initials", name: "A.S.C. initialen · borst", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-none", name: "Geen bedrukking", placement: "Niet van toepassing", referenceDistanceCm: null, sizeLabel: "Geen", fontProfile: "Niet van toepassing", foilColor: "Niet van toepassing", mirror: false, rotationDeg: 0, supports: [], instruction: "Dit artikel heeft standaard geen bedrukking." },
   { id: "profile-pending", name: "Live artikel · productie-inrichting volgt", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Onbekend", foilColor: "Onbekend", mirror: null, rotationDeg: null, supports: [], instruction: "Kritieke productie-inrichting ontbreekt. Het artikel mag worden besteld en naar Productie gaan, maar de uiteindelijke productieactie blijft geblokkeerd tot maat, bedrukoptie, letterprofiel en foliekleur voldoende zijn bevestigd." },
 ];
 PRODUCTION_PROFILES.push(
-  { id: "profile-shirt-home", name: "A.S.C. thuiswedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-shirt-standard", name: "A.S.C. shirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-shorts-home", name: "A.S.C. thuiswedstrijdshort · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
-  { id: "profile-shorts-standard", name: "A.S.C. short · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
-  { id: "profile-initials-shirt", name: "A.S.C. shirt · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen op shirt 3 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
-  { id: "profile-initials-other", name: "A.S.C. overig artikel · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP · fysieke maat niet artikel-specifiek bevestigd", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "DATA_GAP: de fysieke bedrukkingsmaat ontbreekt en blokkeert productie. Positie, referentieafstand, rotatie en spiegeling zijn niet-blokkerende pilot-aandachtspunten." },
-  { id: "profile-unmapped-number", name: "A.S.C. live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
-  { id: "profile-fc-shirt-home", name: "FC Almere wedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A10:J10" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
-  { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
-  { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myrad pro - Bold / zie map 'Lelystad'", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
-  { id: "profile-pioneers-shirt", name: "Almerer Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch · Pioneers cijfercontouren", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
-  { id: "profile-pioneers-shorts", name: "Almerer Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch · Pioneers cijfercontouren", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
+  { id: "profile-shirt-home", name: "A.S.C. thuiswedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-shirt-standard", name: "A.S.C. shirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-shorts-home", name: "A.S.C. thuiswedstrijdshort · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-shorts-standard", name: "A.S.C. short · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-initials-shirt", name: "A.S.C. shirt · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen op shirt 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-initials-other", name: "A.S.C. overig artikel · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP · fysieke maat niet artikel-specifiek bevestigd", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "DATA_GAP: de fysieke bedrukkingsmaat ontbreekt en blokkeert productie. Positie, referentieafstand, rotatie en spiegeling zijn niet-blokkerende pilot-aandachtspunten." },
+  { id: "profile-unmapped-number", name: "A.S.C. live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
+  { id: "profile-fc-shirt-home", name: "FC Almere wedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A10:J10" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
+  { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
+  { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myriad Pro Bold", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
+  { id: "profile-pioneers-shirt", name: "Almerer Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
+  { id: "profile-pioneers-shorts", name: "Almerer Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
 );
+const profileSlug = (value) => String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const sourceProfileFields = [
+  ["initials", "Initialen", "initialsShirt"],
+  ["name", "Naam", "nameHeight"],
+  ["backNumber", "Rugnummer", "backNumberSenior"],
+  ["shortsNumber", "Shortnummer", "shortsNumber"],
+];
+for (const association of SPORTPALEIS_ASSOCIATIONS) {
+  for (const [field, label, dimensionKey] of sourceProfileFields) {
+    const id = `profile-source-${profileSlug(association.name)}-${field}`;
+    const dimensionCm = association.dimensionsCm[dimensionKey];
+    const fontConfigured = Boolean(association.fontProfile && !["X", "DATA_GAP"].includes(association.fontProfile));
+    const foilConfigured = association.foilColors.length > 0;
+    PRODUCTION_PROFILES.push({
+      id,
+      name: `${association.name} · ${label.toLowerCase()}`,
+      placement: "Onbevestigd",
+      referenceDistanceCm: null,
+      sizeLabel: dimensionCm == null ? `${label} · DATA_GAP` : `${label} ${dimensionCm} cm`,
+      fontProfile: association.fontProfile || "Onbekend",
+      foilColor: association.foilColors.join(" / ") || "Onbekend",
+      mirror: null,
+      rotationDeg: null,
+      supports: [field],
+      instruction: `Bronconfiguratie ${association.source.file} · ${association.source.sheet}!${association.source.range}. Positie, afstand, contour-/fontoutput, rotatie en spiegeling blijven fail-closed totdat de specifieke route is gevalideerd.`,
+      ...(field === "backNumber" ? {
+        backNumberSizeClasses: {
+          SENIOR: dimensionCm == null
+            ? { physicalHeightMm: null, status: "DATA_GAP", source: `${association.source.file} · ${association.source.sheet}!${association.source.range}` }
+            : { physicalHeightMm: dimensionCm * 10, status: "SOURCE_CONFIGURED", source: `${association.source.file} · ${association.source.sheet}!${association.source.range}` },
+          JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
+        },
+      } : {}),
+      sourceValidation: {
+        size: dimensionCm == null ? "DATA_GAP" : "SOURCE_CONFIGURED",
+        font: fontConfigured ? "SOURCE_CONFIGURED" : "DATA_GAP",
+        foilColor: foilConfigured ? "SOURCE_CONFIGURED" : "DATA_GAP",
+      },
+    });
+  }
+}
+PRODUCTION_PROFILES.push({
+  id: "profile-mhc-shirt-home",
+  name: "MHC Lelystad thuisshirt · naam/rugnummer",
+  placement: "Onbevestigd",
+  referenceDistanceCm: null,
+  sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm",
+  fontProfile: "Myriad Pro Bold",
+  foilColor: "Wit",
+  mirror: null,
+  rotationDeg: null,
+  supports: ["name", "backNumber"],
+  instruction: "Bronconfiguratie: thuis wit; nummer outline; naam met hoofdletter. Positie, afstand, contour-/fontoutput, rotatie en spiegeling blijven fail-closed.",
+  backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } },
+});
 for (const profile of PRODUCTION_PROFILES) {
   profile.revision = 1;
   profile.validationHistory = [];
@@ -103,6 +160,22 @@ for (const profile of PRODUCTION_PROFILES) {
       placement: "DATA_GAP", referenceDistance: "DATA_GAP", size: "DATA_GAP", font: "DATA_GAP", foilColor: "DATA_GAP", rotation: "DATA_GAP", mirror: "DATA_GAP",
     };
   }
+  if (profile.id.startsWith("profile-source-")) {
+    profile.validation = {
+      status: profile.sourceValidation.size === "SOURCE_CONFIGURED" && profile.sourceValidation.font === "SOURCE_CONFIGURED" && profile.sourceValidation.foilColor === "SOURCE_CONFIGURED" ? "PARTIAL" : "DATA_GAP",
+      source: profile.instruction,
+      placement: "DATA_GAP",
+      referenceDistance: "DATA_GAP",
+      size: profile.sourceValidation.size,
+      font: profile.sourceValidation.font,
+      foilColor: profile.sourceValidation.foilColor,
+      rotation: "DATA_GAP",
+      mirror: "DATA_GAP",
+      cutContour: "DATA_GAP",
+      physicalCutOutput: "DATA_GAP",
+    };
+    delete profile.sourceValidation;
+  }
   if (profile.id.startsWith("profile-fc-")) profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A10:J10. Positie, afstand, rotatie en spiegeling onbevestigd.";
   if (profile.id === "profile-dcg-initials-set") profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A8:J8. Commerciële bedrukoptie: actuele live Sportpaleis-productpagina.";
   if (profile.id === "profile-mhc-shirt-away") profile.validation.source = "Maat, letterprofiel en foliekleur: info bedrukkingen 2026.xlsx · Blad1!A13:J13. Commerciële bedrukopties: actuele live Sportpaleis-productpagina.";
@@ -123,6 +196,7 @@ pioneersShortsProfile.validation.physicalCutOutput = "DATA_GAP";
 const PILOT_SETTINGS = {
   processingDays: 5,
   deliveryFeeEur: 3.95,
+  productionDefaults: { workingWidthMm: 440, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: PILOT_FONT.id, defaultFoilColor: "Wit" },
   receiptMailText: "We hebben de kleding ontvangen. Controleer het overzicht van artikelen en afgesproken bedrukking. De verwachte wachttijd is circa 5 dagen. Je ontvangt bericht wanneer de bestelling klaarstaat.",
   readyMailText: "De bestelling ligt klaar. Neem deze e-mail mee bij het ophalen. Was bedrukte kleding binnenstebuiten, gebruik geen droger en volg altijd het waslabel.",
 };
@@ -308,6 +382,9 @@ export function createSportpaleisDefaultPreference() {
 }
 
 const defaultPreference = createSportpaleisDefaultPreference;
+const CONFIRMED_EMPLOYEES = Object.freeze([
+  { id: "employee-donovan-45", name: "Donovan", salesNumber: "45", active: true, userId: null, revision: 1 },
+]);
 
 export function createSportpaleisProductionBootstrap(now = new Date()) {
   return validateState({
@@ -317,12 +394,13 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     nextOrderSequence: 1,
     nextProductionJobSequence: 5,
     users: [],
-    employees: [],
+    employees: structuredClone(CONFIRMED_EMPLOYEES),
     sessions: [],
     loginAttempts: {},
     orders: [],
     associations: structuredClone(SPORTPALEIS_ASSOCIATIONS),
     configurationVersion: SPORTPALEIS_CONFIGURATION_VERSION,
+    fontConfirmationVersion: SPORTPALEIS_FONT_CONFIRMATION.id,
     articles: structuredClone(ARTICLE_CATALOG),
     productionProfiles: structuredClone(PRODUCTION_PROFILES),
     settings: structuredClone(PILOT_SETTINGS),
@@ -353,22 +431,19 @@ export function migrateSportpaleisPilotState(input) {
   if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
+  const previousFontConfirmationVersion = state.fontConfirmationVersion;
   state.migrationWarnings ??= [];
   for (const user of state.users ?? []) {
-    if (user.salesNumber === undefined) user.salesNumber = user.id === "donovan-support" ? "45" : null;
+    if (user.salesNumber === undefined) user.salesNumber = null;
     user.personType ??= "HUMAN";
     user.workContexts ??= workContextsForRole(user.role);
     user.defaultContext = user.workContexts.includes(user.defaultContext) ? user.defaultContext : user.workContexts[0];
     delete user.quickAuth;
   }
-  if (!Array.isArray(state.employees) || state.employees.length === 0) state.employees = (state.users ?? []).filter(({ salesNumber }) => Boolean(salesNumber)).map((user) => ({
-    id: `employee-${user.id}`,
-    name: user.id === "donovan-support" ? "Donovan" : user.name,
-    salesNumber: user.salesNumber,
-    active: user.status === "Actief",
-    userId: user.seatType === "customer" ? user.id : null,
-    revision: 1,
-  }));
+  state.employees = Array.isArray(state.employees) ? state.employees : [];
+  for (const sourceEmployee of CONFIRMED_EMPLOYEES) {
+    if (!state.employees.some(({ id, salesNumber }) => id === sourceEmployee.id || salesNumber === sourceEmployee.salesNumber)) state.employees.push(structuredClone(sourceEmployee));
+  }
   for (const profile of state.productionProfiles ?? []) if (profile.supports?.includes("initials")) {
       const existing = profile.initialsInfixRule;
       profile.initialsInfixRule = {
@@ -423,7 +498,10 @@ export function migrateSportpaleisPilotState(input) {
         ...structuredClone(sourceAssociation),
         active: existing.active,
         notes: existing.notes,
-        fontProfile: existing.fontProfile ?? sourceAssociation.fontProfile,
+        fontProfile: sourceAssociation.fontEvidence?.applied && sourceAssociation.fontEvidence.confirmationStatus === "MATCH"
+          ? sourceAssociation.fontProfile
+          : existing.fontProfile ?? sourceAssociation.fontProfile,
+        fontEvidence: structuredClone(sourceAssociation.fontEvidence),
         foilColors: structuredClone(existing.foilColors ?? sourceAssociation.foilColors),
         dimensionsCm: structuredClone(existing.dimensionsCm ?? sourceAssociation.dimensionsCm),
         revision: existing.revision ?? 1,
@@ -433,6 +511,7 @@ export function migrateSportpaleisPilotState(input) {
         juniorPhysicalHeightMm: existingValidatedJunior ? Number(existing.juniorPhysicalHeightMm) : sourceAssociation.juniorPhysicalHeightMm,
         juniorGarmentSizes: structuredClone(existingValidatedJunior && Array.isArray(existing.juniorGarmentSizes) ? existing.juniorGarmentSizes : sourceAssociation.juniorGarmentSizes),
         juniorValidationNote: existingValidatedJunior ? existing.juniorValidationNote : sourceAssociation.juniorValidationNote,
+        workspaceLogo: structuredClone(existing.workspaceLogo ?? sourceAssociation.workspaceLogo),
       };
     });
   }
@@ -441,10 +520,60 @@ export function migrateSportpaleisPilotState(input) {
     association.validationHistory ??= [];
     association.juniorPhysicalHeightMm ??= null;
     association.juniorGarmentSizes ??= [];
+    const sourceAssociation = SPORTPALEIS_ASSOCIATIONS.find(({ id, name }) => id === association.id || name === association.name);
+    association.fontEvidence ??= structuredClone(sourceAssociation?.fontEvidence);
     if (association.juniorValidationStatus === "VALIDATED" && !(Number(association.juniorPhysicalHeightMm) > 0)) {
       association.juniorValidationStatus = "DATA_GAP";
       association.juniorValidationNote = "Eerdere status had geen fysieke millimeterwaarde en is veilig teruggezet naar DATA_GAP.";
     }
+  }
+  if (previousFontConfirmationVersion !== SPORTPALEIS_FONT_CONFIRMATION.id) {
+    for (const association of state.associations) {
+      const sourceAssociation = SPORTPALEIS_ASSOCIATIONS.find(({ id, name }) => id === association.id || name === association.name);
+      if (!sourceAssociation?.fontEvidence) continue;
+      const previous = association.fontProfile;
+      if (sourceAssociation.fontEvidence.applied && sourceAssociation.fontEvidence.confirmationStatus === "MATCH") association.fontProfile = sourceAssociation.fontProfile;
+      association.fontEvidence = structuredClone(sourceAssociation.fontEvidence);
+      if (association.fontProfile !== previous) {
+        association.revision = Number(association.revision ?? 1) + 1;
+        association.validationHistory.push({
+          at: "2026-08-12T00:00:00.000Z",
+          userId: "system-human-confirmation",
+          field: "fontProfile",
+          previous,
+          next: association.fontProfile,
+          source: SPORTPALEIS_FONT_CONFIRMATION.authority,
+        });
+      }
+    }
+  }
+  if (previousConfigurationVersion !== SPORTPALEIS_CONFIGURATION_VERSION) {
+    const existingArticles = Array.isArray(state.articles) ? state.articles : [];
+    const consumedIds = new Set();
+    const articleIdRemap = new Map();
+    const canonicalArticles = ARTICLE_CATALOG.map((sourceArticle) => {
+      const existing = existingArticles.find(({ id }) => id === sourceArticle.id)
+        ?? existingArticles.find(({ association, articleNumber }) => association === sourceArticle.association && String(articleNumber) === String(sourceArticle.articleNumber));
+      if (!existing) return structuredClone(sourceArticle);
+      consumedIds.add(existing.id);
+      if (existing.id !== sourceArticle.id) articleIdRemap.set(existing.id, sourceArticle.id);
+      return {
+        ...structuredClone(sourceArticle),
+        active: existing.active ?? sourceArticle.active,
+        displayOrder: existing.displayOrder ?? sourceArticle.displayOrder,
+        revision: Number(existing.revision ?? 1) + 1,
+        validationHistory: structuredClone(existing.validationHistory ?? []),
+      };
+    });
+    const retainedArticles = existingArticles.filter((article) => !consumedIds.has(article.id) && article.catalogProvenance?.authority !== "SPORTPALEIS_LIVE");
+    state.articles = [...retainedArticles, ...canonicalArticles];
+    for (const order of state.orders ?? []) for (const item of order.items ?? []) {
+      const direct = articleIdRemap.get(item.articleId);
+      const matched = direct ? null : ARTICLE_CATALOG.find(({ association, articleNumber }) => association === item.association && String(articleNumber) === String(item.articleNumber));
+      if (direct || matched) item.articleId = direct ?? matched.id;
+    }
+    const warning = "Final pre-live catalogus 006: 183 actuele artikelen met zichtbare bestelbare personalisatie canoniek ingericht; overige actuele clubartikelen blijven buiten Bedrukken; historische ordersnapshots blijven ongewijzigd.";
+    if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
   }
   state.configurationVersion = SPORTPALEIS_CONFIGURATION_VERSION;
   state.activationInvites ??= [];
@@ -522,6 +651,29 @@ export function migrateSportpaleisPilotState(input) {
     const warning = "Pilot readiness 007: dubbele legacy live-artikel-ID's naar de canonieke sp-live-ID's gemigreerd, ordersnapshots behouden en ongewijzigde profielteksten op human pilotbeleid gebracht";
     if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
   }
+  if (previousFontConfirmationVersion !== SPORTPALEIS_FONT_CONFIRMATION.id) {
+    const legacyFontValues = new Set([
+      "schluber", "schluber (Spain voor thuiswedstrijdshirt)", "schluber (Spain voor thuiswedstrijdshort)",
+      "Myrad pro - Bold / zie map 'Lelystad'", "FFF englisch · Pioneers cijfercontouren",
+    ]);
+    for (const profile of state.productionProfiles ?? []) {
+      const sourceProfile = PRODUCTION_PROFILES.find(({ id }) => id === profile.id);
+      if (!sourceProfile || profile.fontProfile === sourceProfile.fontProfile) continue;
+      if (!legacyFontValues.has(profile.fontProfile) && Number(profile.revision ?? 1) > 1) continue;
+      const previous = profile.fontProfile;
+      profile.fontProfile = sourceProfile.fontProfile;
+      profile.revision = Number(profile.revision ?? 1) + 1;
+      profile.validationHistory ??= [];
+      profile.validationHistory.push({
+        at: "2026-08-12T00:00:00.000Z",
+        userId: "system-human-confirmation",
+        previous: { fontProfile: previous },
+        next: { fontProfile: profile.fontProfile },
+        source: SPORTPALEIS_FONT_CONFIRMATION.authority,
+      });
+    }
+  }
+  state.fontConfirmationVersion = SPORTPALEIS_FONT_CONFIRMATION.id;
   state.schemaVersion = PILOT_SCHEMA_VERSION;
   return state;
 }
@@ -556,6 +708,8 @@ export function validateSportpaleisPilotState(input) {
       existing.validation ??= structuredClone(article.validation);
       existing.validationHistory ??= [];
       existing.priceConfiguration ??= structuredClone(article.priceConfiguration);
+      existing.priceConfiguration.articleUnitPricesBySizeEur ??= structuredClone(article.priceConfiguration?.articleUnitPricesBySizeEur ?? {});
+      for (const [size, amount] of Object.entries(article.priceConfiguration?.articleUnitPricesBySizeEur ?? {})) if (existing.priceConfiguration.articleUnitPricesBySizeEur[size] == null && amount != null) existing.priceConfiguration.articleUnitPricesBySizeEur[size] = amount;
       existing.priceConfiguration.personalizationUnitPricesEur ??= {};
       for (const field of PERSONALIZATION_FIELDS) if (existing.priceConfiguration.personalizationUnitPricesEur[field] == null && article.priceConfiguration?.personalizationUnitPricesEur?.[field] != null) existing.priceConfiguration.personalizationUnitPricesEur[field] = article.priceConfiguration.personalizationUnitPricesEur[field];
       if ((!existing.priceConfiguration.sourceLabel || existing.priceConfiguration.sourceLabel.startsWith("DATA_GAP")) && article.priceConfiguration?.sourceLabel) existing.priceConfiguration.sourceLabel = article.priceConfiguration.sourceLabel;
@@ -573,6 +727,7 @@ export function validateSportpaleisPilotState(input) {
   }
   state.settings ??= structuredClone(PILOT_SETTINGS);
   state.settings.deliveryFeeEur ??= PILOT_SETTINGS.deliveryFeeEur;
+  state.settings.productionDefaults = { ...structuredClone(PILOT_SETTINGS.productionDefaults), ...(state.settings.productionDefaults ?? {}) };
   state.foilRolls ??= structuredClone(FOIL_ROLLS);
   state.preferences ??= {};
   for (const user of state.users) {
@@ -1033,7 +1188,7 @@ export class SportpaleisPilotService {
       associations: structuredClone(state.associations),
       configurationVersion: state.configurationVersion,
       productionProfiles: structuredClone(state.productionProfiles),
-      settings: admin ? structuredClone(state.settings) : { processingDays: state.settings.processingDays, deliveryFeeEur: state.settings.deliveryFeeEur },
+      settings: admin ? structuredClone(state.settings) : { processingDays: state.settings.processingDays, deliveryFeeEur: state.settings.deliveryFeeEur, productionDefaults: structuredClone(state.settings.productionDefaults) },
       foilRolls: admin ? structuredClone(state.foilRolls) : [],
       commercialAdministration: admin ? {
         sourceLabel: "Sportpaleis Workspace Pilot Foundation 006",
@@ -1055,6 +1210,11 @@ export class SportpaleisPilotService {
       capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
+  }
+
+  async currentRevision(token) {
+    const { state } = await this.authenticate(token);
+    return { revision: state.revision };
   }
 
   async addProductionFont(token, csrfToken, payload) {
@@ -1253,9 +1413,9 @@ export class SportpaleisPilotService {
         const order = {
           id,
           revision: 1,
-          customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : requiredText(payload.customer, "Klant", 120),
-          customerEmail: orderKind === "TEAM" && !String(payload.customerEmail ?? "").trim() ? "" : validEmail(legacy006Payload ? "legacy-order@sportpaleis.invalid" : payload.customerEmail),
-          customerPhone: orderKind === "TEAM" ? String(payload.customerPhone ?? "").trim().slice(0, 40) : requiredText(legacy006Payload ? "Niet vastgelegd (006)" : payload.customerPhone, "Telefoonnummer", 40),
+          customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : orderKind === "CUSTOM" ? String(payload.customer ?? "").trim().slice(0, 120) || "Vrije productieopdracht" : requiredText(payload.customer, "Klant", 120),
+          customerEmail: ["TEAM", "CUSTOM"].includes(orderKind) && !String(payload.customerEmail ?? "").trim() ? "" : validEmail(legacy006Payload ? "legacy-order@sportpaleis.invalid" : payload.customerEmail),
+          customerPhone: ["TEAM", "CUSTOM"].includes(orderKind) ? String(payload.customerPhone ?? "").trim().slice(0, 40) : requiredText(legacy006Payload ? "Niet vastgelegd (006)" : payload.customerPhone, "Telefoonnummer", 40),
           association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
           associations,
           standardPersonalization,
@@ -1306,8 +1466,8 @@ export class SportpaleisPilotService {
         if (order.stage === "ORDER" && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
           throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
-        if (order.stage === "ORDER" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
-          throw Object.assign(new Error("Productiedata ontbreekt. Vul het productieprofiel en de fysieke maten eerst aan."), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
+        if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
+          throw Object.assign(new Error("Productiedata ontbreekt. De order blijft zichtbaar bij Productie, maar kan nog niet naar fysieke productie."), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
         }
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
           throw Object.assign(new Error("Deze order wacht volledig op de juiste foliekleur."), { statusCode: 409, code: "COLOR_HOLD" });
@@ -1346,7 +1506,7 @@ export class SportpaleisPilotService {
           if (order.stage === "ORDER" && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
             throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
           }
-          if (order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
+          if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
             throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
           }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
@@ -1995,8 +2155,10 @@ export class SportpaleisPilotService {
       if (payload.priceConfiguration !== undefined) {
         const price = (value, label) => value === null || value === "" || value === undefined ? null : nullableNumber(value, label, 0, 10000);
         const current = article.priceConfiguration ?? { articleUnitPriceEur: null, personalizationUnitPricesEur: {}, sourceLabel: "DATA_GAP: geen prijsbron vastgelegd" };
+        const requestedSizePrices = payload.priceConfiguration.articleUnitPricesBySizeEur;
         article.priceConfiguration = {
           articleUnitPriceEur: price(payload.priceConfiguration.articleUnitPriceEur, "Artikelprijs"),
+          articleUnitPricesBySizeEur: Object.fromEntries((article.availableSizes ?? []).map((size) => [size, price(requestedSizePrices === undefined ? current.articleUnitPricesBySizeEur?.[size] : requestedSizePrices?.[size], `Artikelprijs maat ${size}`)])),
           personalizationUnitPricesEur: Object.fromEntries(PERSONALIZATION_FIELDS.map((field) => [field, price(payload.priceConfiguration.personalizationUnitPricesEur?.[field], `Bedrukkingsprijs ${field}`)])),
           sourceLabel: requiredText(payload.priceConfiguration.sourceLabel ?? current.sourceLabel, "Prijsbron", 500),
         };
@@ -2181,6 +2343,26 @@ export class SportpaleisPilotService {
       }
       if (payload.receiptMailText !== undefined) state.settings.receiptMailText = requiredText(payload.receiptMailText, "Ontvangsttekst", 2_000);
       if (payload.readyMailText !== undefined) state.settings.readyMailText = requiredText(payload.readyMailText, "Afhaaltekst", 2_000);
+      if (payload.productionDefaults !== undefined) {
+        const input = payload.productionDefaults;
+        const number = (key, minimum, maximum) => {
+          const result = Number(input[key]);
+          if (!Number.isFinite(result) || result < minimum || result > maximum) throw Object.assign(new Error(`Ongeldige productie-instelling: ${key}.`), { statusCode: 400, code: "VALIDATION_ERROR" });
+          return Math.round(result * 1000) / 1000;
+        };
+        const defaultFontId = requiredText(input.defaultFontId, "Standaard productiefont", 160);
+        if (!state.productionFonts.some(({ id, status }) => id === defaultFontId && status === "TECHNICALLY_VALID")) throw Object.assign(new Error("Kies een technisch geldige standaardfontbron."), { statusCode: 400, code: "PRODUCTION_FONT_INVALID" });
+        state.settings.productionDefaults = {
+          workingWidthMm: number("workingWidthMm", 50, 450),
+          minimumGapMm: number("minimumGapMm", 0, 100),
+          edgeMarginMm: number("edgeMarginMm", 0, 100),
+          defaultWidthMm: number("defaultWidthMm", 1, 430),
+          defaultHeightMm: number("defaultHeightMm", 1, 430),
+          defaultFontId,
+          defaultFoilColor: requiredText(input.defaultFoilColor, "Standaard foliekleur", 80),
+        };
+        if (state.settings.productionDefaults.workingWidthMm + (2 * state.settings.productionDefaults.edgeMarginMm) > 450) throw Object.assign(new Error("Werkbreedte plus randafstanden past niet binnen 450 mm absolute materiaalbreedte."), { statusCode: 400, code: "PRODUCTION_WIDTH_INVALID" });
+      }
       audit(state, user.id, "Workspace-instellingen gewijzigd", "Bedrukkingsmodule");
       return { state, value: structuredClone(state.settings) };
     });
@@ -2371,6 +2553,13 @@ function validatePersonalization(value, { requireBackNumberSizeClass = false } =
   };
 }
 
+function normalizeProductionContent(type, input, placementRole = null) {
+  const value = String(input ?? "").trim();
+  if (placementRole === "INITIALS_INFIX") return value.toLocaleLowerCase("nl-NL");
+  if (["TEXT", "INITIALS"].includes(type)) return value.toLocaleUpperCase("nl-NL");
+  return value;
+}
+
 function validatePriority(value, user, at) {
   if (!value?.enabled) return null;
   const reason = allowedValue(value.reason, ["complaint", "sportpaleis-error", "event", "other"], "Prioriteitsreden");
@@ -2430,7 +2619,7 @@ function validateProductionLines(value, state, user, orderKind) {
   const validated = value.map((line, index) => {
     const type = allowedValue(line.type, [...PRODUCTION_LINE_TYPES], "Productieregeltype");
     if (user.role === "store" && ["LOGO", "PRODUCTION_ELEMENT"].includes(type)) throw Object.assign(new Error("Logo's en beeldmerken zijn alleen beschikbaar in Teamorder/Productie."), { statusCode: 403, code: "STORE_LOGO_FORBIDDEN" });
-    const content = requiredText(line.content, "Inhoud", 160);
+    const content = normalizeProductionContent(type, requiredText(line.content, "Inhoud", 160), line.placementRole);
     if (type === "NUMBER" && !/^\d{1,4}$/u.test(content)) throw Object.assign(new Error("Een nummerregel bevat alleen 1 tot 4 cijfers."), { statusCode: 400, code: "PRODUCTION_NUMBER_INVALID" });
     if (type === "INITIALS" && content.length > 12) throw Object.assign(new Error("Initialen bevatten maximaal 12 tekens."), { statusCode: 400, code: "PRODUCTION_INITIALS_INVALID" });
     const initialsInfix = ["INITIALS_FIRST", "INITIALS_INFIX", "INITIALS_LAST"].includes(line.placementRole);
@@ -2458,12 +2647,16 @@ function validateProductionLines(value, state, user, orderKind) {
       const rule = profile?.initialsInfixRule;
       const expectedIndex = line.placementRole === "INITIALS_FIRST" ? 0 : line.placementRole === "INITIALS_INFIX" ? 1 : 2;
       const compositionId = requiredText(line.placementRule?.compositionId, "Samenstelling initialen", 160);
-      const compositeText = requiredText(line.placementRule?.compositeText, "Samengestelde initialen", 160);
+      const rawCompositeText = requiredText(line.placementRule?.compositeText, "Samengestelde initialen", 160);
+      const compositeCharacters = Array.from(rawCompositeText);
+      const compositeText = compositeCharacters.length >= 2 ? `${compositeCharacters[0].toLocaleUpperCase("nl-NL")}${compositeCharacters.slice(1, -1).join("").toLocaleLowerCase("nl-NL")}${compositeCharacters.at(-1).toLocaleUpperCase("nl-NL")}` : rawCompositeText.toLocaleUpperCase("nl-NL");
       if (Number(line.placementRule?.segmentIndex) !== expectedIndex) throw Object.assign(new Error("Ongeldige volgorde in samengestelde initialen."), { statusCode: 400, code: "INITIALS_COMPOSITION_INVALID" });
       placementRule = { compositionId, compositeText, segmentIndex: expectedIndex, segmentCount: 3, alignment: "CENTER", horizontalSpacingMm: rule?.horizontalSpacingMm ?? null, baselineOffsetMm: rule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: rule?.revision ?? 1 };
       if (!rule?.active || !rule.heightMm || rule.horizontalSpacingMm === null || rule.baselineOffsetMm === null || rule.status === "DATA_GAP") validation = { status: "BLOCKED", reason: "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd." };
     }
-    if (widthMm > 430) validation = { status: "BLOCKED", reason: "De gevraagde breedte past niet binnen 440 mm veilige werkbreedte met 5 mm randafstand." };
+    const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
+    const maximumObjectWidthMm = defaults.workingWidthMm - (2 * defaults.edgeMarginMm);
+    if (widthMm > maximumObjectWidthMm) validation = { status: "BLOCKED", reason: `De gevraagde breedte past niet binnen ${defaults.workingWidthMm} mm veilige werkbreedte met ${defaults.edgeMarginMm} mm randafstand.` };
     return {
       id: String(line.id ?? "").trim() || `production-line-${index + 1}-${randomBytes(5).toString("hex")}`,
       type,
@@ -2496,8 +2689,8 @@ function deriveCatalogProductionLines(state, orderId, items) {
     const profile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
     for (const variant of item.variants ?? []) {
       const values = variant.personalizationValues ?? {};
-      const initials = String(values.initials ?? "").trim();
-      const initialsInfix = String(values.initialsInfix ?? "").trim();
+      const initials = normalizeProductionContent("INITIALS", values.initials);
+      const initialsInfix = normalizeProductionContent("TEXT", values.initialsInfix, "INITIALS_INFIX");
       if (initialsInfix) {
         const characters = Array.from(initials);
         if (characters.length !== 2) throw new Error("Samengestelde initialen vereisen exact twee initialen.");
@@ -2533,10 +2726,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
       }
       for (const field of [...PERSONALIZATION_FIELDS, "initialsInfix"]) {
         if (initialsInfix && (field === "initials" || field === "initialsInfix")) continue;
-        const content = String(values[field] ?? "").trim();
-        if (!content) continue;
         const isNumber = field === "backNumber" || field === "shortsNumber";
         const lineType = isNumber ? "NUMBER" : field === "initials" ? "INITIALS" : "TEXT";
+        const content = normalizeProductionContent(lineType, values[field], field === "initialsInfix" ? "INITIALS_INFIX" : null);
+        if (!content) continue;
         const infixRule = field === "initialsInfix" ? profile?.initialsInfixRule : null;
         const configuredHeight = field === "initialsInfix"
           ? Number(infixRule?.heightMm)
@@ -2606,8 +2799,8 @@ function lineFromOrderItem(state, order, item, index) {
   return { id: `legacy-line-${order.id}-${index + 1}`, type: numeric ? "NUMBER" : "TEXT", content, source: { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) }, widthMm: Math.round(Math.max(20, configuredHeight * Math.max(0.5, content.length * 0.48)) * 1000) / 1000, heightMm: Math.round(configuredHeight * 1000) / 1000, quantity: item.quantity, preview: { kind: "PROFILE_REFERENCE", label: value, aspectRatioLocked: false }, provenance: item.sourceProvenance ?? `Order ${order.id}`, proofStatus: "CONFIGURED", validation: { status: item.productionReadiness?.status === "DATA_GAP" ? "BLOCKED" : "VALID", reason: item.productionReadiness?.reason ?? null } };
 }
 
-function rectangleNesting(lines) {
-  const margin = 5; const gap = 6.4; const workingWidth = 440;
+function rectangleNesting(lines, productionDefaults = PILOT_SETTINGS.productionDefaults) {
+  const margin = productionDefaults.edgeMarginMm; const gap = productionDefaults.minimumGapMm; const workingWidth = productionDefaults.workingWidthMm;
   const objects = lines.flatMap((line) => Array.from({ length: line.quantity }, (_, copy) => ({ lineId: line.id, copy: copy + 1, widthMm: line.widthMm, heightMm: line.heightMm })));
   const arrange = (ordered) => {
     const shelves = []; const placements = [];
@@ -2653,7 +2846,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     attemptIdPrefix: jobNumber.toLowerCase(),
     createdAt,
     pieces,
-    nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 },
+    nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: state.settings.productionDefaults.workingWidthMm, minimumCutGapMm: state.settings.productionDefaults.minimumGapMm, edgeMarginMm: state.settings.productionDefaults.edgeMarginMm },
   });
   if (cutJobBatch.jobs.length !== 1 || !cutJobBatch.jobs[0].readyForPrinting) throw new Error("De versioned productiebronnen konden niet tot één geldige productieplaat worden genest.");
   const cutJob = cutJobBatch.jobs[0];
@@ -2684,7 +2877,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
 
 function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT) {
   const productionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines : order.items.map((item, index) => lineFromOrderItem(state, order, item, index)));
-  const layout = rectangleNesting(productionLines);
+  const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
+  const layout = rectangleNesting(productionLines, defaults);
   const fontIds = new Set(productionLines.filter(({ source }) => source.kind === "FONT").map(({ source }) => source.id));
   const elementIds = new Set(productionLines.filter(({ source }) => source.kind === "PRODUCTION_ELEMENT").map(({ source }) => source.id));
   const fontSources = state.productionFonts.filter(({ id }) => fontIds.has(id)).map(({ id, name, version, sha256: hash, originalFilename }) => ({ id, name, version, sha256: hash, originalFilename }));
@@ -2708,8 +2902,8 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
-    productionGroup: { foilColor: [...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || "Nog te bepalen", material: "Folie · menselijke controle", workingWidthMm: 440 },
-    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: 5, minimumGapMm: 6.4, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, boundsMm }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height })) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: 5, minimumGapMm: 6.4, placements: layout.placements },
+    productionGroup: { foilColor: [...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor, material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm },
+    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, boundsMm }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height })) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
     scale: 1,
     artifact: productionArtifact?.artifact ?? { filename: `${jobNumber}-production-manifest.json`, format: "MANIFEST", version: PILOT_RELEASE_ID, sha256: manifestHash, path: `immutable://sportpaleis/plotjobs/${jobNumber}/production-manifest.json`, manifest },
@@ -2749,6 +2943,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
     if (item.articleId) {
       const article = state.articles.find(({ id }) => id === item.articleId);
       if (!article?.active) throw Object.assign(new Error("Artikel is niet beschikbaar."), { statusCode: 400, code: "ARTICLE_UNAVAILABLE" });
+      if (options.requireBackNumberSizeClass === true && article.printRelevance?.status !== "CONFIRMED_VISIBLE_PERSONALIZATION") throw Object.assign(new Error("Dit artikel behoort niet tot de actuele gevalideerde Bedrukken-catalogus."), { statusCode: 400, code: "ARTICLE_NOT_IN_PRINT_CATALOG" });
       const association = state.associations.find(({ name }) => name === article.association);
       if (!association?.active) throw Object.assign(new Error("De vereniging van dit artikel is niet beschikbaar."), { statusCode: 400, code: "ARTICLE_ASSOCIATION_UNAVAILABLE" });
       if (item.association && item.association !== article.association) throw Object.assign(new Error("Het artikel hoort niet bij de gekozen vereniging."), { statusCode: 400, code: "ARTICLE_ASSOCIATION_MISMATCH" });
@@ -2969,6 +3164,10 @@ export function createSportpaleisPilotRequestHandler(service) {
       }
       if (route === "/api/sportpaleis/v1/bootstrap" && method === "GET") {
         json(response, 200, await service.bootstrap(token));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/state-revision" && method === "GET") {
+        json(response, 200, await service.currentRevision(token));
         return true;
       }
       if (route === "/api/sportpaleis/v1/orders" && method === "POST") {

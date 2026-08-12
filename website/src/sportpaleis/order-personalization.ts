@@ -10,7 +10,9 @@ export function articlePersonalizationFields(article: CatalogArticle): CatalogPr
 }
 
 export function isOrderablePrintedArticle(article: CatalogArticle): boolean {
-  return article.active && (articlePersonalizationFields(article).length > 0 || (article.commercialPrintOptions?.length ?? 0) > 0);
+  return article.active
+    && article.printRelevance?.status === "CONFIRMED_VISIBLE_PERSONALIZATION"
+    && (articlePersonalizationFields(article).length > 0 || (article.commercialPrintOptions?.length ?? 0) > 0);
 }
 
 export function associationPersonalizationModel(articles: CatalogArticle[], association: string): {

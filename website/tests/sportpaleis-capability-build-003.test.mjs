@@ -58,7 +58,9 @@ test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
     assert.equal((await service.bootstrap(admin.token)).articles.some(({ name }) => name === item.product), false);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.value.id, { templateKey: "ORDER_RECEIVED" }, "capability-custom-mail-0001");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.value.id);
-    await assert.rejects(service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "capability-custom-advance-0001"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "capability-custom-control-0001")).value;
+    assert.equal(controlled.stage, "CONTROL");
+    await assert.rejects(service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "capability-custom-advance-0001"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
   });
 
   await context.test("Teamorder bewaart spelerregels in hetzelfde order-, profiel- en revisiemodel", async () => {

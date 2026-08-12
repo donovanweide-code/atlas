@@ -36,7 +36,7 @@ test("Functional Recovery 007 — snelle flow, personalisatie en rollen", async 
 
   await store.mutate(async (state) => {
     state.articles.find(({ id }) => id === "sp-live-140218").association = "Buitenhout MHC";
-    state.productionProfiles.find(({ id }) => id === "profile-keeper").foilColor = "Rood";
+    state.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber").foilColor = "Rood";
     return { state, value: undefined };
   });
 
@@ -48,7 +48,7 @@ test("Functional Recovery 007 — snelle flow, personalisatie en rollen", async 
       items: [
         { articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: {} },
         { articleId: "sp-live-140218", size: "M", quantity: 1, deviation: false, overrides: {} },
-        { articleId: "sp-live-137293", size: "XL", quantity: 1, deviation: true, overrides: { backNumber: "14" } },
+        { articleId: "sp-live-137293", size: "L", quantity: 1, deviation: true, overrides: { backNumber: "14" } },
       ],
     }, "complete-order-007-key")).value;
     assert.equal(order.association, "Meerdere verenigingen");
@@ -58,7 +58,7 @@ test("Functional Recovery 007 — snelle flow, personalisatie en rollen", async 
     assert.equal(order.items[2].deviation, true);
     assert.equal(order.items[0].articleNumber, "137294");
     assert.equal(order.items[0].imageKey, "sp-live-137294");
-    assert.deepEqual(order.foilStates, [{ color: "Wit", status: "READY" }, { color: "Rood", status: "HOLD" }]);
+    assert.deepEqual(order.foilStates, [{ color: "Rood", status: "HOLD" }]);
     assert.match(order.items[0].productionInstruction, /kraag/);
   });
 

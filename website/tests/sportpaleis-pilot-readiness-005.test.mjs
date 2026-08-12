@@ -29,7 +29,7 @@ async function fixture(context) {
 
 function normalizedAssociation(association) {
   return {
-    row: Number(association.source.range.match(/A(\d+)/)?.[1]), name: association.name, fontProfile: association.fontProfile,
+    row: Number(association.source.range.match(/A(\d+)/)?.[1]), name: association.name, fontProfile: association.fontEvidence?.sourceValue ?? association.fontProfile,
     foilColors: association.foilColors, dimensionsCm: Object.fromEntries(Object.entries(association.dimensionsCm).filter(([, value]) => value !== null)), notes: association.notes,
   };
 }
@@ -101,7 +101,9 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     assert.equal(blockedJuniorOrder.items[0].productionReadiness.status, "DATA_GAP");
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, blockedJuniorOrder.id, { templateKey: "ORDER_RECEIVED" }, "readiness-005-junior-gap-mail");
     const latest = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === blockedJuniorOrder.id);
-    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, latest.id, latest.revision, "readiness-005-junior-gap-advance"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, latest.id, latest.revision, "readiness-005-junior-gap-control")).value;
+    assert.equal(controlled.stage, "CONTROL", "een order met een productie-DATA_GAP blijft wel controleerbaar en zichtbaar in Productie");
+    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-005-junior-gap-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
 
     const team = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "TEAM", customer: "Team 18", customerEmail: "team18@example.nl", customerPhone: "0612345678", standardPersonalization: empty,
@@ -130,7 +132,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
 
   await context.test("live pilotcatalogus vervangt demo-artikelen en reviewcontract is compleet", async () => {
     const bootstrap = await service.bootstrap(admin.token);
-    assert.equal(bootstrap.articles.find(({ id }) => id === "sp-live-116597").validation.status, "VALIDATED");
+    assert.equal(bootstrap.articles.find(({ id }) => id === "sp-live-116597").validation.status, "PARTIAL", "alle actuele feiten zijn vastgelegd, maar niet-bevestigde niet-maatvarianten blijven DATA_GAP");
     assert.equal(bootstrap.articles.some(({ id }) => id === "home-shirt"), false);
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const schema = await readFile(new URL("../sportpaleis-server/schema.mysql.sql", import.meta.url), "utf8");

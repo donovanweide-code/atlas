@@ -187,6 +187,14 @@ export class SportpaleisPilotApi {
     return result;
   }
 
+  async currentRevision(): Promise<{ revision: number }> {
+    return responseBody(await fetch(`${API}/state-revision`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    }));
+  }
+
   cachedBootstrap(): PilotBootstrap | undefined {
     try {
       const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? "null") as PilotBootstrap | null;
@@ -414,7 +422,7 @@ export class SportpaleisPilotApi {
     await responseBody(await this.#mutatingFetch(`${API}/admin/production-profiles/${encodeURIComponent(profileId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateSettings(input: { processingDays?: number; deliveryFeeEur?: number; receiptMailText?: string; readyMailText?: string }): Promise<void> {
+  async updateSettings(input: { processingDays?: number; deliveryFeeEur?: number; receiptMailText?: string; readyMailText?: string; productionDefaults?: { workingWidthMm: number; minimumGapMm: number; edgeMarginMm: number; defaultWidthMm: number; defaultHeightMm: number; defaultFontId: string; defaultFoilColor: string } }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

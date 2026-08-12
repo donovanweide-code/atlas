@@ -153,6 +153,7 @@ export interface CatalogArticle {
   supplierArticleNumber?: string;
   commercialPrintOptions?: { sourceLabel: string; canonicalField: keyof OrderPersonalization | null; priceEur: number | null; status: "VALIDATED" | "DATA_GAP" }[];
   catalogProvenance?: { authority: "SPORTPALEIS_LIVE"; url: string; imageUrl: string; checkedAt: string };
+  printRelevance?: { status: "CONFIRMED_VISIBLE_PERSONALIZATION" | "HUMAN_CONFIRMATION_REQUIRED"; sourceLabel: string; checkedAt: string };
   productionDataGaps?: string[];
   revision?: number;
   variantLabels?: string[];
@@ -171,6 +172,7 @@ export interface CatalogArticle {
   personalizationPolicy?: { mode: "none" | "required" | "optional" | "mutually-exclusive" | "combination"; fields: Record<string, "required" | "optional"> };
   priceConfiguration?: {
     articleUnitPriceEur: number | null;
+    articleUnitPricesBySizeEur?: Record<string, number | null>;
     personalizationUnitPricesEur: Partial<Record<keyof OrderPersonalization, number | null>>;
     sourceLabel: string;
   };
@@ -230,6 +232,22 @@ export interface AssociationConfiguration {
   active: boolean;
   source: { file: string; sheet: string; range: string };
   fontProfile: string;
+  fontEvidence?: {
+    sourceValue: string;
+    confirmedAssociationName: string;
+    confirmedValue: string | null;
+    canonicalName: string | null;
+    confirmationStatus: "MATCH" | "MISMATCH" | "DATA_GAP";
+    applied: boolean;
+    assetStatus: "DATA_GAP" | "PRESENT";
+    assetId: string | null;
+    reference: string | null;
+    referenceKind: "VECTOR_CONTOUR_REFERENCE" | null;
+    referenceAsset?: { filename: string; format: string; sha256: string; status: "PRESENT_NOT_A_FONT_FILE" } | null;
+    exception: string | null;
+    reason: string | null;
+    provenance: { id: string; confirmedAt: string; authority: string; limitation: string };
+  };
   foilColors: string[];
   dimensionsCm: {
     initialsShirt: number | null;
@@ -252,6 +270,9 @@ export interface AssociationConfiguration {
     sha256: string;
     updatedAt: string;
     updatedBy: string;
+    sourceUrl?: string;
+    checkedAt?: string;
+    authority?: "SPORTPALEIS_LIVE_ASSOCIATION_PAGE";
   } | null;
   revision?: number;
   updatedAt?: string;
@@ -498,8 +519,23 @@ export interface SportpaleisWorkspaceState {
   orders: WorkspaceOrder[];
   articles: CatalogArticle[];
   associations: AssociationConfiguration[];
+  fontConfirmationVersion?: string;
   productionProfiles: ProductionProfile[];
-  settings: { processingDays: number; deliveryFeeEur: number; receiptMailText?: string; readyMailText?: string };
+  settings: {
+    processingDays: number;
+    deliveryFeeEur: number;
+    receiptMailText?: string;
+    readyMailText?: string;
+    productionDefaults?: {
+      workingWidthMm: number;
+      minimumGapMm: number;
+      edgeMarginMm: number;
+      defaultWidthMm: number;
+      defaultHeightMm: number;
+      defaultFontId: string;
+      defaultFoilColor: string;
+    };
+  };
   foilRolls: FoilRoll[];
   feedback: WorkspaceFeedback[];
   extraUserRequests: ExtraUserRequest[];
@@ -610,7 +646,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
     productionFonts: [],
     articles: [],
     productionProfiles: [],
-    settings: { processingDays: 5, deliveryFeeEur: 3.95 },
+    settings: { processingDays: 5, deliveryFeeEur: 3.95, productionDefaults: { workingWidthMm: 440, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: "", defaultFoilColor: "Wit" } },
     foilRolls: [],
     feedback: [],
     extraUserRequests: [],

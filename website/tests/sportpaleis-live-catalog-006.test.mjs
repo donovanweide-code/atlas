@@ -8,6 +8,7 @@ import {
   SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS,
   SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES,
   SPORTPALEIS_LIVE_EXCLUDED_ARTICLES,
+  SPORTPALEIS_LIVE_HUMAN_CONFIRMATION_REQUIRED_ARTICLES,
   SPORTPALEIS_LIVE_PILOT_ARTICLES,
 } from "../config/sportpaleis-live-pilot-catalog.mjs";
 import { CaptureTransport, MailFoundation, MemoryMailStore, createMailOrganizations } from "../scripts/mail-foundation.mjs";
@@ -35,14 +36,16 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
   const { service, admin, operator, storeUser } = await fixture(context);
 
   await context.test("live inventaris vervangt demo-SKU's en bevat meerdere verenigingen", () => {
-    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 48);
-    assert.deepEqual([...new Set(SPORTPALEIS_LIVE_PILOT_ARTICLES.map(({ association }) => association))].sort(), ["A.S.C. Waterwijk", "Almerer Pioneers", "DCG", "FC Almere", "MHC Lelystad"]);
-    assert.equal(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ status }) => status === "LIVE").length, 27);
-    assert.equal(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.find(({ association }) => association === "DCG Selectie").status, "SITE_ERROR_500");
+    assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.length, 183);
+    assert.equal(new Set(SPORTPALEIS_LIVE_PILOT_ARTICLES.map(({ id }) => id)).size, 183);
+    assert.equal(new Set(SPORTPALEIS_LIVE_PILOT_ARTICLES.map(({ association }) => association)).size, 16);
+    assert.equal(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ status }) => status === "LIVE").length, 20);
+    assert.deepEqual(SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS.filter(({ confirmedPrintArticleCount }) => confirmedPrintArticleCount === 0).map(({ association }) => association), ["Almere'81", "Buitenhout MHC", "HBSA", "Sloeproeien"]);
+    assert.equal(SPORTPALEIS_LIVE_HUMAN_CONFIRMATION_REQUIRED_ARTICLES.length, 267);
     assert.equal(SPORTPALEIS_LIVE_EXCLUDED_ARTICLES.length, 0);
-    assert.equal(SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES.length, 19);
-    assert.ok(SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES.every(({ active, profileId, catalogProvenance }) => active && profileId === "profile-pending" && catalogProvenance.authority === "SPORTPALEIS_LIVE"));
+    assert.equal(SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES.length, 0);
     assert.ok(SPORTPALEIS_LIVE_PILOT_ARTICLES.every(({ id, imageKey, catalogProvenance }) => id.startsWith("sp-live-") && imageKey.startsWith("sp-live-") && catalogProvenance.authority === "SPORTPALEIS_LIVE"));
+    assert.ok(SPORTPALEIS_LIVE_PILOT_ARTICLES.every(({ availableSizes, priceConfiguration, supports, printRelevance }) => availableSizes.every((size) => typeof priceConfiguration.articleUnitPricesBySizeEur[size] === "number") && supports.length && printRelevance.status === "CONFIRMED_VISIBLE_PERSONALIZATION"));
     assert.equal(SPORTPALEIS_LIVE_PILOT_ARTICLES.some(({ articleNumber }) => articleNumber === "ASC-1001"), false);
   });
 
@@ -58,7 +61,7 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
     assert.equal(created.association, "Meerdere verenigingen");
     assert.deepEqual(created.associations.sort(), ["A.S.C. Waterwijk", "FC Almere"]);
     assert.deepEqual(created.items.map(({ association }) => association).sort(), ["A.S.C. Waterwijk", "FC Almere"]);
-    assert.ok(created.items.every(({ sourceProvenance, productionReadiness }) => sourceProvenance.includes("Sportpaleis.nl") && productionReadiness.status === "ATTENTION"));
+    assert.ok(created.items.every(({ sourceProvenance, productionReadiness }) => sourceProvenance.includes("Sportpaleis") && ["ATTENTION", "DATA_GAP"].includes(productionReadiness.status)));
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "live-006-multi-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
     const advanced = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "live-006-nonblocking-attention")).value;

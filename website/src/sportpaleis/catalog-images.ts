@@ -30,7 +30,7 @@ const liveImages = import.meta.glob<string>("../assets/images/sportpaleis/live-c
   import: "default",
 });
 for (const [path, url] of Object.entries(liveImages)) {
-  const key = path.match(/\/(sp-live-\d+)\.webp$/)?.[1];
+  const key = path.match(/\/(sp-live-[^/]+)\.webp$/)?.[1];
   if (key) images[key] = url;
 }
 

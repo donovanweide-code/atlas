@@ -55,7 +55,7 @@ export async function createSportpaleisDevelopmentSeed(seedPasswords, now = new 
     { id: "kevin", name: "Kevin", initials: "KV", role: "admin", email: "kevin@sportpaleis.nl", status: "Actief", seatType: "customer", salesNumber: null },
     { id: "patrick", name: "Patrick", initials: "PA", role: "operator", email: "patrick@sportpaleis.nl", status: "Actief", seatType: "customer", salesNumber: null },
     { id: "collega", name: "Winkelmedewerker", initials: "WM", role: "store", email: "collega@sportpaleis.nl", status: "Actief", seatType: "customer", salesNumber: null },
-    { id: "donovan-support", name: "Donovan · technische ondersteuning", initials: "DW", role: "support", email: "support@webuildanddesign.nl", status: "Actief", seatType: "support", salesNumber: "45" },
+    { id: "donovan-support", name: "Donovan · technische ondersteuning", initials: "DW", role: "support", email: "support@webuildanddesign.nl", status: "Actief", seatType: "support", salesNumber: null },
   ];
   const users = [];
   for (const definition of definitions) {

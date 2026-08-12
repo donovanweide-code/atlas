@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const pwaAsset = (name: string) => readFileSync(new URL(`./workspace-public/${name}`, import.meta.url), "utf8");
 
@@ -16,10 +16,17 @@ export default defineConfig({
           source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/fonts/${fileName}`, import.meta.url)),
         });
       }
+      for (const fileName of readdirSync(new URL("./public/assets/organizations/sportpaleis/association-logos/", import.meta.url)).filter((name) => name.endsWith(".png")).sort()) {
+        this.emitFile({
+          type: "asset",
+          fileName: `assets/organizations/sportpaleis/association-logos/${fileName}`,
+          source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/association-logos/${fileName}`, import.meta.url)),
+        });
+      }
     },
   }],
   build: {
-    assetsInlineLimit: 200_000,
+    assetsInlineLimit: 4_096,
     outDir: "dist-workspace",
     emptyOutDir: true,
     sourcemap: false,

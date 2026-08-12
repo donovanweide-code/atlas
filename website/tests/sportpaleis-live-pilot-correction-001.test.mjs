@@ -50,12 +50,12 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     const dcg = SPORTPALEIS_LIVE_PILOT_ARTICLES.find(({ id }) => id === "sp-live-116350");
     const mhc = SPORTPALEIS_LIVE_PILOT_ARTICLES.find(({ id }) => id === "sp-live-100664");
     assert.deepEqual({ association: dcg.association, sku: dcg.articleNumber, supplier: dcg.supplierArticleNumber, supports: dcg.supports }, { association: "DCG", sku: "116350", supplier: "105007", supports: ["initials"] });
-    assert.deepEqual({ association: mhc.association, sku: mhc.articleNumber, supplier: mhc.supplierArticleNumber, supports: mhc.supports }, { association: "MHC Lelystad", sku: "100664", supplier: "LADY AWAY", supports: ["name", "backNumber"] });
+    assert.deepEqual({ association: mhc.association, sku: mhc.articleNumber, supplier: mhc.supplierArticleNumber, supports: mhc.supports }, { association: "MHC Lelystad", sku: "100664", supplier: "LADY AWAY", supports: ["name"] });
     const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Live twee verenigingen", customerEmail: "live-multi@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, initials: "AB", name: "De Vries", backNumber: "12", backNumberSizeClass: "SENIOR" },
       items: [
-        { articleId: dcg.id, size: "164", quantity: 1, deviation: false, overrides: empty },
+        { articleId: dcg.id, size: "M", quantity: 1, deviation: false, overrides: empty },
         { articleId: mhc.id, size: "164", quantity: 1, deviation: false, overrides: empty },
       ],
     }, "correction-001-live-multi")).value;
@@ -100,7 +100,7 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     });
     assert.equal(updated.revision, before.revision + 1);
     const bootstrap = await service.bootstrap(admin.token);
-    const profile = bootstrap.productionProfiles.find(({ id }) => id === "profile-shirt-home");
+    const profile = bootstrap.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber");
     assert.equal(profile.fontProfile, "schluber · pilotcorrectie");
     assert.equal(profile.foilColor, "Zwart");
     assert.match(profile.sizeLabel, /Rug Senior 21 cm/);

@@ -104,7 +104,7 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
   });
 
   await context.test("bulkstatus is atomair en respecteert een volledige kleurblokkade", async () => {
-    await store.mutate(async (state) => { state.productionProfiles.find(({ id }) => id === "profile-keeper").foilColor = "Rood"; return { state, value: undefined }; });
+    await store.mutate(async (state) => { state.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber").foilColor = "Rood"; return { state, value: undefined }; });
     const blocked = (await service.createOrder(patrick.token, patrick.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137293", size: "L", quantity: 1, deviation: false, overrides: {} }] }), "red-only-007b")).value;
     const control = (await service.advanceOrder(patrick.token, patrick.csrfToken, blocked.id, blocked.revision, "red-control-007b")).value;
     await assert.rejects(service.bulkAdvanceOrders(patrick.token, patrick.csrfToken, { orders: [{ id: control.id, expectedRevision: control.revision }] }, "red-bulk-007b"), (error) => error.code === "COLOR_HOLD");

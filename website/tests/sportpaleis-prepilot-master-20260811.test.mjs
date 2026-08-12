@@ -67,7 +67,11 @@ test("PRE-PILOT MASTER — organisatie, sessies, operatie en intake", async (con
     const individual = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload(), "prepilot-operation-individual")).value;
     await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, individual.id, { action: "PAID", expectedRevision: individual.revision }, "prepilot-paid-individual"), (error) => error.code === "PAYMENT_ACTION_NOT_AVAILABLE");
     await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, individual.id, { action: "PICKED_UP", expectedRevision: individual.revision }, "prepilot-early-pickup"), (error) => error.code === "ORDER_NOT_READY");
-    let created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ orderKind: "TEAM" }), "prepilot-operation-team")).value;
+    let created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({
+      orderKind: "TEAM",
+      standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
+      items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
+    }), "prepilot-operation-team")).value;
     await store.mutate(async (state) => { const order = state.orders.find(({ id }) => id === created.id); order.communication.receipt.status = "CAPTURED"; return { state, value: undefined }; });
     for (const key of ["control", "print", "done"]) created = (await service.advanceOrder(activeAdmin.token, activeAdmin.csrfToken, created.id, created.revision, `prepilot-team-${key}`)).value;
     const paid = (await service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, created.id, { action: "PAID", expectedRevision: created.revision }, "prepilot-paid-event")).value;

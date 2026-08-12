@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { SPORTPALEIS_ASSOCIATION_LOGOS } from "../config/sportpaleis-association-logos.generated.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const outputRoot = path.resolve(scriptDirectory, "../dist-workspace");
@@ -34,11 +36,19 @@ for (const required of [
 if (sportpaleisHtml.includes("WBD Workspace")) fail("Sportpaleis-entrypoint bevat WBD-identiteit");
 const robotsPath = path.join(outputRoot, "robots.txt");
 if (!files.includes(robotsPath)) fail("Workspace-specifieke robots.txt ontbreekt");
-if ((await readFile(robotsPath, "utf8")).trim() !== "User-agent: *\nDisallow: /") fail("Workspace robots.txt moet alle crawling blokkeren");
+if ((await readFile(robotsPath, "utf8")).replaceAll("\r\n", "\n").trim() !== "User-agent: *\nDisallow: /") fail("Workspace robots.txt moet alle crawling blokkeren");
 if (files.some((file) => path.basename(file).toLowerCase() === "sitemap.xml")) fail("Workspace-release mag geen publieke sitemap bevatten");
 if (files.some((file) => file.endsWith(".map"))) fail("source maps horen niet in het runtimeartefact");
 const rasterFiles = files.filter((file) => /\.(?:jpe?g|png|webp)$/i.test(file));
-if (rasterFiles.some((file) => !file.endsWith(".webp"))) fail("alleen lokaal beheerde WebP-catalogusassets zijn toegestaan in het Workspace-artefact");
+const associationLogoRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "association-logos");
+const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS).map((logo) => [path.join(associationLogoRoot, logo.filename), logo]));
+if (associationLogoPaths.size !== 20) fail("exact 20 gecontroleerde Sportpaleis-verenigingslogo's zijn vereist");
+if (rasterFiles.some((file) => !file.endsWith(".webp") && !associationLogoPaths.has(file))) fail("alleen lokaal beheerde WebP-catalogusassets en gehashte Sportpaleis-verenigingslogo's zijn toegestaan");
+for (const [file, logo] of associationLogoPaths) {
+  if (!files.includes(file)) fail(`Sportpaleis-verenigingslogo ontbreekt: ${logo.filename}`);
+  const hash = createHash("sha256").update(await readFile(file)).digest("hex").toUpperCase();
+  if (hash !== logo.sha256) fail(`Sportpaleis-verenigingslogo wijkt af: ${logo.filename}`);
+}
 for (const file of rasterFiles) if ((await stat(file)).size > 1_000_000) fail("onverwacht grote Workspace-catalogusasset aangetroffen");
 
 const textFiles = files.filter((file) => /\.(?:css|html|js|json|svg)$/i.test(file));

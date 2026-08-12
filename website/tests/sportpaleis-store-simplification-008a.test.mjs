@@ -81,11 +81,11 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     await assert.rejects(create([{ articleId: "sp-live-134826", size: "M", quantity: 1, deviation: true, overrides: { initials: "DW", name: "", backNumber: "", shortsNumber: "10" } }], "short-both-008a", { initials: "", backNumber: "", shortsNumber: "" }), (error) => error.code === "ARTICLE_PERSONALIZATION_NOT_ALLOWED");
   });
 
-  await context.test("artikel zonder eerder vastgelegde live bedrukoptie blijft orderbaar maar blokkeert veilige productie", async () => {
-    const order = (await create([{ articleId: "sp-live-134827", size: "M", quantity: 1, deviation: false, overrides: {} }], "socks-order-008a", { initials: "", name: "", backNumber: "", shortsNumber: "" })).value;
-    assert.equal(order.items[0].sourceType, "CATALOG");
-    assert.equal(order.items[0].productionReadiness.status, "DATA_GAP");
-    assert.match(order.items[0].productionReadiness.reason, /Noodzakelijke productiegegevens/);
+  await context.test("artikel zonder actuele zichtbare bestelbare bedrukoptie blijft buiten de Bedrukken-catalogus", async () => {
+    await assert.rejects(
+      create([{ articleId: "sp-live-134827", size: "M", quantity: 1, deviation: false, overrides: {} }], "socks-order-008a", { initials: "", name: "", backNumber: "", shortsNumber: "" }),
+      (error) => error.code === "ARTICLE_UNAVAILABLE",
+    );
   });
 
   await context.test("letterlijke initialen vervangen de oude semantische naamopbouw", async () => {
