@@ -185,6 +185,28 @@ function log(config, level, event, fields = {}) {
   process.stdout.write(`${JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...fields })}\n`);
 }
 
+function stackFrames(error) {
+  if (!(error instanceof Error) || !error.stack) return [];
+  return String(error.stack).split("\n").slice(1, 13).map((line) => line.trim()).filter(Boolean);
+}
+
+export function sportpaleisRuntimeErrorLogFields({ error, method, route, statusCode }) {
+  const cause = error instanceof Error ? error.cause : null;
+  return {
+    method,
+    route,
+    statusCode,
+    errorCode: String(error?.code ?? "INTERNAL_ERROR"),
+    errorType: String(error?.name ?? typeof error),
+    transactionPhase: String(error?.transactionPhase ?? "not-applicable"),
+    transactionRollbackStatus: String(error?.transactionRollbackStatus ?? "not-applicable"),
+    stackFrames: stackFrames(error),
+    causeCode: cause?.code ? String(cause.code) : null,
+    causeType: cause?.name ? String(cause.name) : null,
+    causeStackFrames: stackFrames(cause),
+  };
+}
+
 export async function createWorkspaceRuntimeServer(options = {}) {
   const config = options.config ?? parseWorkspaceRuntimeConfig(process.env);
   const configuredWorkspaceUrl = new URL(config.workspaceBaseUrl);
@@ -227,7 +249,14 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
         });
         await service.initialize();
-        return createSportpaleisPilotRequestHandler(service);
+        return createSportpaleisPilotRequestHandler(service, {
+          onError: (context) => log(
+            config,
+            context.statusCode >= 500 ? "error" : "warn",
+            "sportpaleis-api-error",
+            sportpaleisRuntimeErrorLogFields(context),
+          ),
+        });
       })();
     }
     return sportpaleisHandlerPromise;

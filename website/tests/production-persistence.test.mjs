@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,10 +9,11 @@ import { fileURLToPath } from "node:url";
 import {
   createSportpaleisProductionBootstrap,
   createSportpaleisPasswordRecord,
+  createSportpaleisPilotRequestHandler,
   SportpaleisFileStore,
   SportpaleisPilotService,
 } from "../scripts/sportpaleis-pilot-foundation.mjs";
-import { SportpaleisMariaDbStore } from "../scripts/sportpaleis-mariadb-store.mjs";
+import { SportpaleisMariaDbStore, SportpaleisMariaDbStoreError } from "../scripts/sportpaleis-mariadb-store.mjs";
 import {
   SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   createSportpaleisProductionMailFoundation,
@@ -22,7 +24,7 @@ import {
   productionDatabaseCredentialsFromEnvironment,
   WorkspaceRuntimeConfigError,
 } from "../scripts/workspace-runtime-config.mjs";
-import { createWorkspaceRuntimeServer, SPORTPALEIS_RUNTIME_ARTIFACT_ROOT } from "../scripts/workspace-runtime.mjs";
+import { createWorkspaceRuntimeServer, sportpaleisRuntimeErrorLogFields, SPORTPALEIS_RUNTIME_ARTIFACT_ROOT } from "../scripts/workspace-runtime.mjs";
 import { collectRuntimeDependencyGraph } from "../scripts/release-runtime-graph.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/001-runtime-state.sql", import.meta.url);
@@ -60,6 +62,8 @@ class MemoryPool {
   constructor(checksum) {
     this.checksum = checksum;
     this.row = null;
+    this.rollbackCalls = 0;
+    this.failNextUpdate = null;
   }
 
   async getConnection() {
@@ -78,7 +82,7 @@ class MemoryConnection {
 
   async beginTransaction() {}
   async commit() {}
-  async rollback() {}
+  async rollback() { this.pool.rollbackCalls += 1; }
   release() {}
 
   async query(sql, params = []) {
@@ -91,6 +95,11 @@ class MemoryConnection {
       return { affectedRows: 1 };
     }
     if (sql.startsWith("UPDATE sp_runtime_state")) {
+      if (this.pool.failNextUpdate) {
+        const error = this.pool.failNextUpdate;
+        this.pool.failNextUpdate = null;
+        throw error;
+      }
       if (!this.pool.row || this.pool.row.revision !== Number(params[4])) return { affectedRows: 0 };
       this.pool.row = { revision: Number(params[1]), state_json: params[2] };
       return { affectedRows: 1 };
@@ -230,6 +239,131 @@ test("MariaDB-store initialiseert leeg, bewaart transacties en overleeft een sto
   assert.equal(state.settings.processingDays, 6);
   assert.equal(state.revision, 2);
   assert.equal((await restarted.storageStatus()).engine, "mariadb");
+});
+
+test("MariaDB-store behoudt functionele fouten na rollback en vertaalt alleen echte DB-fouten", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const before = JSON.parse(pool.row.state_json);
+  const domainError = Object.assign(new Error("Kies een geldige vereniging."), { statusCode: 422, code: "ASSOCIATION_INVALID" });
+
+  await assert.rejects(
+    store.mutate(async (state) => {
+      state.nextOrderSequence += 1;
+      state.orders.unshift({ id: "SP-2026-TEST-PARTIAL" });
+      throw domainError;
+    }),
+    (error) => error === domainError
+      && error.statusCode === 422
+      && error.code === "ASSOCIATION_INVALID"
+      && error.message === "Kies een geldige vereniging."
+      && error.transactionPhase === "mutator"
+      && error.transactionRollbackStatus === "succeeded",
+  );
+  assert.equal(pool.rollbackCalls, 1);
+  assert.deepEqual(JSON.parse(pool.row.state_json), before);
+  assert.equal(JSON.parse(pool.row.state_json).orders.some(({ id }) => id === "SP-2026-TEST-PARTIAL"), false);
+
+  const databaseCause = Object.assign(new Error("connection lost"), { code: "ER_SERVER_SHUTDOWN" });
+  pool.failNextUpdate = databaseCause;
+  await assert.rejects(
+    store.mutate(async (state) => {
+      state.settings.processingDays = 7;
+      return { state, value: "not-committed" };
+    }),
+    (error) => error instanceof SportpaleisMariaDbStoreError
+      && error.code === "DATABASE_TRANSACTION_FAILED"
+      && error.cause === databaseCause
+      && error.transactionPhase === "write"
+      && error.transactionRollbackStatus === "succeeded",
+  );
+  assert.equal(pool.rollbackCalls, 2);
+  assert.deepEqual(JSON.parse(pool.row.state_json), before);
+});
+
+test("normale Bedrukken-validatie rolt volledig terug zonder ordernummer of gedeeltelijke order", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const password = "Bedrukken-Validation-Test!";
+  await store.mutate(async (state) => {
+    state.users.push({
+      id: "bedrukken-validation-user",
+      name: "Bedrukken Validation",
+      initials: "BV",
+      role: "store",
+      email: "bedrukken-validation@sportpaleis.test",
+      status: "Actief",
+      seatType: "customer",
+      salesNumber: null,
+      password: await createSportpaleisPasswordRecord(password),
+    });
+    return { state, value: undefined };
+  });
+  const service = new SportpaleisPilotService({ store, allowedOrigin: "http://127.0.0.1" });
+  await service.initialize();
+  const session = await service.login({ email: "bedrukken-validation@sportpaleis.test", password });
+  const before = await store.read();
+
+  await assert.rejects(
+    service.createOrder(session.token, session.csrfToken, {
+      customer: "",
+      customerEmail: "validation@example.test",
+      customerPhone: "0612345678",
+      standardPersonalization: { initials: "BV", initialsSemantic: null, name: "VALIDATION", backNumber: "10", backNumberSizeClass: "SENIOR", shortsNumber: "" },
+      items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} }],
+    }, "bedrukken-normal-validation"),
+    (error) => error.statusCode === 400
+      && error.code === "VALIDATION_ERROR"
+      && error.message === "Klant is verplicht en maximaal 120 tekens."
+      && error.transactionPhase === "mutator"
+      && error.transactionRollbackStatus === "succeeded",
+  );
+  const after = await store.read();
+  assert.equal(after.revision, before.revision);
+  assert.equal(after.nextOrderSequence, before.nextOrderSequence);
+  assert.deepEqual(after.orders, before.orders);
+  assert.equal(new Set(after.orders.map(({ id }) => id)).size, after.orders.length);
+  assert.equal(after.idempotency["bedrukken-validation-user:CREATE_ORDER:bedrukken-normal-validation"], undefined);
+});
+
+test("API toont functionele 4xx ongewijzigd, maskeert echte 5xx en logt alleen veilige context", async (context) => {
+  const observed = [];
+  let selectedError = Object.assign(new Error("Kies een geldige vereniging."), { statusCode: 422, code: "ASSOCIATION_INVALID" });
+  const service = {
+    allowedOrigin: "",
+    async createOrder() { throw selectedError; },
+  };
+  const handler = createSportpaleisPilotRequestHandler(service, { onError: (entry) => observed.push(entry) });
+  const server = createServer(async (request, response) => {
+    if (!(await handler(request, response))) response.end();
+  });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  const address = server.address();
+  const origin = `http://127.0.0.1:${address.port}`;
+  service.allowedOrigin = origin;
+  const request = () => fetch(`${origin}/api/sportpaleis/v1/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: origin, "X-CSRF-Token": "safe-test-token", Cookie: "spw_session=safe-test-session" },
+    body: JSON.stringify({ customer: "Niet loggen", customerEmail: "privacy@example.test" }),
+  });
+
+  const domainResponse = await request();
+  assert.equal(domainResponse.status, 422);
+  assert.deepEqual(await domainResponse.json(), { error: "ASSOCIATION_INVALID", message: "Kies een geldige vereniging." });
+  assert.deepEqual({ method: observed[0].method, route: observed[0].route, statusCode: observed[0].statusCode }, { method: "POST", route: "/api/sportpaleis/v1/orders", statusCode: 422 });
+
+  selectedError = Object.assign(new SportpaleisMariaDbStoreError("Workspace MariaDB-transactie is mislukt.", "DATABASE_TRANSACTION_FAILED", Object.assign(new Error("private database detail"), { code: "ER_LOCK_DEADLOCK" })), { transactionPhase: "write", transactionRollbackStatus: "succeeded" });
+  const databaseResponse = await request();
+  assert.equal(databaseResponse.status, 500);
+  assert.deepEqual(await databaseResponse.json(), { error: "DATABASE_TRANSACTION_FAILED", message: "De Workspace-service is tijdelijk niet beschikbaar." });
+  const safeFields = sportpaleisRuntimeErrorLogFields(observed[1]);
+  assert.deepEqual({ code: safeFields.errorCode, type: safeFields.errorType, phase: safeFields.transactionPhase, rollback: safeFields.transactionRollbackStatus, causeCode: safeFields.causeCode }, { code: "DATABASE_TRANSACTION_FAILED", type: "SportpaleisMariaDbStoreError", phase: "write", rollback: "succeeded", causeCode: "ER_LOCK_DEADLOCK" });
+  assert.doesNotMatch(JSON.stringify(safeFields), /Niet loggen|privacy@example\.test|private database detail|Workspace MariaDB-transactie is mislukt/);
 });
 
 test("MariaDB-store registreert ontbrekende immutable productie-evidence exact eenmaal", async () => {

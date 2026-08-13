@@ -3206,7 +3206,7 @@ function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(S
   return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${clear ? 0 : maxAgeSeconds}${secure ? "; Secure" : ""}`;
 }
 
-export function createSportpaleisPilotRequestHandler(service) {
+export function createSportpaleisPilotRequestHandler(service, { onError } = {}) {
   return async function handle(request, response) {
     const requestUrl = new URL(request.url ?? "/", "http://sportpaleis.local");
     const route = requestUrl.pathname;
@@ -3445,6 +3445,7 @@ export function createSportpaleisPilotRequestHandler(service) {
       return true;
     } catch (error) {
       const statusCode = Number(error?.statusCode) || 500;
+      try { onError?.({ error, method: request.method ?? "GET", route, statusCode }); } catch {}
       json(response, statusCode, {
         error: error?.code ?? "INTERNAL_ERROR",
         message: statusCode >= 500 ? "De Workspace-service is tijdelijk niet beschikbaar." : error.message,

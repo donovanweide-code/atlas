@@ -28,6 +28,24 @@ export class SportpaleisMariaDbStoreError extends Error {
   }
 }
 
+function withTransactionOutcome(error, { phase, rollbackStatus, rollbackError = null }) {
+  if ((typeof error !== "object" && typeof error !== "function") || error === null) return error;
+  for (const [key, value] of Object.entries({ transactionPhase: phase, transactionRollbackStatus: rollbackStatus })) {
+    Object.defineProperty(error, key, { configurable: true, value });
+  }
+  if (rollbackError) Object.defineProperty(error, "transactionRollbackError", { configurable: true, value: rollbackError });
+  return error;
+}
+
+async function rollbackWithStatus(connection) {
+  try {
+    await connection.rollback();
+    return { status: "succeeded", error: null };
+  } catch (error) {
+    return { status: "failed", error };
+  }
+}
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -163,8 +181,10 @@ export class SportpaleisMariaDbStore {
 
   async mutate(mutator) {
     const connection = await this.#connection();
+    let phase = "begin";
     try {
       await connection.beginTransaction();
+      phase = "read";
       const rows = await connection.query(
         "SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE",
         ["sport-2000-sportpaleis-bv"],
@@ -176,9 +196,12 @@ export class SportpaleisMariaDbStore {
       if (Number(rows[0].revision) !== Number(current.revision)) {
         throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
       }
+      phase = "mutator";
       const result = await mutator(structuredClone(current));
+      phase = "state-validation";
       const next = validateSportpaleisPilotState(result.state);
       next.revision = current.revision + 1;
+      phase = "write";
       const update = await connection.query(
         "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
         [next.schemaVersion, next.revision, JSON.stringify(next), next.organizationId, current.revision],
@@ -186,12 +209,19 @@ export class SportpaleisMariaDbStore {
       if (Number(update.affectedRows) !== 1) {
         throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
       }
+      phase = "commit";
       await connection.commit();
       return { state: next, value: result.value };
     } catch (error) {
-      await connection.rollback().catch(() => undefined);
-      if (error instanceof SportpaleisMariaDbStoreError) throw error;
-      throw new SportpaleisMariaDbStoreError("Workspace MariaDB-transactie is mislukt.", "DATABASE_TRANSACTION_FAILED", error);
+      const rollback = await rollbackWithStatus(connection);
+      if (phase === "mutator" && rollback.status === "succeeded") {
+        throw withTransactionOutcome(error, { phase, rollbackStatus: rollback.status });
+      }
+      if (error instanceof SportpaleisMariaDbStoreError && rollback.status === "succeeded") {
+        throw withTransactionOutcome(error, { phase, rollbackStatus: rollback.status });
+      }
+      const failure = new SportpaleisMariaDbStoreError("Workspace MariaDB-transactie is mislukt.", "DATABASE_TRANSACTION_FAILED", error);
+      throw withTransactionOutcome(failure, { phase, rollbackStatus: rollback.status, rollbackError: rollback.error });
     } finally {
       connection.release();
     }
