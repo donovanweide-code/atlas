@@ -42,8 +42,12 @@ if (files.some((file) => file.endsWith(".map"))) fail("source maps horen niet in
 const rasterFiles = files.filter((file) => /\.(?:jpe?g|png|webp)$/i.test(file));
 const associationLogoRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "association-logos");
 const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS).map((logo) => [path.join(associationLogoRoot, logo.filename), logo]));
+const brandLogoPath = path.join(outputRoot, "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png");
+const brandLogoSha256 = "70C424DCD371BB7F690946D24B6F3AEEEA3F7D0F276928C4707951EB8BDD4BB4";
 if (associationLogoPaths.size !== 20) fail("exact 20 gecontroleerde Sportpaleis-verenigingslogo's zijn vereist");
-if (rasterFiles.some((file) => !file.endsWith(".webp") && !associationLogoPaths.has(file))) fail("alleen lokaal beheerde WebP-catalogusassets en gehashte Sportpaleis-verenigingslogo's zijn toegestaan");
+if (rasterFiles.some((file) => !file.endsWith(".webp") && !associationLogoPaths.has(file) && file !== brandLogoPath)) fail("alleen lokaal beheerde WebP-catalogusassets en gehashte Sportpaleis-logo's zijn toegestaan");
+if (!files.includes(brandLogoPath)) fail("gecontroleerd Sportpaleis-merklogo ontbreekt");
+if (createHash("sha256").update(await readFile(brandLogoPath)).digest("hex").toUpperCase() !== brandLogoSha256) fail("Sportpaleis-merklogo wijkt af");
 for (const [file, logo] of associationLogoPaths) {
   if (!files.includes(file)) fail(`Sportpaleis-verenigingslogo ontbreekt: ${logo.filename}`);
   const hash = createHash("sha256").update(await readFile(file)).digest("hex").toUpperCase();

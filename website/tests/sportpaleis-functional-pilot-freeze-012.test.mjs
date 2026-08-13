@@ -115,14 +115,15 @@ test("Functional pilot freeze UX is context-first, preview-safe and responsive",
   const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
   assert.match(source, />Bedrukken</);
   assert.match(source, /Vrije opdruk/);
-  assert.match(source, /Logo's zijn hier bewust niet beschikbaar/);
+  assert.match(source, /<summary>Technische details<\/summary>/);
   assert.match(source, /new FontFace/);
   assert.match(source, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(source, /data-managed-font-ids/);
   assert.match(source, /\["PRODUCTION_SOURCE", "FONT"\]/);
   assert.match(source, /data-font-ready="false"/);
-  assert.match(source, /Human GO · PlotJob vastleggen/);
-  assert.match(source, /MINIMALE|Minimale veilige rollengte|minimaliseert eerst veilige rollengte/i);
+  assert.match(source, /Goedkeuren en productiejob maken/);
+  assert.match(source, /<summary>Technische productie-instellingen<\/summary>/i);
+  assert.match(source, /minimumGapMm/);
   assert.match(source, /Fontbibliotheek/);
   assert.match(css, /@media\(max-width:560px\)/);
   assert.match(css, /\.sp-free-line__fields\{grid-template-columns:1fr 1fr\}/);

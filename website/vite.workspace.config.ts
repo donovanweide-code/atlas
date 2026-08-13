@@ -16,6 +16,11 @@ export default defineConfig({
           source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/fonts/${fileName}`, import.meta.url)),
         });
       }
+      this.emitFile({
+        type: "asset",
+        fileName: "assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png",
+        source: readFileSync(new URL("./public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png", import.meta.url)),
+      });
       for (const fileName of readdirSync(new URL("./public/assets/organizations/sportpaleis/association-logos/", import.meta.url)).filter((name) => name.endsWith(".png")).sort()) {
         this.emitFile({
           type: "asset",

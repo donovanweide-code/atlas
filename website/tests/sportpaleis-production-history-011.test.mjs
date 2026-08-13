@@ -103,8 +103,9 @@ test("Production history UX is vindbaar, mobile-first en hardware-safe", async (
   assert.match(source, /data-replot-form/);
   assert.match(source, /productiebestand downloaden/);
   assert.match(source, /production-jobs\/\$\{encodeURIComponent\(job\.id\)\}\/artifact/);
-  assert.match(source, /immutable SHA-256/);
-  assert.match(source, /Workspace verstuurt niets automatisch naar Illustrator, WinPlot, Summa of hardware/);
-  assert.match(source, /Andere verenigingen, profielen of contouren erven dit bewijs niet/);
+  assert.match(source, /Bestandshash/);
+  assert.match(source, /Snapshot-hash/);
+  assert.match(source, /<summary>Technische details<\/summary>/);
+  assert.match(source, /Controleer het bestand altijd vóór je gaat plotten/);
   assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.sp-production-job-facts \{ grid-template-columns:1fr; \}/);
 });

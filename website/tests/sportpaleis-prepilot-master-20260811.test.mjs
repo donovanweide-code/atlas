@@ -104,7 +104,7 @@ test("PRE-PILOT MASTER — zichtbaar contract en PWA-grens", async () => {
   const entry = await readFile(new URL("../sportpaleis.html", import.meta.url), "utf8");
   const manifest = JSON.parse(await readFile(new URL("../workspace-public/sportpaleis.webmanifest", import.meta.url), "utf8"));
   const pwaIcon = await readFile(new URL("../workspace-public/sportpaleis-pwa-icon.svg", import.meta.url), "utf8");
-  const positions = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Wat moet erop?</h2>", "<h2>Artikelen en exemplaren</h2>", "<h2>Levering en afronden</h2>"].map((marker) => source.indexOf(marker));
+  const positions = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Kies de artikelen</h2>", "<h2>Wat moet erop?</h2>", "<h2>Controleer de order</h2>"].map((marker) => source.indexOf(marker));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
   assert.match(source, /data-action="add-article"/);
   assert.match(source, /maxlength="\$\{field === "initials" \? 5/);

@@ -110,9 +110,9 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
     assert.match(source, /"Mijn werk"/);
     for (const label of ["In behandeling", "Klaar", "Klant geïnformeerd", "Opgehaald", "Klaar voor productie"]) assert.match(source, new RegExp(label));
-    assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
-    assert.ok(source.indexOf("<h2>Wat moet erop?</h2>") < source.indexOf("<h2>Artikelen en exemplaren</h2>"));
-    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "+ Exemplaar", "Leeg = standaardbedrukking", "Levering en afronden", "Totaal bedrukking", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Kies de artikelen</h2>"));
+    assert.ok(source.indexOf("<h2>Kies de artikelen</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
+    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "+ Exemplaar", "Leeg = standaardbedrukking", "Controleren", "Totaal bedrukking", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(source, /Naam \/ initialen controleren/);
     assert.match(source, /association === activeAssociation/);
     assert.match(source, /beheer\/verenigingen/);

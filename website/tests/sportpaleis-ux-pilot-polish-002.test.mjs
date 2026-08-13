@@ -4,11 +4,11 @@ import test from "node:test";
 
 test("Pilot polish 002 gebruikt gewone werktaal en een herkenbare ordervolgorde", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  for (const label of ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Wat moet erop?</h2>", "<h2>Artikelen en exemplaren</h2>", "<h2>Levering en afronden</h2>"]) assert.match(source, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const label of ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Kies de artikelen</h2>", "<h2>Wat moet erop?</h2>", "<h2>Controleer de order</h2>"]) assert.match(source, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.ok(source.indexOf("<h2>Klant</h2>") < source.indexOf("<h2>Vereniging</h2>"));
-  assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
-  assert.ok(source.indexOf("<h2>Wat moet erop?</h2>") < source.indexOf("<h2>Artikelen en exemplaren</h2>"));
-  assert.ok(source.indexOf("<h2>Artikelen en exemplaren</h2>") < source.indexOf("<h2>Levering en afronden</h2>"));
+  assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Kies de artikelen</h2>"));
+  assert.ok(source.indexOf("<h2>Kies de artikelen</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
+  assert.ok(source.indexOf("<h2>Wat moet erop?</h2>") < source.indexOf("<h2>Controleer de order</h2>"));
   assert.doesNotMatch(source, /Naam \/ initialen controleren/);
   assert.doesNotMatch(source, /Wie staat er aan de balie\?/);
   assert.doesNotMatch(source, /KLANT · VERPLICHT/);
@@ -42,14 +42,15 @@ test("Productie scheidt geblokkeerd en maakbaar werk en verbergt ontwikkelaarsta
   for (const phrase of ["Keyboard-wedge datamodel voorbereid", "BARCODE FOUNDATION", "hardwareSendEnabled=false", "FEATURE FLAG UIT"]) assert.doesNotMatch(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
-test("Gebruikersbeheer scheidt rol, toegang en concrete rechten zonder schijnuitnodiging", async () => {
+test("Gebruikersbeheer houdt toegang primair en rechten plus uitnodigen bewust secundair", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /function userAdmin/);
   assert.match(source, /function userDetail/);
   assert.match(source, /Rol bepaalt de standaardrechten/);
   assert.match(source, /Toegang bepaalt of iemand kan inloggen/);
-  assert.match(source, /RECHTEN VAN DEZE ROL/);
-  assert.match(source, /Een nieuwe gebruiker uitnodigen is bewust nog niet actief/);
+  assert.match(source, /class="sp-panel sp-invite-user"/);
+  assert.match(source, /<summary>Gebruiker uitnodigen<\/summary>/);
+  assert.match(source, /class="sp-panel sp-user-rights"/);
 });
 
 test("Layout contract voorkomt desktop- en 390px-overflow en houdt focus zichtbaar", async () => {

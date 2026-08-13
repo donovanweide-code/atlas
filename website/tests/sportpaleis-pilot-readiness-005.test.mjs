@@ -137,7 +137,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const schema = await readFile(new URL("../sportpaleis-server/schema.mysql.sql", import.meta.url), "utf8");
     const migration = await readFile(new URL("../sportpaleis-server/migrations/pilot-readiness-005-to-live-catalog-006.sql", import.meta.url), "utf8");
-    assert.match(source, /Artikelbeheer/); assert.match(source, /Validatie en provenance/); assert.match(source, /Fysieke Junior-hoogte \(mm\)/);
+    assert.match(source, /Artikelbeheer/); assert.match(source, /<summary>Technische details<\/summary>/); assert.match(source, /Bron \/ bevestiging/); assert.match(source, /Fysieke Junior-hoogte \(mm\)/);
     assert.match(source, /LIVE CATALOGUSBRON/); assert.match(source, /Productieblokkade actief/); assert.match(source, /SPW-LIVE-PILOT-CORRECTION-001-20260810/);
     assert.match(schema, /variant_labels_json/); assert.match(schema, /available_sizes_json/); assert.match(schema, /validation_history_json/);
     assert.match(migration, /catalog_metadata_json/); assert.match(migration, /No deployment or database mutation/);

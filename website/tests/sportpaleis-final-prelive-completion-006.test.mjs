@@ -54,7 +54,7 @@ test("Bedrukken toont dynamisch alleen de 16 verenigingen met actuele artikelen"
   for (const association of ZERO_PRINT_ASSOCIATIONS) assert.deepEqual(associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, association), { articles: [], fields: [] });
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /associationNames\(state\)\.filter\(\(association\) => orderableAssociations\.has\(association\)\)/u);
-  assert.match(source, /SPW-PILOT-HUMAN-REVIEW-CORRECTION-002-20260813/u);
+  assert.match(source, /SPW-PILOT-WORKSPACE-CLARITY-CORRECTION-003-20260813/u);
 });
 
 test("werknemer 45 is onafhankelijk van logins en fysiek bewijs blijft immutable", () => {

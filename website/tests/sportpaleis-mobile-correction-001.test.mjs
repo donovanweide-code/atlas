@@ -99,7 +99,7 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
   const manifest = JSON.parse(await readFile(new URL("../workspace-public/sportpaleis.webmanifest", import.meta.url), "utf8"));
-  for (const marker of ["Klant → Vereniging → Bedrukking → Artikelen → Controleren", "data-association-filter", "Vrije opdruk", "+ Exemplaar", "Bezorgen (+", "Bezorgkosten", "Bedoelde je", "Nog niet maakbaar", "Bekijk wat nodig is", "data-association-logo-form"]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["Klant → Vereniging → Artikel → Bedrukking → Bevestigen", "data-association-filter", "Vrije opdruk", "+ Exemplaar", "Bezorgen (+", "Bezorgkosten", "Bedoelde je", "Nog niet maakbaar", "Bekijk wat nodig is", "data-association-logo-form"]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(source, /sp-association-rail__list/);
   assert.match(source, /inheritBackNumberClass/);
   assert.match(source, /productionAttentionCopy/);
@@ -114,7 +114,7 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   assert.match(css, /background:var\(--sp-red\)/);
   assert.match(css, /\.sp-menu-button\{grid-column:1;grid-row:1;color:#fff\}/);
   assert.match(source, /createProductionProposal/);
-  assert.match(source, /Klaar voor productie op productie-pc/);
+  assert.match(source, /Rond dit af op de productie-pc/);
   assert.doesNotMatch(source, /Maat gecontroleerd|Controleer eerst de maat/);
   assert.equal(manifest.start_url, "/overzicht");
   assert.equal(manifest.scope, "/");
