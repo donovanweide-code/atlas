@@ -460,8 +460,19 @@ export interface ProductionProposal {
   createdAt: string;
   initiatedBy: { userId: string; name: string; role: SportpaleisRole };
   orders: { id: string; expectedRevision: number }[];
+  groups?: {
+    id: string;
+    label: string;
+    foilColor: string;
+    outputWriter: { id: string; version: string };
+    orders: { id: string; expectedRevision: number }[];
+    productionLineRefs: { orderId: string; lineId: string }[];
+    status: "OPEN" | "CONVERTED";
+    productionJobId: string | null;
+  }[];
   status: "OPEN" | "CONVERTED" | "STALE";
   productionJobId: string | null;
+  productionJobIds?: string[];
 }
 
 export interface WorkspaceFeedback {

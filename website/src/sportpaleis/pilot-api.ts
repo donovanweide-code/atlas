@@ -360,11 +360,11 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createProductionJob(orders: readonly WorkspaceOrder[], proposalId?: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
+  async createProductionJob(orders: readonly WorkspaceOrder[], proposalId?: string, proposalGroupId?: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
     return responseBody(await this.#mutatingFetch(`${API}/production-jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("plotjob") },
-      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), proposalId }),
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), proposalId, proposalGroupId }),
     }));
   }
 
