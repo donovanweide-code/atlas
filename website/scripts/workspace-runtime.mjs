@@ -33,6 +33,9 @@ const workspaceAliases = new Map([
   [`${workspaceBoundary}/ontwikkeling`, `${workspaceBoundary}/ontwikkeling/monitor`],
   [`${workspaceBoundary}/business-foundation/finance/facturen/concepten`, `${workspaceBoundary}/business-foundation/finance/facturen`],
 ]);
+const sportpaleisHostAliases = new Map([
+  ["/bedrukken", "/orders/nieuw"],
+]);
 const workspaceRootAssets = new Set([
   "/robots.txt",
   "/sportpaleis.webmanifest",
@@ -272,6 +275,14 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       const target = pathname === "/" || pathname === sportpaleisBoundary ? "/overzicht" : pathname.slice(sportpaleisBoundary.length);
       response.statusCode = 308;
       response.setHeader("Location", `${target}${requestUrl.search}`);
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+      return;
+    }
+    const sportpaleisAliasTarget = canonicalSportpaleisRequest ? sportpaleisHostAliases.get(pathname) : undefined;
+    if (sportpaleisAliasTarget) {
+      response.statusCode = 308;
+      response.setHeader("Location", `${sportpaleisAliasTarget}${requestUrl.search}`);
       response.setHeader("Cache-Control", "no-store");
       response.end();
       return;

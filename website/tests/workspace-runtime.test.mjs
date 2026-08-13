@@ -156,8 +156,8 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   context.after(() => new Promise((resolve) => server.close(resolve)));
   const address = server.address(); assert.ok(address && typeof address === "object");
-  const request = (route) => new Promise((resolve, reject) => {
-    const outbound = httpRequest({ hostname: "127.0.0.1", port: address.port, path: route, headers: { Host: "workspace.sportpaleis.nl" } }, (response) => {
+  const request = (route, host = "workspace.sportpaleis.nl") => new Promise((resolve, reject) => {
+    const outbound = httpRequest({ hostname: "127.0.0.1", port: address.port, path: route, headers: { Host: host } }, (response) => {
       const chunks = []; response.on("data", (chunk) => chunks.push(chunk)); response.on("end", () => resolve({ status: response.statusCode, location: response.headers.location, body: Buffer.concat(chunks).toString("utf8") }));
     });
     outbound.on("error", reject); outbound.end();
@@ -168,6 +168,12 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   assert.equal(legacy.status, 308); assert.equal(legacy.location, "/orders/SP-2026-0005?tab=detail");
   const clean = await request("/productie");
   assert.equal(clean.status, 200); assert.match(clean.body, /Sportpaleis Workspace/);
+  const printingAlias = await request("/bedrukken?bron=snelkoppeling");
+  assert.equal(printingAlias.status, 308); assert.equal(printingAlias.location, "/orders/nieuw?bron=snelkoppeling");
+  const printing = await request(printingAlias.location);
+  assert.equal(printing.status, 200); assert.match(printing.body, /Sportpaleis Workspace/);
+  const sharedHostPrintingAlias = await request("/bedrukken", "workspace.webuildanddesign.nl");
+  assert.equal(sharedHostPrintingAlias.status, 404);
   const users = await request("/beheer/gebruikers");
   assert.equal(users.status, 200); assert.match(users.body, /Sportpaleis Workspace/);
   const unknown = await request("/publieke-onbekende-route");
