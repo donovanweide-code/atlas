@@ -72,7 +72,7 @@ test("meerdere geschikte orders worden één uitvoerbare productiegroep met éé
   assert.match(workspaceSource, /Open productiegroep/u);
   assert.match(workspaceSource, /data-proposal-group-id=/u);
   assert.match(workspaceSource, /Human GO · \$\{esc\(group\.label\)\}/u);
-  assert.match(workspaceSource, /data-selection-count>\$\{selectedOrders\.size\}/u);
+  assert.doesNotMatch(workspaceSource, /data-order-select|data-select-all/u);
 });
 
 test("een afwijkende groepsselectie blijft vóór artifact en transactieverwerking fail-closed", async (context) => {

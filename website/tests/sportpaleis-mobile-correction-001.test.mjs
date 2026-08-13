@@ -99,7 +99,7 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
   const manifest = JSON.parse(await readFile(new URL("../workspace-public/sportpaleis.webmanifest", import.meta.url), "utf8"));
-  for (const marker of ["Klant → Vereniging → Bedrukking → Artikelen → Controleren", "data-association-filter", "Vrije opdruk", "+ Voeg exemplaar toe", "Bezorgen (+", "Bezorgkosten", "Bedoelde je", "Nog niet maakbaar", "Bekijk wat nodig is", "data-association-logo-form"]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["Klant → Vereniging → Bedrukking → Artikelen → Controleren", "data-association-filter", "Vrije opdruk", "+ Exemplaar", "Bezorgen (+", "Bezorgkosten", "Bedoelde je", "Nog niet maakbaar", "Bekijk wat nodig is", "data-association-logo-form"]) assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(source, /sp-association-rail__list/);
   assert.match(source, /inheritBackNumberClass/);
   assert.match(source, /productionAttentionCopy/);

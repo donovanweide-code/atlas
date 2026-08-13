@@ -20,7 +20,7 @@ async function fixture(context) {
 test("productiestatusfilters, compact orderwerk en gegroepeerd Beheer zijn aantoonbaar aanwezig", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
-  assert.match(source, /SPW-FINAL-HUMAN-REVIEW-CORRECTION-007-20260812/u);
+  assert.match(source, /SPW-PILOT-HUMAN-REVIEW-CORRECTION-002-20260813/u);
   assert.match(source, /data-printing-sticky/u);
   assert.match(source, /productionStatus === "READY"/u);
   assert.match(source, /data-free-font-search/u);

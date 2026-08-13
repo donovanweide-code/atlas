@@ -320,6 +320,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
+  async cancelInvitation(userId: string): Promise<{ revoked: true; userId: string; email: string }> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/invitation`, { method: "DELETE" }));
+  }
+
   async updateUser(userId: string, input: { role?: "admin" | "operator" | "store"; status?: "Actief" | "Inactief" | "Uitgenodigd"; salesNumber?: string | null; workContexts?: NonNullable<SportpaleisUser["workContexts"]>; defaultContext?: NonNullable<SportpaleisUser["defaultContext"]> }): Promise<SportpaleisUser> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}`, {
       method: "PATCH",

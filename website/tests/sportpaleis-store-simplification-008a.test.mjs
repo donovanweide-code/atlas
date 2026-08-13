@@ -112,7 +112,7 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     for (const label of ["In behandeling", "Klaar", "Klant geïnformeerd", "Opgehaald", "Klaar voor productie"]) assert.match(source, new RegExp(label));
     assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
     assert.ok(source.indexOf("<h2>Wat moet erop?</h2>") < source.indexOf("<h2>Artikelen en exemplaren</h2>"));
-    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "+ Voeg exemplaar toe", "Leeg = standaardbedrukking", "Levering en afronden", "Totaal voor de kassa", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    for (const phrase of ["Andere vereniging", "Kies eerst een vereniging", "+ Exemplaar", "Leeg = standaardbedrukking", "Levering en afronden", "Totaal voor de kassa", "Prijs ontbreekt", "data-association-search"]) assert.match(source, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.doesNotMatch(source, /Naam \/ initialen controleren/);
     assert.match(source, /association === activeAssociation/);
     assert.match(source, /beheer\/verenigingen/);

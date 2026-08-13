@@ -2007,6 +2007,26 @@ export class SportpaleisPilotService {
     return { user: result.value, activationPath: `/workspace/sportpaleis/activeren#token=${rawToken}`, expiresAt, delivery: "LOCAL_HANDOFF_ONLY" };
   }
 
+  async cancelInvitedUser(token, csrfToken, targetUserId) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    const result = await this.store.mutate(async (state) => {
+      const target = state.users.find(({ id }) => id === targetUserId && id !== "donovan-support");
+      if (!target) throw Object.assign(new Error("Uitnodiging niet gevonden."), { statusCode: 404, code: "USER_NOT_FOUND" });
+      if (target.status !== "Uitgenodigd") throw Object.assign(new Error("Alleen een openstaande uitnodiging kan worden ingetrokken."), { statusCode: 409, code: "INVITATION_NOT_PENDING" });
+      if (state.employees.some(({ userId }) => userId === target.id)) throw Object.assign(new Error("Deze uitnodiging is aan een werknemersrecord gekoppeld en kan niet stil worden verwijderd."), { statusCode: 409, code: "INVITATION_HAS_LINKED_DATA" });
+      const email = target.email;
+      state.activationInvites = (state.activationInvites ?? []).filter((invite) => invite.userId !== target.id);
+      state.sessions = state.sessions.filter((session) => session.userId !== target.id);
+      state.users = state.users.filter(({ id }) => id !== target.id);
+      delete state.preferences[target.id];
+      audit(state, user.id, "Uitnodiging ingetrokken", target.id, { email, previousStatus: target.status });
+      return { state, value: { revoked: true, userId: target.id, email } };
+    });
+    return result.value;
+  }
+
   async activateInvitedUser(payload) {
     const rawToken = requiredText(payload.token, "Activatiecode", 200);
     const password = await passwordRecord(String(payload.password ?? ""));
@@ -3480,6 +3500,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const userMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)$/);
       if (userMatch && method === "PATCH") {
         json(response, 200, await service.updateUser(token, csrf, decodeURIComponent(userMatch[1]), await readJson(request)));
+        return true;
+      }
+      const userInvitationMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)\/invitation$/);
+      if (userInvitationMatch && method === "DELETE") {
+        json(response, 200, await service.cancelInvitedUser(token, csrf, decodeURIComponent(userInvitationMatch[1])));
         return true;
       }
       const userPinMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)\/quick-pin$/);

@@ -80,13 +80,13 @@ test("Sportpaleis final pilot readiness 004", async (context) => {
     await assert.rejects(() => service.bulkAdvanceOrders(operator.token, operator.csrfToken, { orders: [{ id: blocked.id, expectedRevision: blocked.revision }] }, "readiness-data-gap-control-004"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
   });
 
-  await context.test("UI-contract bevat groepsinvoer, bulkvoorstel, operatorprofielen en geen onbewezen snijbestandinstructie", async () => {
+  await context.test("UI-contract bevat groepsinvoer, productiecontext, operatorprofielen en geen onbewezen snijbestandinstructie", async () => {
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const css = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
     assert.match(source, /Regels voorbereiden/);
     assert.match(source, /LIVE CATALOGUSBRON/);
     assert.match(source, /\+ Speler\/artikel toevoegen/);
-    assert.match(source, /select-order-count/);
+    assert.doesNotMatch(source, /data-order-select|data-select-all/);
     assert.match(source, /productie\/voorstel/);
     assert.match(source, /Technische profielen bekijken/);
     assert.match(source, /werkelijk productieartefact|werkelijke productiepreview/iu);
