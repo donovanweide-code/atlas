@@ -4,6 +4,7 @@ import { createCutJobBatch, createProductionPreview, createReferencePieces, sha2
 import { canAccessAdmin, type AssociationConfiguration, type BackNumberSizeClass, type CatalogArticle, type ProductionJob, type ProductionLineType, type ProductionProofStatus, type SportpaleisProductionFont, type ValidationStatus, type WorkspaceOrder } from "./sportpaleis/workspace-data.ts";
 import { PilotApiError, SportpaleisPilotApi, type PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 import { articlePersonalizationFields, associationPersonalizationModel, isOrderablePrintedArticle, type CatalogPrintField } from "./sportpaleis/order-personalization.ts";
+import { exactManagedFontForLine, managedFontIdentity } from "./sportpaleis/managed-font-client-gate.ts";
 import { productionPieceFromSource, productionSourceByIdentity } from "./sportpaleis/production-sources.ts";
 import { parseTeamProductionLines } from "./sportpaleis/team-production-lines.ts";
 import { renderWorkspaceIcon } from "./workspace-icons.ts";
@@ -473,10 +474,11 @@ function persistedProductionProposal(state: PilotBootstrap, id: string): string 
   });
   const lines = orders.flatMap((order) => (order.productionLines ?? []).map((line) => ({ order, line })));
   const exactPreview = versionedProductionPreview(state, orders);
+  const managedFontIds = [...new Set(lines.filter(({ line }) => line.source.kind === "FONT").map(({ line }) => line.source.id))];
   const ready = !stale && !blocked.length && orders.length === proposal.orders.length && Boolean(exactPreview);
   const lineDetails = lines.map(({ order, line }) => `<article class="sp-proposal-detail-line"><div><strong>${esc(line.content)}</strong><span>${esc(order.id)} · ${line.placementRole === "INITIALS_INFIX" ? "Tussenvoegsel" : esc(line.type)} · ${line.quantity}×</span></div><dl><div><dt>Afmeting</dt><dd>${line.widthMm > 0 && line.heightMm > 0 ? `${line.widthMm} × ${line.heightMm} mm` : "DATA_GAP — nog niet bevestigd"}</dd></div><div><dt>Bron / font</dt><dd>${esc(line.source.id)} · ${esc(line.source.version)}</dd></div><div><dt>Folie</dt><dd>${esc(order.items.find((item) => item.personalizationValues && Object.values(item.personalizationValues).includes(line.content))?.foilColor ?? order.items[0]?.foilColor ?? "Controleren")}</dd></div><div><dt>Bewijs</dt><dd>${esc(proofLabel(line.proofStatus))}</dd></div></dl></article>`).join("");
   const workstation = matchMedia("(min-width: 900px)").matches;
-  return `<a class="sp-back" data-link href="${BASE}/productie">← Productie</a>${head("PRODUCTIEVOORSTEL", esc(proposal.proposalNumber), `${orders.length} ${orders.length === 1 ? "order" : "orders"} · aangemaakt door ${esc(proposal.initiatedBy.name)}`)}<section class="sp-proposal-summary"><strong>${orders.length} orders</strong><span>${orders.reduce((sum, order) => sum + order.totalPieces, 0)} exemplaren</span><span>${lines.length} productieregels</span></section><section class="sp-panel sp-proposal-details"><div class="sp-panel__head"><div><p class="sp-eyebrow">CONTROLEREN</p><h2>Exacte productie-inhoud</h2></div><span class="sp-stage sp-stage--control">${ready && lines.length ? "Maakbaar" : "Geblokkeerd"}</span></div>${orders.map((order) => `<a class="sp-proposal-order" data-link href="${BASE}/orders/${encodeURIComponent(order.id)}"><strong>${esc(order.id)} · ${esc(order.customer)}</strong><span>${esc((order.associations ?? [order.association]).join(", "))} · ${order.totalPieces} exemplaren</span></a>`).join("")}${lineDetails || `<div class="sp-data-gap-note"><strong>Geen uitvoerregels</strong><span>Voor deze order is geen bronvaste productiepreview beschikbaar.</span></div>`}</section>${proposalProductionLinePreview(state, orders)}${ready && lines.length ? "" : `<section class="sp-panel sp-safe-note"><strong>Nog niet uitvoerbaar</strong><p>${[...(stale ? [`${proposal.proposalNumber}: orderdata is na het voorstel gewijzigd`] : []), ...blocked, ...(!lines.length ? ["Geen gevalideerde productieregels voor preview/output"] : [])].map(esc).join(" · ")}</p></section>`}<section class="sp-panel sp-proposal-go"><div><p class="sp-eyebrow">BEWUSTE GO</p><h2>PlotJob immutable vastleggen</h2><p>${workstation ? "Na GO opent de productiejob. Alleen een aantoonbaar beschikbaar artefact kan worden gedownload." : "Klaar voor productie op productie-pc. Op mobiel kun je controleren en klaarzetten, maar geen Illustrator-handoff uitvoeren."}</p></div><button class="sp-button sp-button--production-go" data-action="confirm-production-proposal" data-proposal-id="${esc(proposal.id)}" data-order-ids="${esc(orders.map(({ id: orderId }) => orderId).join(","))}" ${ready && lines.length ? "" : "disabled"}>Human GO · PlotJob vastleggen</button></section>`;
+  return `<a class="sp-back" data-link href="${BASE}/productie">← Productie</a>${head("PRODUCTIEVOORSTEL", esc(proposal.proposalNumber), `${orders.length} ${orders.length === 1 ? "order" : "orders"} · aangemaakt door ${esc(proposal.initiatedBy.name)}`)}<section class="sp-proposal-summary"><strong>${orders.length} orders</strong><span>${orders.reduce((sum, order) => sum + order.totalPieces, 0)} exemplaren</span><span>${lines.length} productieregels</span></section><section class="sp-panel sp-proposal-details"><div class="sp-panel__head"><div><p class="sp-eyebrow">CONTROLEREN</p><h2>Exacte productie-inhoud</h2></div><span class="sp-stage sp-stage--control">${ready && lines.length ? "Maakbaar" : "Geblokkeerd"}</span></div>${orders.map((order) => `<a class="sp-proposal-order" data-link href="${BASE}/orders/${encodeURIComponent(order.id)}"><strong>${esc(order.id)} · ${esc(order.customer)}</strong><span>${esc((order.associations ?? [order.association]).join(", "))} · ${order.totalPieces} exemplaren</span></a>`).join("")}${lineDetails || `<div class="sp-data-gap-note"><strong>Geen uitvoerregels</strong><span>Voor deze order is geen bronvaste productiepreview beschikbaar.</span></div>`}</section>${proposalProductionLinePreview(state, orders)}${ready && lines.length ? "" : `<section class="sp-panel sp-safe-note"><strong>Nog niet uitvoerbaar</strong><p>${[...(stale ? [`${proposal.proposalNumber}: orderdata is na het voorstel gewijzigd`] : []), ...blocked, ...(!lines.length ? ["Geen gevalideerde productieregels voor preview/output"] : [])].map(esc).join(" · ")}</p></section>`}<section class="sp-panel sp-proposal-go"><div><p class="sp-eyebrow">BEWUSTE GO</p><h2>PlotJob immutable vastleggen</h2><p>${workstation ? "Na GO opent de productiejob. Alleen een aantoonbaar beschikbaar artefact kan worden gedownload." : "Klaar voor productie op productie-pc. Op mobiel kun je controleren en klaarzetten, maar geen Illustrator-handoff uitvoeren."}</p></div><button class="sp-button sp-button--production-go" data-action="confirm-production-proposal" data-proposal-id="${esc(proposal.id)}" data-order-ids="${esc(orders.map(({ id: orderId }) => orderId).join(","))}" ${ready && managedFontIds.length ? `data-managed-font-ids="${esc(managedFontIds.join(","))}"` : ""} ${ready && lines.length && !managedFontIds.length ? "" : "disabled"}>Human GO · PlotJob vastleggen</button></section>`;
 }
 
 function operatorSettings(state: PilotBootstrap): string {
@@ -595,7 +597,19 @@ function combinedFreePreview(state: PilotBootstrap): string {
 }
 function versionedProductionPreview(state: PilotBootstrap, orders: WorkspaceOrder[]): { html: string; productionDataHash: string } | null {
   const lines = orders.flatMap((order) => order.productionLines ?? []);
-  if (!lines.length || lines.some((line) => line.source.kind !== "PRODUCTION_SOURCE" || line.validation.status !== "VALID")) return null;
+  if (!lines.length || lines.some((line) => !["PRODUCTION_SOURCE", "FONT"].includes(line.source.kind) || line.validation.status !== "VALID")) return null;
+  const managed = lines.filter((line) => line.source.kind === "FONT").map((line) => ({ line, font: exactManagedFontForLine(state.productionFonts, line) }));
+  if (managed.some(({ font }) => !font)) return null;
+  if (managed.length) {
+    for (const line of lines) {
+      if (line.source.kind !== "PRODUCTION_SOURCE") continue;
+      const source = productionSourceByIdentity(line.source.id, line.source.version);
+      if (!source || source.content !== line.content || source.lineType !== line.type || source.sourceSetId !== line.source.sourceSetId || source.outputWriterId !== line.source.outputWriterId || source.outputWriterVersion !== line.source.outputWriterVersion) return null;
+    }
+    const productionDataHash = sha256(JSON.stringify(lines)).toUpperCase();
+    const objectCount = lines.reduce((sum, line) => sum + line.quantity, 0);
+    return { productionDataHash, html: `<section class="sp-panel sp-production-line-proposal"><div class="sp-panel__head"><div><p class="sp-eyebrow">BRONGEVALIDEERDE PRODUCTIEPREVIEW</p><h2>${lines.length} regels · ${objectCount} objecten</h2></div><span>exacte managed fontbron</span></div><div class="sp-production-line-proposal__grid">${lines.map((line) => { const font = exactManagedFontForLine(state.productionFonts, line); return `<article ${font ? `data-font-id="${esc(font.id)}" data-font-ready="false" style="font-family:'${esc(productionFontFamily(font.id))}'"` : ""}><strong>${esc(line.content)}</strong><span>${line.quantity}× · ${line.widthMm} × ${line.heightMm} mm</span><small>${esc(font ? managedFontIdentity(font) : `${line.source.id}@${line.source.version}`)}</small></article>`; }).join("")}</div><p class="sp-safe-note">De exacte managed fontbytes worden lokaal op SHA-256 gecontroleerd voordat Human GO beschikbaar komt. De server bouwt daarna fail-closed de vectorcontouren en snijlijnen uit dezelfde bron.</p></section>` };
+  }
   const resolved = lines.map((line) => ({ line, source: productionSourceByIdentity(line.source.id, line.source.version) }));
   if (resolved.some(({ line, source }) => !source || source.content !== line.content || source.lineType !== line.type || source.sourceSetId !== line.source.sourceSetId || source.outputWriterId !== line.source.outputWriterId || source.outputWriterVersion !== line.source.outputWriterVersion)) return null;
   if (new Set(resolved.map(({ source }) => `${source!.outputWriterId}@${source!.outputWriterVersion}`)).size !== 1) return null;
@@ -735,16 +749,34 @@ function page(state: PilotBootstrap, current: string): { title: string; html: st
 function login(message = "", demoEnabled = false): string { document.title = "Inloggen — Sportpaleis Workspace"; return `<main class="sp-login"><section class="sp-login__brand"><img class="sp-login__logo" src="${SPORTPALEIS_OFFICIAL_LOGO}" alt="Sport 2000 Sportpaleis"><p>Een rustige, gedeelde werkplek voor winkel, webshop, productie en organisatie.</p></section><section class="sp-login__panel"><form data-login-form><p class="sp-eyebrow">BEVEILIGDE PILOTOMGEVING</p><h1>Welkom terug</h1>${message ? `<div class="sp-form-error">${esc(message)}</div>` : ""}<label>E-mailadres<input name="email" type="email" required autocomplete="username"></label><label>Wachtwoord<input name="password" type="password" minlength="12" required autocomplete="current-password"></label><fieldset class="sp-device-choice"><legend>Dit apparaat</legend><label><input type="radio" name="deviceMode" value="SHARED" checked> Gedeeld · kort en vergrendelbaar</label><label><input type="radio" name="deviceMode" value="PERSONAL"> Persoonlijk · langer aangemeld</label></fieldset><button class="sp-button sp-button--primary sp-button--wide">Veilig inloggen</button></form>${demoEnabled ? `<div class="sp-demo-login"><p class="sp-eyebrow">ALLEEN LOKALE REVIEW · DEMO</p><button data-action="demo-login" data-view="store">Winkelmedewerker</button><button data-action="demo-login" data-view="operator">Patrick · Productie</button><button data-action="demo-login" data-view="admin">Kevin · Beheer</button></div>` : ""}</section></main>`; }
 function message(error: unknown): string { return error instanceof Error ? error.message : "Handeling mislukt."; }
 
-const loadedProductionFontIds = new Set<string>();
+const loadedProductionFontIdentities = new Set<string>();
+function refreshManagedFontHumanGo(app: HTMLElement, state: PilotBootstrap): void {
+  const button = app.querySelector<HTMLButtonElement>('[data-action="confirm-production-proposal"][data-managed-font-ids]');
+  if (!button) return;
+  const fontIds = (button.dataset.managedFontIds ?? "").split(",").filter(Boolean);
+  button.disabled = !fontIds.length || fontIds.some((fontId) => {
+    const font = state.productionFonts.find(({ id }) => id === fontId);
+    return !font || !loadedProductionFontIdentities.has(managedFontIdentity(font));
+  });
+}
 async function activateProductionFonts(app: HTMLElement, state: PilotBootstrap): Promise<void> {
   const requested = new Set([...app.querySelectorAll<HTMLElement>("[data-font-id]")].map(({ dataset }) => dataset.fontId).filter(Boolean) as string[]);
   await Promise.all([...requested].map(async (fontId) => {
     const font = state.productionFonts.find(({ id }) => id === fontId); if (!font) return;
     try {
-      if (!loadedProductionFontIds.has(fontId)) { const face = new FontFace(productionFontFamily(fontId), `url("${font.sourceUrl.replaceAll('"', '%22')}")`); await face.load(); document.fonts.add(face); loadedProductionFontIds.add(fontId); }
+      const identity = managedFontIdentity(font);
+      if (!loadedProductionFontIdentities.has(identity)) {
+        const response = await fetch(font.sourceUrl, { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) throw new Error("Fontbron ontbreekt.");
+        const bytes = await response.arrayBuffer();
+        const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((value) => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+        if (hash !== font.sha256) throw new Error("Fontbron-hash wijkt af.");
+        const face = new FontFace(productionFontFamily(fontId), bytes); await face.load(); document.fonts.add(face); loadedProductionFontIdentities.add(identity);
+      }
       app.querySelectorAll<HTMLElement>(`[data-font-id="${CSS.escape(fontId)}"]`).forEach((node) => { node.dataset.fontReady = "true"; node.querySelector<HTMLElement>("[data-font-loading]")?.remove(); });
     } catch { app.querySelectorAll<HTMLElement>(`[data-font-id="${CSS.escape(fontId)}"]`).forEach((node) => { node.dataset.fontReady = "error"; const status = node.querySelector<HTMLElement>("[data-font-loading]"); if (status) status.textContent = "Fontbron kon niet veilig worden geladen."; }); }
   }));
+  refreshManagedFontHumanGo(app, state);
 }
 
 export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void {
@@ -972,7 +1004,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       else if (field === "initialsInfix") { line.initialsInfix = target.value.trim().toLocaleLowerCase("nl-NL").slice(0, 8); target.value = line.initialsInfix; render({ preserveScroll: true }); return; }
       else if (field === "fontId") line.fontId = target.value;
       const preview = app.querySelector<HTMLElement>(`[data-live-font-preview="${CSS.escape(line.id)}"]`); const font = allowedProductionFonts(state).find(({ id }) => id === line.fontId);
-      if (preview) { preview.style.fontFamily = `'${productionFontFamily(line.fontId)}'`; preview.dataset.fontId = line.fontId; preview.dataset.fontReady = loadedProductionFontIds.has(line.fontId) ? "true" : "false"; const content = preview.querySelector<HTMLElement>("[data-free-preview-content]"); const quantity = preview.querySelector<HTMLElement>("[data-free-preview-quantity]"); const size = preview.querySelector<HTMLElement>("[data-free-preview-size]"); if (content) content.textContent = line.content; if (quantity) quantity.textContent = `${line.quantity}×`; if (size) size.textContent = `${line.widthMm.toFixed(1)} × ${line.heightMm.toFixed(1)} mm`; if (!preview.querySelector("[data-font-loading]") && !loadedProductionFontIds.has(line.fontId)) preview.insertAdjacentHTML("beforeend", "<em data-font-loading>Beheerde fontbron laden…</em>"); if (font) preview.title = `${font.name} · ${font.sha256}`; }
+      if (preview) { preview.style.fontFamily = `'${productionFontFamily(line.fontId)}'`; preview.dataset.fontId = line.fontId; const loaded = Boolean(font && loadedProductionFontIdentities.has(managedFontIdentity(font))); preview.dataset.fontReady = loaded ? "true" : "false"; const content = preview.querySelector<HTMLElement>("[data-free-preview-content]"); const quantity = preview.querySelector<HTMLElement>("[data-free-preview-quantity]"); const size = preview.querySelector<HTMLElement>("[data-free-preview-size]"); if (content) content.textContent = line.content; if (quantity) quantity.textContent = `${line.quantity}×`; if (size) size.textContent = `${line.widthMm.toFixed(1)} × ${line.heightMm.toFixed(1)} mm`; if (!preview.querySelector("[data-font-loading]") && !loaded) preview.insertAdjacentHTML("beforeend", "<em data-font-loading>Beheerde fontbron laden…</em>"); if (font) preview.title = `${font.name} · ${font.sha256}`; }
       const combined = app.querySelector<HTMLElement>(".sp-combined-production-preview"); if (combined) combined.outerHTML = combinedFreePreview(state);
       void activateProductionFonts(app, state); return;
     }

@@ -117,6 +117,9 @@ test("Functional pilot freeze UX is context-first, preview-safe and responsive",
   assert.match(source, /Vrije opdruk/);
   assert.match(source, /Logo's zijn hier bewust niet beschikbaar/);
   assert.match(source, /new FontFace/);
+  assert.match(source, /crypto\.subtle\.digest\("SHA-256"/);
+  assert.match(source, /data-managed-font-ids/);
+  assert.match(source, /\["PRODUCTION_SOURCE", "FONT"\]/);
   assert.match(source, /data-font-ready="false"/);
   assert.match(source, /Human GO · PlotJob vastleggen/);
   assert.match(source, /MINIMALE|Minimale veilige rollengte|minimaliseert eerst veilige rollengte/i);
