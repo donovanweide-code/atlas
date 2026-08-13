@@ -1247,3 +1247,32 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sp-selected-item__identity small{display:none}
 .sp-admin-links .sp-panel{display:grid;grid-template-rows:auto 1fr auto;min-height:118px}.sp-admin-links .sp-panel b{margin-top:12px;color:#444;font-size:.78rem}.sp-user-list--overview article{grid-template-columns:auto minmax(0,1fr) auto}.sp-user-list--overview article>div small{color:#666}.sp-invite-user{max-width:720px}.sp-invite-user form{display:grid;gap:12px;margin-top:14px}.sp-employee-record>summary{display:flex;justify-content:space-between;gap:14px}.sp-employee-record>summary span{color:#666;font-size:.8rem;font-weight:500}.sp-user-workareas{margin:4px 0 8px}.sp-user-workareas>summary{cursor:pointer;font-weight:800}.sp-user-workareas[open]>summary{margin-bottom:10px}.sp-user-rights{align-self:start}
 @media(max-width:760px){.sp-user-menu__panel{top:calc(var(--sp-topbar) + 4px);right:8px;max-height:calc(100dvh - var(--sp-topbar) - 20px);overflow:auto}.sp-production-summary-facts{grid-template-columns:1fr}.sp-replot-panel{position:static}.sp-replot-panel>.sp-button{min-height:50px}.sp-form-actions{display:grid;grid-template-columns:1fr}.sp-form-actions .sp-button{width:100%;min-height:48px}.sp-form-actions .sp-button--primary{grid-row:1}.sp-form-actions .sp-button--secondary{grid-row:2}.sp-production-line-proposal__grid{grid-template-columns:1fr}.sp-production-preview-facts{grid-template-columns:1fr}.sp-employee-record>summary{display:grid}.sp-price-lines{padding:14px}.sp-action-notice{position:static;max-width:none}.sp-proposal-go{align-items:stretch}.sp-proposal-go .sp-button{width:100%;min-height:50px}.sp-user-list--overview article{grid-template-columns:auto minmax(0,1fr)}.sp-user-list--overview article>.sp-button{grid-column:1/-1;width:100%}}
+
+/* Final pilot polish: calmer hierarchy without changing workflow semantics. */
+body{line-height:1.45}
+.sp-main{padding-top:34px}
+.sp-page-head{min-height:0;margin-bottom:20px}
+.sp-page-head h1,.sp-empty h1{max-width:24ch;font-size:clamp(30px,3vw,42px);font-weight:650;letter-spacing:-.035em;line-height:1.08}
+.sp-page-head>div>p:last-child{max-width:60ch;font-size:14px;line-height:1.5}
+.sp-eyebrow{margin-bottom:6px;font-size:10px;letter-spacing:.1em}
+.sp-panel{padding:22px;border-radius:10px;box-shadow:0 1px 0 rgb(0 0 0 / 4%),0 6px 20px rgb(0 0 0 / 3%)}
+.sp-panel__head{margin-bottom:16px}
+.sp-panel__head h2,.sp-panel h2{font-size:20px;line-height:1.25}
+.sp-capability-form{gap:14px}
+.sp-capability-form .sp-flow-section{padding:22px}
+.sp-capability-form label,.sp-user-capability-layout form label{gap:6px}
+.sp-capability-form input,.sp-capability-form select,.sp-capability-form textarea{border-color:#d4d4d4;border-radius:7px;background:#fff}
+.sp-capability-form input,.sp-capability-form select{min-height:46px}
+.sp-checkout-summary{align-items:center}
+.sp-checkout-summary>.sp-button--primary,.sp-checkout-summary>.sp-form-actions{justify-self:end}
+.sp-proposal-groups{grid-template-columns:minmax(0,1.45fr) minmax(280px,.8fr);align-items:start}
+.sp-proposal-groups>.sp-production-line-proposal{grid-column:1}
+.sp-proposal-groups>.sp-proposal-details{grid-column:2}
+.sp-proposal-groups>.sp-safe-note,.sp-proposal-groups>.sp-proposal-go{grid-column:1/-1}
+.sp-production-line-proposal{border-color:#cad8d2;box-shadow:0 8px 26px rgb(24 55 47 / 7%)}
+.sp-production-job-card h2{font-size:17px;letter-spacing:0}
+.sp-production-summary-facts dt,.sp-order-meta dt,.sp-config-grid dt{font-size:10px;letter-spacing:.04em}
+.sp-production-summary-facts dd,.sp-order-meta dd,.sp-config-grid dd{font-size:13px}
+.sp-stage,.sp-order-status{letter-spacing:0;text-transform:none}
+.sp-technical-details>summary{font-weight:700}
+@media(max-width:760px){.sp-main{padding-top:24px}.sp-page-head h1,.sp-empty h1{font-size:30px}.sp-panel,.sp-capability-form .sp-flow-section{padding:18px}.sp-proposal-groups{grid-template-columns:1fr}.sp-proposal-groups>.sp-production-line-proposal,.sp-proposal-groups>.sp-proposal-details,.sp-proposal-groups>.sp-safe-note,.sp-proposal-groups>.sp-proposal-go{grid-column:1}.sp-checkout-summary>.sp-button--primary,.sp-checkout-summary>.sp-form-actions{justify-self:stretch}}

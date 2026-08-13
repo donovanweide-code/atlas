@@ -8,7 +8,7 @@ const stylesUrl = new URL("../src/styles/sportpaleis-workspace.css", import.meta
 
 test("clarity correction 003 houdt Bedrukken taakgericht en rekent uitsluitend bedrukkingskosten", async () => {
   const source = await readFile(sourceUrl, "utf8");
-  assert.match(source, /SPW-PILOT-WORKSPACE-CLARITY-CORRECTION-003-20260813/u);
+  assert.match(source, /SPW-PILOT-FINAL-SMOOTH-POLISH-004-20260814/u);
   const steps = ["<h2>Klant</h2>", "<h2>Vereniging</h2>", "<h2>Kies de artikelen</h2>", "<h2>Wat moet erop?</h2>", "<h2>Controleer de order</h2>"].map((marker) => source.indexOf(marker));
   assert.ok(steps.every((position) => position >= 0));
   assert.deepEqual([...steps].sort((left, right) => left - right), steps);
@@ -24,7 +24,7 @@ test("clarity correction 003 bewaart bewijs achter details en toont menselijke p
   assert.ok((source.match(/<summary>Technische details<\/summary>/gu) ?? []).length >= 8);
   assert.match(source, /Bestandshash[\s\S]*Snapshot-hash/u);
   assert.match(source, /const artifactDownload = [\s\S]*sp-button--primary/u);
-  assert.match(source, /<h2>Wat wil je doen\?<\/h2>[\s\S]*\$\{artifactDownload\}[\s\S]*<summary>Opnieuw plotten<\/summary>/u);
+  assert.match(source, /<h2>Productiebestand<\/h2>[\s\S]*\$\{artifactDownload\}[\s\S]*<summary>Opnieuw plotten<\/summary>/u);
   assert.match(source, /<h2>Alles gecontroleerd\?<\/h2>/u);
   assert.match(source, /Goedkeuren en productiejob maken/u);
   assert.doesNotMatch(source, /Human GO/u);

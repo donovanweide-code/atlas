@@ -3210,7 +3210,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       id: `item-${randomBytes(6).toString("hex")}`,
       sourceType: legacyTrusted ? "LEGACY" : "CUSTOM",
       sourceProvenance: legacyTrusted ? "Bestaande Foundation 006-invoer" : "Handmatig aan deze order toegevoegd; geen nieuw catalogusartikel aangemaakt",
-      product: requiredText(item.product, "Product", 120),
+      product: options.freeProduction ? (optional(item.product, 120) || "Vrije opdruk") : requiredText(item.product, "Product", 120),
       association,
       size: variants.length > 1 ? "Meerdere maten" : variants[0].size,
       quantity,
