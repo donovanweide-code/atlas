@@ -1015,7 +1015,7 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT }) {
+  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.releaseId = releaseId;
@@ -1027,6 +1027,7 @@ export class SportpaleisPilotService {
     this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
     this.artifactRoot = path.resolve(artifactRoot);
+    this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
   }
 
   async initialize() {
@@ -1276,12 +1277,17 @@ export class SportpaleisPilotService {
     if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
     const artifact = job.snapshot?.artifact;
     if (!artifact?.path || String(artifact.path).startsWith("immutable://")) throw Object.assign(new Error("Voor deze productiejob is geen downloadbaar productieartefact vastgelegd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_NOT_AVAILABLE" });
-    const candidate = path.resolve(this.artifactRoot, artifact.path);
-    const allowedRoots = [path.resolve(this.artifactRoot, "output"), path.resolve(this.artifactRoot, "outputs")];
-    if (!allowedRoots.some((root) => candidate.startsWith(`${root}${path.sep}`))) throw Object.assign(new Error("Het productieartefact valt buiten de immutable artefactgrens."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
-    let bytes; try { bytes = await readFile(candidate); } catch { throw Object.assign(new Error("Het vastgelegde productieartefact ontbreekt."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_MISSING" }); }
-    const hash = sha256(bytes).toUpperCase();
-    if (hash !== artifact.sha256) throw Object.assign(new Error("Het vastgelegde productieartefact wijkt af van de immutable hash."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
+    const roots = [...new Set([this.runtimeArtifactRoot, this.artifactRoot])];
+    const candidates = roots.map((root) => ({ root, candidate: path.resolve(root, artifact.path) }));
+    if (candidates.some(({ root, candidate }) => ![path.resolve(root, "output"), path.resolve(root, "outputs")].some((allowed) => candidate.startsWith(`${allowed}${path.sep}`)))) throw Object.assign(new Error("Het productieartefact valt buiten de gecontroleerde artefactgrens."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+    const existing = [];
+    for (const { candidate } of candidates) {
+      try { existing.push(await readFile(candidate)); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    }
+    if (!existing.length) throw Object.assign(new Error("Het vastgelegde productieartefact ontbreekt."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_MISSING" });
+    const hashes = existing.map((bytes) => sha256(bytes).toUpperCase());
+    if (hashes.some((hash) => hash !== artifact.sha256)) throw Object.assign(new Error("Het vastgelegde productieartefact wijkt af van de immutable hash."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
+    const bytes = existing[0]; const hash = hashes[0];
     const mimeType = artifact.format === "AI" ? "application/illustrator" : artifact.format === "PDF" ? "application/pdf" : artifact.format === "SVG" ? "image/svg+xml" : "application/octet-stream";
     return { bytes, mimeType, filename: artifact.filename, sha256: hash, disposition: "attachment" };
   }
@@ -1338,7 +1344,7 @@ export class SportpaleisPilotService {
         });
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot);
+        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
@@ -2877,7 +2883,7 @@ function managedFontBytes(font, artifactRoot) {
   return null;
 }
 
-function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot) {
+function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot) {
   if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
   const resolved = productionLines.map((line) => {
     if (line.source.kind === "PRODUCTION_SOURCE") {
@@ -2946,8 +2952,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const artifactHash = sha256(bytes).toUpperCase();
   const relativeDirectory = path.join("outputs", "sportpaleis-plotjobs", jobNumber);
   const relativePath = path.join(relativeDirectory, `${jobNumber}-production.svg`).replaceAll(path.sep, "/");
-  const absoluteDirectory = path.resolve(artifactRoot, relativeDirectory);
-  const absolutePath = path.resolve(artifactRoot, relativePath);
+  const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
+  const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
   mkdirSync(absoluteDirectory, { recursive: true });
   if (path.resolve(absolutePath).startsWith(`${absoluteDirectory}${path.sep}`) === false) throw new Error("Ongeldige productiebestandlocatie.");
   try { writeFileSync(absolutePath, bytes, { flag: "wx" }); }
@@ -2964,7 +2970,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   };
 }
 
-function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT) {
+function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot) {
   const productionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id })) : order.items.map((item, index) => lineFromOrderItem(state, order, item, index)));
   const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
   const layout = rectangleNesting(productionLines, defaults);
@@ -2976,7 +2982,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     const source = sourceLayers.physicallyProvenContour ?? sourceLayers.validatedCutContour; if (!source) return [];
     return [{ id: source.sourceId || id, version: source.version, proofStatus: sourceLayers.physicallyProvenContour ? "PHYSICALLY_VALIDATED" : "GEOMETRY_VALIDATED", immutable: true }];
   });
-  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot);
+  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot);
   if (productionArtifact) sourceContours.push(...productionArtifact.sources.map(({ id, version, sourceProofStatus }) => ({ id, version, proofStatus: sourceProofStatus, immutable: true })));
   const firstProfile = orders.flatMap(({ items }) => items).map(({ productionProfileId }) => state.productionProfiles.find(({ id }) => id === productionProfileId)).find(Boolean);
   const abMirrorAccepted = state.productionJobs.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS");

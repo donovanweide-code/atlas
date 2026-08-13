@@ -22,7 +22,7 @@ import {
   productionDatabaseCredentialsFromEnvironment,
   WorkspaceRuntimeConfigError,
 } from "../scripts/workspace-runtime-config.mjs";
-import { createWorkspaceRuntimeServer } from "../scripts/workspace-runtime.mjs";
+import { createWorkspaceRuntimeServer, SPORTPALEIS_RUNTIME_ARTIFACT_ROOT } from "../scripts/workspace-runtime.mjs";
 import { collectRuntimeDependencyGraph } from "../scripts/release-runtime-graph.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/001-runtime-state.sql", import.meta.url);
@@ -104,6 +104,7 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   const environment = productionEnvironment();
   const config = parseWorkspaceRuntimeConfig(environment);
   assert.equal(config.productionDatabases.workspace.name, "wbd_workspace");
+  assert.equal(SPORTPALEIS_RUNTIME_ARTIFACT_ROOT, "/srv/wbd/shared");
   assert.equal(config.productionDatabases.atlas.name, "wbd_atlas");
   assert.deepEqual(config.productionPolicy, {
     uploadsEnabled: false,

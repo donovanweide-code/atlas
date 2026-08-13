@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -15,6 +15,7 @@ const passwords = {
 
 test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-closed", async (context) => {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-font-hotfix-"));
+  const runtimeArtifactRoot = path.join(root, "shared-runtime");
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({
     filePath: path.join(root, "state.json"),
@@ -24,6 +25,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   const service = new SportpaleisPilotService({
     store,
     artifactRoot: root,
+    runtimeArtifactRoot,
     uploadsEnabled: false,
     fontUploadsEnabled: true,
   });
@@ -86,10 +88,32 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.equal(job.snapshot.artifact.format, "SVG");
   assert.deepEqual(job.snapshot.fontSources, [{ id: added.id, name: added.name, version: added.version, sha256: added.sha256, originalFilename: added.originalFilename }]);
   assert.equal(job.snapshot.productionLines[0].source.sha256, added.sha256);
-  const artifact = await readFile(path.join(root, job.snapshot.artifact.path), "utf8");
+  const artifactPath = path.join(runtimeArtifactRoot, job.snapshot.artifact.path);
+  const artifact = await readFile(artifactPath, "utf8");
+  await assert.rejects(readFile(path.join(root, job.snapshot.artifact.path)), (error) => error.code === "ENOENT");
   assert.match(artifact, /<path data-contour-id=/);
   assert.doesNotMatch(artifact, /<text|font-family/iu);
   assert.equal(createHash("sha256").update(artifact).digest("hex").toUpperCase(), job.snapshot.artifact.sha256);
+  const runtimeDownload = await service.productionJobArtifact(admin.token, job.id);
+  assert.equal(runtimeDownload.bytes.toString("utf8"), artifact);
+  assert.equal(runtimeDownload.sha256, job.snapshot.artifact.sha256);
+
+  const legacyPath = "output/golden-existing.svg";
+  await mkdir(path.join(root, "output"), { recursive: true });
+  await writeFile(path.join(root, legacyPath), artifact);
+  const legacyJob = structuredClone(job);
+  legacyJob.id = "production-job-existing-immutable-artifact";
+  legacyJob.jobNumber = "PLOT-2099-9999";
+  legacyJob.snapshot.artifact = { ...legacyJob.snapshot.artifact, path: legacyPath, filename: "golden-existing.svg" };
+  legacyJob.snapshotHash = createHash("sha256").update(JSON.stringify(legacyJob.snapshot)).digest("hex");
+  await store.mutate((current) => ({ state: { ...current, productionJobs: [legacyJob, ...current.productionJobs] }, value: null }));
+  const legacyDownload = await service.productionJobArtifact(admin.token, legacyJob.id);
+  assert.equal(legacyDownload.bytes.toString("utf8"), artifact);
+  assert.equal(legacyDownload.sha256, job.snapshot.artifact.sha256);
+
+  await mkdir(path.join(runtimeArtifactRoot, "output"), { recursive: true });
+  await writeFile(path.join(runtimeArtifactRoot, legacyPath), "not-the-immutable-artifact");
+  await assert.rejects(service.productionJobArtifact(admin.token, legacyJob.id), (error) => error.code === "PRODUCTION_ARTIFACT_HASH_MISMATCH");
 });
 
 test("fontupload blijft gesloten wanneer de specifieke productiepolicy uit staat", async (context) => {

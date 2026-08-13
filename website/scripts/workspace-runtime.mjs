@@ -24,6 +24,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
 const workspaceBoundary = "/workspace/wbd";
 const sportpaleisBoundary = "/workspace/sportpaleis";
+export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
 const workspaceHome = `${workspaceBoundary}/overzicht`;
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
@@ -223,6 +224,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           uploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.uploadsEnabled : true,
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
+          runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
         });
         await service.initialize();
         return createSportpaleisPilotRequestHandler(service);
