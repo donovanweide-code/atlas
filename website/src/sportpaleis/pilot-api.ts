@@ -57,6 +57,7 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     demo: boolean;
     demoEnabled: boolean;
     uploadsEnabled: boolean;
+    fontUploadsEnabled: boolean;
     mailMode: "capture";
     hardwareSendEnabled: false;
     barcodeEnabled: false;

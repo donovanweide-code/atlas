@@ -46,6 +46,7 @@ function productionEnvironment() {
     ATLAS_DB_USER: "wbd_atlas_app",
     ATLAS_DB_PASSWORD: "atlas-secret-not-returned",
     SPORTPALEIS_UPLOADS_ENABLED: "false",
+    SPORTPALEIS_FONT_UPLOADS_ENABLED: "true",
     SPORTPALEIS_MAIL_MODE: "capture",
     SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: "false",
     SPORTPALEIS_DIRECT_PRINT_ENABLED: "false",
@@ -106,6 +107,7 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   assert.equal(config.productionDatabases.atlas.name, "wbd_atlas");
   assert.deepEqual(config.productionPolicy, {
     uploadsEnabled: false,
+    fontUploadsEnabled: true,
     mailMode: "capture",
     hardwareOutputEnabled: false,
     directPrintEnabled: false,
@@ -117,6 +119,7 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   assert.equal(productionDatabaseCredentialsFromEnvironment(environment).workspace.password, "workspace-secret-not-returned");
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_MAIL_MODE: "smtp" }), /exact capture/);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_SUMMA_ENABLED: "true" }), /exact false/);
+  assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_FONT_UPLOADS_ENABLED: "false" }), /exact true/);
 });
 
 test("production startup controleert Atlas en Workspace vóór luisteren en valt niet terug op files", async () => {

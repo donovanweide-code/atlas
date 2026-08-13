@@ -35,6 +35,7 @@ test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resul
     ATLAS_DB_USER: "atlas_app",
     ATLAS_DB_PASSWORD: "do-not-return-atlas",
     SPORTPALEIS_UPLOADS_ENABLED: "false",
+    SPORTPALEIS_FONT_UPLOADS_ENABLED: "true",
     SPORTPALEIS_MAIL_MODE: "capture",
     SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: "false",
     SPORTPALEIS_DIRECT_PRINT_ENABLED: "false",

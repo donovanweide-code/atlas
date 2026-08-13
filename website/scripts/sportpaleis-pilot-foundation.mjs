@@ -993,7 +993,7 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT }) {
+  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.releaseId = releaseId;
@@ -1002,6 +1002,7 @@ export class SportpaleisPilotService {
     this.sessionTtlMs = sessionTtlMs;
     this.demoMode = demoMode === true;
     this.uploadsEnabled = uploadsEnabled === true;
+    this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
     this.artifactRoot = path.resolve(artifactRoot);
   }
@@ -1207,7 +1208,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -1218,8 +1219,8 @@ export class SportpaleisPilotService {
   }
 
   async addProductionFont(token, csrfToken, payload) {
-    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
-    if (!this.uploadsEnabled) throw Object.assign(new Error("Fontuploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    if (!this.fontUploadsEnabled) throw Object.assign(new Error("Fontuploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
     const result = await this.store.mutate(async (state) => {
       const filename = requiredText(payload.filename, "Bestandsnaam", 180);
       const dataBase64 = requiredText(payload.dataBase64, "Fontbron", 7_500_000);

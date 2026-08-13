@@ -12,7 +12,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-freeze-012-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true, fontUploadsEnabled: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -57,8 +57,9 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
   await context.test("alleen bevoegde rollen beheren fonts en technische validatie verhindert naamfallback", async () => {
     const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
     await assert.rejects(service.addProductionFont(storeUser.token, storeUser.csrfToken, { name: "Niet toegestaan", filename: "font.ttf", dataBase64: bytes.toString("base64"), provenance: "test" }), (error) => error.code === "FORBIDDEN");
-    await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, { name: "Alleen een naam", filename: "fake.ttf", dataBase64: Buffer.from("geen font").toString("base64"), provenance: "test" }), (error) => error.code === "FONT_FILE_INVALID" || error.code === "FONT_SIGNATURE_INVALID");
-    const duplicate = await service.addProductionFont(operator.token, operator.csrfToken, { name: "Zelfde bron", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "Open bron", allowedInStore: true });
+    await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, { name: "Niet toegestaan", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "test" }), (error) => error.code === "FORBIDDEN");
+    await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { name: "Alleen een naam", filename: "fake.ttf", dataBase64: Buffer.from("geen font").toString("base64"), provenance: "test" }), (error) => error.code === "FONT_FILE_INVALID" || error.code === "FONT_SIGNATURE_INVALID");
+    const duplicate = await service.addProductionFont(admin.token, admin.csrfToken, { name: "Zelfde bron", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "Open bron", allowedInStore: true });
     assert.equal(duplicate.id, font.id);
     assert.equal((await store.read()).productionFonts.length, 1);
   });

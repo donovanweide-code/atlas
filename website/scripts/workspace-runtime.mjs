@@ -218,6 +218,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           allowedOrigin: new URL(config.workspaceBaseUrl).origin,
           demoMode: config.appEnv === "local" && config.nodeEnv !== "production" && process.env.SPORTPALEIS_REVIEW_DEMO === "true",
           uploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.uploadsEnabled : true,
+          fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
         });
         await service.initialize();

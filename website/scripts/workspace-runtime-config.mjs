@@ -22,6 +22,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   }> | null,
  *   productionPolicy: Readonly<{
  *     uploadsEnabled: false,
+ *     fontUploadsEnabled: true,
  *     mailMode: "capture",
  *     hardwareOutputEnabled: false,
  *     directPrintEnabled: false,
@@ -66,6 +67,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   ATLAS_DB_USER: { phase: "Atlas boundary", requiredInProduction: true, secret: false },
   ATLAS_DB_PASSWORD: { phase: "Atlas boundary", requiredInProduction: true, secret: true },
   SPORTPALEIS_UPLOADS_ENABLED: { phase: "pilot policy", requiredInProduction: true, secret: false },
+  SPORTPALEIS_FONT_UPLOADS_ENABLED: { phase: "pilot policy", requiredInProduction: true, secret: false },
   SPORTPALEIS_MAIL_MODE: { phase: "pilot policy", requiredInProduction: true, secret: false },
   SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: { phase: "pilot policy", requiredInProduction: true, secret: false },
   SPORTPALEIS_DIRECT_PRINT_ENABLED: { phase: "pilot policy", requiredInProduction: true, secret: false },
@@ -195,6 +197,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     });
     productionPolicy = Object.freeze({
       uploadsEnabled: requiredLiteral(env, "SPORTPALEIS_UPLOADS_ENABLED", "false") === "true",
+      fontUploadsEnabled: requiredLiteral(env, "SPORTPALEIS_FONT_UPLOADS_ENABLED", "true") === "true",
       mailMode: requiredLiteral(env, "SPORTPALEIS_MAIL_MODE", "capture"),
       hardwareOutputEnabled: requiredLiteral(env, "SPORTPALEIS_HARDWARE_OUTPUT_ENABLED", "false") === "true",
       directPrintEnabled: requiredLiteral(env, "SPORTPALEIS_DIRECT_PRINT_ENABLED", "false") === "true",
