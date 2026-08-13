@@ -19,6 +19,10 @@ import {
   productionSourceByIdentity,
   resolveProductionSource,
 } from "../src/sportpaleis/production-sources.ts";
+import {
+  createManagedFontProductionPiece,
+  validateManagedFontBytes,
+} from "../src/sportpaleis/managed-font-production.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -673,6 +677,24 @@ export function migrateSportpaleisPilotState(input) {
       });
     }
   }
+  for (const order of state.orders ?? []) {
+    for (const line of order.productionLines ?? []) {
+      if (line.source?.kind !== "PROFILE" || !/fontbestand|fontbron/iu.test(String(line.validation?.reason ?? ""))) continue;
+      const profile = state.productionProfiles?.find(({ id }) => id === line.source.id);
+      const font = configuredManagedFont(state, profile);
+      if (!font) continue;
+      line.source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
+      line.preview = { ...line.preview, kind: "LIVE_FONT" };
+      line.proofStatus = "CONFIGURED";
+      line.validation = { status: "VALID", reason: null };
+    }
+    for (const item of order.items ?? []) {
+      const itemLines = (order.productionLines ?? []).filter(({ itemId }) => !itemId || itemId === item.id);
+      if (itemLines.length && itemLines.every(({ validation }) => validation?.status === "VALID") && /fontbestand|fontbron/iu.test(String(item.productionReadiness?.reason ?? ""))) {
+        item.productionReadiness = { status: "CONFIGURED", reason: null };
+      }
+    }
+  }
   state.fontConfirmationVersion = SPORTPALEIS_FONT_CONFIRMATION.id;
   state.schemaVersion = PILOT_SCHEMA_VERSION;
   return state;
@@ -1230,6 +1252,8 @@ export class SportpaleisPilotService {
       if (!format || !filename.toLowerCase().endsWith(format.extension)) throw Object.assign(new Error("Gebruik een geldig TTF-, OTF-, WOFF- of WOFF2-bestand met overeenkomende bestandsextensie."), { statusCode: 400, code: "FONT_SIGNATURE_INVALID" });
       const hash = sha256(bytes).toUpperCase(); const existing = state.productionFonts.find(({ sha256: candidate }) => candidate === hash);
       if (existing) { const { sourceDataBase64: _sourceDataBase64, ...publicFont } = existing; return { state, value: structuredClone(publicFont) }; }
+      try { validateManagedFontBytes(bytes); }
+      catch (error) { throw Object.assign(new Error("De fontbron is geen technisch leesbaar outline-font."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
       const addedAt = iso(); const id = `font-${hash.slice(0, 16).toLowerCase()}`;
       const font = { id, name: requiredText(payload.name, "Fontnaam", 120), originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance: requiredText(payload.provenance, "Herkomst/licentie", 500), status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64") };
       state.productionFonts.push(font); audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore });
@@ -2614,6 +2638,13 @@ function productionElementProof(element) {
   return element?.sourceLayers?.vectorSource ? "CONFIGURED" : "DATA_GAP";
 }
 
+function configuredManagedFont(state, profile) {
+  const configuredName = String(profile?.fontProfile ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
+  if (!configuredName) return null;
+  const matches = state.productionFonts.filter(({ name, status }) => status === "TECHNICALLY_VALID" && String(name).normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL") === configuredName);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function validateProductionLines(value, state, user, orderKind) {
   if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) return [];
   if (!Array.isArray(value) || value.length > 100) throw Object.assign(new Error("Gebruik maximaal 100 productieregels."), { statusCode: 400, code: "PRODUCTION_LINES_INVALID" });
@@ -2631,7 +2662,10 @@ function validateProductionLines(value, state, user, orderKind) {
       const font = state.productionFonts.find(({ id }) => id === line.sourceId);
       const profile = state.productionProfiles.find(({ id }) => id === line.sourceId);
       if (font?.status === "TECHNICALLY_VALID" && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
-      else if (user.role !== "store" && profile) source = { kind: "PROFILE", id: profile.id, version: String(profile.revision ?? 1) };
+      else if (user.role !== "store" && profile) {
+        const configuredFont = configuredManagedFont(state, profile);
+        source = configuredFont ? { kind: "FONT", id: configuredFont.id, version: configuredFont.version, sha256: configuredFont.sha256 } : { kind: "PROFILE", id: profile.id, version: String(profile.revision ?? 1) };
+      }
       else throw Object.assign(new Error("Kies een toegestane, technisch geldige fontbron."), { statusCode: 400, code: "PRODUCTION_FONT_INVALID" });
     } else {
       const element = state.productionElements.find(({ id }) => id === line.sourceId || line.elementId === id);
@@ -2745,11 +2779,12 @@ function deriveCatalogProductionLines(state, orderId, items) {
           content,
           physicalHeightMm: requestedHeightMm,
         });
+        const managedFont = versionedSource ? null : configuredManagedFont(state, profile);
         const heightMm = versionedSource?.heightMm ?? requestedHeightMm;
         const widthMm = versionedSource?.widthMm ?? (field === "initialsInfix" && !configuredHeight ? 0 : Math.round(Math.max(20, heightMm * Math.max(.5, content.length * .48)) * 1000) / 1000);
         const reason = field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.verticalOffsetMm === null || infixRule.status === "DATA_GAP")
           ? "De fysieke grootte en onderste positie van het tussenvoegsel zijn nog niet bevestigd."
-          : versionedSource
+          : versionedSource || managedFont
           ? null
           : profile?.productionSourceSetId
             ? `In productiebronset ${profile.productionSourceSetId} bestaat geen gevalideerde ${lineType.toLowerCase()}bron voor “${content}” op ${requestedHeightMm} mm.`
@@ -2768,14 +2803,14 @@ function deriveCatalogProductionLines(state, orderId, items) {
             geometryAdapterVersion: versionedSource.geometryAdapterVersion,
             outputWriterId: versionedSource.outputWriterId,
             outputWriterVersion: versionedSource.outputWriterVersion,
-          } : { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) },
+          } : managedFont ? { kind: "FONT", id: managedFont.id, version: managedFont.version, sha256: managedFont.sha256 } : { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) },
           widthMm: Math.round(widthMm * 1000) / 1000,
           heightMm: Math.round(heightMm * 1000) / 1000,
           quantity: variant.quantity,
-          preview: { kind: versionedSource ? "ASSET_REFERENCE" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(versionedSource) },
+          preview: { kind: versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(versionedSource) },
           provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}`,
-          proofStatus: versionedSource?.sourceProofStatus ?? "DATA_GAP",
-          validation: { status: versionedSource || field === "initialsInfix" && !reason ? "VALID" : "BLOCKED", reason },
+          proofStatus: versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
+          validation: { status: versionedSource || managedFont || field === "initialsInfix" && !reason ? "VALID" : "BLOCKED", reason },
           ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "BOTTOM", verticalOffsetMm: infixRule?.verticalOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
         });
       }
@@ -2822,24 +2857,77 @@ function rectangleNesting(lines, productionDefaults = PILOT_SETTINGS.productionD
   return orders.map(arrange).sort((a, b) => a.usedLengthMm - b.usedLengthMm || a.usedWidthMm - b.usedWidthMm)[0];
 }
 
+function managedFontBytes(font, artifactRoot) {
+  if (font?.sourceDataBase64) return Buffer.from(font.sourceDataBase64, "base64");
+  const sourceUrl = String(font?.sourceUrl ?? "");
+  if (!sourceUrl.startsWith("/assets/") || sourceUrl.includes("..")) return null;
+  const relative = sourceUrl.replace(/^\/+/, "").split("/");
+  const candidates = [
+    path.resolve(artifactRoot, "website", "public", ...relative),
+    path.resolve(artifactRoot, "website", "dist-workspace", ...relative),
+    path.resolve(artifactRoot, "app", "dist-workspace", ...relative),
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public", ...relative),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const bytes = readFileSync(candidate);
+      if (sha256(bytes).toUpperCase() === font.sha256) return bytes;
+    } catch { /* Een ontbrekende kandidaat is geen toegestane fallback. */ }
+  }
+  return null;
+}
+
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot) {
-  if (!productionLines.length || productionLines.some((line) => line.source?.kind !== "PRODUCTION_SOURCE" || line.validation?.status !== "VALID")) return null;
+  if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
   const resolved = productionLines.map((line) => {
-    const source = productionSourceByIdentity(line.source.id, line.source.version);
-    if (!source || source.content !== line.content || source.lineType !== line.type || source.sourceSetId !== line.source.sourceSetId) throw new Error(`Productiebron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`);
-    if (source.outputWriterId !== line.source.outputWriterId || source.outputWriterVersion !== line.source.outputWriterVersion) throw new Error(`Outputwriter voor ${line.source.id}@${line.source.version} wijkt af van de ordersnapshot.`);
-    return { line, source };
+    if (line.source.kind === "PRODUCTION_SOURCE") {
+      const source = productionSourceByIdentity(line.source.id, line.source.version);
+      if (!source || source.content !== line.content || source.lineType !== line.type || source.sourceSetId !== line.source.sourceSetId) throw new Error(`Productiebron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`);
+      if (source.outputWriterId !== line.source.outputWriterId || source.outputWriterVersion !== line.source.outputWriterVersion) throw new Error(`Outputwriter voor ${line.source.id}@${line.source.version} wijkt af van de ordersnapshot.`);
+      return {
+        line,
+        source,
+        piece(copy) {
+          return productionPieceFromSource(source, {
+            id: `${line.orderId ?? orders[0].id}-${line.itemId ?? line.id}-${line.content}-${copy}`,
+            sourceOrderId: line.orderId ?? orders[0].id,
+            label: `${line.preview?.label ?? line.type} · ${line.content}`,
+            product: orders.flatMap(({ items }) => items).find(({ id }) => id === line.itemId)?.product,
+          });
+        },
+      };
+    }
+    const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
+    if (!font) throw Object.assign(new Error(`Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_FONT_IDENTITY_MISMATCH" });
+    const bytes = managedFontBytes(font, artifactRoot);
+    if (!bytes) throw Object.assign(new Error(`De exacte bytes van fontbron ${font.id}@${font.version} ontbreken.`), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_MISSING" });
+    const source = { id: font.id, version: font.version, sourceProofStatus: "CONFIGURED", outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
+    return {
+      line,
+      source,
+      piece(copy) {
+        const order = orders.find(({ id }) => id === line.orderId) ?? orders[0];
+        const item = order.items.find(({ id }) => id === line.itemId) ?? order.items[0];
+        return createManagedFontProductionPiece({
+          fontRecord: font,
+          bytes,
+          content: line.content,
+          widthMm: line.widthMm,
+          heightMm: line.heightMm,
+          id: `${order.id}-${line.itemId ?? line.id}-${line.content}-${copy}`,
+          sourceOrderId: order.id,
+          product: item?.product ?? "Productiefont",
+          association: item?.association ?? order.association,
+          foilColor: item?.foilColor ?? state.settings.productionDefaults.defaultFoilColor,
+        });
+      },
+    };
   });
   const writerIdentities = new Set(resolved.map(({ source }) => `${source.outputWriterId}@${source.outputWriterVersion}`));
   if (writerIdentities.size !== 1) throw new Error("Eén PlotJob kan alleen productiebronnen voor dezelfde versioned outputwriter bevatten.");
   const [first] = resolved;
   if (!first || first.source.outputWriterId !== CUTJOB_SVG_WRITER.id || first.source.outputWriterVersion !== CUTJOB_SVG_WRITER.version) throw new Error(`Outputwriter ${[...writerIdentities][0] ?? "onbekend"} is niet geïnstalleerd.`);
-  const pieces = resolved.flatMap(({ line, source }) => Array.from({ length: line.quantity }, (_, copy) => productionPieceFromSource(source, {
-    id: `${line.orderId ?? orders[0].id}-${line.itemId ?? line.id}-${line.content}-${copy + 1}`,
-    sourceOrderId: line.orderId ?? orders[0].id,
-    label: `${line.preview?.label ?? line.type} · ${line.content}`,
-    product: orders.flatMap(({ items }) => items).find(({ id }) => id === line.itemId)?.product,
-  })));
+  const pieces = resolved.flatMap(({ line, piece }) => Array.from({ length: line.quantity }, (_, copy) => piece(copy + 1)));
   const cutJobBatch = createCutJobBatch({
     organizationId: state.organizationId,
     orderId: orders.map(({ id }) => id).join("+"),
@@ -2877,7 +2965,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
 }
 
 function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT) {
-  const productionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines : order.items.map((item, index) => lineFromOrderItem(state, order, item, index)));
+  const productionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id })) : order.items.map((item, index) => lineFromOrderItem(state, order, item, index)));
   const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
   const layout = rectangleNesting(productionLines, defaults);
   const fontIds = new Set(productionLines.filter(({ source }) => source.kind === "FONT").map(({ source }) => source.id));

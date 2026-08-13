@@ -12,7 +12,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-freeze-012-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true, fontUploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, artifactRoot: root, releaseId: "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true, fontUploadsEnabled: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -88,12 +88,15 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     assert.equal(order.productionLines[0].validation.status, "VALID");
   });
 
-  await context.test("Human GO weigert een fontpreview zonder werkelijk vectorartefact en wijzigt Golden evidence niet", async () => {
+  await context.test("Human GO gebruikt de exacte beheerde fontbron voor een werkelijk vectorartefact en wijzigt Golden evidence niet", async () => {
     const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, freeOrder.id, freeOrder.revision, "freeze-to-control")).value;
     assert.equal(controlled.stage, "CONTROL");
     await assert.rejects(service.createProductionJob(storeUser.token, storeUser.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-store-job"), (error) => error.code === "FORBIDDEN");
-    await assert.rejects(service.createProductionJob(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-human-go-001"), (error) => error.code === "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE");
-    assert.equal((await store.read()).orders.find(({ id }) => id === freeOrder.id).stage, "CONTROL");
+    const job = (await service.createProductionJob(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "freeze-human-go-001")).value;
+    assert.equal(job.snapshot.artifact.format, "SVG");
+    assert.deepEqual(job.snapshot.fontSources, [{ id: font.id, name: font.name, version: font.version, sha256: font.sha256, originalFilename: font.originalFilename }]);
+    assert.deepEqual(job.snapshot.productionLines[0].source, { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 });
+    assert.equal((await store.read()).orders.find(({ id }) => id === freeOrder.id).stage, "PRINT");
     assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), goldenBefore);
   });
 

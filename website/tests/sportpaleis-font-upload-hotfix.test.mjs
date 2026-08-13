@@ -23,6 +23,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   });
   const service = new SportpaleisPilotService({
     store,
+    artifactRoot: root,
     uploadsEnabled: false,
     fontUploadsEnabled: true,
   });
@@ -40,7 +41,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   const sourceBytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
   const bytes = Buffer.concat([sourceBytes, Buffer.from([0])]);
   const payload = {
-    name: "Gevalideerde testbron",
+    name: "Schluber",
     filename: "LiberationSans-Regular.ttf",
     dataBase64: bytes.toString("base64"),
     provenance: "Repository testasset met vastgelegde open-bronprovenance",
@@ -48,6 +49,17 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   };
   await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, payload), (error) => error.code === "FORBIDDEN");
   await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, filename: "font.otf" }), (error) => error.code === "FONT_SIGNATURE_INVALID");
+
+  const beforeFont = (await service.createOrder(admin.token, admin.csrfToken, {
+    orderKind: "INDIVIDUAL",
+    customer: "Regressie Bedrukken met nieuwe fontbron",
+    customerEmail: "font-regression@example.test",
+    customerPhone: "0612345678",
+    standardPersonalization: { initials: "SP", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
+    items: [{ articleId: "sp-live-141709", size: "M", quantity: 1, deviation: false, overrides: {} }],
+  }, "font-regression-order")).value;
+  assert.equal(beforeFont.productionLines[0].source.kind, "PROFILE");
+  assert.equal(beforeFont.productionLines[0].validation.status, "BLOCKED");
 
   const added = await service.addProductionFont(admin.token, admin.csrfToken, payload);
   assert.equal(added.sha256, createHash("sha256").update(bytes).digest("hex").toUpperCase());
@@ -59,6 +71,25 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.equal(stored.sourceDataBase64, bytes.toString("base64"));
   assert.equal(stored.uploadedBy.userId, admin.user.id);
   assert.ok(state.audit.some(({ action, subject }) => action === "Productiefont toegevoegd" && subject === added.id));
+  const order = state.orders.find(({ id }) => id === beforeFont.id);
+  assert.deepEqual(order.productionLines[0].source, { kind: "FONT", id: added.id, version: added.version, sha256: added.sha256 });
+  await store.mutate((current) => {
+    const target = current.orders.find(({ id }) => id === order.id);
+    target.communication.receipt = { status: "CAPTURED", updatedAt: new Date().toISOString(), providerReference: "font-regression-fixture" };
+    target.revision += 1;
+    return { state: current, value: null };
+  });
+  const afterReceipt = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === order.id);
+  const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, order.id, afterReceipt.revision, "font-regression-control")).value;
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "font-regression-proposal")).value;
+  const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "font-regression-job")).value;
+  assert.equal(job.snapshot.artifact.format, "SVG");
+  assert.deepEqual(job.snapshot.fontSources, [{ id: added.id, name: added.name, version: added.version, sha256: added.sha256, originalFilename: added.originalFilename }]);
+  assert.equal(job.snapshot.productionLines[0].source.sha256, added.sha256);
+  const artifact = await readFile(path.join(root, job.snapshot.artifact.path), "utf8");
+  assert.match(artifact, /<path data-contour-id=/);
+  assert.doesNotMatch(artifact, /<text|font-family/iu);
+  assert.equal(createHash("sha256").update(artifact).digest("hex").toUpperCase(), job.snapshot.artifact.sha256);
 });
 
 test("fontupload blijft gesloten wanneer de specifieke productiepolicy uit staat", async (context) => {

@@ -181,6 +181,7 @@ async function main() {
       productionUsers: 0,
       productionOrders: 0,
       uploads: false,
+      fontUploads: "admin-only",
       mail: "capture-only",
       hardwareOutput: false,
       directPrint: false,

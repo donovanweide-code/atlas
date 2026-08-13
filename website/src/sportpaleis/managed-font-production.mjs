@@ -1,0 +1,176 @@
+import { createHash } from "node:crypto";
+import { create } from "fontkit";
+
+import { boundsForContours, flattenSourcePath } from "./direct-print/geometry.ts";
+
+const FONT_OUTLINE_TOLERANCE_MM = 0.02;
+const MAX_POINTS_PER_PRODUCTION_PIECE = 150_000;
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex").toUpperCase();
+}
+
+function managedFontError(message, code = "PRODUCTION_FONT_INVALID") {
+  return Object.assign(new Error(message), { statusCode: 409, code });
+}
+
+function parseFont(bytes) {
+  try {
+    const font = create(Buffer.from(bytes));
+    if (!font || typeof font.layout !== "function" || !Number.isFinite(font.unitsPerEm) || font.unitsPerEm <= 0 || !Number.isInteger(font.numGlyphs) || font.numGlyphs < 1) {
+      throw new Error("Fonttabellen ontbreken.");
+    }
+    return font;
+  } catch {
+    throw managedFontError("De fontbron kan niet als zelfstandig outline-font worden gelezen.", "FONT_FILE_INVALID");
+  }
+}
+
+export function validateManagedFontBytes(bytes) {
+  const font = parseFont(bytes);
+  let hasOutline = false;
+  const probeCount = Math.min(font.numGlyphs, 128);
+  for (let index = 0; index < probeCount; index += 1) {
+    const glyph = font.getGlyph(index);
+    if (glyph?.path?.commands?.some(({ command }) => command !== "moveTo" && command !== "closePath")) {
+      hasOutline = true;
+      break;
+    }
+  }
+  if (!hasOutline) throw managedFontError("De fontbron bevat geen bruikbare vectorcontouren.", "FONT_FILE_INVALID");
+  return Object.freeze({
+    familyName: String(font.familyName ?? "").trim() || null,
+    postscriptName: String(font.postscriptName ?? "").trim() || null,
+    unitsPerEm: font.unitsPerEm,
+    glyphCount: font.numGlyphs,
+  });
+}
+
+function mapPoint(x, y, bounds, scaleX, scaleY) {
+  return { x: (x - bounds.minX) * scaleX, y: (bounds.maxY - y) * scaleY };
+}
+
+function positionedGlyphCommands(font, content) {
+  for (const character of Array.from(content)) {
+    const codePoint = character.codePointAt(0);
+    if (!/^\s$/u.test(character) && (!Number.isInteger(codePoint) || !font.hasGlyphForCodePoint(codePoint))) {
+      throw managedFontError(`De gekozen fontbron bevat geen glyph voor “${character}”.`, "PRODUCTION_FONT_GLYPH_MISSING");
+    }
+  }
+
+  let run;
+  try { run = font.layout(content); }
+  catch { throw managedFontError("De tekst kan niet met de exact beheerde fontbron worden gezet."); }
+  if (!run?.glyphs?.length || run.glyphs.length !== run.positions?.length) throw managedFontError("De fontbron leverde geen volledige glyph-run op.");
+
+  let penX = 0;
+  let penY = 0;
+  const glyphs = [];
+  const bounds = { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY };
+  for (let index = 0; index < run.glyphs.length; index += 1) {
+    const glyph = run.glyphs[index];
+    const position = run.positions[index];
+    const offsetX = penX + Number(position.xOffset ?? 0);
+    const offsetY = penY + Number(position.yOffset ?? 0);
+    const commands = glyph.path?.commands ?? [];
+    const glyphBounds = glyph.path?.bbox;
+    if (commands.length && glyphBounds && Number.isFinite(glyphBounds.minX) && glyphBounds.maxX > glyphBounds.minX && glyphBounds.maxY > glyphBounds.minY) {
+      glyphs.push({ commands, offsetX, offsetY });
+      bounds.minX = Math.min(bounds.minX, glyphBounds.minX + offsetX);
+      bounds.minY = Math.min(bounds.minY, glyphBounds.minY + offsetY);
+      bounds.maxX = Math.max(bounds.maxX, glyphBounds.maxX + offsetX);
+      bounds.maxY = Math.max(bounds.maxY, glyphBounds.maxY + offsetY);
+    }
+    penX += Number(position.xAdvance ?? 0);
+    penY += Number(position.yAdvance ?? 0);
+  }
+  if (!glyphs.length || !(bounds.maxX > bounds.minX) || !(bounds.maxY > bounds.minY)) throw managedFontError("De tekst levert geen bruikbare gesloten fontcontour op.");
+  return { glyphs, bounds };
+}
+
+function contourCommands(commands, offsetX, offsetY, bounds, scaleX, scaleY) {
+  const contours = [];
+  let current = [];
+  let currentPoint = null;
+  const mapped = (x, y) => mapPoint(x + offsetX, y + offsetY, bounds, scaleX, scaleY);
+  const finish = () => {
+    if (current.length) contours.push(current);
+    current = [];
+    currentPoint = null;
+  };
+
+  for (const command of commands) {
+    const args = command.args ?? [];
+    if (command.command === "moveTo") {
+      finish();
+      currentPoint = mapped(args[0], args[1]);
+      current.push({ type: "move", point: currentPoint });
+    } else if (command.command === "lineTo") {
+      currentPoint = mapped(args[0], args[1]);
+      current.push({ type: "line", point: currentPoint });
+    } else if (command.command === "quadraticCurveTo") {
+      if (!currentPoint) throw managedFontError("De fontcontour bevat een curve zonder startpunt.");
+      const control = mapped(args[0], args[1]);
+      const point = mapped(args[2], args[3]);
+      current.push({
+        type: "cubic",
+        control1: { x: currentPoint.x + (2 / 3) * (control.x - currentPoint.x), y: currentPoint.y + (2 / 3) * (control.y - currentPoint.y) },
+        control2: { x: point.x + (2 / 3) * (control.x - point.x), y: point.y + (2 / 3) * (control.y - point.y) },
+        point,
+      });
+      currentPoint = point;
+    } else if (command.command === "bezierCurveTo") {
+      const point = mapped(args[4], args[5]);
+      current.push({ type: "cubic", control1: mapped(args[0], args[1]), control2: mapped(args[2], args[3]), point });
+      currentPoint = point;
+    } else if (command.command === "closePath") {
+      current.push({ type: "close" });
+      finish();
+    } else {
+      throw managedFontError(`Niet-ondersteunde fontcontouropdracht: ${command.command ?? "onbekend"}.`);
+    }
+  }
+  finish();
+  return contours;
+}
+
+export function createManagedFontProductionPiece({ fontRecord, bytes, content, widthMm, heightMm, id, sourceOrderId, product, association, foilColor }) {
+  const sourceBytes = Buffer.from(bytes);
+  const actualHash = sha256(sourceBytes);
+  if (actualHash !== fontRecord.sha256 || fontRecord.status !== "TECHNICALLY_VALID") {
+    throw managedFontError(`Fontbron ${fontRecord.id} wijkt af van de beheerde bronidentiteit.`, "PRODUCTION_FONT_HASH_MISMATCH");
+  }
+  if (!(Number(widthMm) > 0) || !(Number(heightMm) > 0)) throw managedFontError("Een productiefont vereist positieve fysieke afmetingen.");
+
+  const font = parseFont(sourceBytes);
+  const positioned = positionedGlyphCommands(font, content);
+  const scaleX = Number(widthMm) / (positioned.bounds.maxX - positioned.bounds.minX);
+  const scaleY = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
+  const contours = [];
+  for (let glyphIndex = 0; glyphIndex < positioned.glyphs.length; glyphIndex += 1) {
+    const glyph = positioned.glyphs[glyphIndex];
+    const commandSets = contourCommands(glyph.commands, glyph.offsetX, glyph.offsetY, positioned.bounds, scaleX, scaleY);
+    for (let contourIndex = 0; contourIndex < commandSets.length; contourIndex += 1) {
+      const contour = flattenSourcePath(`${id}-g${glyphIndex + 1}-c${contourIndex + 1}`, commandSets[contourIndex], FONT_OUTLINE_TOLERANCE_MM);
+      if (contour.closed && contour.points.length >= 4) contours.push(contour);
+    }
+  }
+  const pointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
+  if (!contours.length || pointCount > MAX_POINTS_PER_PRODUCTION_PIECE) throw managedFontError("De fontcontour is leeg of te complex voor veilige productie.");
+  const contourBounds = boundsForContours(contours);
+  if (!(contourBounds.width > 0) || !(contourBounds.height > 0)) throw managedFontError("De fontcontour heeft geen bruikbare fysieke afmetingen.");
+
+  return {
+    id,
+    label: content,
+    sourceOrderId,
+    product,
+    association,
+    printType: "Beheerd productiefont",
+    requestedPhysicalSizeMm: { widthMm: Number(widthMm), heightMm: Number(heightMm) },
+    vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
+    material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
+    contours,
+    productionRule: { mirror: false, rotation: 0, allowedNestingRotations: [0] },
+  };
+}
