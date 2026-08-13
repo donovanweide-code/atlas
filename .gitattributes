@@ -1,1 +1,3 @@
 output/pdf/sportpaleis-winplot-vector-pdf-003-20260811/pioneers-number-2-200mm-1to1-v3.pdf -text
+website/sportpaleis-server/production-migrations/workspace/001-runtime-state.sql text eol=lf
+website/sportpaleis-server/production-migrations/atlas/001-runtime-boundary.sql text eol=lf
