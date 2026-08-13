@@ -199,6 +199,18 @@ export function calculateManagedCheckoutTotal(lines: ManagedCheckoutPriceLine[])
   return { totalEur: missingPriceCount ? null : Math.round(totalEur * 100) / 100, missingPriceCount };
 }
 
+export interface BedrukkenCheckoutPriceLine {
+  articleUnitPriceEur?: number | null;
+  personalizations: ManagedCheckoutPriceLine[];
+}
+
+export function calculateBedrukkenCheckoutTotal(lines: BedrukkenCheckoutPriceLine[]): {
+  totalEur: number | null;
+  missingPriceCount: number;
+} {
+  return calculateManagedCheckoutTotal(lines.flatMap(({ personalizations }) => personalizations));
+}
+
 export interface ProductionProfile {
   id: string; name: string; placement: string; referenceDistanceCm: number | null; sizeLabel: string;
   fontProfile: string; foilColor: string; mirror: boolean | null; rotationDeg: number | null; instruction: string;

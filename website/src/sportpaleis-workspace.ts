@@ -1,7 +1,7 @@
 import "./styles/sportpaleis-workspace.css";
 import { articleImage } from "./sportpaleis/catalog-images.ts";
 import { createCutJobBatch, createProductionPreview, createReferencePieces, sha256 } from "./sportpaleis/direct-print/index.ts";
-import { canAccessAdmin, type AssociationConfiguration, type BackNumberSizeClass, type CatalogArticle, type ProductionJob, type ProductionLineType, type ProductionProofStatus, type ProductionProposal, type SportpaleisProductionFont, type ValidationStatus, type WorkspaceOrder } from "./sportpaleis/workspace-data.ts";
+import { calculateBedrukkenCheckoutTotal, canAccessAdmin, type AssociationConfiguration, type BackNumberSizeClass, type CatalogArticle, type ManagedCheckoutPriceLine, type ProductionJob, type ProductionLineType, type ProductionProofStatus, type ProductionProposal, type SportpaleisProductionFont, type ValidationStatus, type WorkspaceOrder } from "./sportpaleis/workspace-data.ts";
 import { PilotApiError, SportpaleisPilotApi, type PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 import { articlePersonalizationFields, associationPersonalizationModel, isOrderablePrintedArticle, type CatalogPrintField } from "./sportpaleis/order-personalization.ts";
 import { exactManagedFontForLine, managedFontIdentity } from "./sportpaleis/managed-font-client-gate.ts";
@@ -288,16 +288,16 @@ function articleUnitPrice(article: CatalogArticle, size: string): number | null 
   if (size && bySize && Object.prototype.hasOwnProperty.call(bySize, size)) return bySize[size];
   return article.priceConfiguration?.articleUnitPriceEur;
 }
-function checkoutArticleLine(article: CatalogArticle, draft: DraftItem, quantity: number, totalPrice: number, complete: boolean): string {
+function checkoutArticleLine(article: CatalogArticle, draft: DraftItem, quantity: number, catalogPrice: number, catalogPriceComplete: boolean): string {
   const rows = draft.variants.length
     ? draft.variants.map((variant) => `${variant.size} ×${variant.quantity} — ${variant.deviation ? `afwijking: ${overridePrintSummary(article, variant.overrides, variant.printChoice)}` : inheritedPrintSummary(article, variant.printChoice ?? draft.printChoice)}`)
     : [`${draft.size} ×${draft.quantity} — ${draft.deviation ? `afwijking: ${overridePrintSummary(article, draft.overrides, draft.printChoice)}` : inheritedPrintSummary(article, draft.printChoice)}`];
-  const price = complete ? euro(totalPrice) : "Prijs ontbreekt";
-  return `<div class="sp-price-article"><img src="${articleImage(article.imageKey)}" alt=""><span><strong>${esc(article.name)} ×${quantity}</strong><em>${esc(article.association)}</em><small>${rows.map(esc).join("<br>")}</small></span><strong>${price}</strong></div>`;
+  const price = catalogPriceComplete ? euro(catalogPrice) : "Prijs onbekend";
+  return `<div class="sp-price-article"><img src="${articleImage(article.imageKey)}" alt=""><span><strong>${esc(article.name)} ×${quantity}</strong><em>${esc(article.association)}</em><small>${rows.map(esc).join("<br>")}</small><small>Artikelprijs: ${price} · niet inbegrepen in Bedrukken</small></span></div>`;
 }
 function orderPriceSummary(state: PilotBootstrap): string {
   if (!draftItems.length) return `<div class="sp-price-empty">Kies een artikel om het kassa-overzicht op te bouwen.</div>`;
-  let total = 0; let complete = true; const lines: string[] = [];
+  const printingPrices: ManagedCheckoutPriceLine[] = []; const lines: string[] = [];
   for (const draft of draftItems) {
     const article = state.articles.find(({ id }) => id === draft.articleId)!;
     const quantity = draft.variants.length ? draft.variants.reduce((sum, variant) => sum + variant.quantity, 0) : draft.quantity;
@@ -307,7 +307,6 @@ function orderPriceSummary(state: PilotBootstrap): string {
       const unit = articleUnitPrice(article, row.size);
       if (typeof unit === "number") articleTotal += unit * row.quantity; else articleComplete = false;
     }
-    if (articleComplete) total += articleTotal; else complete = false;
     lines.push(checkoutArticleLine(article, draft, quantity, articleTotal, articleComplete));
     const usage = new Map<PrintField, number>();
     const add = (field: PrintField, count: number, value: string) => { if (value) usage.set(field, (usage.get(field) ?? 0) + count); };
@@ -324,12 +323,14 @@ function orderPriceSummary(state: PilotBootstrap): string {
     }
     for (const [field, count] of usage) {
       const price = article.priceConfiguration?.personalizationUnitPricesEur[field];
-      if (typeof price === "number") total += price * count; else complete = false;
+      printingPrices.push({ quantity: count, unitPriceEur: price });
       lines.push(`<div class="sp-price-print"><span>Bedrukking ${printLabels[field].toLowerCase()} ×${count}</span><strong>${typeof price === "number" ? euro(price * count) : "Prijs ontbreekt"}</strong></div>`);
     }
   }
-  if (draftOrderMeta.deliveryMode === "DELIVERY") { total += state.settings.deliveryFeeEur; lines.push(`<div class="sp-price-print"><span>Bezorgkosten</span><strong>${euro(state.settings.deliveryFeeEur)}</strong></div>`); }
-  return `${lines.join("")}<div class="sp-price-total"><span>Totaal voor de kassa</span><strong>${complete ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(total) : "Nog niet beschikbaar"}</strong></div>${complete ? "" : `<p>Een of meer beheerde prijzen ontbreken. Sla geen bedrag op basis van een aanname aan.</p>`}`;
+  if (draftOrderMeta.deliveryMode === "DELIVERY") lines.push(`<div class="sp-price-print"><span>Bezorgkosten · niet inbegrepen in Bedrukken</span><strong>${euro(state.settings.deliveryFeeEur)}</strong></div>`);
+  const calculated = calculateBedrukkenCheckoutTotal([{ personalizations: printingPrices }]);
+  const complete = calculated.totalEur !== null;
+  return `${lines.join("")}<div class="sp-price-total"><span>Totaal bedrukking</span><strong>${complete ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(calculated.totalEur!) : "Nog niet beschikbaar"}</strong></div>${complete ? "" : `<p>Een of meer beheerde bedrukkingsprijzen ontbreken. Sla geen bedrag op basis van een aanname aan.</p>`}`;
 }
 function draftValues(values: WorkspaceOrder["standardPersonalization"] | WorkspaceOrder["items"][number]["personalizationValues"]): DraftOverrides {
   return { initials: values?.initials ?? "", initialsInfix: values?.initialsInfix ?? "", name: values?.name ?? "", backNumber: values?.backNumber ?? "", backNumberSizeClass: values?.backNumberSizeClass ?? "", shortsNumber: values?.shortsNumber ?? "" };

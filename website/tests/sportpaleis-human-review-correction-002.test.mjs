@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { calculateBedrukkenCheckoutTotal } from "../src/sportpaleis/workspace-data.ts";
 
 const passwords = { kevin: "Human-Review-Kevin-002!", patrick: "Human-Review-Patrick-002!", collega: "Human-Review-Store-002!", "donovan-support": "Human-Review-Support-002!" };
 
@@ -66,4 +67,17 @@ test("Orders en navigatie volgen de Human Review-scheiding zonder productiebedie
   assert.doesNotMatch(shellSource, /WERKCONTEXT/);
   assert.match(styles, /\.sp-operational-order-row/);
   assert.match(styles, /@media\(max-width:600px\).*\.sp-operational-order-row/s);
+});
+
+test("Bedrukken totaal bestaat uitsluitend uit toepasselijke personalisatiekosten", () => {
+  assert.deepEqual(calculateBedrukkenCheckoutTotal([
+    {
+      articleUnitPriceEur: 34.95,
+      personalizations: [
+        { quantity: 2, unitPriceEur: 4.5 },
+        { quantity: 2, unitPriceEur: 9.95 },
+      ],
+    },
+  ]), { totalEur: 28.9, missingPriceCount: 0 });
+  assert.notEqual(28.9, 34.95 + 28.9);
 });
