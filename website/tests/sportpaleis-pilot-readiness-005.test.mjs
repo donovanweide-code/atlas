@@ -106,12 +106,15 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-005-junior-gap-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
 
     const team = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
-      orderKind: "TEAM", customer: "Team 18", customerEmail: "team18@example.nl", customerPhone: "0612345678", standardPersonalization: empty,
+      orderKind: "TEAM", customer: "", customerEmail: "", customerPhone: "", standardPersonalization: empty,
       items: [{ articleId: "sp-live-137294", size: "Meerdere maten", quantity: 18, deviation: true, overrides: empty, variants: Array.from({ length: 18 }, (_, index) => ({ participantName: `Speler ${index + 1}`, size: index % 2 ? "M" : "L", quantity: 1, deviation: true, overrides: { ...empty, backNumber: String(index === 17 ? 99 : index + 1), backNumberSizeClass: "SENIOR" } })) }],
     }, "readiness-005-team")).value;
     assert.equal(team.items[0].variants.length, 18);
     assert.equal(team.items[0].variants.at(-1).personalizationValues.backNumber, "99");
     assert.equal(team.items[0].productionReadiness.status, "CONFIGURED");
+    assert.equal(team.customerEmail, "");
+    assert.equal(team.customerPhone, "");
+    assert.doesNotMatch(team.attention ?? "", /contact|e-mail|telefoon/iu);
     await assert.rejects(() => service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Verkeerde maat", customerEmail: "maat@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "8", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "sp-live-137294", size: "XXXL", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-invalid-size"), (error) => error.code === "ARTICLE_SIZE_UNAVAILABLE");
   });
 

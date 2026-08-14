@@ -787,6 +787,65 @@ export function validateSportpaleisPilotState(input) {
   return state;
 }
 
+function cleanStartProtectedFingerprint(state) {
+  const protectedState = Object.fromEntries(Object.entries(state).filter(([key]) => !["revision", "orders", "productionElementRequirements", "productionJobs", "productionProposals", "idempotency"].includes(key)));
+  return sha256(JSON.stringify(protectedState));
+}
+
+export function cleanSportpaleisPilotOrders(input) {
+  const state = validateSportpaleisPilotState(structuredClone(input));
+  if (state.organizationId !== "sport-2000-sportpaleis-bv") throw new Error("Clean start is buiten de Sportpaleis-organisatie geweigerd.");
+  const beforeFingerprint = cleanStartProtectedFingerprint(state);
+  const orders = state.orders ?? [];
+  for (const order of orders) {
+    const structurallyPilotBound = /^SP(?:W)?-/u.test(String(order.id))
+      && ["INDIVIDUAL", "TEAM", "CUSTOM", "LEGACY"].includes(order.orderKind)
+      && order.barcode?.value === `SPW:${order.id}`
+      && Array.isArray(order.items)
+      && order.items.every((item) => typeof item.sourceProvenance === "string");
+    if (!structurallyPilotBound) throw new Error(`Clean start geweigerd: ${order.id || "onbekende order"} is niet eenduidig als Sportpaleis-pilotrecord bevestigd.`);
+  }
+  const orderIds = new Set(orders.map(({ id }) => id));
+  const removedJobs = [];
+  const retainedJobs = [];
+  for (const job of state.productionJobs ?? []) {
+    const referenced = job.snapshot?.orderIds ?? [];
+    const matches = referenced.filter((id) => orderIds.has(id));
+    if (matches.length && matches.length !== referenced.length) throw new Error(`Clean start geweigerd: PlotJob ${job.jobNumber} mengt te verwijderen en onbekende orders.`);
+    (matches.length ? removedJobs : retainedJobs).push(job);
+  }
+  const removedProposals = [];
+  const retainedProposals = [];
+  for (const proposal of state.productionProposals ?? []) {
+    const referenced = (proposal.orders ?? []).map(({ id }) => id);
+    const matches = referenced.filter((id) => orderIds.has(id));
+    if (matches.length && matches.length !== referenced.length) throw new Error(`Clean start geweigerd: productievoorstel ${proposal.proposalNumber} mengt te verwijderen en onbekende orders.`);
+    (matches.length ? removedProposals : retainedProposals).push(proposal);
+  }
+  const removedRequirements = (state.productionElementRequirements ?? []).filter(({ orderId }) => orderIds.has(orderId));
+  const retainedRequirements = (state.productionElementRequirements ?? []).filter(({ orderId }) => !orderIds.has(orderId));
+  const removedIdempotencyKeys = Object.entries(state.idempotency ?? {}).filter(([, value]) => orders.some(({ id }) => JSON.stringify(value).includes(id))).map(([key]) => key);
+  const retainedIdempotency = Object.fromEntries(Object.entries(state.idempotency ?? {}).filter(([key]) => !removedIdempotencyKeys.includes(key)));
+  const artifactPaths = [...new Set(removedJobs.map((job) => String(job.snapshot?.artifact?.path ?? "").replaceAll("\\", "/")).filter((artifactPath) => /^outputs\/sportpaleis-plotjobs\/[A-Za-z0-9._/-]+$/u.test(artifactPath) && !artifactPath.includes("../")))];
+  state.orders = [];
+  state.productionElementRequirements = retainedRequirements;
+  state.productionJobs = retainedJobs;
+  state.productionProposals = retainedProposals;
+  state.idempotency = retainedIdempotency;
+  const afterFingerprint = cleanStartProtectedFingerprint(state);
+  if (afterFingerprint !== beforeFingerprint) throw new Error("Clean start heeft beschermde Workspace-data gewijzigd en is teruggedraaid.");
+  return {
+    state,
+    manifest: {
+      organizationId: state.organizationId,
+      protectedFingerprint: beforeFingerprint,
+      before: { orders: orders.length, productionJobs: (input.productionJobs ?? []).length, productionProposals: (input.productionProposals ?? []).length, productionElementRequirements: (input.productionElementRequirements ?? []).length },
+      removed: { orderIds: [...orderIds], productionJobIds: removedJobs.map(({ id }) => id), productionProposalIds: removedProposals.map(({ id }) => id), productionElementRequirementIds: removedRequirements.map(({ id }) => id), idempotencyKeys: removedIdempotencyKeys, artifactPaths },
+      after: { orders: 0, productionJobs: retainedJobs.length, productionProposals: retainedProposals.length, productionElementRequirements: retainedRequirements.length },
+    },
+  };
+}
+
 const validateState = validateSportpaleisPilotState;
 
 export class SportpaleisFileStore {
@@ -1439,15 +1498,7 @@ export class SportpaleisPilotService {
           item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
         });
         if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
-        for (const item of items) if (item.productionProfileId === "profile-none" && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) item.productionReadiness = { status: "CONFIGURED", reason: null };
-        if (productionLines.length) for (const item of items) {
-          const itemLines = productionLines.filter(({ itemId }) => !itemId || itemId === item.id);
-          if (!itemLines.length && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) continue;
-          const allValid = itemLines.length && itemLines.every(({ validation }) => validation.status === "VALID");
-          item.productionReadiness = { status: allValid ? "CONFIGURED" : item.productionReadiness?.status === "DATA_GAP" ? "DATA_GAP" : "ATTENTION", reason: itemLines.find(({ validation }) => validation.status === "BLOCKED")?.validation.reason ?? "Voor dit bedrukte artikel ontbreekt een uitvoerbare productieregel." };
-        }
-        const productionAttention = items.filter((item) => item.productionReadiness?.status !== "CONFIGURED");
-        const blockingProductionGaps = productionAttention.filter((item) => item.productionReadiness?.status === "DATA_GAP");
+        applyProductionReadiness(items, productionLines);
         const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
         if (orderKind === "TEAM" && associations.length === 0) throw Object.assign(new Error("Kies een vereniging voor de teamorder."), { statusCode: 400, code: "TEAM_ASSOCIATION_REQUIRED" });
         const teamCustomerFallback = associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
@@ -1488,7 +1539,7 @@ export class SportpaleisPilotService {
           communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
           notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
           priority,
-          attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttention.length ? `${blockingProductionGaps.length ? "Kritieke productiedata ontbreekt" : "Pilot-aandachtspunt"}: ${[...new Set(productionAttention.map(({ productionReadiness }) => productionReadiness.reason).filter(Boolean))].join(" · ")}` : undefined,
+          attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttentionText(items),
           barcode: { value: `SPW:${id}`, featureEnabled: false, hardwareValidated: false },
           pickup: { status: "NOT_PICKED_UP", pickedUpAt: null, pickedUpBy: null },
           payment: { status: "UNKNOWN", updatedAt: null, updatedBy: null, source: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : "UNKNOWN" },
@@ -1618,14 +1669,8 @@ export class SportpaleisPilotService {
         const strictPilotContract = order.orderKind === "INDIVIDUAL" || order.communication?.requiredForIndividualOrder === true;
         const standardPersonalization = validatePersonalization(payload.standardPersonalization, { requireBackNumberSizeClass: strictPilotContract });
         const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract });
-        for (const item of items) if (item.productionProfileId === "profile-none" && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) item.productionReadiness = { status: "CONFIGURED", reason: null };
         order.productionLines = order.orderKind === "INDIVIDUAL" ? deriveCatalogProductionLines(state, order.id, items) : order.productionLines;
-        if (order.productionLines?.length) for (const item of items) {
-          const itemLines = order.productionLines.filter(({ itemId }) => !itemId || itemId === item.id);
-          if (!itemLines.length && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) continue;
-          const allValid = itemLines.length && itemLines.every(({ validation }) => validation.status === "VALID");
-          item.productionReadiness = { status: allValid ? "CONFIGURED" : item.productionReadiness?.status === "DATA_GAP" ? "DATA_GAP" : "ATTENTION", reason: itemLines.find(({ validation }) => validation.status === "BLOCKED")?.validation.reason ?? "Voor dit bedrukte artikel ontbreekt een uitvoerbare productieregel." };
-        }
+        applyProductionReadiness(items, order.productionLines);
         const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
         order.standardPersonalization = standardPersonalization;
         order.items = items;
@@ -1633,9 +1678,10 @@ export class SportpaleisPilotService {
         order.association = associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging";
         order.totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
         order.foilStates = [...new Set(items.map(({ foilColor }) => foilColor))].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" }));
-        const hasProductionGap = items.some((item) => item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
-        if (hasProductionGap) order.attention = "Productiedata ontbreekt: Junior-rugnummermaat moet door Sportpaleis worden gevalideerd.";
-        else if (order.attention?.startsWith("Productiedata ontbreekt:")) delete order.attention;
+        const manualAttention = order.priority ? `Prioriteitsuitzondering: ${order.priority.reasonLabel ?? order.priority.reason}` : [...(order.notes ?? [])].reverse().find(({ kind }) => kind === "attention")?.text;
+        const recalculatedAttention = manualAttention || productionAttentionText(items);
+        if (recalculatedAttention) order.attention = recalculatedAttention;
+        else delete order.attention;
       }
       const next = {
         customer: order.customer,
@@ -3125,6 +3171,36 @@ function productionStatusForOrder(order) {
   const blocker = productionProposalBlockReason(order);
   if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker };
   return { productionStatus: "READY", productionStatusReason: null };
+}
+
+function applyProductionReadiness(items, productionLines) {
+  for (const item of items) {
+    if (item.productionProfileId === "profile-none" && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) {
+      item.productionReadiness = { status: "CONFIGURED", reason: null };
+      continue;
+    }
+    if (!productionLines?.length) continue;
+    const itemLines = productionLines.filter(({ itemId }) => !itemId || itemId === item.id);
+    if (!itemLines.length && (item.variants ?? []).every(({ personalization }) => personalization === "Geen bedrukking")) {
+      item.productionReadiness = { status: "CONFIGURED", reason: null };
+      continue;
+    }
+    const blocked = itemLines.find(({ validation }) => validation.status === "BLOCKED");
+    item.productionReadiness = blocked
+      ? { status: item.productionReadiness?.status === "DATA_GAP" ? "DATA_GAP" : "ATTENTION", reason: blocked.validation.reason ?? "Voor dit bedrukte artikel ontbreekt een uitvoerbare productieregel." }
+      : itemLines.length
+        ? { status: "CONFIGURED", reason: null }
+        : item.productionReadiness;
+  }
+  return items;
+}
+
+function productionAttentionText(items) {
+  const attention = items.filter((item) => item.productionReadiness?.status !== "CONFIGURED" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
+  if (!attention.length) return undefined;
+  const blocking = attention.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
+  const reasons = [...new Set(attention.flatMap((item) => [item.productionReadiness?.reason, item.backNumberProduction?.source, ...(item.variants ?? []).map((variant) => variant.backNumberProduction?.source)]).filter(Boolean))];
+  return `${blocking ? "Kritieke productiedata ontbreekt" : "Pilot-aandachtspunt"}: ${reasons.join(" · ") || "Productiecontrole nodig"}`;
 }
 
 function validateItems(value, state, standardPersonalization, options = {}) {

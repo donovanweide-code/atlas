@@ -46,8 +46,8 @@ export function validateManagedFontBytes(bytes) {
   });
 }
 
-function mapPoint(x, y, bounds, scaleX, scaleY) {
-  return { x: (x - bounds.minX) * scaleX, y: (bounds.maxY - y) * scaleY };
+function mapPoint(x, y, bounds, scale) {
+  return { x: (x - bounds.minX) * scale, y: (bounds.maxY - y) * scale };
 }
 
 function positionedGlyphCommands(font, content) {
@@ -88,11 +88,11 @@ function positionedGlyphCommands(font, content) {
   return { glyphs, bounds };
 }
 
-function contourCommands(commands, offsetX, offsetY, bounds, scaleX, scaleY) {
+function contourCommands(commands, offsetX, offsetY, bounds, scale) {
   const contours = [];
   let current = [];
   let currentPoint = null;
-  const mapped = (x, y) => mapPoint(x + offsetX, y + offsetY, bounds, scaleX, scaleY);
+  const mapped = (x, y) => mapPoint(x + offsetX, y + offsetY, bounds, scale);
   const finish = () => {
     if (current.length) contours.push(current);
     current = [];
@@ -144,12 +144,14 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
 
   const font = parseFont(sourceBytes);
   const positioned = positionedGlyphCommands(font, content);
-  const scaleX = Number(widthMm) / (positioned.bounds.maxX - positioned.bounds.minX);
-  const scaleY = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
+  // Physical text size is height-led. Applying one scale factor to both axes
+  // preserves the exact font outline; width is a contour result, never an
+  // independent text transform.
+  const scale = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
   const contours = [];
   for (let glyphIndex = 0; glyphIndex < positioned.glyphs.length; glyphIndex += 1) {
     const glyph = positioned.glyphs[glyphIndex];
-    const commandSets = contourCommands(glyph.commands, glyph.offsetX, glyph.offsetY, positioned.bounds, scaleX, scaleY);
+    const commandSets = contourCommands(glyph.commands, glyph.offsetX, glyph.offsetY, positioned.bounds, scale);
     for (let contourIndex = 0; contourIndex < commandSets.length; contourIndex += 1) {
       const contour = flattenSourcePath(`${id}-g${glyphIndex + 1}-c${contourIndex + 1}`, commandSets[contourIndex], FONT_OUTLINE_TOLERANCE_MM);
       if (contour.closed && contour.points.length >= 4) contours.push(contour);
@@ -167,7 +169,8 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     product,
     association,
     printType: "Beheerd productiefont",
-    requestedPhysicalSizeMm: { widthMm: Number(widthMm), heightMm: Number(heightMm) },
+    requestedPhysicalSizeMm: { widthMm: contourBounds.width, heightMm: contourBounds.height },
+    sizing: { mode: "HEIGHT_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm) },
     vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
     material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
     contours,
