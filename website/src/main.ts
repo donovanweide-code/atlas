@@ -2,6 +2,7 @@ import "./styles/main.css";
 import "./styles/atlas-expedition.css";
 import "./styles/public-pages.css";
 import "./styles/experience-pages.css";
+import "./styles/sportpaleis-practice-case.css";
 import { renderSceneWorld } from "./atlas-scenes";
 import { publicMethod } from "./public-method";
 import {

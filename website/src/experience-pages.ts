@@ -7,6 +7,7 @@ import methodListening from "./assets/images/atlas/generated/atlas-method-listen
 import methodClarity from "./assets/images/atlas/generated/atlas-method-clarity-v01.jpg";
 import methodPrototype from "./assets/images/atlas/generated/atlas-method-prototype-v01.jpg";
 import { legalPages, type LegalPage } from "./legal-pages";
+import { renderSportpaleisPracticeCase } from "./sportpaleis-practice-case";
 
 interface ExperienceSection {
   label: string;
@@ -278,8 +279,8 @@ const pages: ExperiencePage[] = [
         label: "05.3 / Wat nog niet wordt geclaimd",
         title: "We claimen alleen resultaten die aantoonbaar zijn.",
         paragraphs: [
-          "Er zijn op dit moment geen gepubliceerde klantcases met bevestigde uitkomsten. Dat ontbrekende bewijs vullen we niet aan met verzonnen resultaten, testimonials of voorbeeldverhalen.",
-          "Nieuwe projecten verschijnen hier zodra de vraag, samenwerking, uitvoering en waargenomen verandering samen een eerlijk verhaal vormen.",
+          "De Sportpaleis-praktijkcase laat de uitgangssituatie, de gemaakte keuze en de werkwijze in ontwikkeling zien. We koppelen daar geen percentages, tijdwinst of onbewezen resultaatclaim aan.",
+          "Nieuwe projecten verschijnen hier pas wanneer de vraag, samenwerking, uitvoering en feitelijke status samen een eerlijk verhaal vormen.",
         ],
       },
     ],
@@ -830,6 +831,19 @@ function renderContactPanel(): string {
   </section>`;
 }
 
+function renderSportpaleisCaseEntry(): string {
+  return `<aside class="sp-case-entry" aria-labelledby="sp-case-entry-title">
+    <div class="sp-case-entry__copy">
+      <p>Nieuwe praktijkcase · in ontwikkeling</p>
+      <h2 id="sp-case-entry-title">Van papier naar één werkwijze.</h2>
+    </div>
+    <div class="sp-case-entry__action">
+      <p>Niet het formulier stond centraal, maar de kennis en keuzes die erachter zaten.</p>
+      <a href="/projecten/sportpaleis">Bekijk de Sportpaleis-case <span aria-hidden="true">→</span></a>
+    </div>
+  </aside>`;
+}
+
 function renderPage(page: ExperiencePage): string {
   setMeta(page.metaTitle, page.description, page.path);
   return `<a class="skip-link" href="#main-content">Ga naar inhoud</a>
@@ -852,6 +866,7 @@ function renderPage(page: ExperiencePage): string {
       </header>
       <div class="experience-flow" id="inhoud">
         ${page.sections.map(renderSection).join("")}
+        ${page.path === "/projecten" ? renderSportpaleisCaseEntry() : ""}
         ${page.contact ? renderContactPanel() : ""}
         <blockquote class="experience-reflection">${page.reflection}</blockquote>
         <aside class="experience-next">
@@ -1024,6 +1039,9 @@ function renderNotFound(): string {
 }
 
 export function renderExperiencePage(path: string): string {
+  if (path === "/projecten/sportpaleis") {
+    return renderSportpaleisPracticeCase(renderExperienceHeader, renderExperienceFooter);
+  }
   const page = pageIndex.get(path);
   if (page) return renderPage(page);
   if (path === "/kennis") return renderKnowledgeHub();
