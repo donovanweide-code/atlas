@@ -67,20 +67,14 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.match(order.items[0].personalization, /Rug 10 \(Senior\)/);
   });
 
-  await context.test("artikeloverride bewaart Junior apart en rapporteert ontbrekende fysieke brondata eerlijk", async () => {
+  await context.test("artikeloverride bewaart Junior apart en laat kledingmaat de productieklasse niet overschrijven", async () => {
     const junior = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({ items: [{ articleId: "sp-live-137294", variants: [
       { id: "standard", size: "M", quantity: 1, deviation: false, overrides: {} },
       { id: "junior", size: "S", quantity: 1, deviation: true, overrides: { initials: "", name: "", backNumber: "14", backNumberSizeClass: "JUNIOR", shortsNumber: "" } },
     ] }] }), "pilot-junior-override")).value;
     assert.equal(junior.items[0].variants[0].backNumberProduction.status, "SOURCE_CONFIGURED");
-    assert.equal(junior.items[0].variants[1].backNumberProduction.status, "DATA_GAP");
-    assert.equal(junior.items[0].variants[1].backNumberProduction.physicalHeightMm, null);
-    assert.match(junior.attention, /Kritieke productiedata ontbreekt/);
-    await service.captureOrderMail(storeUser.token, storeUser.csrfToken, junior.id, { templateKey: "ORDER_RECEIVED" }, "pilot-junior-receipt");
-    const juniorReady = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === junior.id);
-    const controlled = (await service.advanceOrder(patrick.token, patrick.csrfToken, junior.id, juniorReady.revision, "pilot-junior-to-control")).value;
-    assert.equal(controlled.stage, "CONTROL");
-    await assert.rejects(service.advanceOrder(patrick.token, patrick.csrfToken, junior.id, controlled.revision, "pilot-junior-data-block"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    assert.equal(junior.items[0].variants[1].backNumberProduction.status, "VALIDATED");
+    assert.equal(junior.items[0].variants[1].backNumberProduction.physicalHeightMm, 200);
   });
 
   await context.test("individuele order kan niet naar Controle vóór de verplichte ontvangstbevestiging", async () => {

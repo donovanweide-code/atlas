@@ -59,7 +59,7 @@ export function createProductionPreview(job: CutJob): ProductionPreview {
       sourceOrderId: provenance.sourceOrderId,
       printType: provenance.printType,
     })),
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Productiepreview ${escapeXml(job.cutJobId)}" viewBox="0 0 ${width} ${length}" width="${width}mm" height="${length}mm"><rect width="100%" height="100%" fill="white"/><g fill="none" stroke="black" stroke-width="0.2" vector-effect="non-scaling-stroke">${paths}</g></svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Productiepreview ${escapeXml(job.cutJobId)}" viewBox="0 0 ${width} ${length}" width="${width}mm" height="${length}mm"><g fill="none" stroke="black" stroke-width="0.2" vector-effect="non-scaling-stroke">${paths}</g></svg>`,
   };
 }
 

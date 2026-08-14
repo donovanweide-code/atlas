@@ -174,6 +174,6 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
     material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
     contours,
-    productionRule: { mirror: false, rotation: 0, allowedNestingRotations: [0] },
+    productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0] },
   };
 }

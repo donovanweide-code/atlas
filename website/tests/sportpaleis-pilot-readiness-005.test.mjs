@@ -94,6 +94,8 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
 
   let blockedJuniorOrder;
   await context.test("normale order en Teamorder erven artikelbeleid; DATA_GAP blokkeert productie server-side", async () => {
+    const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
+    await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "DATA_GAP", juniorValidationNote: "Test-only reset zonder fysieke mm" });
     blockedJuniorOrder = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Junior geblokkeerd", customerEmail: "junior-gap@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} }],

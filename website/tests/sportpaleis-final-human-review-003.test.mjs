@@ -54,7 +54,7 @@ test("Pioneers 2 loopt van normale order tot byte-identiek SVG-productieartefact
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "review-pioneers-proposal")).value;
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, orders: proposal.orders }, "review-pioneers-job")).value;
   assert.equal(job.snapshot.artifact.format, "SVG"); assert.equal(job.snapshot.orientation.preMirrored, true); assert.equal(job.snapshot.hardwareSendPerformedByWorkspace, false);
-  assert.deepEqual(job.snapshot.outputWriter, { id: "cutjob-svg", version: "1", format: "SVG", proofStatus: "GEOMETRY_VALIDATED", physicalRouteStatus: "HUMAN_VALIDATION_REQUIRED" });
+  assert.deepEqual(job.snapshot.outputWriter, { id: "cutjob-svg", version: "2", format: "SVG", proofStatus: "GEOMETRY_VALIDATED", physicalRouteStatus: "HUMAN_VALIDATION_REQUIRED" });
   assert.equal(job.snapshot.layout.objectCount, 1); assert.ok(job.snapshot.layout.closedContourCount >= 1); assert.ok(job.snapshot.artifact.productionDataHash);
   const first = await service.productionJobArtifact(admin.token, job.id); const second = await service.productionJobArtifact(admin.token, job.id);
   assert.equal(first.sha256, job.snapshot.artifact.sha256); assert.deepEqual(first.bytes, second.bytes); assert.match(first.bytes.toString("utf8"), /data-production-data-sha256=/u);
@@ -78,7 +78,7 @@ test("normale Bedrukken-invoer volgt de werkelijk ingerichte artikelregels", asy
 test("versioned productiebron en outputwriter zijn generiek geregistreerd en onbekende waarden falen gesloten", async () => {
   const sources = availableProductionSourceIdentities();
   assert.equal(sources.length, 3);
-  assert.ok(sources.every(({ sourceSetId, outputWriterId, outputWriterVersion }) => sourceSetId === PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID && outputWriterId === "cutjob-svg" && outputWriterVersion === "1"));
+  assert.ok(sources.every(({ sourceSetId, outputWriterId, outputWriterVersion }) => sourceSetId === PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID && outputWriterId === "cutjob-svg" && outputWriterVersion === "2"));
   assert.ok(resolveProductionSource({ sourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: "cutjob-svg", lineType: "NUMBER", content: "2", physicalHeightMm: 200 }));
   assert.equal(resolveProductionSource({ sourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: "cutjob-svg", lineType: "NUMBER", content: "5", physicalHeightMm: 200 }), null);
   const serviceSource = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");

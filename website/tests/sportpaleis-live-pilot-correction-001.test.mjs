@@ -63,7 +63,7 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     assert.equal(created.items.find(({ association }) => association === "MHC Lelystad").foilColor, "Zwart");
   });
 
-  await context.test("Junior kledingmaten 116–164 gebruiken 200 mm en andere maten blijven veilig DATA_GAP", async () => {
+  await context.test("expliciete Junior-klasse gebruikt 200 mm onafhankelijk van de kledingmaat", async () => {
     const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
     assert.equal(association.juniorValidationStatus, "VALIDATED");
     assert.equal(association.juniorPhysicalHeightMm, 200);
@@ -74,13 +74,12 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
       items: [{ articleId: "sp-live-137294", size: "164", quantity: 1, deviation: false, overrides: empty }],
     }, "correction-001-junior-164")).value;
     assert.deepEqual(valid.items[0].backNumberProduction, { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "VALIDATED", source: association.juniorValidationNote });
-    const gap = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
+    const otherClothingSize = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Junior S", customerEmail: "juniors@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "15", backNumberSizeClass: "JUNIOR" },
       items: [{ articleId: "sp-live-137294", size: "S", quantity: 1, deviation: false, overrides: empty }],
     }, "correction-001-junior-s")).value;
-    assert.equal(gap.items[0].backNumberProduction.status, "DATA_GAP");
-    assert.match(gap.items[0].backNumberProduction.source, /116, 128, 140, 152, 164/);
+    assert.deepEqual(otherClothingSize.items[0].backNumberProduction, { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "VALIDATED", source: association.juniorValidationNote });
   });
 
   await context.test("verenigingsinstellingen zijn gereviseerd en werken direct door naar profiel en bestaand productievoorstel", async () => {

@@ -2706,13 +2706,6 @@ function associationProfileSizeLabel(association, profile) {
 function resolveBackNumberProductionContext(association, profile, sizeClass, garmentSize) {
   if (!sizeClass) return null;
   if (sizeClass === "JUNIOR" && association?.juniorValidationStatus === "VALIDATED") {
-    const configuredSizes = association.juniorGarmentSizes ?? [];
-    if (configuredSizes.length && !configuredSizes.includes(garmentSize)) return {
-      sizeClass,
-      physicalHeightMm: null,
-      status: "DATA_GAP",
-      source: `De bevestigde Juniorregel geldt alleen voor kledingmaten ${configuredSizes.join(", ")}; maat ${garmentSize} vereist controle.`,
-    };
     return { sizeClass, physicalHeightMm: association.juniorPhysicalHeightMm, status: "VALIDATED", source: association.juniorValidationNote };
   }
   const configured = profile.backNumberSizeClasses?.[sizeClass];

@@ -75,7 +75,8 @@ test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
     assert.equal(created.value.orderKind, "TEAM");
     assert.deepEqual(created.value.items[0].variants.map(({ participantName }) => participantName), ["Speler Een", "Speler Twee"]);
     assert.equal(created.value.items[0].variants[0].backNumberProduction.physicalHeightMm, 220);
-    assert.equal(created.value.items[0].variants[1].backNumberProduction.status, "DATA_GAP");
+    assert.equal(created.value.items[0].variants[1].backNumberProduction.status, "VALIDATED");
+    assert.equal(created.value.items[0].variants[1].backNumberProduction.physicalHeightMm, 200);
   });
 
   await context.test("de generieke Mail Foundation rendert alle drie operationele klantmomenten zonder echte send", async () => {

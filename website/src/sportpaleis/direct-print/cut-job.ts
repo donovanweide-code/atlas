@@ -56,6 +56,17 @@ interface NestSolution {
   signature: string;
 }
 
+function placementEnvelopesConflict(
+  left: ReturnType<typeof boundsForContours>,
+  right: ReturnType<typeof boundsForContours>,
+  minimumGapMm: number,
+): boolean {
+  return !(left.maxX + minimumGapMm <= right.minX + 0.000_001
+    || right.maxX + minimumGapMm <= left.minX + 0.000_001
+    || left.maxY + minimumGapMm <= right.minY + 0.000_001
+    || right.maxY + minimumGapMm <= left.minY + 0.000_001);
+}
+
 function compareNumberTuples(left: readonly number[], right: readonly number[]): number {
   for (let index = 0; index < left.length; index += 1) {
     const difference = left[index] - right[index];
@@ -193,9 +204,12 @@ function tryPlace(
       const jobLength = boundsMm.maxY + configuration.edgeMarginMm;
       if (configuration.maxJobLengthMm !== undefined
         && jobLength > configuration.maxJobLengthMm + 0.000_001) continue;
-      if (sheet.some((placed) => contourSetsConflict(
-        contours,
-        placed.contours,
+      // Production text is placed by its immutable physical envelope. This
+      // conservative fast path avoids expensive contour interlocking while
+      // preserving the configured gap and the final contour-level validation.
+      if (sheet.some((placed) => placementEnvelopesConflict(
+        boundsMm,
+        placed.boundsMm,
         configuration.minimumCutGapMm,
       ))) continue;
 
@@ -467,13 +481,16 @@ function createJob(
   const groups = sheet.map((placed) => buildGroup(placed, request));
   const contours = groups.flatMap(({ contours: groupContours }) => groupContours);
   const boundsMm = boundsForContours(contours);
-  const validation = validateGeometry(contours, request.nesting.absoluteMaxWidthMm);
-  if (!validation.valid) {
-    throw new Error(`Geneste productiegeometrie is ongeldig: ${validation.issues.map(({ code }) => code).join(", ")}`);
+  // Every source contour was fully validated before nesting. Mirror, rotation
+  // and translation preserve that validity, so the combined job only needs
+  // the cross-group checks below plus its absolute production width.
+  if (boundsMm.width > request.nesting.absoluteMaxWidthMm + 0.000_001) {
+    throw new Error(`Geneste productiebreedte ${boundsMm.width.toFixed(3)} mm overschrijdt ${request.nesting.absoluteMaxWidthMm} mm.`);
   }
   for (let left = 0; left < groups.length; left += 1) {
     for (let right = left + 1; right < groups.length; right += 1) {
-      if (contourSetsConflict(groups[left].contours, groups[right].contours, request.nesting.minimumCutGapMm)) {
+      if (placementEnvelopesConflict(groups[left].boundsMm, groups[right].boundsMm, request.nesting.minimumCutGapMm)
+        && contourSetsConflict(groups[left].contours, groups[right].contours, request.nesting.minimumCutGapMm)) {
         throw new Error(`Geneste objecten ${groups[left].sourcePieceId} en ${groups[right].sourcePieceId} overlappen of schenden minimumCutGapMm.`);
       }
     }

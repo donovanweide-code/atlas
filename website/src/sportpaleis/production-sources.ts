@@ -4,7 +4,7 @@ import type { ProductionLineType, ProductionProofStatus } from "./workspace-data
 
 export const CUTJOB_SVG_WRITER = Object.freeze({
   id: "cutjob-svg",
-  version: "1",
+  version: "2",
   format: "SVG" as const,
   proofStatus: "GEOMETRY_VALIDATED" as ProductionProofStatus,
   physicalRouteStatus: "HUMAN_VALIDATION_REQUIRED" as const,
@@ -91,6 +91,7 @@ export function productionPieceFromSource(
     sourceOrderId: overrides.sourceOrderId,
     label: overrides.label,
     product: overrides.product ?? source.piece.product,
+    productionRule: { ...structuredClone(source.piece.productionRule), mirror: true },
   };
 }
 
