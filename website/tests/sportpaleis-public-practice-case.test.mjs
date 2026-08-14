@@ -5,17 +5,20 @@ import test from "node:test";
 const caseSourceUrl = new URL("../src/sportpaleis-practice-case.ts", import.meta.url);
 const pageSourceUrl = new URL("../src/experience-pages.ts", import.meta.url);
 const sitemapUrl = new URL("../public/sitemap.xml", import.meta.url);
+const htaccessUrl = new URL("../public/.htaccess", import.meta.url);
 
 test("de publieke Sportpaleis-praktijkcase heeft één begrensde route en ingang", async () => {
-  const [caseSource, pageSource, sitemap] = await Promise.all([
+  const [caseSource, pageSource, sitemap, htaccess] = await Promise.all([
     readFile(caseSourceUrl, "utf8"),
     readFile(pageSourceUrl, "utf8"),
     readFile(sitemapUrl, "utf8"),
+    readFile(htaccessUrl, "utf8"),
   ]);
 
   assert.match(pageSource, /href="\/projecten\/sportpaleis"/);
   assert.match(pageSource, /path === "\/projecten\/sportpaleis"/);
   assert.match(sitemap, /<loc>https:\/\/webuildanddesign\.nl\/projecten\/sportpaleis<\/loc>/);
+  assert.match(htaccess, /RewriteRule \^projecten\/sportpaleis\/\?\$ index\.html \[L\]/);
   assert.match(caseSource, /Van papier naar één werkwijze\./);
   assert.match(caseSource, /Ontbrekende informatie blijft zichtbaar\./);
   assert.match(caseSource, /<details class="sp-case-detail">/);

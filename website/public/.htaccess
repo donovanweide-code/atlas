@@ -17,6 +17,7 @@ ErrorDocument 404 /404.html
   # Alleen bekende publieke routes gebruiken de client-side router.
   RewriteRule ^$ index.html [L]
   RewriteRule ^(?:diensten|werkwijze|projecten|over-ons|contact|algemene-voorwaarden|privacy)/?$ index.html [L]
+  RewriteRule ^projecten/sportpaleis/?$ index.html [L]
   RewriteRule ^kennis/?$ index.html [L]
   RewriteRule ^kennis/(?:wanneer-website-vernieuwen|website-verbeteren-of-vernieuwen|wanneer-past-wbd|wat-wbd-doet)/?$ index.html [L]
 
