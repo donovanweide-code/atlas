@@ -88,16 +88,17 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.doesNotMatch(await (await fetch(`${origin}/health`)).text(), /release|database|identity|secretless/);
 
   const alias = await fetch(`${origin}/workspace/wbd?bron=test`, { redirect: "manual" });
-  assert.equal(alias.status, 308);
-  assert.equal(alias.headers.get("location"), "/workspace/wbd/overzicht?bron=test");
+  assert.equal(alias.status, 404);
+  assert.equal(alias.headers.get("location"), null);
+  assert.doesNotMatch(await alias.text(), /Workspace shell marker/);
 
   const developmentAlias = await fetch(`${origin}/workspace/wbd/ontwikkeling`, { redirect: "manual" });
-  assert.equal(developmentAlias.status, 308);
-  assert.equal(developmentAlias.headers.get("location"), "/workspace/wbd/ontwikkeling/monitor");
+  assert.equal(developmentAlias.status, 404);
+  assert.doesNotMatch(await developmentAlias.text(), /Workspace shell marker/);
 
   const known = await fetch(`${origin}/workspace/wbd/organisaties/sportpaleis`);
-  assert.equal(known.status, 200);
-  assert.match(await known.text(), /Workspace shell marker/);
+  assert.equal(known.status, 404);
+  assert.doesNotMatch(await known.text(), /Workspace shell marker/);
 
   const sportpaleisAlias = await fetch(`${origin}/workspace/sportpaleis`, { redirect: "manual" });
   assert.equal(sportpaleisAlias.status, 308);
@@ -116,7 +117,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
 
   const unknown = await fetch(`${origin}/workspace/wbd/onbekend`);
   assert.equal(unknown.status, 404);
-  assert.match(await unknown.text(), /Workspace shell marker/);
+  assert.doesNotMatch(await unknown.text(), /Workspace shell marker/);
 
   const publicRoute = await fetch(`${origin}/`);
   assert.equal(publicRoute.status, 404);

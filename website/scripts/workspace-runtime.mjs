@@ -302,6 +302,10 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       sendJson(response, 200, { status: "ready" }, method);
       return;
     }
+    if (pathname === workspaceBoundary || pathname.startsWith(`${workspaceBoundary}/`)) {
+      sendHtml(response, 404, outsideBoundaryHtml, method);
+      return;
+    }
     if (canonicalSportpaleisRequest && (pathname === "/" || pathname === sportpaleisBoundary || pathname.startsWith(`${sportpaleisBoundary}/`))) {
       const target = pathname === "/" || pathname === sportpaleisBoundary ? "/overzicht" : pathname.slice(sportpaleisBoundary.length);
       response.statusCode = 308;
