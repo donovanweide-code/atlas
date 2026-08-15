@@ -416,6 +416,7 @@ export class AuthenticatedSmtpTransport {
     usernameProvider,
     secretProvider,
     allowlistedRecipients = [],
+    allowAnyValidatedRecipient = false,
     connectionTimeoutMs = 10_000,
     commandTimeoutMs = 15_000,
     clientHostname = "workspace.webuildanddesign.nl",
@@ -432,6 +433,7 @@ export class AuthenticatedSmtpTransport {
     this.usernameProvider = usernameProvider;
     this.secretProvider = secretProvider;
     this.allowlistedRecipients = [...new Set(allowlistedRecipients.map(email))];
+    this.allowAnyValidatedRecipient = allowAnyValidatedRecipient === true;
     this.connectionTimeoutMs = Number(connectionTimeoutMs);
     this.commandTimeoutMs = Number(commandTimeoutMs);
     this.clientHostname = safeText(clientHostname, "SMTP-clienthostname", 253);
@@ -450,6 +452,7 @@ export class AuthenticatedSmtpTransport {
       organizationId: this.organizationId,
       credentialStatus: this.#credentials(false) ? "PROVISIONED" : "NOT_PROVISIONED",
       allowlistCount: this.allowlistedRecipients.length,
+      recipientPolicy: this.allowAnyValidatedRecipient ? "SINGLE_TRANSACTIONAL_RECIPIENT" : "EXACT_ALLOWLIST",
     };
   }
   validateMessage(message) {
@@ -457,7 +460,7 @@ export class AuthenticatedSmtpTransport {
     if (message.senderPolicy !== this.senderPolicy || smtpAddressFromHeader(message.from) !== this.senderAddress) {
       throw new MailFoundationError("SENDER_NOT_ALLOWED", "De server-side afzenderpolicy staat deze afzender niet toe.", 403);
     }
-    if (this.allowlistedRecipients.length !== 1 || this.allowlistedRecipients[0] !== email(message.to)) {
+    if (!this.allowAnyValidatedRecipient && (this.allowlistedRecipients.length !== 1 || this.allowlistedRecipients[0] !== email(message.to))) {
       throw new MailFoundationError("RECIPIENT_NOT_ALLOWLISTED", "De ontvanger staat niet op de gecontroleerde SMTP-allowlist.", 403);
     }
   }
@@ -786,9 +789,13 @@ export class MailFoundation {
 
   async #prepare(request, actor, action) {
     const organization = this.#organization(request.organizationId);
-    const template = organization.templates[request.templateKey];
+    const configuredTemplate = organization.templates[request.templateKey];
     await this.#authorize(organization, actor, action, request.templateKey, request.contextType, request.contextId);
-    if (!template) throw new MailFoundationError("TEMPLATE_RENDER_FAILED", "De gekozen template bestaat niet.", 404);
+    if (!configuredTemplate) throw new MailFoundationError("TEMPLATE_RENDER_FAILED", "De gekozen template bestaat niet.", 404);
+    const template = request.templateOverride === undefined ? configuredTemplate : clone(request.templateOverride);
+    if (template.key !== configuredTemplate.key || template.senderPolicy !== configuredTemplate.senderPolicy || !Number.isInteger(template.version) || template.version < 1 || !Array.isArray(template.allowedVariables)) {
+      throw new MailFoundationError("TEMPLATE_RENDER_FAILED", "De beheerde template voldoet niet aan het servercontract.", 400);
+    }
     const recipients = Array.isArray(request.recipient) ? request.recipient : [request.recipient];
     if (recipients.length !== MAX_RECIPIENTS) throw new MailFoundationError("MASS_SEND_BLOCKED", "Transactionele mail staat exact één ontvanger toe.", 400);
     const recipient = email(recipients[0]);
@@ -893,6 +900,70 @@ export class MailFoundation {
   }
 }
 
+const SPORTPALEIS_MANAGED_ORDER_VARIABLES = Object.freeze([
+  "customer.name",
+  "order.number",
+  "order.date",
+  "order.pickupInformation",
+]);
+
+function managedTemplateText(value, label, maximum, { optional = false } = {}) {
+  const text = String(value ?? "").trim();
+  if (!text && optional) return "";
+  if (!text || text.length > maximum || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(text)) {
+    throw new MailFoundationError("TEMPLATE_RENDER_FAILED", `${label} ontbreekt of is te lang.`);
+  }
+  for (const match of text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/gu)) {
+    if (!SPORTPALEIS_MANAGED_ORDER_VARIABLES.includes(match[1])) {
+      throw new MailFoundationError("TEMPLATE_RENDER_FAILED", `Het ingevoegde gegeven ${match[1]} wordt niet ondersteund.`);
+    }
+  }
+  if (text.replace(/\{\{\s*[a-zA-Z][a-zA-Z0-9_.]*\s*\}\}/gu, "").match(/[{}]/u)) {
+    throw new MailFoundationError("TEMPLATE_RENDER_FAILED", `${label} bevat ongeldige dynamische syntax.`);
+  }
+  return text;
+}
+
+function managedParagraphs(value) {
+  return value.split(/\n{2,}/u).map((paragraph) => `<p style="margin:0 0 20px;">${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`).join("");
+}
+
+export function createManagedSportpaleisOrderTemplate(event, input, { test = false } = {}) {
+  if (!["ORDER_RECEIVED", "ORDER_READY"].includes(event)) {
+    throw new MailFoundationError("TEMPLATE_RENDER_FAILED", "Dit notificatie-event wordt niet ondersteund.", 400);
+  }
+  const brandConfig = createOrganizationBrandRegistry().get("sportpaleis");
+  const name = managedTemplateText(input?.name, "Templatenaam", 120);
+  const subject = managedTemplateText(input?.subject, "Onderwerp", 180);
+  const heading = managedTemplateText(input?.heading, "Kop", 180);
+  const body = managedTemplateText(input?.body, "Berichttekst", 4_000);
+  const buttonText = managedTemplateText(input?.buttonText, "Knoptekst", 100, { optional: true });
+  const footerContact = managedTemplateText(input?.footerContact, "Contactinformatie", 600);
+  const version = Number(input?.version ?? 1);
+  if (!Number.isInteger(version) || version < 1) throw new MailFoundationError("TEMPLATE_RENDER_FAILED", "De templateversie is ongeldig.", 400);
+  const renderedSubject = `${test ? "[TEST] " : ""}${subject}`;
+  const renderedHeading = `${test ? "TEST · " : ""}${heading}`;
+  const testNotice = test ? '<p style="margin:0 0 20px;padding:12px;background:#fff4d6;color:#4b3a00;"><strong>Testbericht</strong><br>Dit bericht wijzigt geen order- of klantstatus.</p>' : "";
+  const action = buttonText ? `<p style="margin:4px 0 20px;"><strong>${escapeHtml(buttonText)}</strong></p>` : "";
+  const footer = `<p style="margin:20px 0 0;">${escapeHtml(footerContact).replaceAll("\n", "<br>")}</p>`;
+  return Object.freeze({
+    key: event,
+    version,
+    allowedVariables: [...SPORTPALEIS_MANAGED_ORDER_VARIABLES],
+    subject: renderedSubject,
+    text: `${test ? "TESTBERICHT — wijzigt geen orderstatus.\n\n" : ""}${heading}\n\n${body}${buttonText ? `\n\n${buttonText}` : ""}\n\n${footerContact}`,
+    html: buildOrganizationMailShell({
+      brandConfig,
+      preheader: renderedSubject,
+      eyebrow: test ? "Technische test" : event === "ORDER_READY" ? "Afhalen" : "Bestelling ontvangen",
+      heading: renderedHeading,
+      contentHtml: `${testNotice}${managedParagraphs(body)}${action}`,
+      closingHtml: footer,
+    }),
+    managedName: name,
+  });
+}
+
 export function createMailOrganizations({ organizationIds } = {}) {
   const requestedOrganizations = organizationIds === undefined ? null : new Set(organizationIds);
   if (requestedOrganizations && [...requestedOrganizations].some((id) => !["sportpaleis", "we-build-and-design"].includes(id))) {
@@ -911,7 +982,7 @@ export function createMailOrganizations({ organizationIds } = {}) {
   const wbdBrand = wbdBrandConfig.brand;
   const wbdGeneralPlainFooter = buildOrganizationPlainTextFooter({ brandConfig: wbdBrandConfig });
   const wbdInvoicePlainFooter = buildOrganizationPlainTextFooter({ brandConfig: wbdBrandConfig, email: "facturen@webuildanddesign.nl" });
-  const sportVariables = ["customer.name", "order.number", "order.items", "order.processingDays", "order.pickupInformation", "message.question"];
+  const sportVariables = ["customer.name", "order.number", "order.date", "order.items", "order.processingDays", "order.pickupInformation", "message.question"];
   const sportBranding = {
     primary: sportpaleisBrand.primary_color,
     secondary: sportpaleisBrand.secondary_background_color,
@@ -1136,6 +1207,7 @@ export function createEnvironmentMailFoundation({ stateFile, captureDirectory, s
       senderAddress: "bedrukking@sportpaleis.nl",
       usernameProvider: () => environment.SPORTPALEIS_SMTP_BEDRUKKING_USERNAME,
       secretProvider: () => environment.SPORTPALEIS_SMTP_BEDRUKKING_PASSWORD,
+      allowAnyValidatedRecipient: mode === MAIL_ENVIRONMENTS.PRODUCTION_SMTP,
     }),
   };
   const controlledSmtpOrganizations = [

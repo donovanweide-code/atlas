@@ -1,4 +1,11 @@
-import { CaptureTransport, MailFoundation, createMailOrganizations } from "./mail-foundation.mjs";
+import {
+  AuthenticatedSmtpTransport,
+  CaptureTransport,
+  EnvironmentMailTransport,
+  MAIL_ENVIRONMENTS,
+  MailFoundation,
+  createMailOrganizations,
+} from "./mail-foundation.mjs";
 
 export const SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY = "/srv/wbd/shared/mail/captures";
 
@@ -64,12 +71,33 @@ export function createSportpaleisProductionMailFoundation({
   workspaceStore,
   captureDirectory = SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   simulation = "success",
+  environment = process.env,
 } = {}) {
   const store = new SportpaleisMariaDbMailStore({ workspaceStore });
-  const transport = new CaptureTransport({ captureDirectory, simulation });
-  if (transport.externalNetworkEnabled !== false || transport.name !== "capture") {
-    throw new Error("Sportpaleis production mail moet netwerkloos in capture mode blijven.");
-  }
+  const captureTransport = new CaptureTransport({ captureDirectory, simulation });
+  const mode = String(environment.SPORTPALEIS_MAIL_MODE ?? "capture").trim().toUpperCase();
+  if (![MAIL_ENVIRONMENTS.CAPTURE, MAIL_ENVIRONMENTS.PRODUCTION_SMTP].includes(mode)) throw new Error("Sportpaleis production mail mode is ongeldig.");
+  const transport = mode === MAIL_ENVIRONMENTS.CAPTURE ? captureTransport : new EnvironmentMailTransport({
+    mode,
+    captureTransport,
+    smtpTransports: {
+      SPORTPALEIS_BEDRUKKING: new AuthenticatedSmtpTransport({
+        organizationId: MAIL_ORGANIZATION_ID,
+        host: String(environment.SPORTPALEIS_SMTP_HOST ?? "mail.hostingserver.nl").trim(),
+        port: Number(environment.SPORTPALEIS_SMTP_PORT ?? 465),
+        tlsRequired: true,
+        senderPolicy: "SPORTPALEIS_BEDRUKKING",
+        senderAddress: "bedrukking@sportpaleis.nl",
+        usernameProvider: () => environment.SPORTPALEIS_SMTP_BEDRUKKING_USERNAME,
+        secretProvider: () => environment.SPORTPALEIS_SMTP_BEDRUKKING_PASSWORD,
+        allowAnyValidatedRecipient: true,
+        connectionTimeoutMs: Number(environment.SPORTPALEIS_SMTP_CONNECTION_TIMEOUT_MS ?? 10_000),
+        commandTimeoutMs: Number(environment.SPORTPALEIS_SMTP_SEND_TIMEOUT_MS ?? 15_000),
+        clientHostname: "workspace.sportpaleis.nl",
+      }),
+    },
+    productionSmtpOrganizations: environment.SPORTPALEIS_PRODUCTION_SMTP_ENABLED === "YES_EXPLICIT_PRODUCTION_APPROVAL" ? [MAIL_ORGANIZATION_ID] : [],
+  });
   return new MailFoundation({
     organizations: createMailOrganizations({ organizationIds: [MAIL_ORGANIZATION_ID] }),
     store,
@@ -81,8 +109,8 @@ export const sportpaleisProductionMailPolicy = Object.freeze({
   organizationId: MAIL_ORGANIZATION_ID,
   persistence: "workspace-mariadb-runtime-state",
   namespace: `mailFoundation.${MAIL_ORGANIZATION_ID}`,
-  transport: "capture",
-  externalNetworkEnabled: false,
+  transport: "capture-or-explicit-production-smtp",
+  externalNetworkEnabled: "only-with-explicit-production-gate",
   captureDirectory: SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   limits: Object.freeze({
     attempts: MAX_MAIL_ATTEMPTS,

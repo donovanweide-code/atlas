@@ -77,14 +77,12 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.equal(junior.items[0].variants[1].backNumberProduction.physicalHeightMm, 200);
   });
 
-  await context.test("individuele order kan niet naar Controle vóór de verplichte ontvangstbevestiging", async () => {
-    await assert.rejects(service.advanceOrder(patrick.token, patrick.csrfToken, order.id, order.revision, "pilot-before-receipt"), (error) => error.code === "RECEIPT_CONFIRMATION_REQUIRED");
-    const captured = await service.captureOrderMail(storeUser.token, storeUser.csrfToken, order.id, { templateKey: "ORDER_RECEIVED" }, "pilot-receipt-capture");
-    assert.equal(captured.status, "CAPTURED");
-    const afterCapture = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === order.id);
-    assert.equal(afterCapture.communication.receipt.status, "CAPTURED");
-    const advanced = await service.advanceOrder(patrick.token, patrick.csrfToken, order.id, afterCapture.revision, "pilot-after-receipt");
+  await context.test("ontvangstcommunicatie blokkeert de orderflow nooit", async () => {
+    const beforeAdvance = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === order.id);
+    assert.equal(beforeAdvance.communication.receipt.status, "NOT_SENT");
+    const advanced = await service.advanceOrder(patrick.token, patrick.csrfToken, order.id, beforeAdvance.revision, "pilot-without-receipt");
     assert.equal(advanced.value.stage, "CONTROL");
+    assert.equal(advanced.value.communication.receipt.status, "NOT_SENT");
   });
 
   await context.test("bekende mailfout is herstelbaar, unknown outcome blokkeert iedere automatische retry en duplicates blijven idempotent", async () => {

@@ -20,6 +20,9 @@ import type {
   SportpaleisProductionFont,
   SportpaleisProductionLine,
   SportpaleisEmployee,
+  NotificationEvent,
+  NotificationEventConfig,
+  NotificationTemplateConfig,
 } from "./workspace-data.ts";
 
 const API = "/api/sportpaleis/v1";
@@ -58,7 +61,8 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     demoEnabled: boolean;
     uploadsEnabled: boolean;
     fontUploadsEnabled: boolean;
-    mailMode: "capture";
+    mailMode: "capture" | "PRODUCTION_SMTP";
+    notificationDeliveryReady?: boolean;
     hardwareSendEnabled: false;
     barcodeEnabled: false;
     barcodeHardwareValidated: false;
@@ -83,7 +87,7 @@ export interface MailPreview {
   html: string;
   text: string;
   attachments: Array<{ filename: string; mimeType: string; sizeBytes: number; sha256: string }>;
-  transport: "capture";
+  transport: "capture" | "smtp";
   externalMailSent: false;
 }
 
@@ -290,6 +294,22 @@ export class SportpaleisPilotApi {
   async orderMailHistory(orderId: string): Promise<MailHistoryEntry[]> {
     const result = await responseBody<{ history: MailHistoryEntry[] }>(await fetch(`${API}/orders/${encodeURIComponent(orderId)}/mail/history`, { credentials: "same-origin", headers: { Accept: "application/json" } }));
     return result.history;
+  }
+
+  async previewNotification(event: NotificationEvent, template?: Partial<NotificationTemplateConfig>): Promise<MailPreview> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/notifications/${event}?action=preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ template }) }));
+  }
+
+  async saveNotification(event: NotificationEvent, input: { template?: Partial<NotificationTemplateConfig>; enabled?: boolean }): Promise<NotificationEventConfig> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/notifications/${event}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async testNotification(event: NotificationEvent, recipient: string): Promise<MailHistoryEntry> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/notifications/${event}?action=test`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("notification-test") }, body: JSON.stringify({ recipient }) }));
+  }
+
+  async retryNotification(orderId: string, executionId: string): Promise<unknown> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(orderId)}/notifications/${encodeURIComponent(executionId)}/retry`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("notification-retry") }, body: "{}" }));
   }
 
   async submitFeedback(input: Omit<WorkspaceFeedback, "id" | "userId" | "userRole" | "createdAt" | "attachments"> & { attachments?: { filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; dataBase64: string }[] }): Promise<{ duplicate: boolean; value: WorkspaceFeedback }> {

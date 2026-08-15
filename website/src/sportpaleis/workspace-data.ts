@@ -343,7 +343,7 @@ export interface WorkspaceOrder {
   productionLines?: SportpaleisProductionLine[];
   notes?: { id: string; scope: "order" | "customer"; kind: "internal" | "attention"; text: string; authorId: string; authorName: string; createdAt: string }[];
   priority?: { requestedBy: string; alignedWith: string; reason: string; explanation: string; createdAt: string } | null;
-  communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null }; production?: { status: string; updatedAt?: string; providerReference?: string | null }; ready: { status: string; updatedAt?: string; providerReference?: string | null } };
+  communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null; attentionCode?: string; notificationExecutionId?: string }; production?: { status: string; updatedAt?: string; providerReference?: string | null; attentionCode?: string; notificationExecutionId?: string }; ready: { status: string; updatedAt?: string; providerReference?: string | null; attentionCode?: string; notificationExecutionId?: string } };
   barcode?: { value: string; featureEnabled: false; hardwareValidated: false };
   pickup?: { status: "NOT_PICKED_UP" | "PICKED_UP"; pickedUpAt: string | null; pickedUpBy: string | null };
   payment?: { status: "UNKNOWN" | "DUE" | "PAID" | "REGISTER_PROCESSED"; updatedAt: string | null; updatedBy: string | null; source: "MANUAL_WORKSPACE" | "ACA_XPRT" | "UNKNOWN" };
@@ -537,6 +537,40 @@ export interface WorkspaceAuditEntry {
   subject: string;
 }
 
+export type NotificationEvent = "ORDER_RECEIVED" | "ORDER_READY";
+export interface NotificationTemplateConfig {
+  name: string;
+  subject: string;
+  heading: string;
+  body: string;
+  buttonText: string;
+  footerContact: string;
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+}
+export interface NotificationEventConfig {
+  event: NotificationEvent;
+  enabled: boolean;
+  template: NotificationTemplateConfig;
+  lastTest: null | { status: string; at: string; recipient: string; templateVersion: number; attemptId: string };
+}
+export interface NotificationExecution {
+  id: string;
+  event: NotificationEvent;
+  orderId: string;
+  orderReference: string;
+  recipientReference: string | null;
+  templateVersion: number;
+  channel: "EMAIL";
+  status: "DISABLED" | "MISSING_RECIPIENT" | "INVALID_RECIPIENT" | "PENDING" | "CAPTURED" | "SENT" | "DELIVERY_FAILED" | "UNKNOWN";
+  createdAt: string;
+  completedAt?: string;
+  retryOf?: string | null;
+  mailAttemptId?: string | null;
+  safeResult: { code: string; message: string };
+}
+
 export interface SportpaleisWorkspaceState {
   schemaVersion: 12;
   configurationVersion?: string;
@@ -563,6 +597,11 @@ export interface SportpaleisWorkspaceState {
       defaultFontId: string;
       defaultFoilColor: string;
     };
+  };
+  notificationFoundation?: {
+    schemaVersion: 1;
+    events: Record<NotificationEvent, NotificationEventConfig>;
+    executions: NotificationExecution[];
   };
   foilRolls: FoilRoll[];
   feedback: WorkspaceFeedback[];

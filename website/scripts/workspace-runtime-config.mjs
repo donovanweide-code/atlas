@@ -23,7 +23,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   productionPolicy: Readonly<{
  *     uploadsEnabled: false,
  *     fontUploadsEnabled: true,
- *     mailMode: "capture",
+ *     mailMode: "capture" | "PRODUCTION_SMTP",
  *     hardwareOutputEnabled: false,
  *     directPrintEnabled: false,
  *     summaEnabled: false,
@@ -134,6 +134,12 @@ function requiredLiteral(env, name, expected) {
   return actual;
 }
 
+function requiredChoice(env, name, allowed) {
+  const actual = required(env, name);
+  if (!allowed.includes(actual)) throw new WorkspaceRuntimeConfigError(`${name} moet exact ${allowed.join(" of ")} zijn.`);
+  return actual;
+}
+
 function parseHttpUrl(raw, name) {
   let parsed;
   try {
@@ -198,7 +204,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     productionPolicy = Object.freeze({
       uploadsEnabled: requiredLiteral(env, "SPORTPALEIS_UPLOADS_ENABLED", "false") === "true",
       fontUploadsEnabled: requiredLiteral(env, "SPORTPALEIS_FONT_UPLOADS_ENABLED", "true") === "true",
-      mailMode: requiredLiteral(env, "SPORTPALEIS_MAIL_MODE", "capture"),
+      mailMode: requiredChoice(env, "SPORTPALEIS_MAIL_MODE", ["capture", "PRODUCTION_SMTP"]),
       hardwareOutputEnabled: requiredLiteral(env, "SPORTPALEIS_HARDWARE_OUTPUT_ENABLED", "false") === "true",
       directPrintEnabled: requiredLiteral(env, "SPORTPALEIS_DIRECT_PRINT_ENABLED", "false") === "true",
       summaEnabled: requiredLiteral(env, "SPORTPALEIS_SUMMA_ENABLED", "false") === "true",

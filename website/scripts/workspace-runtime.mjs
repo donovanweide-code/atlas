@@ -234,6 +234,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           ? createSportpaleisProductionMailFoundation({
             workspaceStore: store,
             captureDirectory: SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
+            environment: process.env,
           })
           : options.mailFoundation;
         const service = new SportpaleisPilotService({
@@ -246,6 +247,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           uploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.uploadsEnabled : true,
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
+          requireSmtpForNotificationActivation: config.nodeEnv === "production",
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
         });
         await service.initialize();

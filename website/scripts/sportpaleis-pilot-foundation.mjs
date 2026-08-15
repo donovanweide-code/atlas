@@ -23,6 +23,7 @@ import {
   createManagedFontProductionPiece,
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
+import { createManagedSportpaleisOrderTemplate } from "./mail-foundation.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -35,6 +36,8 @@ const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 12;
 const PILOT_RELEASE_ID = "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811";
+const NOTIFICATION_EVENTS = new Set(["ORDER_RECEIVED", "ORDER_READY"]);
+const NOTIFICATION_FOUNDATION_CREATED_AT = "2026-08-15T00:00:00.000Z";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
@@ -64,6 +67,55 @@ const PILOT_FONT = Object.freeze({
 
 const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
 const ARTICLE_IMAGE_KEYS = new Set(ARTICLE_CATALOG.map(({ imageKey }) => imageKey));
+
+function defaultNotificationFoundation() {
+  const template = (event) => event === "ORDER_READY" ? {
+    name: "Bestelling klaar",
+    subject: "Uw bestelling {{order.number}} ligt klaar",
+    heading: "Uw bestelling ligt klaar",
+    body: "Beste {{customer.name}},\n\nUw bestelling {{order.number}} ligt klaar om opgehaald te worden.\n\n{{order.pickupInformation}}",
+    buttonText: "",
+    footerContact: "Met vriendelijke groet\nSport 2000 Sportpaleis\nbedrukking@sportpaleis.nl",
+    version: 1,
+    updatedAt: NOTIFICATION_FOUNDATION_CREATED_AT,
+    updatedBy: "system",
+  } : {
+    name: "Bestelling ontvangen",
+    subject: "Ontvangstbevestiging {{order.number}}",
+    heading: "We hebben uw bestelling ontvangen",
+    body: "Beste {{customer.name}},\n\nWe hebben bestelling {{order.number}} op {{order.date}} ontvangen. U krijgt bericht zodra de bestelling klaar ligt.",
+    buttonText: "",
+    footerContact: "Met vriendelijke groet\nSport 2000 Sportpaleis\nbedrukking@sportpaleis.nl",
+    version: 1,
+    updatedAt: NOTIFICATION_FOUNDATION_CREATED_AT,
+    updatedBy: "system",
+  };
+  return {
+    schemaVersion: 1,
+    events: Object.fromEntries([...NOTIFICATION_EVENTS].map((event) => [event, { event, enabled: false, template: template(event), lastTest: null }])),
+    executions: [],
+  };
+}
+
+function normalizeNotificationFoundation(state) {
+  const defaults = defaultNotificationFoundation();
+  state.notificationFoundation ??= defaults;
+  state.notificationFoundation.schemaVersion ??= 1;
+  state.notificationFoundation.events ??= {};
+  state.notificationFoundation.executions ??= [];
+  for (const event of NOTIFICATION_EVENTS) {
+    const existing = state.notificationFoundation.events[event];
+    state.notificationFoundation.events[event] = {
+      ...structuredClone(defaults.events[event]),
+      ...(existing ?? {}),
+      event,
+      enabled: existing?.enabled === true,
+      template: { ...structuredClone(defaults.events[event].template), ...(existing?.template ?? {}) },
+    };
+  }
+  state.notificationFoundation.executions = state.notificationFoundation.executions.slice(0, 5_000);
+  return state.notificationFoundation;
+}
 
 const PRODUCTION_PROFILES = [
   { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
@@ -439,6 +491,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     productionElementRequirements: [],
     productionJobs: createGoldenProductionJobs(iso(now)),
     productionProposals: [],
+    notificationFoundation: defaultNotificationFoundation(),
     preferences: {},
     audit: [{
       id: "audit-production-bootstrap",
@@ -602,6 +655,7 @@ export function migrateSportpaleisPilotState(input) {
     if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
   }
   state.configurationVersion = SPORTPALEIS_CONFIGURATION_VERSION;
+  normalizeNotificationFoundation(state);
   state.activationInvites ??= [];
   state.mailbatches ??= [];
   state.productionElements ??= [];
@@ -773,6 +827,13 @@ export function validateSportpaleisPilotState(input) {
   state.settings.deliveryFeeEur ??= PILOT_SETTINGS.deliveryFeeEur;
   state.settings.productionDefaults = { ...structuredClone(PILOT_SETTINGS.productionDefaults), ...(state.settings.productionDefaults ?? {}) };
   state.foilRolls ??= structuredClone(FOIL_ROLLS);
+  const notificationFoundation = normalizeNotificationFoundation(state);
+  if (notificationFoundation.schemaVersion !== 1 || !Array.isArray(notificationFoundation.executions)) throw new Error("Ongeldige Notification Foundation-state.");
+  for (const event of NOTIFICATION_EVENTS) {
+    const config = notificationFoundation.events[event];
+    createManagedSportpaleisOrderTemplate(event, config.template);
+    if (typeof config.enabled !== "boolean") throw new Error("Ongeldige notificatieconfiguratie.");
+  }
   state.preferences ??= {};
   for (const user of state.users) {
     state.preferences[user.id] = { ...defaultPreference(), ...(state.preferences[user.id] ?? {}) };
@@ -1096,7 +1157,7 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
+  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", requireSmtpForNotificationActivation = false, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.releaseId = releaseId;
@@ -1107,6 +1168,7 @@ export class SportpaleisPilotService {
     this.uploadsEnabled = uploadsEnabled === true;
     this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
+    this.requireSmtpForNotificationActivation = requireSmtpForNotificationActivation === true;
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
   }
@@ -1294,6 +1356,7 @@ export class SportpaleisPilotService {
       configurationVersion: state.configurationVersion,
       productionProfiles: structuredClone(state.productionProfiles),
       settings: admin ? structuredClone(state.settings) : { processingDays: state.settings.processingDays, deliveryFeeEur: state.settings.deliveryFeeEur, productionDefaults: structuredClone(state.settings.productionDefaults) },
+      notificationFoundation: admin ? structuredClone(normalizeNotificationFoundation(state)) : undefined,
       foilRolls: admin ? structuredClone(state.foilRolls) : [],
       commercialAdministration: admin ? {
         sourceLabel: "Sportpaleis Workspace Pilot Foundation 006",
@@ -1312,7 +1375,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, notificationDeliveryReady: !this.requireSmtpForNotificationActivation || this.mailMode === "PRODUCTION_SMTP", barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -1579,7 +1642,9 @@ export class SportpaleisPilotService {
       });
       return { state, value: outcome };
     });
-    return result.value;
+    const outcome = result.value;
+    if (!outcome.duplicate && outcome.value.orderKind !== "TEAM") await this.#dispatchOrderNotification("ORDER_RECEIVED", outcome.value.id, user, `order:${outcome.value.id}:received:v1`);
+    return outcome;
   }
 
   async advanceOrder(token, csrfToken, orderId, expectedRevision, idempotencyKey) {
@@ -1592,9 +1657,6 @@ export class SportpaleisPilotService {
         if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
         if (order.revision !== expectedRevision) {
           throw Object.assign(new Error("Order is intussen door iemand anders gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-        }
-        if (order.stage === "ORDER" && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
-          throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
         if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
           throw Object.assign(new Error("Productiedata ontbreekt. De order blijft zichtbaar bij Productie, maar kan nog niet naar fysieke productie."), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
@@ -1613,7 +1675,9 @@ export class SportpaleisPilotService {
       });
       return { state, value: outcome };
     });
-    return result.value;
+    const outcome = result.value;
+    if (!outcome.duplicate && outcome.value.stage === "DONE") await this.#dispatchOrderNotification("ORDER_READY", outcome.value.id, user, `order:${outcome.value.id}:ready:v1`);
+    return outcome;
   }
 
   async bulkAdvanceOrders(token, csrfToken, payload, idempotencyKey) {
@@ -1633,9 +1697,6 @@ export class SportpaleisPilotService {
           return order;
         });
         for (const order of orders) {
-          if (order.stage === "ORDER" && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
-            throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
-          }
           if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
             throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
           }
@@ -1654,7 +1715,9 @@ export class SportpaleisPilotService {
       });
       return { state, value: outcome };
     });
-    return result.value;
+    const outcome = result.value;
+    if (!outcome.duplicate) for (const order of outcome.value.filter(({ stage }) => stage === "DONE")) await this.#dispatchOrderNotification("ORDER_READY", order.id, user, `order:${order.id}:ready:v1`);
+    return outcome;
   }
 
   async updateOrder(token, csrfToken, orderId, payload, expectedRevision) {
@@ -1899,6 +1962,9 @@ export class SportpaleisPilotService {
     const { state, user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     const currentOrder = state.orders.find(({ id }) => id === orderId);
+    if (this.mailMode === "PRODUCTION_SMTP" && NOTIFICATION_EVENTS.has(payload.templateKey) && !normalizeNotificationFoundation(state).events[payload.templateKey].enabled) {
+      throw Object.assign(new Error("Deze automatische klantcommunicatie staat in Beheer uit."), { statusCode: 409, code: "NOTIFICATION_EVENT_DISABLED" });
+    }
     if (payload.templateKey === "ORDER_RECEIVED" && currentOrder?.communication?.receipt.status === "UNKNOWN") {
       throw Object.assign(new Error("De vorige verzenduitkomst is onbekend. Menselijke controle is vereist voordat opnieuw verzonden mag worden."), { statusCode: 409, code: "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW" });
     }
@@ -1937,8 +2003,208 @@ export class SportpaleisPilotService {
     return this.#mail().history({ organizationId: "sportpaleis", contextType: "order", contextId: orderId }, { id: user.id, name: user.name, role: user.role });
   }
 
+  async previewNotificationTemplate(token, event, payload = {}) {
+    const { state, user } = await this.authenticate(token);
+    assertRole(user, ["admin"]);
+    if (!NOTIFICATION_EVENTS.has(event)) throw Object.assign(new Error("Notificatie-event niet gevonden."), { statusCode: 404, code: "NOTIFICATION_EVENT_NOT_FOUND" });
+    const configured = normalizeNotificationFoundation(state).events[event];
+    const templateInput = payload.template ? { ...configured.template, ...payload.template, version: configured.template.version } : configured.template;
+    return this.#mail().preview({
+      organizationId: "sportpaleis",
+      contextType: "notification-preview",
+      contextId: event,
+      templateKey: event,
+      templateOverride: createManagedSportpaleisOrderTemplate(event, templateInput, { test: true }),
+      recipient: "preview@example.test",
+      context: this.#notificationSampleContext(),
+      attachments: [],
+    }, { id: user.id, name: user.name, role: user.role });
+  }
+
+  async updateNotificationConfig(token, csrfToken, event, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    if (!NOTIFICATION_EVENTS.has(event)) throw Object.assign(new Error("Notificatie-event niet gevonden."), { statusCode: 404, code: "NOTIFICATION_EVENT_NOT_FOUND" });
+    const result = await this.store.mutate(async (state) => {
+      const foundation = normalizeNotificationFoundation(state);
+      const config = foundation.events[event];
+      if (payload.template) {
+        const nextTemplate = {
+          ...config.template,
+          name: requiredText(payload.template.name, "Templatenaam", 120),
+          subject: requiredText(payload.template.subject, "Onderwerp", 180),
+          heading: requiredText(payload.template.heading, "Kop", 180),
+          body: requiredText(payload.template.body, "Berichttekst", 4_000),
+          buttonText: optional(payload.template.buttonText, 100),
+          footerContact: requiredText(payload.template.footerContact, "Contactinformatie", 600),
+          version: Number(config.template.version ?? 1) + 1,
+          updatedAt: iso(),
+          updatedBy: user.id,
+        };
+        createManagedSportpaleisOrderTemplate(event, nextTemplate);
+        config.template = nextTemplate;
+        config.lastTest = null;
+        audit(state, user.id, "Notificatietemplate gewijzigd", event, { version: nextTemplate.version });
+      }
+      if (payload.enabled !== undefined) {
+        const enabled = payload.enabled === true;
+        if (enabled) {
+          const acceptedStatuses = this.requireSmtpForNotificationActivation || this.mailMode === "PRODUCTION_SMTP" ? ["SMTP_ACCEPTED"] : ["CAPTURED", "SMTP_ACCEPTED"];
+          if (!config.lastTest || config.lastTest.templateVersion !== config.template.version || !acceptedStatuses.includes(config.lastTest.status)) {
+            throw Object.assign(new Error("Test eerst de actuele template succesvol voordat automatische communicatie wordt aangezet."), { statusCode: 409, code: "NOTIFICATION_TEST_REQUIRED" });
+          }
+        }
+        config.enabled = enabled;
+        audit(state, user.id, enabled ? "Automatische klantcommunicatie aangezet" : "Automatische klantcommunicatie uitgezet", event, { templateVersion: config.template.version });
+      }
+      return { state, value: structuredClone(config) };
+    });
+    return result.value;
+  }
+
+  async testNotification(token, csrfToken, event, payload, idempotencyKey) {
+    const { state, user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    if (!NOTIFICATION_EVENTS.has(event)) throw Object.assign(new Error("Notificatie-event niet gevonden."), { statusCode: 404, code: "NOTIFICATION_EVENT_NOT_FOUND" });
+    const recipient = validEmail(payload.recipient);
+    const config = normalizeNotificationFoundation(state).events[event];
+    const result = await this.#mail().capture({
+      organizationId: "sportpaleis",
+      contextType: "notification-test",
+      contextId: event,
+      templateKey: event,
+      templateOverride: createManagedSportpaleisOrderTemplate(event, config.template, { test: true }),
+      recipient,
+      context: this.#notificationSampleContext(),
+      attachments: [],
+      idempotencyKey,
+    }, { id: user.id, name: user.name, role: user.role });
+    if (!result.duplicate) await this.store.mutate(async (next) => {
+      const nextConfig = normalizeNotificationFoundation(next).events[event];
+      if (nextConfig.template.version === config.template.version) nextConfig.lastTest = { status: result.status, at: iso(), recipient, templateVersion: config.template.version, attemptId: result.id };
+      audit(next, user.id, "Notificatietest uitgevoerd", event, { status: result.status, templateVersion: config.template.version, attemptId: result.id });
+      return { state: next, value: undefined };
+    });
+    return result;
+  }
+
+  #notificationSampleContext() {
+    return {
+      customer: { name: "Testklant" },
+      order: {
+        number: "SP-2026-TEST",
+        date: "15-08-2026",
+        pickupInformation: "Neem de orderreferentie SP-2026-TEST mee bij het ophalen bij Sport 2000 Sportpaleis.",
+      },
+    };
+  }
+
+  async #dispatchOrderNotification(event, orderId, user, triggerKey, { retryOf = null } = {}) {
+    if (!NOTIFICATION_EVENTS.has(event)) return null;
+    let reservation;
+    try {
+      const reserved = await this.store.mutate(async (state) => {
+        const foundation = normalizeNotificationFoundation(state);
+        const duplicate = foundation.executions.find((execution) => execution.triggerKey === triggerKey);
+        if (duplicate) return { state, value: { duplicate: true, execution: structuredClone(duplicate) } };
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        const config = foundation.events[event];
+        const recipient = String(order.customerEmail ?? "").trim().toLowerCase();
+        const recipientStatus = !recipient ? "MISSING_RECIPIENT" : /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(recipient) ? null : "INVALID_RECIPIENT";
+        const execution = {
+          id: `notification-${randomBytes(10).toString("hex")}`,
+          triggerKey,
+          event,
+          orderId,
+          orderReference: order.id,
+          recipientReference: recipient || null,
+          templateVersion: config.template.version,
+          channel: "EMAIL",
+          status: !config.enabled ? "DISABLED" : recipientStatus ?? "PENDING",
+          createdAt: iso(),
+          initiatedBy: { id: user.id, role: user.role },
+          retryOf,
+          mailAttemptId: null,
+          safeResult: !config.enabled ? { code: "EVENT_DISABLED", message: "Automatische klantcommunicatie staat uit." } : recipientStatus ? { code: recipientStatus, message: recipientStatus === "MISSING_RECIPIENT" ? "Klant-e-mailadres ontbreekt." : "Klant-e-mailadres is ongeldig." } : { code: "PENDING", message: "Verzendpoging gereserveerd." },
+        };
+        foundation.executions.unshift(execution);
+        const channel = event === "ORDER_READY" ? "ready" : "receipt";
+        order.communication ??= { receipt: { status: "NOT_SENT" }, production: { status: "NOT_SENT" }, ready: { status: "NOT_SENT" } };
+        if (recipientStatus) {
+          order.communication[channel] = { status: "NOT_SENT", updatedAt: execution.createdAt, attentionCode: recipientStatus, notificationExecutionId: execution.id };
+          order.revision += 1;
+          order.updatedAt = execution.createdAt;
+        }
+        order.eventHistory ??= [];
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `NOTIFICATION_${execution.status}`, at: execution.createdAt, userId: user.id, userName: user.name, source: "notification-foundation", details: { event, executionId: execution.id } });
+        return { state, value: { duplicate: false, execution: structuredClone(execution) } };
+      });
+      reservation = reserved.value;
+      if (reservation.duplicate || reservation.execution.status !== "PENDING") return reservation.execution;
+      const current = await this.store.read();
+      const request = {
+        ...this.#orderMailRequest(current, user, orderId, { templateKey: event }),
+        idempotencyKey: `notification:${reservation.execution.id}`,
+      };
+      const mailResult = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role });
+      const status = mailResult.status === "SMTP_ACCEPTED" ? "SENT"
+        : mailResult.status === "CAPTURED" ? "CAPTURED"
+          : mailResult.status === "UNKNOWN_PARTIAL_SEND" ? "UNKNOWN"
+            : "DELIVERY_FAILED";
+      await this.store.mutate(async (state) => {
+        const foundation = normalizeNotificationFoundation(state);
+        const execution = foundation.executions.find(({ id }) => id === reservation.execution.id);
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!execution || !order) return { state, value: undefined };
+        execution.status = status;
+        execution.completedAt = iso();
+        execution.mailAttemptId = mailResult.id;
+        execution.safeResult = { code: mailResult.safeResult?.code ?? mailResult.status, message: mailResult.safeResult?.message ?? "Verzendpoging afgerond." };
+        const channel = event === "ORDER_READY" ? "ready" : "receipt";
+        const communicationStatus = status === "SENT" ? "SMTP_ACCEPTED" : status === "CAPTURED" ? "CAPTURED" : status === "UNKNOWN" ? "UNKNOWN" : "FAILED";
+        order.communication[channel] = { status: communicationStatus, updatedAt: execution.completedAt, providerReference: mailResult.referenceId ?? mailResult.id, notificationExecutionId: execution.id, ...(status === "DELIVERY_FAILED" ? { attentionCode: "DELIVERY_FAILED" } : {}) };
+        order.revision += 1;
+        order.updatedAt = execution.completedAt;
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `NOTIFICATION_${status}`, at: execution.completedAt, userId: user.id, userName: user.name, source: "notification-foundation", details: { event, executionId: execution.id, mailAttemptId: mailResult.id } });
+        audit(state, user.id, "Ordernotificatie verwerkt", order.id, { event, status, executionId: execution.id, mailAttemptId: mailResult.id });
+        return { state, value: undefined };
+      });
+      return { ...reservation.execution, status };
+    } catch (error) {
+      if (reservation?.execution?.id) await this.store.mutate(async (state) => {
+        const execution = normalizeNotificationFoundation(state).executions.find(({ id }) => id === reservation.execution.id);
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (execution?.status === "PENDING") {
+          execution.status = "DELIVERY_FAILED";
+          execution.completedAt = iso();
+          execution.safeResult = { code: "DELIVERY_FAILED", message: "De mail is aantoonbaar niet als afgeronde verzending vastgelegd." };
+        }
+        if (order) {
+          const channel = event === "ORDER_READY" ? "ready" : "receipt";
+          order.communication[channel] = { status: "FAILED", updatedAt: iso(), attentionCode: "DELIVERY_FAILED", notificationExecutionId: execution?.id };
+          order.revision += 1;
+          order.updatedAt = iso();
+        }
+        return { state, value: undefined };
+      });
+      return { status: "DELIVERY_FAILED", safeResult: { code: "DELIVERY_FAILED", message: "Mailfout; orderverwerking is behouden." } };
+    }
+  }
+
+  async retryOrderNotification(token, csrfToken, orderId, executionId, idempotencyKey) {
+    const { state, user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const prior = normalizeNotificationFoundation(state).executions.find((execution) => execution.id === executionId && execution.orderId === orderId);
+    if (!prior || !["DELIVERY_FAILED", "MISSING_RECIPIENT", "INVALID_RECIPIENT"].includes(prior.status)) throw Object.assign(new Error("Deze notificatie kan niet veilig opnieuw worden geprobeerd."), { statusCode: 409, code: "NOTIFICATION_RETRY_BLOCKED" });
+    return this.#dispatchOrderNotification(prior.event, orderId, user, `retry:${executionId}:${idempotencyKey}`, { retryOf: executionId });
+  }
+
   #mail() {
-    if (this.mailMode !== "capture") throw Object.assign(new Error("Externe mail is in deze pilotomgeving uitgeschakeld."), { statusCode: 503, code: "MAIL_TRANSPORT_DISABLED" });
+    if (!["capture", "PRODUCTION_SMTP"].includes(this.mailMode)) throw Object.assign(new Error("Mailtransport is in deze omgeving uitgeschakeld."), { statusCode: 503, code: "MAIL_TRANSPORT_DISABLED" });
     if (!this.mailFoundation) throw Object.assign(new Error("Mail Foundation is lokaal niet ingericht."), { statusCode: 503, code: "MAIL_FOUNDATION_UNAVAILABLE" });
     return this.mailFoundation;
   }
@@ -1959,6 +2225,7 @@ export class SportpaleisPilotService {
         customer: { name: order.customer },
         order: {
           number: order.id,
+          date: new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Amsterdam" }).format(new Date(order.createdAt)),
           items: itemLines,
           processingDays: state.settings.processingDays,
           pickupInformation: `Neem de orderreferentie ${order.id} mee bij het ophalen bij Sport 2000 Sportpaleis.`,
@@ -1967,6 +2234,7 @@ export class SportpaleisPilotService {
       },
       attachments: [],
       requestedByRole: user.role,
+      ...(NOTIFICATION_EVENTS.has(templateKey) ? { templateOverride: createManagedSportpaleisOrderTemplate(templateKey, normalizeNotificationFoundation(state).events[templateKey].template) } : {}),
     };
   }
 
@@ -3583,6 +3851,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, { history: await service.orderMailHistory(token, decodeURIComponent(mailHistoryMatch[1])) });
         return true;
       }
+      const notificationRetryMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/notifications\/([^/]+)\/retry$/);
+      if (notificationRetryMatch && method === "POST") {
+        json(response, 200, await service.retryOrderNotification(token, csrf, decodeURIComponent(notificationRetryMatch[1]), decodeURIComponent(notificationRetryMatch[2]), request.headers["idempotency-key"]));
+        return true;
+      }
       const orderMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/advance$/);
       if (orderMatch && method === "POST") {
         const payload = await readJson(request);
@@ -3665,6 +3938,19 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/admin/settings" && method === "PATCH") {
         json(response, 200, await service.updateSettings(token, csrf, await readJson(request)));
+        return true;
+      }
+      const notificationConfigMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/notifications\/(ORDER_RECEIVED|ORDER_READY)$/);
+      if (notificationConfigMatch && method === "PATCH") {
+        json(response, 200, await service.updateNotificationConfig(token, csrf, notificationConfigMatch[1], await readJson(request)));
+        return true;
+      }
+      if (notificationConfigMatch && method === "POST" && requestUrl.searchParams.get("action") === "preview") {
+        json(response, 200, await service.previewNotificationTemplate(token, notificationConfigMatch[1], await readJson(request)));
+        return true;
+      }
+      if (notificationConfigMatch && method === "POST" && requestUrl.searchParams.get("action") === "test") {
+        json(response, 200, await service.testNotification(token, csrf, notificationConfigMatch[1], await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const rollMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/foil-rolls\/([^/]+)$/);
