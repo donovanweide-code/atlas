@@ -366,6 +366,28 @@ function publicUser(user) {
   };
 }
 
+function normalizedEmail(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function publicAdminUser(user, state, now = new Date()) {
+  const result = publicUser(user);
+  if (user.status !== "Uitgenodigd") return result;
+  const pendingInvites = (state.activationInvites ?? []).filter((invite) => invite.userId === user.id && !invite.usedAt);
+  const invite = pendingInvites[0];
+  const expiryTime = invite ? new Date(invite.expiresAt).getTime() : Number.NaN;
+  const sameEmailUsers = state.users.filter((candidate) => candidate.id !== user.id && normalizedEmail(candidate.email) === normalizedEmail(user.email));
+  const sameEmailAccounts = sameEmailUsers.filter((candidate) => candidate.status !== "Uitgenodigd");
+  return {
+    ...result,
+    invitation: {
+      state: pendingInvites.length > 1 || (invite && !Number.isFinite(expiryTime)) ? "AMBIGUOUS" : !invite ? "MISSING" : expiryTime <= now.getTime() ? "EXPIRED" : "VALID",
+      expiresAt: pendingInvites.length === 1 && Number.isFinite(expiryTime) ? invite.expiresAt : null,
+      identityState: sameEmailAccounts.length > 1 ? "AMBIGUOUS_ACCOUNTS" : sameEmailAccounts.length === 1 ? "ACCOUNT_EXISTS" : sameEmailUsers.length ? "PENDING_DUPLICATE" : "CLEAR",
+    },
+  };
+}
+
 function workContextsForRole(role) {
   if (role === "admin") return ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"];
   if (role === "operator") return ["PRODUCTION", "STORE", "ALL"];
@@ -1253,7 +1275,7 @@ export class SportpaleisPilotService {
       revision: state.revision,
       currentUserId: user.id,
       currentUser: sessionUser,
-      users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map(publicUser) : [publicUser(user)],
+      users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
       orders: structuredClone(state.orders.map((order) => ({ ...order, ...productionStatusForOrder(order) }))),
@@ -2040,7 +2062,7 @@ export class SportpaleisPilotService {
     const createdAt = iso();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const result = await this.store.mutate(async (state) => {
-      if (state.users.some((candidate) => candidate.email.toLowerCase() === email)) throw Object.assign(new Error("Dit e-mailadres bestaat al."), { statusCode: 409, code: "EMAIL_EXISTS" });
+      if (state.users.some((candidate) => normalizedEmail(candidate.email) === email)) throw Object.assign(new Error("Dit e-mailadres bestaat al."), { statusCode: 409, code: "EMAIL_EXISTS" });
       const contexts = workContextsForRole(role);
       const target = { id: `user-${randomBytes(8).toString("hex")}`, name, initials: name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(), role, email, status: "Uitgenodigd", seatType: "customer", personType: "HUMAN", workContexts: contexts, defaultContext: contexts[0], password: null };
       state.users.push(target);
@@ -2062,15 +2084,44 @@ export class SportpaleisPilotService {
       if (!target) throw Object.assign(new Error("Uitnodiging niet gevonden."), { statusCode: 404, code: "USER_NOT_FOUND" });
       if (target.status !== "Uitgenodigd") throw Object.assign(new Error("Alleen een openstaande uitnodiging kan worden ingetrokken."), { statusCode: 409, code: "INVITATION_NOT_PENDING" });
       if (state.employees.some(({ userId }) => userId === target.id)) throw Object.assign(new Error("Deze uitnodiging is aan een werknemersrecord gekoppeld en kan niet stil worden verwijderd."), { statusCode: 409, code: "INVITATION_HAS_LINKED_DATA" });
+      const sameEmailAccounts = state.users.filter((candidate) => candidate.id !== target.id
+        && candidate.status !== "Uitgenodigd"
+        && normalizedEmail(candidate.email) === normalizedEmail(target.email));
+      if (sameEmailAccounts.length > 1) throw Object.assign(new Error("Meerdere bestaande accounts gebruiken dit e-mailadres. Beoordeel eerst handmatig welk account leidend is."), { statusCode: 409, code: "INVITATION_IDENTITY_AMBIGUOUS" });
       const email = target.email;
       state.activationInvites = (state.activationInvites ?? []).filter((invite) => invite.userId !== target.id);
       state.sessions = state.sessions.filter((session) => session.userId !== target.id);
       state.users = state.users.filter(({ id }) => id !== target.id);
       delete state.preferences[target.id];
-      audit(state, user.id, "Uitnodiging ingetrokken", target.id, { email, previousStatus: target.status });
+      audit(state, user.id, "Uitnodiging ingetrokken", target.id, { email, previousStatus: target.status, preservedAccountId: sameEmailAccounts[0]?.id ?? null });
       return { state, value: { revoked: true, userId: target.id, email } };
     });
     return result.value;
+  }
+
+  async reissueInvitedUser(token, csrfToken, targetUserId) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    let rawToken = "";
+    let expiresAt = "";
+    const result = await this.store.mutate(async (state) => {
+      const target = state.users.find(({ id }) => id === targetUserId && id !== "donovan-support");
+      if (!target) throw Object.assign(new Error("Uitnodiging niet gevonden."), { statusCode: 404, code: "USER_NOT_FOUND" });
+      if (target.status !== "Uitgenodigd") throw Object.assign(new Error("Alleen een nog niet geactiveerde uitnodiging kan een nieuwe activatielink krijgen."), { statusCode: 409, code: "INVITATION_NOT_PENDING" });
+      const sameEmailUsers = state.users.filter((candidate) => candidate.id !== target.id && normalizedEmail(candidate.email) === normalizedEmail(target.email));
+      if (sameEmailUsers.length) throw Object.assign(new Error("Voor dit e-mailadres bestaat al een andere toegang. Trek alleen de overbodige uitnodiging in of beoordeel de situatie handmatig."), { statusCode: 409, code: "INVITATION_IDENTITY_CONFLICT" });
+      const pendingInvites = (state.activationInvites ?? []).filter((invite) => invite.userId === target.id && !invite.usedAt);
+      if (pendingInvites.length > 1) throw Object.assign(new Error("Voor deze gebruiker bestaan meerdere openstaande links. Handmatige beoordeling is nodig."), { statusCode: 409, code: "INVITATION_STATE_AMBIGUOUS" });
+      rawToken = randomBytes(32).toString("base64url");
+      const createdAt = iso();
+      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      state.activationInvites = (state.activationInvites ?? []).filter((invite) => invite.userId !== target.id || invite.usedAt);
+      state.activationInvites.push({ id: `invite-${randomBytes(8).toString("hex")}`, userId: target.id, tokenHash: sha256(rawToken), createdAt, expiresAt, usedAt: null, createdBy: user.id });
+      audit(state, user.id, "Activatielink vernieuwd", target.id, { expiresAt });
+      return { state, value: publicUser(target) };
+    });
+    return { user: result.value, activationPath: `/workspace/sportpaleis/activeren#token=${rawToken}`, expiresAt, delivery: "LOCAL_HANDOFF_ONLY" };
   }
 
   async activateInvitedUser(payload) {
@@ -2082,6 +2133,7 @@ export class SportpaleisPilotService {
       if (!invite || new Date(invite.expiresAt).getTime() <= now.getTime()) throw Object.assign(new Error("Deze activatielink is ongeldig of verlopen."), { statusCode: 400, code: "ACTIVATION_INVALID" });
       const target = state.users.find(({ id }) => id === invite.userId && id !== "donovan-support");
       if (!target || target.status !== "Uitgenodigd") throw Object.assign(new Error("Deze gebruiker kan niet worden geactiveerd."), { statusCode: 409, code: "ACTIVATION_STATE_INVALID" });
+      if (state.users.some((candidate) => candidate.id !== target.id && normalizedEmail(candidate.email) === normalizedEmail(target.email))) throw Object.assign(new Error("Voor dit e-mailadres bestaat al een andere toegang. Laat een beheerder de overbodige uitnodiging beoordelen."), { statusCode: 409, code: "ACTIVATION_IDENTITY_CONFLICT" });
       target.password = password;
       target.status = "Actief";
       invite.usedAt = iso(now);
@@ -2104,7 +2156,10 @@ export class SportpaleisPilotService {
         target.role = allowedValue(payload.role, ["admin", "operator", "store"], "Rol");
         if (payload.workContexts === undefined) target.workContexts = workContextsForRole(target.role);
       }
-      if (payload.status !== undefined) target.status = allowedValue(payload.status, ["Actief", "Inactief", "Uitgenodigd"], "Status");
+      if (payload.status !== undefined) {
+        if (target.status === "Uitgenodigd") throw Object.assign(new Error("Een uitnodiging wordt geactiveerd via de activatielink, niet via accountstatus."), { statusCode: 409, code: "INVITATION_STATUS_CHANGE_FORBIDDEN" });
+        target.status = allowedValue(payload.status, ["Actief", "Inactief"], "Status");
+      }
       if (payload.salesNumber !== undefined) {
         const salesNumber = payload.salesNumber === null || String(payload.salesNumber).trim() === "" ? null : String(payload.salesNumber).trim();
         if (salesNumber !== null && !/^\d{1,8}$/.test(salesNumber)) throw Object.assign(new Error("Verkoopnummer moet uit 1 tot 8 cijfers bestaan."), { statusCode: 400, code: "VALIDATION_ERROR" });
@@ -3572,6 +3627,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         return true;
       }
       const userInvitationMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)\/invitation$/);
+      if (userInvitationMatch && method === "POST") {
+        json(response, 200, await service.reissueInvitedUser(token, csrf, decodeURIComponent(userInvitationMatch[1])));
+        return true;
+      }
       if (userInvitationMatch && method === "DELETE") {
         json(response, 200, await service.cancelInvitedUser(token, csrf, decodeURIComponent(userInvitationMatch[1])));
         return true;

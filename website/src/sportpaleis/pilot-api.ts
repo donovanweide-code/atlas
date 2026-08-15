@@ -324,6 +324,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/invitation`, { method: "DELETE" }));
   }
 
+  async reissueInvitation(userId: string): Promise<{ user: SportpaleisUser; activationPath: string; expiresAt: string; delivery: "LOCAL_HANDOFF_ONLY" }> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/invitation`, { method: "POST" }));
+  }
+
   async updateUser(userId: string, input: { role?: "admin" | "operator" | "store"; status?: "Actief" | "Inactief" | "Uitgenodigd"; salesNumber?: string | null; workContexts?: NonNullable<SportpaleisUser["workContexts"]>; defaultContext?: NonNullable<SportpaleisUser["defaultContext"]> }): Promise<SportpaleisUser> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}`, {
       method: "PATCH",

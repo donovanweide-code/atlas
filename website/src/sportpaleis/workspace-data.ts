@@ -83,6 +83,11 @@ export interface SportpaleisUser {
   workContexts?: SportpaleisWorkContext[];
   defaultContext?: SportpaleisWorkContext;
   quickAuth?: { mode: "PASSWORD" | "PIN"; pinEnrolled: boolean };
+  invitation?: {
+    state: "VALID" | "EXPIRED" | "MISSING" | "AMBIGUOUS";
+    expiresAt: string | null;
+    identityState: "CLEAR" | "PENDING_DUPLICATE" | "ACCOUNT_EXISTS" | "AMBIGUOUS_ACCOUNTS";
+  };
 }
 
 export interface SportpaleisEmployee {
