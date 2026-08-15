@@ -87,17 +87,20 @@ test("page titles en browserhistorie hebben één route-driven contract", async 
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
 });
 
-test("public, Experience en Workspace entrypoints blijven afzonderlijk", async () => {
-  const [workspaceEntry, publicEntry, experienceEntry, workspaceBuild] = await Promise.all([
-    readFile(new URL("../src/workspace-main.ts", import.meta.url), "utf8"),
+test("public, Experience, WBD-owner en Sportpaleis entrypoints blijven afzonderlijk", async () => {
+  const [workspaceEntry, sportpaleisEntry, publicEntry, experienceEntry, workspaceBuild] = await Promise.all([
+    readFile(new URL("../src/wbd-owner-main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/sportpaleis-main.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/experience-validation-main.ts", import.meta.url), "utf8"),
     readFile(new URL("../vite.workspace.config.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(workspaceEntry, /mountWbdWorkspaceApplication/);
-  assert.doesNotMatch(workspaceEntry, /from "\.\/main"|experience-validation-main|from "\.\/atlas-workspace"/);
-  assert.doesNotMatch(publicEntry, /workspace-main/);
-  assert.doesNotMatch(experienceEntry, /workspace-main/);
+  assert.match(workspaceEntry, /mountWbdOwnerWorkspace/);
+  assert.match(sportpaleisEntry, /mountSportpaleisWorkspaceApplication/);
+  assert.doesNotMatch(workspaceEntry, /wbd-workspace|sportpaleis-workspace|experience-validation-main|atlas-workspace/);
+  assert.doesNotMatch(sportpaleisEntry, /wbd-owner/);
+  assert.doesNotMatch(publicEntry, /wbd-owner-main|sportpaleis-main/);
+  assert.doesNotMatch(experienceEntry, /wbd-owner-main|sportpaleis-main/);
   assert.match(workspaceBuild, /publicDir: false/);
   assert.match(workspaceBuild, /dist-workspace/);
 });

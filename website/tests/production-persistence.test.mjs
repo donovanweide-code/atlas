@@ -35,7 +35,8 @@ function productionEnvironment() {
     NODE_ENV: "production",
     APP_ENV: "production",
     PUBLIC_BASE_URL: "https://webuildanddesign.nl",
-    WORKSPACE_BASE_URL: "https://workspace.webuildanddesign.nl",
+    WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl",
+    WBD_WORKSPACE_BASE_URL: "https://workspace.webuildanddesign.nl",
     RELEASE_ID: "production-persistence-test",
     WORKSPACE_DB_HOST: "127.0.0.1",
     WORKSPACE_DB_PORT: "3306",
@@ -141,12 +142,19 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     async mutate() { throw new Error("not used"); },
     async close() {},
   };
+  const wbdOwnerStore = {
+    async initialize() { calls.push("wbd-owner"); },
+    async read() { throw new Error("not used"); },
+    async mutate() { throw new Error("not used"); },
+    async close() {},
+  };
   await createWorkspaceRuntimeServer({
     config,
     sportpaleisStore: store,
+    wbdOwnerStore,
     verifyAtlasBoundary: async () => { calls.push("atlas"); },
   });
-  assert.deepEqual(calls, ["atlas", "workspace"]);
+  assert.deepEqual(calls, ["atlas", "workspace", "wbd-owner"]);
   await assert.rejects(
     createWorkspaceRuntimeServer({
       config,

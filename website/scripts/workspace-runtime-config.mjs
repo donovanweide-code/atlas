@@ -13,6 +13,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   port: number,
  *   publicBaseUrl: string,
  *   workspaceBaseUrl: string,
+ *   wbdWorkspaceBaseUrl: string,
  *   releaseId: string,
  *   distDir: string,
  *   logLevel: LogLevel,
@@ -53,6 +54,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   PORT: { phase: "WS.1", requiredInProduction: false, secret: false },
   PUBLIC_BASE_URL: { phase: "WS.1", requiredInProduction: true, secret: false },
   WORKSPACE_BASE_URL: { phase: "WS.1", requiredInProduction: true, secret: false },
+  WBD_WORKSPACE_BASE_URL: { phase: "WBD Owner V1", requiredInProduction: true, secret: false },
   RELEASE_ID: { phase: "WS.1", requiredInProduction: true, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
@@ -177,6 +179,10 @@ export function parseWorkspaceRuntimeConfig(env) {
     productionMode ? required(env, "WORKSPACE_BASE_URL") : value(env, "WORKSPACE_BASE_URL") || `${localOrigin}/workspace/wbd`,
     "WORKSPACE_BASE_URL",
   );
+  const wbdWorkspaceBaseUrl = parseHttpUrl(
+    productionMode ? required(env, "WBD_WORKSPACE_BASE_URL") : value(env, "WBD_WORKSPACE_BASE_URL") || `${localOrigin}/workspace/wbd`,
+    "WBD_WORKSPACE_BASE_URL",
+  );
   const releaseId = productionMode ? required(env, "RELEASE_ID") : value(env, "RELEASE_ID") || "local-development";
   if (!releaseIdPattern.test(releaseId)) {
     throw new WorkspaceRuntimeConfigError("RELEASE_ID moet een opaque identifier van maximaal 128 veilige tekens zijn.");
@@ -214,6 +220,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     port,
     publicBaseUrl,
     workspaceBaseUrl,
+    wbdWorkspaceBaseUrl,
     releaseId,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,

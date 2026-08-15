@@ -22,7 +22,8 @@ test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resul
     APP_ENV: "production",
     PORT: "8080",
     PUBLIC_BASE_URL: "https://webuildanddesign.nl",
-    WORKSPACE_BASE_URL: "https://workspace.webuildanddesign.nl",
+    WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl",
+    WBD_WORKSPACE_BASE_URL: "https://workspace.webuildanddesign.nl",
     RELEASE_ID: "ws1-test.1",
     DATABASE_URL: "postgres://do-not-return",
     IDENTITY_CLIENT_SECRET: "do-not-return",
@@ -89,9 +90,14 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.doesNotMatch(await (await fetch(`${origin}/health`)).text(), /release|database|identity|secretless/);
 
   const alias = await fetch(`${origin}/workspace/wbd?bron=test`, { redirect: "manual" });
-  assert.equal(alias.status, 404);
-  assert.equal(alias.headers.get("location"), null);
-  assert.doesNotMatch(await alias.text(), /Workspace shell marker/);
+  assert.equal(alias.status, 308);
+  assert.equal(alias.headers.get("location"), "/workspace/wbd/capabilities?bron=test");
+
+  const capabilities = await fetch(`${origin}/workspace/wbd/capabilities`);
+  assert.equal(capabilities.status, 200);
+  assert.match(capabilities.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.match(capabilities.headers.get("permissions-policy"), /camera=\(\)/);
+  assert.match(await capabilities.text(), /Workspace shell marker/);
 
   const developmentAlias = await fetch(`${origin}/workspace/wbd/ontwikkeling`, { redirect: "manual" });
   assert.equal(developmentAlias.status, 404);

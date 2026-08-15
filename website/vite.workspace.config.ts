@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [{
     name: "sportpaleis-pwa-assets",
     generateBundle() {
-      for (const fileName of ["robots.txt", "sportpaleis.webmanifest", "sportpaleis-sw.js", "sportpaleis-pwa-icon.svg"]) this.emitFile({ type: "asset", fileName, source: pwaAsset(fileName) });
+      for (const fileName of ["robots.txt", "sportpaleis.webmanifest", "sportpaleis-sw.js", "sportpaleis-pwa-icon.svg", "wbd-owner-icon.svg"]) this.emitFile({ type: "asset", fileName, source: pwaAsset(fileName) });
       for (const fileName of ["LiberationSans-Regular.ttf", "LICENSE_LIBERATION.txt"]) {
         this.emitFile({
           type: "asset",

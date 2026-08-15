@@ -23,6 +23,10 @@ import {
   createManagedFontProductionPiece,
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
+import {
+  createWorkspacePasswordRecord,
+  verifyWorkspacePassword,
+} from "./workspace-auth-foundation.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -314,12 +318,7 @@ function safeEqualHex(left, right) {
 }
 
 export async function createSportpaleisPasswordRecord(password) {
-  if (typeof password !== "string" || password.length < 12) {
-    throw new Error("Pilotwachtwoorden moeten minimaal 12 tekens bevatten.");
-  }
-  const salt = randomBytes(16).toString("hex");
-  const derived = await scrypt(password, salt, 64, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-  return { algorithm: "scrypt", salt, hash: Buffer.from(derived).toString("hex"), N: 16_384, r: 8, p: 1 };
+  return createWorkspacePasswordRecord(password);
 }
 
 export async function createSportpaleisPinRecord(pin) {
@@ -332,14 +331,7 @@ export async function createSportpaleisPinRecord(pin) {
 const passwordRecord = createSportpaleisPasswordRecord;
 
 async function verifyPassword(password, record) {
-  if (!record || record.algorithm !== "scrypt") return false;
-  const derived = await scrypt(password, record.salt, 64, {
-    N: record.N,
-    r: record.r,
-    p: record.p,
-    maxmem: 64 * 1024 * 1024,
-  });
-  return safeEqualHex(Buffer.from(derived).toString("hex"), record.hash);
+  return verifyWorkspacePassword(password, record);
 }
 
 async function verifyPin(pin, record) {

@@ -19,6 +19,14 @@ import {
   createSportpaleisPilotRequestHandler,
   seedPasswordsFromEnvironment,
 } from "./sportpaleis-pilot-foundation.mjs";
+import { createWorkspacePasswordRecord } from "./workspace-auth-foundation.mjs";
+import {
+  WbdOwnerFileStore,
+  WbdOwnerService,
+  createInitialWbdOwnerState,
+  createWbdOwnerRequestHandler,
+} from "./wbd-owner-foundation.mjs";
+import { WbdOwnerMariaDbStore } from "./wbd-owner-mariadb-store.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -26,7 +34,7 @@ const workspaceBoundary = "/workspace/wbd";
 const sportpaleisBoundary = "/workspace/sportpaleis";
 export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
-const workspaceHome = `${workspaceBoundary}/overzicht`;
+const workspaceHome = `${workspaceBoundary}/capabilities`;
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
 const workspaceAliases = new Map([
   [workspaceBoundary, workspaceHome],
@@ -46,6 +54,7 @@ const workspaceRootAssets = new Set([
 
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
+  `${workspaceBoundary}/overzicht`,
   `${workspaceBoundary}/organisaties`,
   `${workspaceBoundary}/projecten`,
   `${workspaceBoundary}/ontwikkelpartners`,
@@ -146,6 +155,12 @@ function sendHtml(response, statusCode, body, method = "GET") {
   response.end(method === "HEAD" ? undefined : body);
 }
 
+function sendWbdOwnerHtml(response, statusCode, body, method = "GET") {
+  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  sendHtml(response, statusCode, body, method);
+}
+
 async function serveAsset(response, method, pathname, distRoot) {
   let decoded;
   try {
@@ -211,6 +226,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   const config = options.config ?? parseWorkspaceRuntimeConfig(process.env);
   const configuredWorkspaceUrl = new URL(config.workspaceBaseUrl);
   const canonicalSportpaleisHost = configuredWorkspaceUrl.pathname === "/" ? configuredWorkspaceUrl.hostname : null;
+  const canonicalWbdHost = new URL(config.wbdWorkspaceBaseUrl).hostname;
   const distRoot = path.resolve(websiteRoot, config.distDir);
   const workspaceHtmlPath = path.join(distRoot, "workspace.html");
   const workspaceHtml = await readFile(workspaceHtmlPath, "utf8");
@@ -219,6 +235,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   const outsideBoundaryHtml = "<!doctype html><html lang=\"nl\"><head><meta charset=\"utf-8\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Route niet gevonden</title></head><body><main><h1>Route niet gevonden</h1></main></body></html>";
   let sportpaleisHandlerPromise;
   let activeSportpaleisStore;
+  let wbdOwnerHandlerPromise;
+  let activeWbdOwnerStore;
   const sportpaleisHandler = () => {
     if (!sportpaleisHandlerPromise) {
       sportpaleisHandlerPromise = (async () => {
@@ -262,6 +280,42 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     return sportpaleisHandlerPromise;
   };
 
+  const wbdOwnerHandler = () => {
+    if (!wbdOwnerHandlerPromise) {
+      wbdOwnerHandlerPromise = (async () => {
+        const bootstrap = async () => {
+          if (config.nodeEnv === "production") {
+            if (!activeSportpaleisStore) throw new Error("Bewezen Donovan credentialbron is niet beschikbaar.");
+            const sportpaleisState = await activeSportpaleisStore.read();
+            const candidates = sportpaleisState.users.filter(({ email, status, password }) => email?.trim().toLowerCase() === "donovanweide@gmail.com" && status === "Actief" && password);
+            if (candidates.length !== 1) throw new Error("Exact één actieve Donovan credentialbron is vereist.");
+            return createInitialWbdOwnerState({ passwordRecord: candidates[0].password });
+          }
+          const seedPassword = String(process.env.WBD_OWNER_SEED_PASSWORD ?? "");
+          if (seedPassword.length < 12) throw new Error("WBD_OWNER_SEED_PASSWORD is vereist voor de lokale owner-store.");
+          return createInitialWbdOwnerState({ passwordRecord: await createWorkspacePasswordRecord(seedPassword) });
+        };
+        const store = options.wbdOwnerStore ?? (config.nodeEnv === "production"
+          ? new WbdOwnerMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace, bootstrap })
+          : new WbdOwnerFileStore({ filePath: process.env.WBD_OWNER_DATA_FILE ?? path.join(websiteRoot, "data", "wbd-owner", `${config.appEnv}-state.json`), bootstrap }));
+        activeWbdOwnerStore = store;
+        const service = new WbdOwnerService({
+          store,
+          releaseId: config.releaseId,
+          secureCookies: config.nodeEnv === "production",
+          allowedOrigin: new URL(config.wbdWorkspaceBaseUrl).origin,
+        });
+        await service.initialize();
+        return createWbdOwnerRequestHandler(service, {
+          onError: ({ error, method, route, statusCode }) => log(config, statusCode >= 500 ? "error" : "warn", "wbd-owner-api-error", {
+            method, route, statusCode, errorCode: String(error?.code ?? "INTERNAL_ERROR"), errorType: String(error?.name ?? typeof error),
+          }),
+        });
+      })();
+    }
+    return wbdOwnerHandlerPromise;
+  };
+
   if (config.nodeEnv === "production") {
     if (options.verifyAtlasBoundary) {
       await options.verifyAtlasBoundary();
@@ -269,6 +323,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       await verifyAtlasMariaDbBoundary(productionDatabaseCredentialsFromEnvironment(process.env).atlas);
     }
     await sportpaleisHandler();
+    await wbdOwnerHandler();
   }
 
   const server = createServer(async (request, response) => {
@@ -277,6 +332,20 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     const pathname = normalizePathname(requestUrl.pathname);
     const requestHost = String(request.headers.host ?? "").split(":")[0].toLowerCase();
     const canonicalSportpaleisRequest = Boolean(canonicalSportpaleisHost && requestHost === canonicalSportpaleisHost);
+    const canonicalWbdRequest = requestHost === canonicalWbdHost;
+
+    if (pathname.startsWith("/api/wbd/v1/") || pathname === "/health/wbd" || pathname === "/ready/wbd") {
+      if (!canonicalWbdRequest) {
+        sendJson(response, 404, { status: "not-found" }, method);
+        return;
+      }
+      try {
+        await (await wbdOwnerHandler())(request, response);
+      } catch {
+        sendJson(response, 503, { status: "not-configured" }, method);
+      }
+      return;
+    }
 
     if (pathname.startsWith("/api/sportpaleis/v1/")
       || pathname === "/health/sportpaleis"
@@ -303,7 +372,18 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       return;
     }
     if (pathname === workspaceBoundary || pathname.startsWith(`${workspaceBoundary}/`)) {
-      sendHtml(response, 404, outsideBoundaryHtml, method);
+      if (!canonicalWbdRequest) {
+        sendWbdOwnerHtml(response, 404, outsideBoundaryHtml, method);
+        return;
+      }
+      if (pathname === workspaceBoundary || pathname === `${workspaceBoundary}/overzicht`) {
+        response.statusCode = 308;
+        response.setHeader("Location", `${workspaceHome}${requestUrl.search}`);
+        response.setHeader("Cache-Control", "no-store");
+        response.end();
+        return;
+      }
+      sendWbdOwnerHtml(response, pathname === workspaceHome ? 200 : 404, pathname === workspaceHome ? workspaceHtml : outsideBoundaryHtml, method);
       return;
     }
     if (canonicalSportpaleisRequest && (pathname === "/" || pathname === sportpaleisBoundary || pathname.startsWith(`${sportpaleisBoundary}/`))) {
@@ -332,6 +412,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     }
     if ((workspaceRootAssets.has(pathname) || pathname.startsWith("/assets/"))
       && await serveAsset(response, method, pathname, distRoot)) return;
+    if (pathname === "/wbd-owner-icon.svg" && canonicalWbdRequest && await serveAsset(response, method, pathname, distRoot)) return;
     if (canonicalSportpaleisRequest && isCanonicalSportpaleisRoute(pathname)) {
       sendHtml(response, 200, sportpaleisHtml, method);
       return;
@@ -357,6 +438,9 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   server.on("close", () => {
     if (typeof activeSportpaleisStore?.close === "function") {
       void activeSportpaleisStore.close().catch(() => undefined);
+    }
+    if (typeof activeWbdOwnerStore?.close === "function") {
+      void activeWbdOwnerStore.close().catch(() => undefined);
     }
   });
   return server;

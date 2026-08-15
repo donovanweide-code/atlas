@@ -23,6 +23,18 @@ function fail(message) {
 const files = await filesBelow(outputRoot);
 const htmlPath = path.join(outputRoot, "workspace.html");
 if (!files.includes(htmlPath)) fail("workspace.html ontbreekt");
+const workspaceHtml = await readFile(htmlPath, "utf8");
+for (const required of [
+  "<title>Capabilities",
+  'rel="icon" type="image/svg+xml" href="/wbd-owner-icon.svg"',
+]) {
+  if (!workspaceHtml.includes(required)) fail(`WBD-owner identiteitsmarker ontbreekt: ${required}`);
+}
+const workspaceEntryMatch = workspaceHtml.match(/<script[^>]+src="([^"]+\.js)"/u);
+if (!workspaceEntryMatch) fail("WBD-owner bundleverwijzing ontbreekt");
+const workspaceEntryPath = path.join(outputRoot, workspaceEntryMatch[1].replace(/^\/+/, ""));
+if (!files.includes(workspaceEntryPath)) fail("WBD-owner bundle ontbreekt");
+const workspaceEntry = await readFile(workspaceEntryPath, "utf8");
 const sportpaleisHtmlPath = path.join(outputRoot, "sportpaleis.html");
 if (!files.includes(sportpaleisHtmlPath)) fail("sportpaleis.html ontbreekt");
 const sportpaleisHtml = await readFile(sportpaleisHtmlPath, "utf8");
@@ -61,8 +73,12 @@ for (const file of rasterFiles) if ((await stat(file)).size > 1_000_000) fail("o
 const textFiles = files.filter((file) => /\.(?:css|html|js|json|svg)$/i.test(file));
 const combined = (await Promise.all(textFiles.map((file) => readFile(file, "utf8")))).join("\n");
 
-for (const required of ["/workspace/wbd", "/workspace/sportpaleis", "WBD_WORKSPACE_ROUTE_NOT_FOUND", "data-route-status", "rel=\"icon\""]) {
+for (const required of ["wbd-owner-icon.svg", "/workspace/sportpaleis", "rel=\"icon\""]) {
   if (!combined.includes(required)) fail(`vereiste Workspace-marker ontbreekt: ${required}`);
+}
+
+for (const required of ["/api/wbd/v1", "Nog niet verkopen", "Oude browserdossiers zijn niet gemigreerd"]) {
+  if (!workspaceEntry.includes(required)) fail(`vereiste WBD-owner marker ontbreekt: ${required}`);
 }
 
 for (const forbidden of [
@@ -71,8 +87,11 @@ for (const forbidden of [
   "/atlas-lab",
   "/sportpaleis-proof",
   "context-first-experiment",
+  "atlas-wbd-dossier-v1",
+  "wbd-invoices",
+  "F00248",
 ]) {
-  if (combined.includes(forbidden)) fail(`onbedoelde public/Experience/dev-inhoud aangetroffen: ${forbidden}`);
+  if (workspaceEntry.includes(forbidden)) fail(`onbedoelde oude WBD/browserinhoud in ownerbundle aangetroffen: ${forbidden}`);
 }
 
 console.log(`Workspace-only build geverifieerd: ${files.length} bestanden, ${textFiles.length} tekstbestanden gecontroleerd.`);
