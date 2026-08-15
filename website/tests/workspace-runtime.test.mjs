@@ -59,6 +59,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><link rel=icon href=/sportpaleis-pwa-icon.svg><div id=app></div>");
   await writeFile(path.join(temporary, "assets", "workspace-test.js"), "export const ok=true;\n");
   await writeFile(path.join(temporary, "robots.txt"), "User-agent: *\nDisallow: /\n");
+  await writeFile(path.join(temporary, "sportpaleis-sw.js"), "self.addEventListener('install', () => self.skipWaiting());\n");
 
   const config = parseWorkspaceRuntimeConfig({
     NODE_ENV: "test",
@@ -137,6 +138,12 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
   assert.equal(robots.headers.get("content-type"), "text/plain; charset=utf-8");
   assert.equal(robots.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
+
+  const serviceWorker = await fetch(`${origin}/sportpaleis-sw.js`);
+  assert.equal(serviceWorker.status, 200);
+  assert.equal(serviceWorker.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assert.equal(serviceWorker.headers.get("cache-control"), "no-cache");
+  assert.match(await serviceWorker.text(), /addEventListener/);
 
   const sitemap = await fetch(`${origin}/sitemap.xml`);
   assert.equal(sitemap.status, 404);

@@ -171,10 +171,13 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     "sportpaleis-logo-mail-safe.png",
     "collectReferencedProductionArtifacts",
     "persistentProductionArtifacts",
+    "nginx-workspace-predeployment.conf",
     "nginx-workspace-sportpaleis-predeployment.conf",
     "collectRuntimeDependencyGraph",
     "runtimeDependencyGraph",
   ]) assert.match(releaseBuilder, new RegExp(required.replaceAll(".", "\\.")));
+  const sharedHostNginx = await readFile(new URL("../../ops/production/nginx-workspace-predeployment.conf", import.meta.url), "utf8");
+  assert.match(sharedHostNginx, /location = \/sportpaleis-sw\.js \{[\s\S]*proxy_pass http:\/\/wbd_workspace_runtime\/sportpaleis-sw\.js;/);
   assert.doesNotMatch(releaseBuilder, /collect\(path\.join\(repositoryRoot, "outputs?"\)/);
   assert.doesNotMatch(releaseBuilder, /wbd-logo-mail-safe/);
 });

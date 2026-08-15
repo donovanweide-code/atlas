@@ -39,6 +39,9 @@ if (!files.includes(robotsPath)) fail("Workspace-specifieke robots.txt ontbreekt
 if ((await readFile(robotsPath, "utf8")).replaceAll("\r\n", "\n").trim() !== "User-agent: *\nDisallow: /") fail("Workspace robots.txt moet alle crawling blokkeren");
 if (files.some((file) => path.basename(file).toLowerCase() === "sitemap.xml")) fail("Workspace-release mag geen publieke sitemap bevatten");
 if (files.some((file) => file.endsWith(".map"))) fail("source maps horen niet in het runtimeartefact");
+const serviceWorkerPath = path.join(outputRoot, "sportpaleis-sw.js");
+if (!files.includes(serviceWorkerPath)) fail("Sportpaleis service worker ontbreekt");
+if (!(await readFile(serviceWorkerPath, "utf8")).includes("self.addEventListener")) fail("Sportpaleis service worker bevat geen registratiehandlers");
 const rasterFiles = files.filter((file) => /\.(?:jpe?g|png|webp)$/i.test(file));
 const associationLogoRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "association-logos");
 const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS).map((logo) => [path.join(associationLogoRoot, logo.filename), logo]));

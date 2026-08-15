@@ -140,6 +140,7 @@ async function main() {
     [path.join(websiteRoot, "package-lock.json"), "app/package-lock.json"],
     [path.join(websiteRoot, "public", "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png"), "app/public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
+    [path.join(repositoryRoot, "ops", "production", "nginx-workspace-predeployment.conf"), "deployment/nginx-workspace-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "nginx-workspace-sportpaleis-predeployment.conf"), "deployment/nginx-workspace-sportpaleis-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
     [path.join(websiteRoot, ".env.production.example"), "deployment/production.env.example"],
