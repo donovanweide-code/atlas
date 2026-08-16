@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,6 +13,7 @@ import {
   WbdOwnerService,
   createInitialWbdOwnerState,
 } from "../scripts/wbd-owner-foundation.mjs";
+import { renderPromotionCards } from "../src/wbd-control-home.ts";
 
 const password = "Historical-Bootstrap-Test-20260816!";
 const now = new Date("2026-08-16T14:00:00.000Z");
@@ -141,17 +143,64 @@ test("proposal, evidence, canonieke mutatie en beide audits blijven herleidbaar"
 test("Opportunity en Owner Action vereisen ontbrekende menselijke betekenis; UNKNOWN blijft UNKNOWN", async (context) => {
   const { store, service, login } = await fixture(context);
   await review(service, login, "bij-cees-historical-organization-v1", "ACCEPT");
+  const afterParent = await service.promotions(login.token, now);
+  assert.equal(afterParent.proposals.find(({ id }) => id === "bijcees-aquaflask-commercial-opportunity-v1").status, "READY");
+  assert.equal(afterParent.proposals.find(({ id }) => id === "bijcees-current-situation-owner-action-v1").status, "WAITING");
+  const beforeIncompleteOpportunity = await store.read();
   await assert.rejects(review(service, login, "bijcees-aquaflask-commercial-opportunity-v1", "ACCEPT"), ({ code }) => code === "PROMOTION_MEANING_INCOMPLETE");
+  assert.deepEqual(await store.read(), beforeIncompleteOpportunity);
   const opportunity = await review(service, login, "bijcees-aquaflask-commercial-opportunity-v1", "ADJUST", { nextReviewAt: "2026-09-01T00:00:00.000Z" });
   assert.equal(opportunity.record.valueType, "UNKNOWN");
   assert.equal(opportunity.record.expectedOneOffRevenue, null);
   assert.equal(opportunity.record.expectedMrr, null);
   assert.equal(opportunity.record.proposalStatus, "NONE");
+  assert.equal((await service.promotions(login.token, now)).proposals.find(({ id }) => id === "bijcees-current-situation-owner-action-v1").status, "READY");
   assert.equal((await store.read()).controlPlane.serviceCommitments.length, 0);
+  const beforeIncompleteAction = await store.read();
   await assert.rejects(review(service, login, "bijcees-current-situation-owner-action-v1", "ACCEPT"), ({ code }) => code === "PROMOTION_MEANING_INCOMPLETE");
+  assert.deepEqual(await store.read(), beforeIncompleteAction);
   const action = await review(service, login, "bijcees-current-situation-owner-action-v1", "ADJUST", { priority: "HIGH" });
   assert.equal(action.record.priority, "HIGH");
   assert.equal(action.record.dueAt, null);
+  const finalState = await store.read();
+  assert.equal(finalState.controlPlane.opportunities.length, 1);
+  assert.equal(finalState.controlPlane.ownerActions.length, 1);
+});
+
+test("verplichte menselijke betekenis krijgt een actieve Aanvullen en bevestigen-route", () => {
+  const promotion = (canonicalType, requiredHumanFields) => ({
+    id: canonicalType === "OPPORTUNITY" ? "bijcees-aquaflask-commercial-opportunity-v1" : "bijcees-current-situation-owner-action-v1",
+    operation: "CREATE",
+    canonicalType,
+    title: canonicalType === "OPPORTUNITY" ? "Digitale vernieuwing" : "Actuele situatie onderzoeken",
+    summary: "Menselijke betekenis is vereist.",
+    confidence: "MIDDEL",
+    uncertainty: "Waarde blijft onbekend.",
+    evidence: [],
+    allowedAdjustments: canonicalType === "OPPORTUNITY" ? ["nextReviewAt"] : ["priority"],
+    requiredHumanFields,
+    status: "READY",
+    message: null,
+    reviewed: null,
+  });
+  const html = renderPromotionCards({
+    schemaVersion: 1,
+    revision: 49,
+    releaseId: "TEST",
+    proposals: [promotion("OPPORTUNITY", ["nextReviewAt"]), promotion("OWNER_ACTION", ["priority"])],
+  });
+  assert.equal((html.match(/data-promotion-complete=/gu) ?? []).length, 2);
+  assert.equal((html.match(/>Aanvullen en bevestigen<\/button>/gu) ?? []).length, 4);
+  assert.doesNotMatch(html, /<button[^>]*disabled[^>]*>Bevestigen<\/button>/u);
+  assert.doesNotMatch(html, /data-promotion-toggle=/u);
+  assert.match(html, /name="nextReviewAt" type="date" required/u);
+  assert.match(html, /name="priority" required/u);
+
+  const source = readFileSync(new URL("../src/wbd-control-home.ts", import.meta.url), "utf8");
+  assert.match(source, /data-promotion-complete/u);
+  assert.match(source, /form\.hidden = false/u);
+  assert.match(source, /proposal\.requiredHumanFields\?\.\[0\]/u);
+  assert.match(source, /focusTarget instanceof HTMLElement\) focusTarget\.focus\(\)/u);
 });
 
 test("één Organization-bevestiging maakt organizations-coverage niet compleet en Home toont Organizations", async (context) => {
