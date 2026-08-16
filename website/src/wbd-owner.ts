@@ -1,4 +1,5 @@
 import { bindControlHome, renderControlHome, type ControlOverview, type ControlRecordType, type ControlView, type PromotionView } from "./wbd-control-home.ts";
+import { bindOrganizationDirectory, renderOrganizationContext, renderOrganizationDirectory, renderOpportunityDirectory } from "./wbd-organization-context.ts";
 
 type CapabilityStatus = "PROVEN_REUSABLE" | "PROVEN_PRODUCT_SPECIFIC" | "PARTIAL" | "DESIGN_ONLY" | "EXTERNAL_SOLUTION_PREFERRED" | "LEGACY" | "UNKNOWN";
 type StrategicJudgement = "INVEST" | "INTEGRATE" | "MAINTAIN" | "WATCH" | "RETIRE";
@@ -29,6 +30,8 @@ const filters: { id: FilterId; label: string }[] = [
 ];
 const capabilitiesPath = "/workspace/wbd/capabilities";
 const homePath = "/workspace/wbd/home";
+const organizationsPath = "/workspace/wbd/organisaties";
+const opportunitiesPath = "/workspace/wbd/kansen";
 const workContextPath = "/workspace/wbd/werkcontext";
 const localWorkContextUrl = "http://127.0.0.1:5173/workspace/wbd/overzicht";
 const escapeHtml = (value: unknown): string => String(value ?? "").replace(/[&<>'"]/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!);
@@ -89,12 +92,23 @@ function capabilityCard(capability: Capability): string {
   </article>`;
 }
 
-function ownerTopbar(session: SessionView, active: "home" | "capabilities" | "workcontext"): string {
+type OwnerSection = "home" | "organizations" | "opportunities" | "capabilities" | "workcontext";
+
+function ownerTopbar(session: SessionView, active: OwnerSection): string {
+  const moreActive = active === "capabilities" || active === "workcontext";
   return `<header class="wbd-owner-topbar">
     <a class="wbd-owner-brand" href="${homePath}" aria-label="WBD Workspace"><span class="wbd-owner-mark" aria-hidden="true">W</span><span>WBD Workspace</span></a>
-    <nav class="wbd-owner-sections" aria-label="WBD werkgebieden"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">Home</a><a href="${capabilitiesPath}" aria-current="${active === "capabilities" ? "page" : "false"}">Capabilities</a><a href="${workContextPath}" aria-current="${active === "workcontext" ? "page" : "false"}">Bestaande werkcontext</a></nav>
+    <nav class="wbd-owner-sections" aria-label="WBD werkgebieden"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">Home</a><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">Organisaties</a><a href="${opportunitiesPath}" aria-current="${active === "opportunities" ? "page" : "false"}">Kansen</a><span class="wbd-owner-sections__unavailable" aria-disabled="true" title="Finance is nog niet centraal beschikbaar">Financiën</span><details class="wbd-owner-more"><summary aria-current="${moreActive ? "page" : "false"}">Meer</summary><div><a href="${capabilitiesPath}" aria-current="${active === "capabilities" ? "page" : "false"}">Capabilities</a><a href="${workContextPath}" aria-current="${active === "workcontext" ? "page" : "false"}">Bestaande werkcontext</a><span>Financiën · nog niet centraal</span></div></details></nav>
     <div><span>${escapeHtml(session.owner.name)}</span><button type="button" data-logout>Uitloggen</button></div>
   </header>`;
+}
+
+function organizationIdFromPath(pathname: string): string | null {
+  const prefix = `${organizationsPath}/`;
+  if (!pathname.startsWith(prefix)) return null;
+  const encoded = pathname.slice(prefix.length);
+  if (!encoded || encoded.includes("/")) return null;
+  try { return decodeURIComponent(encoded); } catch { return null; }
 }
 
 function workspaceView(session: SessionView, catalog: CatalogView, filter: FilterId): string {
@@ -172,10 +186,21 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
 
   const renderWorkspace = (): void => {
     if (!session || !catalog || !control || !overview || !promotions) return;
-    const workContextActive = window.location.pathname === workContextPath;
-    const homeActive = window.location.pathname === homePath;
-    document.title = `${homeActive ? "Home" : workContextActive ? "Bestaande werkcontext" : "Capabilities"} — WBD Workspace`;
-    app.innerHTML = homeActive ? renderControlHome(ownerTopbar(session, "home"), control, overview, promotions) : workContextActive ? workContextView(session, isCurrentDeviceMobile()) : workspaceView(session, catalog, activeFilter);
+    const pathname = window.location.pathname;
+    const workContextActive = pathname === workContextPath;
+    const homeActive = pathname === homePath;
+    const organizationDirectoryActive = pathname === organizationsPath;
+    const organizationId = organizationIdFromPath(pathname);
+    const opportunitiesActive = pathname === opportunitiesPath;
+    const capabilitiesActive = pathname === capabilitiesPath;
+    const pageTitle = homeActive ? "Home" : organizationDirectoryActive ? "Organisaties" : organizationId ? control.organizations.find(({ id }) => id === organizationId)?.name ?? "Organization" : opportunitiesActive ? "Kansen" : workContextActive ? "Bestaande werkcontext" : "Capabilities";
+    document.title = `${pageTitle} — WBD Workspace`;
+    if (homeActive) app.innerHTML = renderControlHome(ownerTopbar(session, "home"), control, overview, promotions);
+    else if (organizationDirectoryActive) app.innerHTML = renderOrganizationDirectory(ownerTopbar(session, "organizations"), control);
+    else if (organizationId) app.innerHTML = renderOrganizationContext(ownerTopbar(session, "organizations"), control, organizationId, catalog.capabilities.length);
+    else if (opportunitiesActive) app.innerHTML = renderOpportunityDirectory(ownerTopbar(session, "opportunities"), control);
+    else if (workContextActive) app.innerHTML = workContextView(session, isCurrentDeviceMobile());
+    else app.innerHTML = workspaceView(session, catalog, activeFilter);
     if (homeActive) bindControlHome(app, control, promotions, {
       create: async (recordType: ControlRecordType, payload: Record<string, unknown>) => {
         await api(`/api/wbd/v1/control/${recordType}`, { method: "POST", headers: { "Content-Type": "application/json", Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken }, body: JSON.stringify({ ...payload, expectedRevision: control!.revision }) });
@@ -193,7 +218,8 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
         renderWorkspace();
       },
     });
-    app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
+    if (organizationDirectoryActive) bindOrganizationDirectory(app);
+    if (capabilitiesActive) app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelector<HTMLButtonElement>("[data-logout]")?.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
       session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; app.innerHTML = loginView(); bindLogin();

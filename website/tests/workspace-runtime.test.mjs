@@ -107,9 +107,21 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.equal(developmentAlias.status, 404);
   assert.doesNotMatch(await developmentAlias.text(), /Workspace shell marker/);
 
-  const known = await fetch(`${origin}/workspace/wbd/organisaties/sportpaleis`);
-  assert.equal(known.status, 404);
-  assert.doesNotMatch(await known.text(), /Workspace shell marker/);
+  const organizations = await fetch(`${origin}/workspace/wbd/organisaties`);
+  assert.equal(organizations.status, 200);
+  assert.match(await organizations.text(), /Workspace shell marker/);
+
+  const organization = await fetch(`${origin}/workspace/wbd/organisaties/organization-05e88cb6-9a3a-4ae8-9f52-e53124fe6a39`);
+  assert.equal(organization.status, 200);
+  assert.match(await organization.text(), /Workspace shell marker/);
+
+  const opportunities = await fetch(`${origin}/workspace/wbd/kansen`);
+  assert.equal(opportunities.status, 200);
+  assert.match(await opportunities.text(), /Workspace shell marker/);
+
+  const invalidOrganization = await fetch(`${origin}/workspace/wbd/organisaties/sportpaleis/details`);
+  assert.equal(invalidOrganization.status, 404);
+  assert.doesNotMatch(await invalidOrganization.text(), /Workspace shell marker/);
 
   const sportpaleisAlias = await fetch(`${origin}/workspace/sportpaleis`, { redirect: "manual" });
   assert.equal(sportpaleisAlias.status, 308);

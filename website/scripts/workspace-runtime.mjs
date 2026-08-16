@@ -36,8 +36,12 @@ export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
 const workspaceHome = `${workspaceBoundary}/home`;
 const workspaceCapabilities = `${workspaceBoundary}/capabilities`;
+const workspaceOrganizations = `${workspaceBoundary}/organisaties`;
+const workspaceOpportunities = `${workspaceBoundary}/kansen`;
 const workspaceWorkContext = `${workspaceBoundary}/werkcontext`;
-const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceCapabilities, workspaceWorkContext]);
+const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceCapabilities, workspaceOrganizations, workspaceOpportunities, workspaceWorkContext]);
+const ownerOrganizationRoute = /^\/workspace\/wbd\/organisaties\/[a-z0-9][a-z0-9-]*$/u;
+const isOwnerWorkspaceRoute = (pathname) => ownerWorkspaceRoutes.has(pathname) || ownerOrganizationRoute.test(pathname);
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
 const workspaceAliases = new Map([
   [workspaceBoundary, workspaceHome],
@@ -390,7 +394,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
         response.end();
         return;
       }
-      sendWbdOwnerHtml(response, ownerWorkspaceRoutes.has(pathname) ? 200 : 404, ownerWorkspaceRoutes.has(pathname) ? workspaceHtml : outsideBoundaryHtml, method);
+      sendWbdOwnerHtml(response, isOwnerWorkspaceRoute(pathname) ? 200 : 404, isOwnerWorkspaceRoute(pathname) ? workspaceHtml : outsideBoundaryHtml, method);
       return;
     }
     if (canonicalSportpaleisRequest && (pathname === "/" || pathname === sportpaleisBoundary || pathname.startsWith(`${sportpaleisBoundary}/`))) {
