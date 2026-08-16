@@ -115,3 +115,23 @@ Beslissingen zijn herleidbaar. De Foundation blijft leidend.
 - **Keuze:** Een module is een afzonderlijk bruikbare werkvorm binnen de WBD Workspace. Een connector verbindt zo'n werkvorm met een extern systeem en is geen zelfstandig doel. WBD wil bewezen modules later afzonderlijk commercieel kunnen aanbieden.
 - **Prijsgrens:** Een prijs voor een ontwikkelpartner is niet automatisch een marktprijs. Een toekomstig Value & Pricing Framework moet waarde, doelgroep, bewijs, leveringsvorm, ondersteuning en prijsstelling afzonderlijk toetsen voordat een commerciële moduleprijs wordt vastgesteld.
 - **Gevolg:** Na GO / Afgerond op de Atlas Workspace Sync is Experience Polish de actieve werkstroom. Project 002 blijft de fase hierna. Deze beslissing bouwt geen connector, module, prijsmodel of Sportpaleis-functionaliteit en activeert geen Horizon-item.
+
+## D-014 — Home is regie; Organization is contextuele diepte
+
+- **Datum:** 2026-08-16
+- **Status:** Roadmapbesluit uit Human Review van `WBD-HISTORICAL-BOOTSTRAP-HUMAN-CORRECTION-V0.1`; geen implementatie-GO.
+- **Keuze:** Home blijft de compacte owner-regielaag. Een Organization wordt later onderzocht als primaire contextdrager voor actuele betekenis, aandacht, relatie, bewezen levering, capabilities, service commitments, verantwoordelijkheid, opportunities, recurring effort en relevante evidence/besluiten.
+- **Menselijke ingang:** De eerste vraag is wat er bij de organisatie speelt, wat aandacht vraagt en wat voor Donovan relevant is. Historische of technische diepte volgt daarna. Dit is geen CRM en geen lange databasepagina met een modulemenu.
+- **Bronbezit:** Organization centraliseert betekenis en context, niet noodzakelijk ruwe brondata. Specialistische systemen blijven waar passend authoritative source. Verantwoordelijkheid, MRR, resultaat of opportunity worden nooit zonder bewijs afgeleid.
+- **Workspace-A-hypothese:** Generieke geschiktheid mag pas worden beoordeeld na bewijsvolgorde WBD-dogfood → Sport 2000 Sportpaleis → BijCees/AquaFlask → bij voorkeur een ander bedrijfstype.
+- **Atlasrelatie:** Organization Context wordt later een read-context: Atlas leest bevestigde waarheid, combineert die met capabilities/evidence/source health, adviseert, en alleen human-approved promotion wijzigt de canonieke Workspace.
+- **Grens:** Geen Organization Depth-, Atlas-connector- of Workspace-A-build binnen dit besluit.
+
+## D-015 — Technische bronstatus is niet automatisch Donovan-needed
+
+- **Datum:** 2026-08-16
+- **Status:** Roadmapbesluit uit dezelfde Human Review; geen implementatie-GO.
+- **Keuze:** Technische termen zoals `SOURCE BLOCKER`, severity, coverage en source-health worden niet prominent als menselijke Owner Action gepresenteerd. Een bronprobleem wordt pas Donovan-needed wanneer Donovan werkelijk iets moet beslissen of uitvoeren.
+- **Menselijke taal:** Workspace toont eerst betekenis, bijvoorbeeld “Bedrijfsinformatie nog niet volledig bekend” of “We kunnen hierover nog geen betrouwbare conclusie geven”. Technische details blijven secundair beschikbaar achter “Waarom?” of “Technische details”.
+- **Grens:** Geen Human Attention-polish binnen dit besluit. De bestaande release wordt alleen aangepast wanneer een echte productieblocker afzonderlijk wordt vastgesteld en goedgekeurd.
+- **Capaciteit:** Na sluiting van de huidige release-lijn geldt deze week WBD/Atlas BUILD STOP; resterende capaciteit is gereserveerd voor BijCees/AquaFlask — actuele werkelijkheid en commerciële voorbereiding.

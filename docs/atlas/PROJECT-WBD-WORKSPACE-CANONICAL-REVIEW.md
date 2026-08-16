@@ -871,3 +871,43 @@ Iedere fase is klein, geïsoleerd en vraagt afzonderlijke GO.
 - Werkelijke Codex-credits zijn in deze omgeving niet zichtbaar en worden daarom niet gerapporteerd of geschat.
 
 **STOP:** wacht op menselijke beoordeling en expliciete GO.
+
+## 36. Roadmap addendum — Owner Control Plane Human Review (2026-08-16)
+
+Dit addendum legt twee productbevindingen uit de Human Review van `WBD-HISTORICAL-BOOTSTRAP-HUMAN-CORRECTION-V0.1` vast. Het is productregie, geen implementatieroadmap en geen GO.
+
+### PRIORITEIT — Organization Context / Organization Depth
+
+**Productregel:** Home is de regie; Organization is de diepte.
+
+Een toekomstige Organization-context moet eerst antwoord geven op wat er nu speelt, wat aandacht vraagt en wat relevant is voor Donovan. Daaronder kan zij de bevestigde samenhang tonen tussen:
+
+- organisatie-identiteit, relatietype, status en relevante historie;
+- aantoonbaar geleverd werk, releases, Workspaces, implementaties en resultaten;
+- bij deze Organization bewezen capabilities en bijbehorende evidence;
+- service commitments, contracted MRR, geldigheid en scope;
+- expliciete responsibility: WBD, klant, shared of external provider;
+- canonieke opportunities, proposalstatus, bekende waarde, volgende actie en evidence;
+- recurring menselijke Donovan-tijd en alleen bij voldoende dekking MRR per recurring uur;
+- relevante beslissingen, bewijs en de reden waarom iets bekend of onzeker is.
+
+Mail, agenda, boekhouding, documenten, websites, monitoring, Search Console, Analytics, WooCommerce en andere specialistische systemen blijven later waar passend eigenaar van hun ruwe waarheid. Organization centraliseert de betekenisvolle context, niet automatisch alle brondata.
+
+Dit is nadrukkelijk geen CRM, tabbladendatabase of generiek moduleframework. De medewerker ziet relevant werk vanuit rol, verantwoordelijkheid en context. De generieke Workspace-A-hypothese wordt pas getoetst via WBD-dogfood, Sport 2000 Sportpaleis, BijCees/AquaFlask en daarna bij voorkeur een ander bedrijfstype.
+
+Voor Atlas is Organization Context later uitsluitend read-context. De lus blijft: Workspace-feiten → Atlas-observatie/advies → Donovan-beoordeling → human-approved promotion → bijgewerkte canonieke waarheid. Atlas krijgt geen autonome schrijfbevoegdheid.
+
+### ROADMAP — Human Attention Language
+
+Een technische bronstatus is niet vanzelf Donovan-needed. `SOURCE BLOCKER`, severity, coverage, source-health en vergelijkbare enginebegrippen worden niet prominent als menselijke Owner Action gebruikt wanneer Donovan niets hoeft te beslissen of uitvoeren.
+
+De primaire taal beschrijft betekenis, bijvoorbeeld “Bedrijfsinformatie nog niet volledig bekend” of “We kunnen hierover nog geen betrouwbare conclusie geven”. Herkomst en technische details mogen secundair beschikbaar blijven achter “Waarom?” of “Technische details”.
+
+### Beslis- en capaciteitsgrens
+
+- Geen Organization Depth-build.
+- Geen Human Attention-polish.
+- Geen Atlas-connector.
+- Geen Workspace-A-build.
+- Deze week WBD/Atlas BUILD STOP, behalve na een afzonderlijk vastgestelde echte productieblocker en expliciete GO.
+- Resterende capaciteit gaat naar BijCees/AquaFlask: actuele werkelijkheid en commerciële voorbereiding.
