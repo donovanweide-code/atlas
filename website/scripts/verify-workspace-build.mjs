@@ -77,7 +77,14 @@ for (const required of ["wbd-owner-icon.svg", "/workspace/sportpaleis", "rel=\"i
   if (!combined.includes(required)) fail(`vereiste Workspace-marker ontbreekt: ${required}`);
 }
 
-for (const required of ["/api/wbd/v1", "Nog niet verkopen", "Oude browserdossiers zijn niet gemigreerd"]) {
+for (const required of [
+  "/api/wbd/v1",
+  "Nog niet verkopen",
+  "Oude browserdossiers zijn niet gemigreerd",
+  "Tijdelijke continuïteitsbrug",
+  "http://127.0.0.1:5173/workspace/wbd/overzicht",
+  "Niet beschikbaar op iPhone",
+]) {
   if (!workspaceEntry.includes(required)) fail(`vereiste WBD-owner marker ontbreekt: ${required}`);
 }
 

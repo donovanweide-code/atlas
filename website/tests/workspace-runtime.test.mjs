@@ -99,6 +99,10 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.match(capabilities.headers.get("permissions-policy"), /camera=\(\)/);
   assert.match(await capabilities.text(), /Workspace shell marker/);
 
+  const workContext = await fetch(`${origin}/workspace/wbd/werkcontext`);
+  assert.equal(workContext.status, 200);
+  assert.match(await workContext.text(), /Workspace shell marker/);
+
   const developmentAlias = await fetch(`${origin}/workspace/wbd/ontwikkeling`, { redirect: "manual" });
   assert.equal(developmentAlias.status, 404);
   assert.doesNotMatch(await developmentAlias.text(), /Workspace shell marker/);

@@ -35,6 +35,8 @@ const sportpaleisBoundary = "/workspace/sportpaleis";
 export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
 const workspaceHome = `${workspaceBoundary}/capabilities`;
+const workspaceWorkContext = `${workspaceBoundary}/werkcontext`;
+const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceWorkContext]);
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
 const workspaceAliases = new Map([
   [workspaceBoundary, workspaceHome],
@@ -383,7 +385,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
         response.end();
         return;
       }
-      sendWbdOwnerHtml(response, pathname === workspaceHome ? 200 : 404, pathname === workspaceHome ? workspaceHtml : outsideBoundaryHtml, method);
+      sendWbdOwnerHtml(response, ownerWorkspaceRoutes.has(pathname) ? 200 : 404, ownerWorkspaceRoutes.has(pathname) ? workspaceHtml : outsideBoundaryHtml, method);
       return;
     }
     if (canonicalSportpaleisRequest && (pathname === "/" || pathname === sportpaleisBoundary || pathname.startsWith(`${sportpaleisBoundary}/`))) {

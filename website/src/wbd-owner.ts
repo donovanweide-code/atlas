@@ -25,6 +25,9 @@ const filters: { id: FilterId; label: string }[] = [
   { id: "reusable", label: "Herbruikbaar" }, { id: "partial", label: "Gedeeltelijk" },
   { id: "decision", label: "Bewaken / integreren / stoppen" },
 ];
+const capabilitiesPath = "/workspace/wbd/capabilities";
+const workContextPath = "/workspace/wbd/werkcontext";
+const localWorkContextUrl = "http://127.0.0.1:5173/workspace/wbd/overzicht";
 const escapeHtml = (value: unknown): string => String(value ?? "").replace(/[&<>'"]/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!);
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -61,16 +64,49 @@ function capabilityCard(capability: Capability): string {
   </article>`;
 }
 
+function ownerTopbar(session: SessionView, active: "capabilities" | "workcontext"): string {
+  return `<header class="wbd-owner-topbar">
+    <a class="wbd-owner-brand" href="${capabilitiesPath}" aria-label="WBD Workspace"><span class="wbd-owner-mark" aria-hidden="true">W</span><span>WBD Workspace</span></a>
+    <nav class="wbd-owner-sections" aria-label="WBD werkgebieden"><a href="${capabilitiesPath}" aria-current="${active === "capabilities" ? "page" : "false"}">Capabilities</a><a href="${workContextPath}" aria-current="${active === "workcontext" ? "page" : "false"}">Bestaande werkcontext</a></nav>
+    <div><span>${escapeHtml(session.owner.name)}</span><button type="button" data-logout>Uitloggen</button></div>
+  </header>`;
+}
+
 function workspaceView(session: SessionView, catalog: CatalogView, filter: FilterId): string {
   const visible = catalog.capabilities.filter((capability) => matchesFilter(capability, filter));
   const proven = catalog.capabilities.filter(({ status }) => status.startsWith("PROVEN_")).length;
   const sellable = catalog.capabilities.filter(({ sellNow }) => sellNow).length;
   return `<main class="wbd-owner-workspace">
-    <header class="wbd-owner-topbar"><a href="/workspace/wbd/capabilities" aria-label="WBD Capabilities"><span class="wbd-owner-mark" aria-hidden="true">W</span><span>WBD Workspace</span></a><div><span>${escapeHtml(session.owner.name)}</span><button type="button" data-logout>Uitloggen</button></div></header>
+    ${ownerTopbar(session, "capabilities")}
     <section class="wbd-owner-intro"><div><p class="wbd-owner-eyebrow">Owner Foundation · centrale waarheid</p><h1>Capabilities</h1><p>Wat WBD vandaag aantoonbaar kan, waar het bewezen is en wat nog niet verkocht moet worden.</p></div><dl><div><dt>Totaal</dt><dd>${catalog.capabilities.length}</dd></div><div><dt>Bewezen</dt><dd>${proven}</dd></div><div><dt>Nu verkoopbaar</dt><dd>${sellable}</dd></div><div><dt>Nog niet</dt><dd>${catalog.capabilities.length - sellable}</dd></div></dl></section>
     <nav class="wbd-owner-filters" aria-label="Capabilityfilters">${filters.map(({ id, label }) => `<button type="button" data-filter="${id}" aria-pressed="${filter === id}">${escapeHtml(label)}</button>`).join("")}</nav>
     <section class="wbd-capability-list" aria-live="polite" aria-label="${visible.length} capabilities">${visible.length ? visible.map(capabilityCard).join("") : '<p class="wbd-owner-empty">Geen capabilities binnen dit filter.</p>'}</section>
     <footer class="wbd-owner-footer"><span>Centrale bron · revisie ${catalog.revision}</span><span>Release ${escapeHtml(catalog.releaseId)}</span><span>Oude browserdossiers zijn niet gemigreerd.</span></footer>
+  </main>`;
+}
+
+function workContextView(session: SessionView): string {
+  return `<main class="wbd-owner-workspace">
+    ${ownerTopbar(session, "workcontext")}
+    <section class="wbd-workcontext" aria-labelledby="workcontext-title">
+      <p class="wbd-owner-eyebrow">Tijdelijke continuïteitsbrug</p>
+      <h1 id="workcontext-title">Bestaande werkcontext</h1>
+      <p class="wbd-workcontext__lead">De bestaande WBD-werkcontext blijft lokaal en browsergebonden. Deze brug maakt haar bereikbaar zonder te doen alsof die gegevens centraal of productierijp zijn.</p>
+      <div class="wbd-workcontext__boundary" role="note">
+        <strong>Niet centraal</strong>
+        <p>Er wordt niets uit IndexedDB gekopieerd, verwijderd of stil gemigreerd. De lokale werkcontext werkt alleen op deze desktop wanneer de bestaande lokale Workspace op poort 5173 draait.</p>
+      </div>
+      <div class="wbd-workcontext__desktop">
+        <a class="wbd-workcontext__launch" href="${localWorkContextUrl}" target="_blank" rel="noopener noreferrer" data-local-workcontext-link>Bestaande werkcontext openen</a>
+        <small>Opent de lokale route in een nieuw tabblad; Capabilities blijft hier beschikbaar.</small>
+      </div>
+      <div class="wbd-workcontext__mobile" role="status">
+        <strong>Niet beschikbaar op iPhone</strong>
+        <p>Deze lokale werkcontext staat op de desktop en is vanaf dit apparaat niet bereikbaar. Capabilities blijft wel centraal en mobiel beschikbaar.</p>
+      </div>
+      <a class="wbd-workcontext__back" href="${capabilitiesPath}">Terug naar Capabilities</a>
+    </section>
+    <footer class="wbd-owner-footer"><span>Continuïteitsbrug · geen eindarchitectuur</span><span>Release ${escapeHtml(session.releaseId)}</span><span>Lokale browserdata blijft ongewijzigd.</span></footer>
   </main>`;
 }
 
@@ -99,7 +135,9 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
 
   const renderWorkspace = (): void => {
     if (!session || !catalog) return;
-    app.innerHTML = workspaceView(session, catalog, activeFilter);
+    const workContextActive = window.location.pathname === workContextPath;
+    document.title = `${workContextActive ? "Bestaande werkcontext" : "Capabilities"} — WBD Workspace`;
+    app.innerHTML = workContextActive ? workContextView(session) : workspaceView(session, catalog, activeFilter);
     app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelector<HTMLButtonElement>("[data-logout]")?.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
