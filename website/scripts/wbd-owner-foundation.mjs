@@ -24,6 +24,12 @@ import {
   updateControlRecord,
   validateControlPlane,
 } from "./wbd-control-plane.mjs";
+import {
+  createInitialPromotionBoundary,
+  publicPromotionView,
+  reviewPromotion,
+  validatePromotionBoundary,
+} from "./wbd-promotion-boundary.mjs";
 
 const SESSION_COOKIE = "wbd_owner_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -75,6 +81,7 @@ export function createInitialWbdOwnerState({ passwordRecord, now = new Date() })
     loginAttempts: {},
     capabilities: structuredClone(WBD_CAPABILITY_SEED),
     controlPlane: createInitialControlPlane({ ownerId: "wbd-owner-donovan", now }),
+    promotionBoundary: createInitialPromotionBoundary(),
     audit: [],
     boundaries: {
       commercial: "FUTURE_SLICE",
@@ -108,6 +115,7 @@ export function validateWbdOwnerState(input) {
   state.loginAttempts = state.loginAttempts && typeof state.loginAttempts === "object" ? state.loginAttempts : {};
   state.capabilities = validateWbdCapabilityCatalog(state.capabilities);
   if (state.controlPlane !== undefined) state.controlPlane = validateControlPlane(state.controlPlane);
+  state.promotionBoundary = validatePromotionBoundary(state.promotionBoundary);
   state.audit = Array.isArray(state.audit) ? state.audit.map((event) => ({
     id: requiredString(event.id, "Audit-ID", 80),
     actorId: requiredString(event.actorId, "Auditactor", 80),
@@ -313,6 +321,26 @@ export class WbdOwnerService {
     return projectControlOverview(state.controlPlane, { revision: state.revision, releaseId: this.releaseId, now });
   }
 
+  async promotions(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    return publicPromotionView(state, { releaseId: this.releaseId });
+  }
+
+  async reviewPromotion(token, csrfToken, proposalId, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 1) throw error("Expected revision ontbreekt.", 400, "VALIDATION_ERROR");
+    const result = await this.store.mutate(async (state) => {
+      if (state.revision !== payload.expectedRevision) throw error("De centrale WBD-waarheid is inmiddels gewijzigd.", 409, "REVISION_CONFLICT");
+      const reviewed = reviewPromotion(state, proposalId, payload, owner.id, now);
+      appendAudit(reviewed.state, owner.id, `Promotion ${reviewed.value.review.decision.toLowerCase()}`, proposalId, now);
+      return reviewed;
+    });
+    return { revision: result.state.revision, ...result.value };
+  }
+
   async createControlRecord(token, csrfToken, recordType, payload, now = new Date()) {
     const { owner } = await this.authenticate(token, now);
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
@@ -459,6 +487,12 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
       }
       if (route === "/api/wbd/v1/control" && method === "GET") return json(response, 200, await service.controlPlane(token)) ?? true;
       if (route === "/api/wbd/v1/control/overview" && method === "GET") return json(response, 200, await service.controlOverview(token)) ?? true;
+      if (route === "/api/wbd/v1/promotions" && method === "GET") return json(response, 200, await service.promotions(token)) ?? true;
+      const promotionMatch = route.match(/^\/api\/wbd\/v1\/promotions\/([^/]+)\/review$/u);
+      if (promotionMatch && method === "POST") {
+        json(response, 200, await service.reviewPromotion(token, csrfToken, decodeURIComponent(promotionMatch[1]), await readJson(request)));
+        return true;
+      }
       const controlMatch = route.match(/^\/api\/wbd\/v1\/control\/(organizations|opportunities|commitments|actions|effort-observations)(?:\/([^/]+))?$/u);
       if (controlMatch && method === "POST" && !controlMatch[2]) {
         json(response, 200, await service.createControlRecord(token, csrfToken, controlMatch[1], await readJson(request)));

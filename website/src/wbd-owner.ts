@@ -1,4 +1,4 @@
-import { bindControlHome, renderControlHome, type ControlOverview, type ControlRecordType, type ControlView } from "./wbd-control-home.ts";
+import { bindControlHome, renderControlHome, type ControlOverview, type ControlRecordType, type ControlView, type PromotionView } from "./wbd-control-home.ts";
 
 type CapabilityStatus = "PROVEN_REUSABLE" | "PROVEN_PRODUCT_SPECIFIC" | "PARTIAL" | "DESIGN_ONLY" | "EXTERNAL_SOLUTION_PREFERRED" | "LEGACY" | "UNKNOWN";
 type StrategicJudgement = "INVEST" | "INTEGRATE" | "MAINTAIN" | "WATCH" | "RETIRE";
@@ -140,13 +140,15 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
   let catalog: CatalogView | undefined;
   let control: ControlView | undefined;
   let overview: ControlOverview | undefined;
+  let promotions: PromotionView | undefined;
   let activeFilter: FilterId = "all";
 
   const loadOwnerTruth = async (): Promise<void> => {
-    [catalog, control, overview] = await Promise.all([
+    [catalog, control, overview, promotions] = await Promise.all([
       api<CatalogView>("/api/wbd/v1/capabilities"),
       api<ControlView>("/api/wbd/v1/control"),
       api<ControlOverview>("/api/wbd/v1/control/overview"),
+      api<PromotionView>("/api/wbd/v1/promotions"),
     ]);
   };
 
@@ -169,12 +171,12 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
   };
 
   const renderWorkspace = (): void => {
-    if (!session || !catalog || !control || !overview) return;
+    if (!session || !catalog || !control || !overview || !promotions) return;
     const workContextActive = window.location.pathname === workContextPath;
     const homeActive = window.location.pathname === homePath;
     document.title = `${homeActive ? "Home" : workContextActive ? "Bestaande werkcontext" : "Capabilities"} — WBD Workspace`;
-    app.innerHTML = homeActive ? renderControlHome(ownerTopbar(session, "home"), control, overview) : workContextActive ? workContextView(session, isCurrentDeviceMobile()) : workspaceView(session, catalog, activeFilter);
-    if (homeActive) bindControlHome(app, control, {
+    app.innerHTML = homeActive ? renderControlHome(ownerTopbar(session, "home"), control, overview, promotions) : workContextActive ? workContextView(session, isCurrentDeviceMobile()) : workspaceView(session, catalog, activeFilter);
+    if (homeActive) bindControlHome(app, control, promotions, {
       create: async (recordType: ControlRecordType, payload: Record<string, unknown>) => {
         await api(`/api/wbd/v1/control/${recordType}`, { method: "POST", headers: { "Content-Type": "application/json", Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken }, body: JSON.stringify({ ...payload, expectedRevision: control!.revision }) });
         await loadOwnerTruth();
@@ -185,11 +187,16 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
         await loadOwnerTruth();
         renderWorkspace();
       },
+      review: async (proposalId: string, decision: "ACCEPT" | "ADJUST" | "REJECT", adjustments?: Record<string, unknown>) => {
+        await api(`/api/wbd/v1/promotions/${encodeURIComponent(proposalId)}/review`, { method: "POST", headers: { "Content-Type": "application/json", Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken }, body: JSON.stringify({ decision, adjustments, expectedRevision: control!.revision }) });
+        await loadOwnerTruth();
+        renderWorkspace();
+      },
     });
     app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelector<HTMLButtonElement>("[data-logout]")?.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
-      session = undefined; catalog = undefined; control = undefined; overview = undefined; app.innerHTML = loginView(); bindLogin();
+      session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; app.innerHTML = loginView(); bindLogin();
     });
   };
 
