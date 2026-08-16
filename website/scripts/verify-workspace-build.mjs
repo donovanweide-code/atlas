@@ -84,6 +84,9 @@ for (const required of [
   "Tijdelijke continuïteitsbrug",
   "http://127.0.0.1:5173/workspace/wbd/overzicht",
   "Niet beschikbaar op iPhone",
+  "Organisaties zoeken en filteren",
+  "/workspace/wbd/kansen",
+  "Nog niet centraal beschikbaar",
 ]) {
   if (!workspaceEntry.includes(required)) fail(`vereiste WBD-owner marker ontbreekt: ${required}`);
 }

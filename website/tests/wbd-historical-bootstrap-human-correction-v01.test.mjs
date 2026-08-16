@@ -203,7 +203,7 @@ test("verplichte menselijke betekenis krijgt een actieve Aanvullen en bevestigen
   assert.match(source, /focusTarget instanceof HTMLElement\) focusTarget\.focus\(\)/u);
 });
 
-test("één Organization-bevestiging maakt organizations-coverage niet compleet en Home toont Organizations", async (context) => {
+test("één Organization-bevestiging maakt organizations-coverage niet compleet en Home verwijst compact naar Organizations", async (context) => {
   const { service, login } = await fixture(context);
   await review(service, login, "bij-cees-historical-organization-v1", "ACCEPT");
   const control = await service.controlPlane(login.token, now);
@@ -211,7 +211,9 @@ test("één Organization-bevestiging maakt organizations-coverage niet compleet 
   assert.equal(source.coverage, "PARTIAL");
   const ui = await readFile(new URL("../src/wbd-control-home.ts", import.meta.url), "utf8");
   assert.match(ui, /<h2 id="organizations-title">Organisaties<\/h2>/u);
-  assert.match(ui, /organizationCards\(control\)/u);
+  assert.match(ui, /Home is regie/u);
+  assert.match(ui, /href="\/workspace\/wbd\/organisaties"/u);
+  assert.doesNotMatch(ui, /function organizationCards/u);
   assert.doesNotMatch(ui, /name="(?:sourceCoverage|sourceHealthId|permitsNoAttentionClaim|sourceImpact)"|function sourceFields/u);
   assert.match(ui, /Waarom weten we dit\?/u);
 });
