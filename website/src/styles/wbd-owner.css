@@ -100,10 +100,8 @@ button { cursor:pointer; }
   .wbd-capability>header { flex-direction:column; }
   .wbd-capability__guidance { min-height:0; }
 }
-@media (max-width:700px), (hover:none) and (pointer:coarse) {
-  .wbd-workcontext__desktop { display:none; }
-  .wbd-workcontext__mobile { display:block; }
-}
+.wbd-workcontext[data-mobile-device="true"] .wbd-workcontext__desktop { display:none; }
+.wbd-workcontext[data-mobile-device="true"] .wbd-workcontext__mobile { display:block; }
 @media (max-width:420px) {
   .wbd-owner-intro dl,.wbd-capability>dl { grid-template-columns:1fr; }
   .wbd-owner-intro dl div:nth-child(even),.wbd-capability>dl div:nth-child(even) { padding-left:0; border-left:0; }

@@ -30,6 +30,28 @@ const workContextPath = "/workspace/wbd/werkcontext";
 const localWorkContextUrl = "http://127.0.0.1:5173/workspace/wbd/overzicht";
 const escapeHtml = (value: unknown): string => String(value ?? "").replace(/[&<>'"]/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!);
 
+interface WorkContextDeviceInput {
+  userAgent: string;
+  userAgentData?: { mobile?: boolean };
+}
+
+export function isMobileWorkContextDevice({ userAgent, userAgentData }: WorkContextDeviceInput): boolean {
+  if (typeof userAgentData?.mobile === "boolean") return userAgentData.mobile;
+  const iphoneSafari = /\biPhone\b/iu.test(userAgent)
+    && /\bMobile(?:\/|\b)/iu.test(userAgent)
+    && /\bSafari\//iu.test(userAgent)
+    && !/\b(?:CriOS|FxiOS|EdgiOS|OPiOS)\//iu.test(userAgent);
+  return iphoneSafari;
+}
+
+function isCurrentDeviceMobile(): boolean {
+  const browserNavigator = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  return isMobileWorkContextDevice({
+    userAgent: browserNavigator.userAgent,
+    userAgentData: browserNavigator.userAgentData,
+  });
+}
+
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(path, { ...options, credentials: "same-origin", headers: { Accept: "application/json", ...options.headers } });
   const body = await response.json().catch(() => ({})) as { message?: string };
@@ -85,10 +107,10 @@ function workspaceView(session: SessionView, catalog: CatalogView, filter: Filte
   </main>`;
 }
 
-function workContextView(session: SessionView): string {
+function workContextView(session: SessionView, mobileDevice: boolean): string {
   return `<main class="wbd-owner-workspace">
     ${ownerTopbar(session, "workcontext")}
-    <section class="wbd-workcontext" aria-labelledby="workcontext-title">
+    <section class="wbd-workcontext" data-mobile-device="${mobileDevice}" aria-labelledby="workcontext-title">
       <p class="wbd-owner-eyebrow">Tijdelijke continuïteitsbrug</p>
       <h1 id="workcontext-title">Bestaande werkcontext</h1>
       <p class="wbd-workcontext__lead">De bestaande WBD-werkcontext blijft lokaal en browsergebonden. Deze brug maakt haar bereikbaar zonder te doen alsof die gegevens centraal of productierijp zijn.</p>
@@ -137,7 +159,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     if (!session || !catalog) return;
     const workContextActive = window.location.pathname === workContextPath;
     document.title = `${workContextActive ? "Bestaande werkcontext" : "Capabilities"} — WBD Workspace`;
-    app.innerHTML = workContextActive ? workContextView(session) : workspaceView(session, catalog, activeFilter);
+    app.innerHTML = workContextActive ? workContextView(session, isCurrentDeviceMobile()) : workspaceView(session, catalog, activeFilter);
     app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelector<HTMLButtonElement>("[data-logout]")?.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
