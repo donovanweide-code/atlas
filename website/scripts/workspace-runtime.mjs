@@ -34,9 +34,10 @@ const workspaceBoundary = "/workspace/wbd";
 const sportpaleisBoundary = "/workspace/sportpaleis";
 export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
-const workspaceHome = `${workspaceBoundary}/capabilities`;
+const workspaceHome = `${workspaceBoundary}/home`;
+const workspaceCapabilities = `${workspaceBoundary}/capabilities`;
 const workspaceWorkContext = `${workspaceBoundary}/werkcontext`;
-const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceWorkContext]);
+const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceCapabilities, workspaceWorkContext]);
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
 const workspaceAliases = new Map([
   [workspaceBoundary, workspaceHome],
@@ -56,6 +57,7 @@ const workspaceRootAssets = new Set([
 
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
+  workspaceCapabilities,
   `${workspaceBoundary}/overzicht`,
   `${workspaceBoundary}/organisaties`,
   `${workspaceBoundary}/projecten`,

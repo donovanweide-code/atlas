@@ -13,6 +13,17 @@ import {
   validateWbdCapability,
   validateWbdCapabilityCatalog,
 } from "./wbd-capability-catalog.mjs";
+import {
+  appendControlAudit,
+  controlRecordSourceRefs,
+  createControlRecord,
+  createInitialControlPlane,
+  ensureControlPlane,
+  projectControlOverview,
+  publicControlPlane,
+  updateControlRecord,
+  validateControlPlane,
+} from "./wbd-control-plane.mjs";
 
 const SESSION_COOKIE = "wbd_owner_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -63,6 +74,7 @@ export function createInitialWbdOwnerState({ passwordRecord, now = new Date() })
     sessions: [],
     loginAttempts: {},
     capabilities: structuredClone(WBD_CAPABILITY_SEED),
+    controlPlane: createInitialControlPlane({ ownerId: "wbd-owner-donovan", now }),
     audit: [],
     boundaries: {
       commercial: "FUTURE_SLICE",
@@ -95,6 +107,7 @@ export function validateWbdOwnerState(input) {
   })) : [];
   state.loginAttempts = state.loginAttempts && typeof state.loginAttempts === "object" ? state.loginAttempts : {};
   state.capabilities = validateWbdCapabilityCatalog(state.capabilities);
+  if (state.controlPlane !== undefined) state.controlPlane = validateControlPlane(state.controlPlane);
   state.audit = Array.isArray(state.audit) ? state.audit.map((event) => ({
     id: requiredString(event.id, "Audit-ID", 80),
     actorId: requiredString(event.actorId, "Auditactor", 80),
@@ -170,6 +183,14 @@ export class WbdOwnerService {
 
   async initialize() {
     await this.store.initialize();
+    const current = await this.store.read();
+    if (current.controlPlane === undefined) {
+      await this.store.mutate(async (state) => {
+        ensureControlPlane(state);
+        appendAudit(state, state.owner.id, "Control Plane geinitialiseerd", state.organizationId);
+        return { state, value: undefined };
+      });
+    }
   }
 
   async login({ email, password, deviceMode = "SHARED", remoteAddress = "unknown", now = new Date() }) {
@@ -278,13 +299,81 @@ export class WbdOwnerService {
     return { revision: result.state.revision, capability: result.value };
   }
 
+  async controlPlane(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
+    return publicControlPlane(state.controlPlane, { revision: state.revision, releaseId: this.releaseId, now });
+  }
+
+  async controlOverview(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
+    return projectControlOverview(state.controlPlane, { revision: state.revision, releaseId: this.releaseId, now });
+  }
+
+  async createControlRecord(token, csrfToken, recordType, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 1) throw error("Expected revision ontbreekt.", 400, "VALIDATION_ERROR");
+    const { expectedRevision, ...recordPayload } = payload;
+    const result = await this.store.mutate(async (state) => {
+      if (state.revision !== expectedRevision) throw error("De centrale WBD-waarheid is inmiddels gewijzigd.", 409, "REVISION_CONFLICT");
+      const plane = ensureControlPlane(state, now);
+      const created = createControlRecord(plane, recordType, recordPayload, owner.id, now);
+      state.controlPlane = created.plane;
+      appendControlAudit(state.controlPlane, {
+        recordType,
+        recordId: created.value.id,
+        changedFields: created.changedFields,
+        sourceRefs: controlRecordSourceRefs(created.value),
+        actor: owner.id,
+        lifecycleAction: created.lifecycleAction,
+        now,
+      });
+      appendAudit(state, owner.id, `Control Plane ${created.lifecycleAction.toLowerCase()}`, `${recordType}:${created.value.id}`, now);
+      return { state, value: created.value };
+    });
+    return { revision: result.state.revision, record: result.value };
+  }
+
+  async updateControlRecord(token, csrfToken, recordType, recordId, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 1) throw error("Expected revision ontbreekt.", 400, "VALIDATION_ERROR");
+    const { expectedRevision, ...recordPayload } = payload;
+    const result = await this.store.mutate(async (state) => {
+      if (state.revision !== expectedRevision) throw error("De centrale WBD-waarheid is inmiddels gewijzigd.", 409, "REVISION_CONFLICT");
+      const plane = ensureControlPlane(state, now);
+      const updated = updateControlRecord(plane, recordType, recordId, recordPayload, owner.id, now);
+      state.controlPlane = updated.plane;
+      appendControlAudit(state.controlPlane, {
+        recordType,
+        recordId: updated.value.id,
+        changedFields: updated.changedFields,
+        sourceRefs: controlRecordSourceRefs(updated.value),
+        actor: owner.id,
+        lifecycleAction: updated.lifecycleAction,
+        now,
+      });
+      appendAudit(state, owner.id, `Control Plane ${updated.lifecycleAction.toLowerCase()}`, `${recordType}:${updated.value.id}`, now);
+      return { state, value: updated.value };
+    });
+    return { revision: result.state.revision, record: result.value };
+  }
+
   async health() {
     const state = await this.store.read();
+    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
     return { status: "ok", releaseId: this.releaseId, persistence: (await this.store.storageStatus()).engine, datastoreRevision: state.revision };
   }
 
   async ready() {
-    await this.store.read();
+    const state = await this.store.read();
+    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
     return { status: "ready", releaseId: this.releaseId };
   }
 
@@ -366,6 +455,17 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
       const capabilityMatch = route.match(/^\/api\/wbd\/v1\/capabilities\/([^/]+)$/u);
       if (capabilityMatch && method === "PATCH") {
         json(response, 200, await service.updateCapability(token, csrfToken, decodeURIComponent(capabilityMatch[1]), await readJson(request)));
+        return true;
+      }
+      if (route === "/api/wbd/v1/control" && method === "GET") return json(response, 200, await service.controlPlane(token)) ?? true;
+      if (route === "/api/wbd/v1/control/overview" && method === "GET") return json(response, 200, await service.controlOverview(token)) ?? true;
+      const controlMatch = route.match(/^\/api\/wbd\/v1\/control\/(organizations|opportunities|commitments|actions|effort-observations)(?:\/([^/]+))?$/u);
+      if (controlMatch && method === "POST" && !controlMatch[2]) {
+        json(response, 200, await service.createControlRecord(token, csrfToken, controlMatch[1], await readJson(request)));
+        return true;
+      }
+      if (controlMatch && method === "PATCH" && controlMatch[2]) {
+        json(response, 200, await service.updateControlRecord(token, csrfToken, controlMatch[1], decodeURIComponent(controlMatch[2]), await readJson(request)));
         return true;
       }
       throw error("Route niet gevonden.", 404, "NOT_FOUND");

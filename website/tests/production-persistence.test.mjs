@@ -25,6 +25,7 @@ import {
   WorkspaceRuntimeConfigError,
 } from "../scripts/workspace-runtime-config.mjs";
 import { createWorkspaceRuntimeServer, sportpaleisRuntimeErrorLogFields, SPORTPALEIS_RUNTIME_ARTIFACT_ROOT } from "../scripts/workspace-runtime.mjs";
+import { createInitialWbdOwnerState } from "../scripts/wbd-owner-foundation.mjs";
 import { collectRuntimeDependencyGraph } from "../scripts/release-runtime-graph.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/001-runtime-state.sql", import.meta.url);
@@ -142,9 +143,12 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     async mutate() { throw new Error("not used"); },
     async close() {},
   };
+  const wbdOwnerState = createInitialWbdOwnerState({
+    passwordRecord: await createSportpaleisPasswordRecord("Test-WBD-Owner-Production!"),
+  });
   const wbdOwnerStore = {
     async initialize() { calls.push("wbd-owner"); },
-    async read() { throw new Error("not used"); },
+    async read() { return structuredClone(wbdOwnerState); },
     async mutate() { throw new Error("not used"); },
     async close() {},
   };

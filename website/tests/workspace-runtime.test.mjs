@@ -91,7 +91,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
 
   const alias = await fetch(`${origin}/workspace/wbd?bron=test`, { redirect: "manual" });
   assert.equal(alias.status, 308);
-  assert.equal(alias.headers.get("location"), "/workspace/wbd/capabilities?bron=test");
+  assert.equal(alias.headers.get("location"), "/workspace/wbd/home?bron=test");
 
   const capabilities = await fetch(`${origin}/workspace/wbd/capabilities`);
   assert.equal(capabilities.status, 200);
