@@ -1607,7 +1607,7 @@ export class SportpaleisPilotService {
           id,
           revision: 1,
           customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : orderKind === "CUSTOM" ? String(payload.customer ?? "").trim().slice(0, 120) || "Vrije productieopdracht" : requiredText(payload.customer, "Klant", 120),
-          customerEmail: ["TEAM", "CUSTOM"].includes(orderKind) && !String(payload.customerEmail ?? "").trim() ? "" : validEmail(legacy006Payload ? "legacy-order@sportpaleis.invalid" : payload.customerEmail),
+          customerEmail: optionalEmail(payload.customerEmail),
           customerPhone: ["TEAM", "CUSTOM"].includes(orderKind) ? String(payload.customerPhone ?? "").trim().slice(0, 40) : requiredText(legacy006Payload ? "Niet vastgelegd (006)" : payload.customerPhone, "Telefoonnummer", 40),
           association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
           associations,
@@ -1742,7 +1742,7 @@ export class SportpaleisPilotService {
       if (contentChanged && order.stage !== "ORDER") throw Object.assign(new Error("Artikel- en bedrukinhoud is vanaf controle vergrendeld."), { statusCode: 409, code: "ORDER_CONTENT_LOCKED" });
       if (contentChanged && (payload.standardPersonalization === undefined || payload.items === undefined)) throw Object.assign(new Error("Stuur standaardbedrukking en artikelen samen voor een veilige correctie."), { statusCode: 400, code: "ORDER_CONTENT_INCOMPLETE" });
       if (payload.customer !== undefined) order.customer = requiredText(payload.customer, "Klant", 120);
-      if (payload.customerEmail !== undefined) order.customerEmail = validEmail(payload.customerEmail);
+      if (payload.customerEmail !== undefined) order.customerEmail = optionalEmail(payload.customerEmail);
       if (payload.customerPhone !== undefined) order.customerPhone = requiredText(payload.customerPhone, "Telefoonnummer", 40);
       if (payload.deliveryMode !== undefined) {
         if (order.sourceContext?.transactionalAuthority === "ACA_XPRT") throw Object.assign(new Error("Wijzig de bezorgwijze van deze webshoporder in ACA XPRT."), { statusCode: 409, code: "XPRT_TRANSACTIONAL_AUTHORITY" });
@@ -2133,7 +2133,7 @@ export class SportpaleisPilotService {
         foundation.executions.unshift(execution);
         const channel = event === "ORDER_READY" ? "ready" : "receipt";
         order.communication ??= { receipt: { status: "NOT_SENT" }, production: { status: "NOT_SENT" }, ready: { status: "NOT_SENT" } };
-        if (recipientStatus) {
+        if (config.enabled && recipientStatus) {
           order.communication[channel] = { status: "NOT_SENT", updatedAt: execution.createdAt, attentionCode: recipientStatus, notificationExecutionId: execution.id };
           order.revision += 1;
           order.updatedAt = execution.createdAt;
@@ -2883,6 +2883,11 @@ function validEmail(value) {
   const email = requiredText(value, "E-mailadres", 180).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(email)) throw Object.assign(new Error("Vul een geldig e-mailadres in."), { statusCode: 400, code: "INVALID_EMAIL" });
   return email;
+}
+
+function optionalEmail(value) {
+  const candidate = String(value ?? "").trim();
+  return candidate ? validEmail(candidate) : "";
 }
 
 function validDeliveryAddress(value, mode) {
