@@ -41,7 +41,7 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
     assert.deepEqual({ admin: light.capabilities.admin, operator: light.capabilities.operator, store: light.capabilities.store }, { admin: false, operator: false, store: true });
     assert.deepEqual({ admin: production.capabilities.admin, operator: production.capabilities.operator, store: production.capabilities.store }, { admin: false, operator: true, store: false });
     assert.equal(admin.capabilities.admin, true);
-    assert.equal(light.foilRolls.length, 0); assert.equal(production.foilRolls.length, 0); assert.equal(admin.foilRolls.length, 2);
+    assert.equal(light.foilRolls.length, 0); assert.equal(production.foilRolls.length, 0); assert.equal(admin.foilRolls.length, 6);
     assert.equal(light.commercialAdministration, undefined); assert.equal(production.commercialAdministration, undefined);
     assert.equal(admin.commercialAdministration.seats.customerSeats, 3);
     assert.equal(admin.commercialAdministration.seats.activeCustomerSeats, 3);

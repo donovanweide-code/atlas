@@ -301,8 +301,9 @@ export interface AssociationConfiguration {
 }
 
 export interface FoilRoll {
-  id: string; color: string; supplierType: string; purchasePriceEur: number | null;
-  originalLengthM: number | null; widthMm: number; usedLengthMm: number;
+  id: string; color: string; supplierType: string | null; purchasePriceEur: number | null;
+  originalLengthM: number | null; widthMm: number | null; usedLengthMm: number | null;
+  active?: boolean; revision?: number; createdAt?: string;
 }
 
 export interface CommercialAdministration {

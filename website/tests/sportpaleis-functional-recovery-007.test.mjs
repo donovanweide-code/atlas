@@ -83,7 +83,7 @@ test("Functional Recovery 007 — snelle flow, personalisatie en rollen", async 
 
   await context.test("financiële data en beheerwijzigingen blijven admin-only", async () => {
     assert.deepEqual((await service.bootstrap(patrick.token)).foilRolls, []);
-    assert.equal((await service.bootstrap(kevin.token)).foilRolls.length, 2);
+    assert.equal((await service.bootstrap(kevin.token)).foilRolls.length, 6);
     await assert.rejects(service.updateFoilRoll(patrick.token, patrick.csrfToken, "foil-white", { purchasePriceEur: 50 }), (error) => error.code === "FORBIDDEN");
   });
 

@@ -15,10 +15,6 @@ async function fixture(context) {
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
   const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-P0-PRODUCTION-COLOR-20260817" });
   await service.initialize();
-  await store.mutate(async (state) => {
-    state.foilRolls.push({ id: "foil-blue", color: "Blauw", supplierType: "Bestaande beheerde testfolie", purchasePriceEur: null, originalLengthM: null, widthMm: 500, usedLengthMm: 0 });
-    return { state, value: null };
-  });
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
 

@@ -444,7 +444,11 @@ export class SportpaleisPilotApi {
     await responseBody(await this.#mutatingFetch(`${API}/admin/settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateFoilRoll(rollId: string, input: { supplierType?: string; purchasePriceEur?: number | null; originalLengthM?: number | null }): Promise<void> {
+  async createFoilRoll(input: { color: string; supplierType?: string | null; purchasePriceEur?: number | null; originalLengthM?: number | null; widthMm?: number | null }): Promise<void> {
+    await responseBody(await this.#mutatingFetch(`${API}/admin/foil-rolls`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async updateFoilRoll(rollId: string, input: { supplierType?: string | null; purchasePriceEur?: number | null; originalLengthM?: number | null; widthMm?: number | null; active?: boolean }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/foil-rolls/${encodeURIComponent(rollId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

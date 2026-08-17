@@ -38,7 +38,7 @@ const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 12;
-const PILOT_RELEASE_ID = "SPW-P0-PRODUCTION-COLOR-20260817";
+const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
@@ -212,6 +212,10 @@ const PILOT_SETTINGS = {
 const FOIL_ROLLS = [
   { id: "foil-white", color: "Wit", supplierType: "Nog in te vullen", purchasePriceEur: null, originalLengthM: null, widthMm: 500, usedLengthMm: 327.4 },
   { id: "foil-red", color: "Rood", supplierType: "Nog in te vullen", purchasePriceEur: null, originalLengthM: null, widthMm: 500, usedLengthMm: 0 },
+  { id: "foil-blue", color: "Blauw", supplierType: null, purchasePriceEur: null, originalLengthM: null, widthMm: null, usedLengthMm: null },
+  { id: "foil-black", color: "Zwart", supplierType: null, purchasePriceEur: null, originalLengthM: null, widthMm: null, usedLengthMm: null },
+  { id: "foil-green", color: "Groen", supplierType: null, purchasePriceEur: null, originalLengthM: null, widthMm: null, usedLengthMm: null },
+  { id: "foil-yellow", color: "Geel", supplierType: null, purchasePriceEur: null, originalLengthM: null, widthMm: null, usedLengthMm: null },
 ];
 
 function iso(now = new Date()) {
@@ -764,7 +768,12 @@ export function validateSportpaleisPilotState(input) {
   state.settings ??= structuredClone(PILOT_SETTINGS);
   state.settings.deliveryFeeEur ??= PILOT_SETTINGS.deliveryFeeEur;
   state.settings.productionDefaults = { ...structuredClone(PILOT_SETTINGS.productionDefaults), ...(state.settings.productionDefaults ?? {}) };
-  state.foilRolls ??= structuredClone(FOIL_ROLLS);
+  state.foilRolls ??= [];
+  for (const canonicalRoll of FOIL_ROLLS) {
+    const exists = state.foilRolls.some(({ id, color }) => id === canonicalRoll.id || String(color).trim().toLocaleLowerCase("nl-NL") === canonicalRoll.color.toLocaleLowerCase("nl-NL"));
+    if (!exists) state.foilRolls.push(structuredClone(canonicalRoll));
+  }
+  if (new Set(state.foilRolls.map(({ id }) => id)).size !== state.foilRolls.length || new Set(state.foilRolls.map(({ color }) => String(color).trim().toLocaleLowerCase("nl-NL"))).size !== state.foilRolls.length) throw new Error("Dubbele folierol of foliekleur.");
   state.preferences ??= {};
   for (const user of state.users) {
     state.preferences[user.id] = { ...defaultPreference(), ...(state.preferences[user.id] ?? {}) };
@@ -2607,15 +2616,69 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const roll = state.foilRolls.find(({ id }) => id === rollId);
       if (!roll) throw Object.assign(new Error("Folierol niet gevonden."), { statusCode: 404, code: "FOIL_ROLL_NOT_FOUND" });
-      if (payload.supplierType !== undefined) roll.supplierType = requiredText(payload.supplierType, "Leverancier/type", 120);
+      if (payload.supplierType !== undefined) roll.supplierType = String(payload.supplierType ?? "").trim().slice(0, 120) || null;
       for (const [key, label] of [["purchasePriceEur", "Inkoopprijs"], ["originalLengthM", "Rollengte"]]) {
-        if (payload[key] !== undefined && payload[key] !== null && payload[key] !== "") {
+        if (payload[key] === null || payload[key] === "") roll[key] = null;
+        else if (payload[key] !== undefined) {
           const numeric = Number(payload[key]);
           if (!Number.isFinite(numeric) || numeric <= 0) throw Object.assign(new Error(`Ongeldige ${label.toLowerCase()}.`), { statusCode: 400, code: "VALIDATION_ERROR" });
           roll[key] = numeric;
         }
       }
+      if (payload.widthMm === null || payload.widthMm === "") roll.widthMm = null;
+      else if (payload.widthMm !== undefined) {
+        const widthMm = Number(payload.widthMm);
+        if (!Number.isFinite(widthMm) || widthMm <= 0 || widthMm > 2000) throw Object.assign(new Error("Ongeldige gemeten rolbreedte."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        roll.widthMm = widthMm;
+      }
+      if (payload.active !== undefined) {
+        if (typeof payload.active !== "boolean") throw Object.assign(new Error("Ongeldige rolstatus."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        if (!payload.active && ["foil-white", "foil-red"].includes(roll.id)) throw Object.assign(new Error("Wit en Rood zijn bestaande beschermde productierollen."), { statusCode: 409, code: "FOIL_ROLL_PROTECTED" });
+        if (!payload.active) {
+          const normalized = String(roll.color).trim().toLocaleLowerCase("nl-NL");
+          const usedByArticle = state.articles.some(({ foilColorOverride }) => String(foilColorOverride ?? "").trim().toLocaleLowerCase("nl-NL") === normalized);
+          const usedByAssociation = state.associations.some((association) => associationDefaultFoilColor(association).toLocaleLowerCase("nl-NL") === normalized);
+          const usedByProfile = state.productionProfiles.some(({ foilColor }) => String(foilColor ?? "").trim().toLocaleLowerCase("nl-NL") === normalized);
+          const usedByDefault = String(state.settings.productionDefaults.defaultFoilColor ?? "").trim().toLocaleLowerCase("nl-NL") === normalized;
+          if (usedByArticle || usedByAssociation || usedByProfile || usedByDefault) throw Object.assign(new Error("Deze foliekleur is nog in productieconfiguratie in gebruik."), { statusCode: 409, code: "FOIL_ROLL_IN_USE" });
+        }
+        roll.active = payload.active;
+      }
+      roll.revision = Number(roll.revision ?? 1) + 1;
       audit(state, user.id, "Folierol gewijzigd", roll.id);
+      return { state, value: structuredClone(roll) };
+    });
+    return result.value;
+  }
+
+  async createFoilRoll(token, csrfToken, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    const result = await this.store.mutate(async (state) => {
+      const color = requiredText(payload.color, "Kleur/naam", 40);
+      const normalized = color.toLocaleLowerCase("nl-NL");
+      if (state.foilRolls.some(({ color: existing }) => String(existing).trim().toLocaleLowerCase("nl-NL") === normalized)) throw Object.assign(new Error("Deze foliekleur bestaat al."), { statusCode: 409, code: "FOIL_ROLL_EXISTS" });
+      const optionalPositive = (key, label, maximum = Number.MAX_SAFE_INTEGER) => {
+        if (payload[key] === undefined || payload[key] === null || payload[key] === "") return null;
+        const value = Number(payload[key]);
+        if (!Number.isFinite(value) || value <= 0 || value > maximum) throw Object.assign(new Error(`Ongeldige ${label.toLowerCase()}.`), { statusCode: 400, code: "VALIDATION_ERROR" });
+        return value;
+      };
+      const roll = {
+        id: `foil-${normalized.normalize("NFKD").replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "roll"}-${randomBytes(4).toString("hex")}`,
+        color,
+        supplierType: String(payload.supplierType ?? "").trim().slice(0, 120) || null,
+        purchasePriceEur: optionalPositive("purchasePriceEur", "Inkoopprijs"),
+        originalLengthM: optionalPositive("originalLengthM", "Oorspronkelijke lengte"),
+        widthMm: optionalPositive("widthMm", "Gemeten rolbreedte", 2000),
+        usedLengthMm: null,
+        active: true,
+        revision: 1,
+        createdAt: iso(),
+      };
+      state.foilRolls.push(roll);
+      audit(state, user.id, "Folierol toegevoegd", roll.id);
       return { state, value: structuredClone(roll) };
     });
     return result.value;
@@ -3362,7 +3425,7 @@ function associationDefaultFoilColor(association) {
 
 function managedFoilColor(state, requested) {
   const normalized = String(requested ?? "").trim().toLocaleLowerCase("nl-NL");
-  return state.foilRolls?.find(({ color }) => String(color).trim().toLocaleLowerCase("nl-NL") === normalized)?.color ?? null;
+  return state.foilRolls?.find(({ color, active }) => active !== false && String(color).trim().toLocaleLowerCase("nl-NL") === normalized)?.color ?? null;
 }
 
 function effectiveCatalogFoilColor(article, association, profile) {
@@ -3798,6 +3861,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         return true;
       }
       const rollMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/foil-rolls\/([^/]+)$/);
+      if (route === "/api/sportpaleis/v1/admin/foil-rolls" && method === "POST") {
+        json(response, 201, await service.createFoilRoll(token, csrf, await readJson(request)));
+        return true;
+      }
       if (rollMatch && method === "PATCH") {
         json(response, 200, await service.updateFoilRoll(token, csrf, decodeURIComponent(rollMatch[1]), await readJson(request)));
         return true;
