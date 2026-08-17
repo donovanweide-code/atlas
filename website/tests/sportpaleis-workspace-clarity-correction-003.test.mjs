@@ -25,8 +25,9 @@ test("clarity correction 003 bewaart bewijs achter details en toont menselijke p
   assert.match(source, /Bestandshash[\s\S]*Snapshot-hash/u);
   assert.match(source, /const artifactDownload = [\s\S]*sp-button--primary/u);
   assert.match(source, /<h2>Productiebestand<\/h2>[\s\S]*\$\{artifactDownload\}[\s\S]*<summary>Opnieuw plotten<\/summary>/u);
-  assert.match(source, /<h2>Alles gecontroleerd\?<\/h2>/u);
-  assert.match(source, /Goedkeuren en productiejob maken/u);
+  assert.match(source, /<h2>\$\{ready \? "Klaar voor productie" : "Aandacht nodig"\}<\/h2>/u);
+  assert.match(source, /data-action="confirm-production-proposal"[^]*?>Produceren/u);
+  assert.doesNotMatch(source, /<h2>Alles gecontroleerd\?<\/h2>/u);
   assert.doesNotMatch(source, /Human GO/u);
   assert.match(source, /<summary>Gebruiker uitnodigen<\/summary>/u);
   assert.match(source, /<summary>Lettertype toevoegen<\/summary>/u);

@@ -114,7 +114,7 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   assert.match(css, /background:var\(--sp-red\)/);
   assert.match(css, /\.sp-menu-button\{grid-column:1;grid-row:1;color:#fff\}/);
   assert.match(source, /createProductionProposal/);
-  assert.match(source, /Rond dit af op de productie-pc/);
+  assert.match(source, /Voer deze fysieke productieactie uit op de productie-pc/);
   assert.doesNotMatch(source, /Maat gecontroleerd|Controleer eerst de maat/);
   assert.equal(manifest.start_url, "/overzicht");
   assert.equal(manifest.scope, "/");

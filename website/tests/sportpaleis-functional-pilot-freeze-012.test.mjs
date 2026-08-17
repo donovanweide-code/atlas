@@ -121,7 +121,7 @@ test("Functional pilot freeze UX is context-first, preview-safe and responsive",
   assert.match(source, /data-managed-font-ids/);
   assert.match(source, /\["PRODUCTION_SOURCE", "FONT"\]/);
   assert.match(source, /data-font-ready="false"/);
-  assert.match(source, /Goedkeuren en productiejob maken/);
+  assert.match(source, /data-action="confirm-production-proposal"[^]*?>Produceren/);
   assert.match(source, /<summary>Technische productie-instellingen<\/summary>/i);
   assert.match(source, /minimumGapMm/);
   assert.match(source, /Fontbibliotheek/);

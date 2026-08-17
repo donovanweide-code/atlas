@@ -1432,6 +1432,7 @@ export class SportpaleisPilotService {
         const orders = expectedSelections.map(({ id, expectedRevision }) => {
           const order = state.orders.find((candidate) => candidate.id === id);
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden geproduceerd."), { statusCode: 409, code: "ORDER_DELETED" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           if (!["CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
           if (order.productionLines?.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
@@ -1622,6 +1623,7 @@ export class SportpaleisPilotService {
       const outcome = idempotent(state, idempotencyKey, user.id, `ADVANCE_ORDER:${orderId}`, () => {
         const order = state.orders.find(({ id }) => id === orderId);
         if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gewijzigd."), { statusCode: 409, code: "ORDER_DELETED" });
         if (order.revision !== expectedRevision) {
           throw Object.assign(new Error("Order is intussen door iemand anders gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         }
@@ -1665,6 +1667,7 @@ export class SportpaleisPilotService {
         const orders = selections.map((selection) => {
           const order = state.orders.find(({ id }) => id === selection.id);
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          if (order.deletion?.status === "DELETED") throw Object.assign(new Error(`${order.id} is verwijderd.`), { statusCode: 409, code: "ORDER_DELETED" });
           if (order.revision !== Number(selection.expectedRevision)) throw Object.assign(new Error("Een geselecteerde order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           return order;
         });
@@ -1677,6 +1680,10 @@ export class SportpaleisPilotService {
           }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
             throw Object.assign(new Error(`${order.id} wacht volledig op de juiste foliekleur.`), { statusCode: 409, code: "COLOR_HOLD" });
+          }
+          if (order.stage === "PRINT") {
+            const progress = productionProgressForOrder(state, order);
+            if (progress && (!progress.trackedComplete || !progress.complete)) throw Object.assign(new Error(`${order.id} kan pas Klaar wanneer alle productieregels per foliekleur als bedrukt zijn bevestigd.`), { statusCode: 409, code: "PRODUCTION_LINES_PENDING" });
           }
           const previous = order.stage;
           order.stage = STAGE_ORDER[Math.min(STAGE_ORDER.length - 1, STAGE_ORDER.indexOf(order.stage) + 1)];
@@ -1693,6 +1700,51 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async completeProductionOrders(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const selections = Array.isArray(payload.orders) ? payload.orders : [];
+    if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, "COMPLETE_PRODUCTION_ORDERS", () => {
+        const uniqueIds = new Set(selections.map(({ id }) => String(id)));
+        if (uniqueIds.size !== selections.length) throw Object.assign(new Error("Dubbele orderselectie."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        const orders = selections.map((selection) => {
+          const order = state.orders.find(({ id }) => id === selection.id);
+          if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          if (order.deletion?.status === "DELETED") throw Object.assign(new Error(`${order.id} is verwijderd.`), { statusCode: 409, code: "ORDER_DELETED" });
+          if (order.revision !== Number(selection.expectedRevision)) throw Object.assign(new Error("Een geselecteerde order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+          return order;
+        });
+        const completed = [];
+        const skipped = [];
+        for (const order of orders) {
+          if (order.stage !== "PRINT") {
+            skipped.push({ id: order.id, code: "ORDER_NOT_IN_PRODUCTION", reason: "Order is niet In productie." });
+            continue;
+          }
+          const progress = productionProgressForOrder(state, order);
+          if (!progress?.trackedComplete || !progress.complete) {
+            skipped.push({ id: order.id, code: "PRODUCTION_LINES_PENDING", reason: "Nog niet alle vereiste productieregels per foliekleur zijn bedrukt." });
+            continue;
+          }
+          const previous = order.stage;
+          order.stage = "DONE";
+          order.revision += 1;
+          order.updatedAt = iso();
+          order.eventHistory ??= [];
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "READY", at: order.updatedAt, userId: user.id, userName: user.name, source: "bulk-production-ready" });
+          audit(state, user.id, "Volledig geproduceerde order in bulk Gereed gemeld", order.id, { from: previous, to: order.stage, revision: order.revision });
+          completed.push(order);
+        }
+        return { completed, skipped };
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
   async updateOrder(token, csrfToken, orderId, payload, expectedRevision) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
@@ -1700,6 +1752,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const order = state.orders.find(({ id }) => id === orderId);
       if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gewijzigd."), { statusCode: 409, code: "ORDER_DELETED" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
       if (user.role === "store" && order.stage !== "ORDER") throw Object.assign(new Error("Deze order is in productie en is voor winkelmedewerkers vergrendeld."), { statusCode: 409, code: "ORDER_LOCKED_FOR_STORE" });
       if (order.stage !== "ORDER" && user.role !== "store" && !String(payload.correctionReason ?? "").trim()) throw Object.assign(new Error("Een productiecorrectie vereist een reden."), { statusCode: 400, code: "CORRECTION_REASON_REQUIRED" });
@@ -1760,6 +1813,51 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async deleteOrder(token, csrfToken, orderId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const order = state.orders.find(({ id }) => id === orderId);
+      if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+      if (order.deletion?.status === "DELETED") return { state, value: order };
+      const consequentialHistory = state.productionJobs.some((job) => job.snapshot.orderIds.includes(order.id));
+      const at = iso();
+      order.deletion = { status: "DELETED", at, byUserId: user.id, byUserName: user.name, reason: optional(payload.reason, 300) || null, restorable: !consequentialHistory };
+      order.revision += 1;
+      order.updatedAt = at;
+      order.eventHistory ??= [];
+      order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_DELETED", at, userId: user.id, userName: user.name, source: "button", details: { reason: order.deletion.reason, restorable: order.deletion.restorable, productionHistoryPreserved: consequentialHistory } });
+      audit(state, user.id, "Order verwijderd", order.id, { reason: order.deletion.reason, restorable: order.deletion.restorable, productionHistoryPreserved: consequentialHistory });
+      return { state, value: order };
+    });
+    return result.value;
+  }
+
+  async restoreOrder(token, csrfToken, orderId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const order = state.orders.find(({ id }) => id === orderId);
+      if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+      if (!order.deletion) return { state, value: order };
+      if (!order.deletion.restorable || state.productionJobs.some((job) => job.snapshot.orderIds.includes(order.id))) throw Object.assign(new Error("Deze order heeft onveranderlijke productiehistorie en kan niet worden hersteld."), { statusCode: 409, code: "ORDER_RESTORE_NOT_ALLOWED" });
+      const at = iso();
+      const priorDeletion = structuredClone(order.deletion);
+      delete order.deletion;
+      order.revision += 1;
+      order.updatedAt = at;
+      order.eventHistory ??= [];
+      order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_RESTORED", at, userId: user.id, userName: user.name, source: "button", details: { deletedAt: priorDeletion.at } });
+      audit(state, user.id, "Order hersteld", order.id, { deletedAt: priorDeletion.at, revision: order.revision });
+      return { state, value: order };
+    });
+    return result.value;
+  }
+
   async addOrderNote(token, csrfToken, orderId, payload, idempotencyKey) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
     const result = await this.store.mutate(async (state) => {
@@ -1785,6 +1883,7 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
     const result = await this.store.mutate(async (state) => {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden afgehaald."), { statusCode: 409, code: "ORDER_DELETED" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
       if (order.stage !== "DONE") throw Object.assign(new Error("Alleen een gereedgemelde order kan worden afgehaald."), { statusCode: 409, code: "ORDER_NOT_READY" });
       const at = iso(); order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id, exception: String(payload.exception ?? "").trim() || null }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; order.operationalFacts ??= {}; order.operationalFacts.PICKED_UP = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" }; order.revision += 1; order.updatedAt = at;
@@ -1799,6 +1898,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, `OPERATIONAL_EVENT:${orderId}:${action}`, () => {
         const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet operationeel worden verwerkt."), { statusCode: 409, code: "ORDER_DELETED" });
         if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         if (action === "PRINTED") {
           const progress = productionProgressForOrder(state, order);
@@ -3368,7 +3468,9 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
 }
 
 function productionProposalBlockReason(order) {
+  if (order.deletion?.status === "DELETED") return "order is verwijderd";
   if (order.stage !== "CONTROL") return "status is niet Klaar voor productie";
+  if (!order.productionLines?.length) return "geen gevalideerde productieregels beschikbaar";
   const blockedLine = order.productionLines?.find(({ validation }) => validation.status !== "VALID");
   if (blockedLine) return blockedLine.validation.reason || "een productieregel is geblokkeerd";
   const blockedItem = order.items.find((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
@@ -3683,6 +3785,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.bulkAdvanceOrders(token, csrf, await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/orders/bulk-complete-production" && method === "POST") {
+        json(response, 200, await service.completeProductionOrders(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
       if (route === "/api/sportpaleis/v1/barcode/resolve" && method === "POST") {
         json(response, 200, await service.resolveBarcode(token, await readJson(request)));
         return true;
@@ -3691,6 +3797,15 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (orderUpdateMatch && method === "PATCH") {
         const payload = await readJson(request);
         json(response, 200, await service.updateOrder(token, csrf, decodeURIComponent(orderUpdateMatch[1]), payload, Number(payload.expectedRevision)));
+        return true;
+      }
+      const orderDeletionMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/(delete|restore)$/);
+      if (orderDeletionMatch && method === "POST") {
+        const payload = await readJson(request);
+        const value = orderDeletionMatch[2] === "delete"
+          ? await service.deleteOrder(token, csrf, decodeURIComponent(orderDeletionMatch[1]), payload)
+          : await service.restoreOrder(token, csrf, decodeURIComponent(orderDeletionMatch[1]), payload);
+        json(response, 200, value);
         return true;
       }
       const orderNotesMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/notes$/);

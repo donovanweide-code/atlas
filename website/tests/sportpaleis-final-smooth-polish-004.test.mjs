@@ -61,7 +61,7 @@ test("polish maakt taak en werk primair zonder auditgegevens te verwijderen", as
   const source = await readFile(sourceUrl, "utf8");
   const styles = await readFile(stylesUrl, "utf8");
   assert.match(source, /SPW-PILOT-FINAL-SMOOTH-POLISH-004-20260814/u);
-  assert.match(source, /head\("PRODUCTIEVOORSTEL", "Productiewerk controleren"/u);
+  assert.match(source, /head\("PRODUCTIEVOORSTEL", "Productiewerk uitvoeren"/u);
   assert.match(source, /head\("PRODUCTIEBESTAND", esc\(snapshot\.association\)/u);
   assert.match(source, /<h2>Te maken werk<\/h2>/u);
   assert.match(source, /Bestandshash[\s\S]*Snapshot-hash/u);

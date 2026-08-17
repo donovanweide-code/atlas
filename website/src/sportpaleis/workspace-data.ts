@@ -355,6 +355,14 @@ export interface WorkspaceOrder {
   fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null; feeEur?: number; address?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" } | null };
   operationalFacts?: Partial<Record<"PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED", { at: string; userId: string; userName: string; source: "MANUAL_WORKSPACE" }>>;
   eventHistory?: { type: string; at: string; userId: string; userName: string; source: string; details?: Record<string, unknown> }[];
+  deletion?: {
+    status: "DELETED";
+    at: string;
+    byUserId: string;
+    byUserName: string;
+    reason: string | null;
+    restorable: boolean;
+  };
 }
 
 export interface SportpaleisMailbatch {

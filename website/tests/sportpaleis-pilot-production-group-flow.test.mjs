@@ -69,9 +69,10 @@ test("meerdere geschikte orders worden één uitvoerbare productiegroep met éé
   assert.ok(controlledOrders.every(({ id }) => state.orders.find((order) => order.id === id).eventHistory.some(({ details }) => details?.productionGroupId === group.id)));
 
   const workspaceSource = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(workspaceSource, /Goedkeuren en productiejob maken/u);
+  assert.match(workspaceSource, /data-action="confirm-production-proposal"[^]*?>Produceren</u);
   assert.match(workspaceSource, /data-proposal-group-id=/u);
-  assert.match(workspaceSource, /Alles gecontroleerd\?/u);
+  assert.match(workspaceSource, /Klaar voor productie/u);
+  assert.doesNotMatch(workspaceSource, /Alles gecontroleerd\?/u);
   assert.doesNotMatch(workspaceSource, /data-order-select|data-select-all/u);
 });
 

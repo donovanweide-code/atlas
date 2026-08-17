@@ -239,12 +239,28 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async completeProductionOrders(orders: readonly WorkspaceOrder[]): Promise<{ duplicate: boolean; value: { completed: WorkspaceOrder[]; skipped: { id: string; code: string; reason: string }[] } }> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/bulk-complete-production`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("bulk-production-ready") },
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })) }),
+    }));
+  }
+
   async advanceOrder(order: WorkspaceOrder): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/advance`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("advance") },
       body: JSON.stringify({ expectedRevision: order.revision }),
     }));
+  }
+
+  async deleteOrder(order: WorkspaceOrder, reason = ""): Promise<WorkspaceOrder> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision, reason }) }));
+  }
+
+  async restoreOrder(order: WorkspaceOrder): Promise<WorkspaceOrder> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision }) }));
   }
 
   async updateOrder(order: WorkspaceOrder, input: { customer?: string; customerEmail?: string; customerPhone?: string; deliveryMode?: "PICKUP" | "DELIVERY"; deliveryAddress?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" }; standardPersonalization?: OrderPersonalization; items?: readonly EditableOrderItemInput[]; correctionReason?: string }): Promise<WorkspaceOrder> {
