@@ -167,7 +167,7 @@ test("kleine type-sortering ordent stabiel binnen één kleur vóór de bestaand
   ];
   const created = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "CUSTOM", customer: "P0 sortering", customerEmail: "", customerPhone: "0612345678", standardPersonalization: empty,
-    items: [{ product: "Sorteringstest", size: "", quantity: 8, personalization: "Gerichte productiefixture", deviation: true, overrides: empty }],
+    items: [{ product: "Sorteringstest", size: "", quantity: 8, personalization: "Gerichte productiefixture", foilColor: "Wit", deviation: true, overrides: empty }],
     productionLines: input.map(([id, type, content, previewLabel, widthMm, heightMm]) => ({ id, type, content, previewLabel, widthMm, heightMm, quantity: 1, sourceId: font.id, provenance: "P0 sort-key regressiefixture" })),
   }, "p0-sort-order")).value;
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, created.revision, "p0-sort-control")).value;

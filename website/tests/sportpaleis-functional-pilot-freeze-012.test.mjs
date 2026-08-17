@@ -42,7 +42,7 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
   await context.test("vrije bedrukking bewaart dezelfde font-ID, versie en hash en weigert logo aan de kassa", async () => {
     const payload = {
       orderKind: "CUSTOM", customer: "Fictieve klant", customerEmail: "fictief@example.test", customerPhone: "0612345678", standardPersonalization: emptyPersonalization,
-      items: [{ product: "Eigen Ajax-shirt", size: "M", quantity: 2, personalization: "DONOVAN ×2", deviation: true, overrides: emptyPersonalization }],
+      items: [{ product: "Eigen Ajax-shirt", size: "M", quantity: 2, personalization: "DONOVAN ×2", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }],
       productionLines: [{ id: "free-line-001", type: "TEXT", content: "DONOVAN", sourceId: font.id, widthMm: 180, heightMm: 30, quantity: 2, previewLabel: "DONOVAN", provenance: "Test · winkel" }],
     };
     freeOrder = (await service.createOrder(storeUser.token, storeUser.csrfToken, payload, "freeze-free-001")).value;

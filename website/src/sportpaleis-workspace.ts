@@ -461,10 +461,12 @@ function linkedProductionRoute(state: PilotBootstrap, order: WorkspaceOrder): st
 
 function productionExecution(state: PilotBootstrap, blocked: WorkspaceOrder[], batches: [string, WorkspaceOrder[]][], pref: PilotBootstrap["preferences"][string]): string {
   const activeOrderIds = new Set(state.orders.filter(({ deletion }) => !deletion).map(({ id }) => id));
+  const managedFoilColors = new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => color.trim().toLocaleLowerCase("nl-NL")));
   const proposals = (state.productionProposals ?? []).filter(({ status }) => status === "OPEN");
   const statusCounts = { attention: state.orders.filter(({ deletion, productionStatus }) => !deletion && productionStatus === "ATTENTION").length, ready: state.orders.filter(({ deletion, productionStatus }) => !deletion && productionStatus === "READY").length, printing: state.orders.filter(({ deletion, productionStatus }) => !deletion && productionStatus === "IN_PRODUCTION").length, done: state.orders.filter(({ deletion, productionStatus }) => !deletion && productionStatus === "DONE").length };
   const layout = state.settings.productionDefaults ?? { workingWidthMm: 440, minimumGapMm: 6.4 };
   const openGroups = proposals.flatMap((proposal) => proposalGroups(proposal, proposal.orders.map(({ id }) => state.orders.find((order) => order.id === id)).filter((order): order is WorkspaceOrder => Boolean(order))).filter(({ status, orders }) => status === "OPEN" && orders.every(({ id }) => activeOrderIds.has(id))).map((group) => ({ proposal, group })));
+  for (let index = openGroups.length - 1; index >= 0; index -= 1) if (!managedFoilColors.has(openGroups[index].group.foilColor.trim().toLocaleLowerCase("nl-NL"))) openGroups.splice(index, 1);
   const proposedOrderIds = new Set(openGroups.flatMap(({ group }) => group.orders.map(({ id }) => id)));
   const readyForProposal = state.orders.filter(({ id, deletion, productionStatus }) => !deletion && productionStatus === "READY" && !proposedOrderIds.has(id));
   const selectedReadyOrders = readyForProposal.filter(({ id }) => selectedOrders.has(id));
@@ -550,12 +552,14 @@ function persistedProductionProposal(state: PilotBootstrap, id: string): string 
     const orders = productionGroupOrders(allOrders, group);
     const groupJob = group.productionJobId ? state.productionJobs.find(({ id: jobId }) => jobId === group.productionJobId) : undefined;
     const stale = group.status === "OPEN" && group.orders.some(({ id: orderId, expectedRevision }) => state.orders.find(({ id: candidateId }) => candidateId === orderId)?.revision !== expectedRevision);
+    const managedFoilColor = state.foilRolls.some(({ color, active }) => active !== false && color.trim().toLocaleLowerCase("nl-NL") === group.foilColor.trim().toLocaleLowerCase("nl-NL"));
     const blocked = group.status === "OPEN" ? orders.flatMap((order) => {
       const reasons: string[] = [];
       if (!["CONTROL", "PRINT"].includes(order.stage)) reasons.push("status is niet Klaar voor productie of al In productie");
       for (const line of order.productionLines ?? []) if (line.validation.status !== "VALID") reasons.push(line.validation.reason || "productieregel geblokkeerd");
       return reasons.map((reason) => `${order.id}: ${reason}`);
     }) : [];
+    if (group.status === "OPEN" && !managedFoilColor) blocked.unshift(`${group.foilColor || "Onbekend"}: actieve beheerde foliekleur ontbreekt`);
     const lines = orders.flatMap((order) => (order.productionLines ?? []).map((line) => ({ order, line })));
     const exactPreview = group.status === "OPEN" ? versionedProductionPreview(state, orders) : null;
     const managedFontIds = [...new Set(lines.filter(({ line }) => line.source.kind === "FONT").map(({ line }) => line.source.id))];

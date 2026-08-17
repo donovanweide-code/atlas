@@ -27,13 +27,33 @@ async function controlledOrder(service, actor, key, items) {
 }
 
 test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvolledige orders veilig over", async (context) => {
-  const { service, admin } = await fixture(context);
+  const { store, service, admin } = await fixture(context);
   const initial = await service.bootstrap(admin.token);
   const lineLessControlled = initial.orders.filter(({ stage, productionLines }) => stage === "CONTROL" && !productionLines?.length);
   assert.ok(lineLessControlled.length > 0, "seed bevat de historische CONTROL-zonder-productieregels situatie");
   assert.ok(lineLessControlled.every(({ productionStatus, productionStatusReason }) => productionStatus === "ATTENTION" && /geen gevalideerde productieregels/u.test(productionStatusReason)));
   const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
+  const legacyOrder = await controlledOrder(service, admin, "legacy-unmanaged", [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]);
+  const legacyProposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: legacyOrder.id, expectedRevision: legacyOrder.revision }] }, "bulk-ux-legacy-proposal")).value;
+  await store.mutate(async (state) => {
+    state.orders.find(({ id }) => id === legacyOrder.id).items.forEach((item) => { item.foilColor = "Onbekend"; });
+    const group = state.productionProposals.find(({ id }) => id === legacyProposal.id).groups[0];
+    group.foilColor = "Onbekend";
+    group.label = "Onbekend — 1 order";
+    return { state, value: null };
+  });
+  const unmanagedState = await service.bootstrap(admin.token);
+  const unmanagedColorOrder = unmanagedState.orders.find(({ id }) => id === legacyOrder.id);
+  assert.equal(unmanagedColorOrder.productionStatus, "ATTENTION");
+  assert.match(unmanagedColorOrder.productionStatusReason, /beheerde foliekleur ontbreekt/u);
+  const unmanagedProposal = unmanagedState.productionProposals.find(({ id }) => id === legacyProposal.id);
+  const unmanagedGroup = unmanagedProposal.groups[0];
+  const jobsBeforeUnmanagedAttempt = unmanagedState.productionJobs.length;
+  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: unmanagedProposal.id, proposalGroupId: unmanagedGroup.id, orders: unmanagedGroup.orders }, "bulk-ux-unmanaged-color-denied"), (error) => error.code === "PRODUCTION_FOIL_COLOR_UNMANAGED");
+  const afterUnmanagedAttempt = await service.bootstrap(admin.token);
+  assert.equal(afterUnmanagedAttempt.productionJobs.length, jobsBeforeUnmanagedAttempt);
+  assert.equal(afterUnmanagedAttempt.orders.find(({ id }) => id === unmanagedColorOrder.id).revision, unmanagedColorOrder.revision);
   const shirt = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-116386");
   if (shirt.foilColorOverride !== "Blauw") await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });
 
@@ -126,4 +146,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(server, /completeProductionOrders/u);
   assert.match(server, /PRODUCTION_LINES_PENDING/u);
   assert.match(server, /ORDER_DELETED/u);
+  assert.match(server, /PRODUCTION_FOIL_COLOR_UNMANAGED/u);
+  assert.match(source, /managedFoilColors[^]*openGroups\.splice/u);
+  assert.match(source, /actieve beheerde foliekleur ontbreekt/u);
 });

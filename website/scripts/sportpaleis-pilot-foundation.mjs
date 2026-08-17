@@ -1279,7 +1279,7 @@ export class SportpaleisPilotService {
       users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: structuredClone(state.orders.map((order) => ({ ...order, ...productionStatusForOrder(order) }))),
+      orders: structuredClone(state.orders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
@@ -1384,7 +1384,7 @@ export class SportpaleisPilotService {
           const order = state.orders.find((candidate) => candidate.id === id);
           if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-          const blocker = productionProposalBlockReason(order);
+          const blocker = productionProposalBlockReason(order, state);
           if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });
           return order;
         });
@@ -1423,6 +1423,7 @@ export class SportpaleisPilotService {
           ? proposal.groups.find(({ id }) => id === payload.proposalGroupId) ?? (proposal.groups.length === 1 && !payload.proposalGroupId ? proposal.groups[0] : null)
           : null;
         if (proposal?.groups?.length && (!proposalGroup || proposalGroup.status !== "OPEN")) throw Object.assign(new Error("De productiegroep is niet meer open."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_OPEN" });
+        if (proposalGroup && !managedFoilColor(state, proposalGroup.foilColor)) throw Object.assign(new Error("De productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         const expectedSelections = proposalGroup?.orders ?? selections;
         if (proposalGroup) {
           const submitted = [...new Set(selections.map(({ id }) => id))].sort();
@@ -1440,6 +1441,7 @@ export class SportpaleisPilotService {
         });
         if (!proposalGroup) {
           const directFoilColors = new Set(orders.flatMap((order) => (order.productionLines ?? []).map((line) => productionLineFoilColor(state, order, line)).filter(Boolean)));
+          if ([...directFoilColors].some((color) => !managedFoilColor(state, color))) throw Object.assign(new Error("Een productieregel heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
           if (directFoilColors.size > 1) throw Object.assign(new Error("Een order met meerdere foliekleuren moet eerst als afzonderlijke kleurproductiegroepen worden voorbereid."), { statusCode: 409, code: "PRODUCTION_COLOR_GROUP_REQUIRED" });
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
@@ -3467,10 +3469,11 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
   };
 }
 
-function productionProposalBlockReason(order) {
+function productionProposalBlockReason(order, state = undefined) {
   if (order.deletion?.status === "DELETED") return "order is verwijderd";
   if (order.stage !== "CONTROL") return "status is niet Klaar voor productie";
   if (!order.productionLines?.length) return "geen gevalideerde productieregels beschikbaar";
+  if (state && order.items.some(({ foilColor }) => !managedFoilColor(state, foilColor))) return "een actieve beheerde foliekleur ontbreekt";
   const blockedLine = order.productionLines?.find(({ validation }) => validation.status !== "VALID");
   if (blockedLine) return blockedLine.validation.reason || "een productieregel is geblokkeerd";
   const blockedItem = order.items.find((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
@@ -3479,14 +3482,14 @@ function productionProposalBlockReason(order) {
   return null;
 }
 
-function productionStatusForOrder(order) {
+function productionStatusForOrder(state, order) {
   if (order.stage === "DONE") return { productionStatus: "DONE", productionStatusReason: null };
   if (order.stage === "PRINT") return { productionStatus: "IN_PRODUCTION", productionStatusReason: null };
   if (order.stage === "ORDER") {
-    const contentBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" });
+    const contentBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
     return { productionStatus: "ATTENTION", productionStatusReason: contentBlocker ?? "order moet nog worden gecontroleerd" };
   }
-  const blocker = productionProposalBlockReason(order);
+  const blocker = productionProposalBlockReason(order, state);
   if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker };
   return { productionStatus: "READY", productionStatusReason: null };
 }
