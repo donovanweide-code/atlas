@@ -2298,8 +2298,8 @@ export class SportpaleisPilotService {
       const associationRecord = state.associations.find(({ name }) => name === association);
       if (!associationRecord) throw Object.assign(new Error("Kies een bestaande vereniging uit Beheer."), { statusCode: 400, code: "ASSOCIATION_UNKNOWN" });
       const requestedFoilOverride = String(payload.foilColorOverride ?? "").trim();
-      const foilColorOverride = requestedFoilOverride ? associationRecord.foilColors.find((color) => color.toLocaleLowerCase("nl-NL") === requestedFoilOverride.toLocaleLowerCase("nl-NL")) : null;
-      if (requestedFoilOverride && !foilColorOverride) throw Object.assign(new Error("Kies een bestaande foliekleur uit de verenigingsinstellingen."), { statusCode: 400, code: "ARTICLE_FOIL_COLOR_UNKNOWN" });
+      const foilColorOverride = requestedFoilOverride ? managedFoilColor(state, requestedFoilOverride) : null;
+      if (requestedFoilOverride && !foilColorOverride) throw Object.assign(new Error("Kies een bestaande beheerde foliekleur uit Folie en rollen."), { statusCode: 400, code: "ARTICLE_FOIL_COLOR_UNKNOWN" });
       const profile = state.productionProfiles.find(({ id }) => id === payload.profileId);
       if (!profile) throw Object.assign(new Error("Productieprofiel niet gevonden."), { statusCode: 400, code: "PROFILE_MISSING" });
       const imageKey = requiredText(payload.imageKey, "Afbeelding", 120);
@@ -2367,12 +2367,11 @@ export class SportpaleisPilotService {
         article.profileId = profile.id;
       }
       if (payload.foilColorOverride !== undefined) {
-        const association = state.associations.find(({ name }) => name === article.association);
         const requested = String(payload.foilColorOverride ?? "").trim();
         if (!requested) article.foilColorOverride = null;
         else {
-          const canonical = association?.foilColors.find((color) => color.toLocaleLowerCase("nl-NL") === requested.toLocaleLowerCase("nl-NL"));
-          if (!canonical) throw Object.assign(new Error("Kies een bestaande foliekleur uit de verenigingsinstellingen."), { statusCode: 400, code: "ARTICLE_FOIL_COLOR_UNKNOWN" });
+          const canonical = managedFoilColor(state, requested);
+          if (!canonical) throw Object.assign(new Error("Kies een bestaande beheerde foliekleur uit Folie en rollen."), { statusCode: 400, code: "ARTICLE_FOIL_COLOR_UNKNOWN" });
           article.foilColorOverride = canonical;
         }
       }
@@ -2444,9 +2443,6 @@ export class SportpaleisPilotService {
         const canonical = association.foilColors.find((color) => color.toLocaleLowerCase("nl-NL") === previous.defaultFoilColor.toLocaleLowerCase("nl-NL"));
         if (!canonical) throw Object.assign(new Error("De bestaande standaardkleur mag niet uit de foliekleurenlijst verdwijnen."), { statusCode: 400, code: "ASSOCIATION_DEFAULT_FOIL_COLOR_REMOVED" });
         association.defaultFoilColor = canonical;
-      }
-      for (const article of state.articles.filter(({ association: name, foilColorOverride }) => name === association.name && foilColorOverride)) {
-        if (!association.foilColors.some((color) => color.toLocaleLowerCase("nl-NL") === article.foilColorOverride.toLocaleLowerCase("nl-NL"))) throw Object.assign(new Error(`Foliekleur ${article.foilColorOverride} is nog als artikeluitzondering in gebruik.`), { statusCode: 409, code: "ARTICLE_FOIL_COLOR_IN_USE" });
       }
       if (payload.dimensionsCm !== undefined) association.dimensionsCm = {
         initialsShirt: nullableNumber(payload.dimensionsCm.initialsShirt, "Initialen shirt", 0.1, 100),
@@ -3362,6 +3358,11 @@ function productionAttentionText(items) {
 
 function associationDefaultFoilColor(association) {
   return String(association?.defaultFoilColor ?? association?.foilColors?.[0] ?? "Onbekend").trim() || "Onbekend";
+}
+
+function managedFoilColor(state, requested) {
+  const normalized = String(requested ?? "").trim().toLocaleLowerCase("nl-NL");
+  return state.foilRolls?.find(({ color }) => String(color).trim().toLocaleLowerCase("nl-NL") === normalized)?.color ?? null;
 }
 
 function effectiveCatalogFoilColor(article, association, profile) {

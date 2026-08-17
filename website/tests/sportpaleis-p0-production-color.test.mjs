@@ -15,6 +15,10 @@ async function fixture(context) {
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
   const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-P0-PRODUCTION-COLOR-20260817" });
   await service.initialize();
+  await store.mutate(async (state) => {
+    state.foilRolls.push({ id: "foil-blue", color: "Blauw", supplierType: "Bestaande beheerde testfolie", purchasePriceEur: null, originalLengthM: null, widthMm: 500, usedLengthMm: 0 });
+    return { state, value: null };
+  });
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
 
@@ -37,12 +41,13 @@ test("verenigingdefault en expliciete artikeloverride blijven logisch, persisten
   assert.ok(waterwijkArticlesBefore.every((article) => !Object.hasOwn(article, "foilColorOverride")));
 
   let association = await service.updateAssociation(admin.token, admin.csrfToken, waterwijk.id, {
-    expectedRevision: waterwijk.revision, foilColors: ["Wit", "Blauw", "Zwart"], defaultFoilColor: "Wit",
+    expectedRevision: waterwijk.revision, foilColors: ["Wit", "Rood"], defaultFoilColor: "Wit",
   });
   let state = await service.bootstrap(admin.token);
   assert.deepEqual(state.articles.filter(({ association: name }) => name === waterwijk.name), waterwijkArticlesBefore, "kleurbeheer mag bestaande artikelen niet bulkgewijs muteren");
 
   const blueShirt = state.articles.find(({ id }) => id === "sp-live-137294");
+  await assert.rejects(service.updateArticle(admin.token, admin.csrfToken, blueShirt.id, { expectedRevision: blueShirt.revision, foilColorOverride: "Paars" }), (error) => error.code === "ARTICLE_FOIL_COLOR_UNKNOWN");
   const savedBlueShirt = await service.updateArticle(admin.token, admin.csrfToken, blueShirt.id, { expectedRevision: blueShirt.revision, foilColorOverride: "Blauw" });
   assert.equal(savedBlueShirt.foilColorOverride, "Blauw");
   state = await service.bootstrap(admin.token);
@@ -59,7 +64,7 @@ test("verenigingdefault en expliciete artikeloverride blijven logisch, persisten
   }, "waterwijk-blue-white-order")).value;
   assert.deepEqual(whiteOrder.items.map(({ foilColor }) => foilColor), ["Blauw", "Wit"]);
 
-  association = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, foilColors: ["Wit", "Blauw", "Zwart"], defaultFoilColor: "Zwart" });
+  association = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, foilColors: ["Wit", "Rood"], defaultFoilColor: "Rood" });
   const changedDefaultOrder = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "INDIVIDUAL", customer: "Waterwijk gewijzigde default", customerEmail: "", customerPhone: "0612345678",
     standardPersonalization: { ...empty, backNumber: "10", backNumberSizeClass: "SENIOR" },
@@ -68,8 +73,8 @@ test("verenigingdefault en expliciete artikeloverride blijven logisch, persisten
       { articleId: "sp-live-137295", size: "L", quantity: 1, deviation: false, overrides: empty },
     ],
   }, "waterwijk-blue-black-order")).value;
-  assert.deepEqual(changedDefaultOrder.items.map(({ foilColor }) => foilColor), ["Blauw", "Zwart"], "override blijft staan terwijl een ervend artikel de nieuwe default volgt");
-  await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, foilColors: ["Wit", "Blauw", "Zwart"], defaultFoilColor: "Wit" });
+  assert.deepEqual(changedDefaultOrder.items.map(({ foilColor }) => foilColor), ["Blauw", "Rood"], "override blijft staan terwijl een ervend artikel de nieuwe default volgt");
+  await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, foilColors: ["Wit", "Rood"], defaultFoilColor: "Wit" });
   const reopened = await service.bootstrap(admin.token);
   assert.equal(reopened.associations.find(({ id }) => id === association.id).defaultFoilColor, "Wit");
   assert.equal(reopened.articles.find(({ id }) => id === blueShirt.id).foilColorOverride, "Blauw");
@@ -80,7 +85,7 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   const { service, admin, storeUser } = await fixture(context);
   const initial = await service.bootstrap(admin.token);
   const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
-  await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit", "Blauw"], defaultFoilColor: "Wit" });
+  await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit"], defaultFoilColor: "Wit" });
   const shirt = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-116386");
   await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });
 
