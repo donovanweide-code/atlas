@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { create } from "fontkit";
 
-import { boundsForContours, flattenSourcePath } from "./direct-print/geometry.ts";
+import { boundsForContours, flattenSourcePath, samePoint, validateGeometry } from "./direct-print/geometry.ts";
 
 const FONT_OUTLINE_TOLERANCE_MM = 0.02;
 const MAX_POINTS_PER_PRODUCTION_PIECE = 150_000;
@@ -12,6 +12,21 @@ function sha256(bytes) {
 
 function managedFontError(message, code = "PRODUCTION_FONT_INVALID") {
   return Object.assign(new Error(message), { statusCode: 409, code });
+}
+
+export function normalizeAndValidateManagedFontContours(contours) {
+  const normalized = contours.map((contour) => ({
+    ...contour,
+    points: contour.points.filter((point, index, points) => index === 0 || !samePoint(point, points[index - 1])),
+  }));
+  const validation = validateGeometry(normalized);
+  if (!validation.valid) {
+    throw managedFontError(
+      "Dit productievoorstel kan nog niet worden voorbereid. Controleer de productiegegevens.",
+      "PRODUCTION_FONT_GEOMETRY_INVALID",
+    );
+  }
+  return normalized;
 }
 
 function parseFont(bytes) {
@@ -157,9 +172,10 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
       if (contour.closed && contour.points.length >= 4) contours.push(contour);
     }
   }
-  const pointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
-  if (!contours.length || pointCount > MAX_POINTS_PER_PRODUCTION_PIECE) throw managedFontError("De fontcontour is leeg of te complex voor veilige productie.");
-  const contourBounds = boundsForContours(contours);
+  const sourcePointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
+  if (!contours.length || sourcePointCount > MAX_POINTS_PER_PRODUCTION_PIECE) throw managedFontError("De fontcontour is leeg of te complex voor veilige productie.");
+  const productionContours = normalizeAndValidateManagedFontContours(contours);
+  const contourBounds = boundsForContours(productionContours);
   if (!(contourBounds.width > 0) || !(contourBounds.height > 0)) throw managedFontError("De fontcontour heeft geen bruikbare fysieke afmetingen.");
 
   return {
@@ -173,7 +189,7 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     sizing: { mode: "HEIGHT_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm) },
     vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
     material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
-    contours,
+    contours: productionContours,
     productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0] },
   };
 }
