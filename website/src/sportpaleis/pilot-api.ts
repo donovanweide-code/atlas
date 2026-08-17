@@ -364,6 +364,14 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async completeProductionJob(productionJobId: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-complete") },
+      body: JSON.stringify({}),
+    }));
+  }
+
   async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean }): Promise<SportpaleisProductionFont> {
     return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
@@ -398,20 +406,21 @@ export class SportpaleisPilotApi {
     personalizationPolicy?: CatalogArticle["personalizationPolicy"];
     validation?: CatalogArticle["validation"];
     displayOrder?: number;
+    foilColorOverride?: string | null;
     priceConfiguration?: CatalogArticle["priceConfiguration"];
   }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/articles/${encodeURIComponent(articleId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createArticle(input: { name: string; articleNumber: string; imageKey: string; association: string; profileId: string; source: string }): Promise<CatalogArticle> {
+  async createArticle(input: { name: string; articleNumber: string; imageKey: string; association: string; profileId: string; source: string; foilColorOverride?: string | null }): Promise<CatalogArticle> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/articles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async updateAssociation(associationId: string, input: { expectedRevision: number; active?: boolean; notes?: string; fontProfile?: string; foilColors?: string[]; dimensionsCm?: AssociationConfiguration["dimensionsCm"]; juniorValidationStatus?: "DATA_GAP" | "VALIDATED"; juniorPhysicalHeightMm?: number | null; juniorGarmentSizes?: string[]; juniorValidationNote?: string; workspaceLogo?: { filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; dataBase64: string } | null }): Promise<void> {
+  async updateAssociation(associationId: string, input: { expectedRevision: number; active?: boolean; notes?: string; fontProfile?: string; foilColors?: string[]; defaultFoilColor?: string; dimensionsCm?: AssociationConfiguration["dimensionsCm"]; juniorValidationStatus?: "DATA_GAP" | "VALIDATED"; juniorPhysicalHeightMm?: number | null; juniorGarmentSizes?: string[]; juniorValidationNote?: string; workspaceLogo?: { filename: string; mimeType: "image/png" | "image/jpeg" | "image/webp"; dataBase64: string } | null }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/associations/${encodeURIComponent(associationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createAssociation(input: { name: string; sourceName: string; provenance: string }): Promise<AssociationConfiguration> {
+  async createAssociation(input: { name: string; sourceName: string; provenance: string; defaultFoilColor?: string }): Promise<AssociationConfiguration> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/associations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

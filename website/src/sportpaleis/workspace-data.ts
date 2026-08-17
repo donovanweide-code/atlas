@@ -155,6 +155,8 @@ export interface CatalogArticle {
   id: string; articleNumber: string; name: string; imageKey: string; category: string;
   association: string; profileId: string; supports: (keyof OrderPersonalization)[]; active: boolean;
   displayOrder?: number;
+  /** Null means: inherit the association default. Missing means legacy profile-color compatibility. */
+  foilColorOverride?: string | null;
   supplierArticleNumber?: string;
   commercialPrintOptions?: { sourceLabel: string; canonicalField: keyof OrderPersonalization | null; priceEur: number | null; status: "VALIDATED" | "DATA_GAP" }[];
   catalogProvenance?: { authority: "SPORTPALEIS_LIVE"; url: string; imageUrl: string; checkedAt: string };
@@ -266,6 +268,8 @@ export interface AssociationConfiguration {
     provenance: { id: string; confirmedAt: string; authority: string; limitation: string };
   };
   foilColors: string[];
+  /** Existing records inherit foilColors[0] until an admin explicitly stores this field. */
+  defaultFoilColor?: string;
   dimensionsCm: {
     initialsShirt: number | null;
     backNumberJuniorSourceValue: number | null;

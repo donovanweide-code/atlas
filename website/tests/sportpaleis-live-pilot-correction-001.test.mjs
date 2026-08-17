@@ -82,7 +82,7 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     assert.deepEqual(otherClothingSize.items[0].backNumberProduction, { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "VALIDATED", source: association.juniorValidationNote });
   });
 
-  await context.test("verenigingsinstellingen zijn gereviseerd en werken direct door naar profiel en bestaand productievoorstel", async () => {
+  await context.test("verenigingsinstellingen zijn gereviseerd terwijl bestaande orders hun productiesnapshot behouden", async () => {
     const before = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
     const existing = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Voor voorstel", customerEmail: "voorstel@example.nl", customerPhone: "0612345678",
@@ -93,7 +93,8 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     const updated = await service.updateAssociation(admin.token, admin.csrfToken, before.id, {
       expectedRevision: before.revision,
       fontProfile: "schluber · pilotcorrectie",
-      foilColors: ["Zwart"],
+      foilColors: ["Wit", "Zwart"],
+      defaultFoilColor: "Zwart",
       dimensionsCm: { ...before.dimensionsCm, backNumberSenior: 21 },
       juniorGarmentSizes: before.juniorGarmentSizes,
     });
@@ -101,9 +102,9 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     const bootstrap = await service.bootstrap(admin.token);
     const profile = bootstrap.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber");
     assert.equal(profile.fontProfile, "schluber · pilotcorrectie");
-    assert.equal(profile.foilColor, "Zwart");
+    assert.equal(profile.foilColor, "Wit");
     assert.match(profile.sizeLabel, /Rug Senior 21 cm/);
-    assert.equal(bootstrap.orders.find(({ id }) => id === existing.id).items[0].foilColor, "Zwart");
+    assert.equal(bootstrap.orders.find(({ id }) => id === existing.id).items[0].foilColor, "Wit");
     const after = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Na voorstel", customerEmail: "navoorstel@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "10", backNumberSizeClass: "SENIOR" },
