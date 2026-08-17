@@ -116,11 +116,13 @@ test("Teamorder bewaart default en per-regel Junior/Senior los van kledingmaat",
   assert.deepEqual(juniorDefault.items[0].variants.map(({ size, backNumberProduction }) => [size, backNumberProduction.sizeClass, backNumberProduction.physicalHeightMm]), [["XL", "JUNIOR", 180], ["152", "SENIOR", 220]]);
 });
 
-test("workspace-contract zet CTA boven de lijst en Teamorder faalt gesloten zonder fysieke mm", async () => {
+test("workspace-contract zet directe kleur-CTA boven de lijst en Teamorder faalt gesloten zonder fysieke mm", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  const composer = source.slice(source.indexOf("const proposalComposer"), source.indexOf("const activeRows"));
-  assert.ok(composer.indexOf("sp-production-proposal-actions") < composer.indexOf("sp-production-proposal-orders"));
-  assert.equal((composer.match(/data-action="create-production-proposal"/gu) ?? []).length, 1);
+  const primaryStart = source.indexOf("const persistedGroupCards");
+  const primary = source.slice(primaryStart, source.indexOf("const attentionPanel", primaryStart));
+  assert.ok(primary.indexOf("sp-production-proposal-actions") >= 0);
+  assert.equal((primary.match(/data-action="prepare-and-print-production-color"/gu) ?? []).length, 1);
+  assert.match(primary, /Alles selecteren[^]*Printen/u);
   assert.match(source, /name="teamDefaultClass"/u);
   assert.match(source, /data-team-row-field="backNumberSizeClass"/u);
   assert.match(source, /kledingmaat onafhankelijk/u);

@@ -11,8 +11,8 @@ test("final UX gebruikt profielhoogte, menselijke statussen en geen handmatige T
   assert.match(source, /Lettertype en maat/u);
   assert.doesNotMatch(source, /name="teamWidthMm"/u);
   assert.doesNotMatch(source, /name="teamHeightMm"/u);
-  assert.match(source, /AWAITING_HUMAN_CHECK: "Controle nodig"/u);
-  assert.match(source, /COMPLETED: "Gecontroleerd"/u);
+  assert.match(source, /AWAITING_HUMAN_CHECK: "Klaar om te bedrukken"/u);
+  assert.match(source, /COMPLETED: "Bedrukt"/u);
   assert.match(css, /\.sp-catalog-card\.is-selected\{border-color:#18372f;background:#f1f8f4/u);
   assert.match(css, /\.sp-production-measure/u);
 });

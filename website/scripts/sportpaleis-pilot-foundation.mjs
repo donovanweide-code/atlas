@@ -1435,7 +1435,8 @@ export class SportpaleisPilotService {
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden geproduceerd."), { statusCode: 409, code: "ORDER_DELETED" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-          if (!["CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
+          const allowedStages = proposalGroup ? ["ORDER", "CONTROL", "PRINT"] : ["CONTROL", "PRINT"];
+          if (!allowedStages.includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
           if (order.productionLines?.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
           return order;
         });
@@ -1548,7 +1549,7 @@ export class SportpaleisPilotService {
         const orderKind = ["INDIVIDUAL", "TEAM", "CUSTOM"].includes(payload.orderKind) ? payload.orderKind : "LEGACY";
         const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
         let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind);
-        const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: strictPilotContract });
+        const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: false });
         const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0 });
         if (orderKind === "TEAM") items.forEach((item, index) => {
           if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
@@ -1608,8 +1609,12 @@ export class SportpaleisPilotService {
           items,
           productionLines,
         };
+        const automaticValidationBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
+        if (!automaticValidationBlocker) {
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_VALIDATED", at: createdAt, userId: user.id, userName: user.name, source: "automatic-validation" });
+        } else if (!order.attention) order.attention = automaticValidationBlocker;
         state.orders.unshift(order);
-        audit(state, user.id, "Order aangemaakt", id, { revision: 1 });
+        audit(state, user.id, "Order aangemaakt", id, { revision: 1, automaticValidation: automaticValidationBlocker ? "ATTENTION" : "PASSED", ...(automaticValidationBlocker ? { reason: automaticValidationBlocker } : {}) });
         return order;
       });
       return { state, value: outcome };
@@ -3339,6 +3344,38 @@ function buildProductionProposalGroups(state, orders) {
   });
 }
 
+export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg) {
+  const expectedIds = pieces.map(({ id }) => String(id));
+  const actualIds = cutJob?.productionGeometry?.groups?.map(({ sourcePieceId }) => String(sourcePieceId)) ?? [];
+  const expected = expectedIds.length;
+  const actual = actualIds.length;
+  const exactIds = new Set(expectedIds).size === expected
+    && new Set(actualIds).size === actual
+    && expectedIds.every((id) => actualIds.includes(id))
+    && actualIds.every((id) => expectedIds.includes(id));
+  const contours = cutJob?.productionGeometry?.groups?.flatMap((group) => group.contours ?? []) ?? [];
+  const artifactContourIds = [...String(svg ?? "").matchAll(/data-contour-id="([^"]+)"/gu)].map((match) => match[1]);
+  const escapedContourId = (id) => String(id).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+  const expectedContourIds = contours.map(({ id }) => escapedContourId(id)).sort();
+  const sortedArtifactContourIds = [...artifactContourIds].sort();
+  const remainingArtifactContours = new Map(artifactContourIds.map((id) => [id, artifactContourIds.filter((candidate) => candidate === id).length]));
+  const actualArtifactInstances = (cutJob?.productionGeometry?.groups ?? []).reduce((count, group) => {
+    const required = new Map((group.contours ?? []).map(({ id }) => { const escaped = escapedContourId(id); return [escaped, (group.contours ?? []).filter((contour) => escapedContourId(contour.id) === escaped).length]; }));
+    const complete = required.size > 0 && [...required].every(([id, quantity]) => Number(remainingArtifactContours.get(id) ?? 0) >= quantity);
+    if (complete) for (const [id, quantity] of required) remainingArtifactContours.set(id, Number(remainingArtifactContours.get(id)) - quantity);
+    return count + Number(complete);
+  }, 0);
+  const exactContours = contours.length > 0
+    && cutJob.productionGeometry.groups.every(({ contours: groupContours }) => groupContours.length > 0)
+    && artifactContourIds.length === contours.length
+    && expectedContourIds.every((id, index) => sortedArtifactContourIds[index] === id);
+  if (expected < 1 || expected !== actual || !exactIds || !exactContours) {
+    const placed = Math.min(actual, actualArtifactInstances);
+    throw Object.assign(new Error(`Productie geblokkeerd: ${expected} opdrukken verwacht, ${placed} geplaatst.`), { statusCode: 409, code: "PRODUCTION_INSTANCE_QUANTITY_MISMATCH", expectedInstances: expected, actualInstances: placed, failedChecks: { exactIds, exactContours, expectedContourCount: contours.length, artifactContourCount: artifactContourIds.length } });
+  }
+  return { expectedInstances: expected, actualInstances: actual };
+}
+
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot) {
   if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
   const resolved = productionLines.map((line) => {
@@ -3402,6 +3439,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   if (cutJobBatch.jobs.length !== 1 || !cutJobBatch.jobs[0].readyForPrinting) throw Object.assign(new Error("De productiegroep past niet in één geldige productiejob."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const cutJob = cutJobBatch.jobs[0];
   const preview = createProductionPreview(cutJob);
+  assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, preview.svg);
   const productionDataHash = sha256(JSON.stringify(productionLines)).toUpperCase();
   const svg = preview.svg.replace("<svg ", `<svg data-production-data-sha256="${productionDataHash}" data-cutjob-sha256="${cutJob.contentHash.toUpperCase()}" `);
   const bytes = Buffer.from(svg, "utf8");
@@ -3471,7 +3509,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
 
 function productionProposalBlockReason(order, state = undefined) {
   if (order.deletion?.status === "DELETED") return "order is verwijderd";
-  if (order.stage !== "CONTROL") return "status is niet Klaar voor productie";
+  if (!["ORDER", "CONTROL"].includes(order.stage)) return "status is niet Klaar voor productie";
   if (!order.productionLines?.length) return "geen gevalideerde productieregels beschikbaar";
   if (state && order.items.some(({ foilColor }) => !managedFoilColor(state, foilColor))) return "een actieve beheerde foliekleur ontbreekt";
   const blockedLine = order.productionLines?.find(({ validation }) => validation.status !== "VALID");
@@ -3487,7 +3525,9 @@ function productionStatusForOrder(state, order) {
   if (order.stage === "PRINT") return { productionStatus: "IN_PRODUCTION", productionStatusReason: null };
   if (order.stage === "ORDER") {
     const contentBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
-    return { productionStatus: "ATTENTION", productionStatusReason: contentBlocker ?? "order moet nog worden gecontroleerd" };
+    return contentBlocker
+      ? { productionStatus: "ATTENTION", productionStatusReason: contentBlocker }
+      : { productionStatus: "READY", productionStatusReason: null };
   }
   const blocker = productionProposalBlockReason(order, state);
   if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker };
@@ -3544,6 +3584,17 @@ function effectiveCatalogFoilColor(article, association, profile) {
   return !Object.hasOwn(association ?? {}, "defaultFoilColor") && legacyProfileColor && legacyProfileColor.toLocaleLowerCase("nl-NL") !== associationDefault.toLocaleLowerCase("nl-NL") ? legacyProfileColor : associationDefault;
 }
 
+function inferBackNumberSizeClass(association, article, garmentSize) {
+  const size = String(garmentSize ?? "").trim().toLocaleLowerCase("nl-NL");
+  if (!size) return "";
+  const juniorSizes = new Set((association?.juniorGarmentSizes ?? []).map((value) => String(value).trim().toLocaleLowerCase("nl-NL")).filter(Boolean));
+  if (juniorSizes.has(size)) return "JUNIOR";
+  const validatedArticleSizes = article?.validation?.sizes === "VALIDATED"
+    ? new Set((article.availableSizes ?? []).map((value) => String(value).trim().toLocaleLowerCase("nl-NL")).filter(Boolean))
+    : new Set();
+  return juniorSizes.size > 0 && validatedArticleSizes.has(size) ? "SENIOR" : "";
+}
+
 function validateItems(value, state, standardPersonalization, options = {}) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 50) throw Object.assign(new Error("Een order vereist 1 tot 50 artikelen."), { statusCode: 400, code: "VALIDATION_ERROR" });
   return value.map((item) => {
@@ -3563,22 +3614,24 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       const variants = requestedVariants.map((variant) => {
         const variantQuantity = Number(variant.quantity);
         if (!Number.isInteger(variantQuantity) || variantQuantity < 1 || variantQuantity > 99) throw Object.assign(new Error("Ongeldig aantal in artikelvariant."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        const enteredSize = String(variant.size ?? "").trim().slice(0, 20);
+        const size = enteredSize || "Niet opgegeven";
+        if (enteredSize && article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(enteredSize)) throw Object.assign(new Error(`${enteredSize} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
         const deviation = Boolean(variant.deviation);
-        const overrides = deviation ? validatePersonalization(variant.overrides ?? {}, options) : { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
+        const overrides = deviation ? validatePersonalization(variant.overrides ?? {}, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
         const forbiddenOverrides = PERSONALIZATION_FIELDS.filter((field) => !article.supports.includes(field) && Boolean(overrides[field]));
         if (forbiddenOverrides.length) throw Object.assign(new Error(`${article.name} staat deze bedrukking niet toe.`), { statusCode: 400, code: "ARTICLE_PERSONALIZATION_NOT_ALLOWED" });
         const appliedFields = Object.fromEntries(article.supports.map((key) => [key, deviation && Object.hasOwn(overrides, key) ? overrides[key] : standardPersonalization[key] ?? ""]));
         if (article.supports.includes("initials")) appliedFields.initialsInfix = deviation ? overrides.initialsInfix : standardPersonalization.initialsInfix ?? "";
-        const appliedBackNumberSizeClass = appliedFields.backNumber ? (deviation ? overrides.backNumberSizeClass : standardPersonalization.backNumberSizeClass) : "";
+        const selectedBackNumberSizeClass = deviation ? overrides.backNumberSizeClass : standardPersonalization.backNumberSizeClass;
+        const appliedBackNumberSizeClass = appliedFields.backNumber ? selectedBackNumberSizeClass || inferBackNumberSizeClass(association, article, enteredSize) : "";
+        if (appliedFields.backNumber && options.requireBackNumberSizeClass === true && !BACK_NUMBER_SIZE_CLASSES.has(appliedBackNumberSizeClass)) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 400, code: "BACK_NUMBER_SIZE_CLASS_REQUIRED" });
         const applied = { ...appliedFields, backNumberSizeClass: appliedBackNumberSizeClass };
         const policy = article.personalizationPolicy ?? { mode: "combination", fields: Object.fromEntries(article.supports.map((key) => [key, "optional"])) };
         const populated = Object.entries(appliedFields).filter(([key, entry]) => key !== "initialsInfix" && entry);
         if (policy.mode === "mutually-exclusive" && populated.length > 1) throw Object.assign(new Error(`${article.name} staat slechts één bedrukkingstype tegelijk toe.`), { statusCode: 400, code: "PERSONALIZATION_MUTUALLY_EXCLUSIVE" });
         for (const [key, requirement] of Object.entries(policy.fields ?? {})) if (requirement === "required" && !applied[key]) throw Object.assign(new Error(`${article.name} vereist ${labels[key].toLowerCase()}.`), { statusCode: 400, code: "PERSONALIZATION_REQUIRED" });
         const personalization = `${populated.map(([key, entry]) => `${labels[key]} ${entry}${key === "backNumber" && appliedBackNumberSizeClass ? ` (${appliedBackNumberSizeClass === "JUNIOR" ? "Junior" : "Senior"})` : ""}`).join(" · ")}${appliedFields.initialsInfix ? `${populated.length ? " · " : ""}Tussenvoegsel ${appliedFields.initialsInfix}` : ""}` || "Geen bedrukking";
-        const enteredSize = String(variant.size ?? "").trim().slice(0, 20);
-        const size = enteredSize || "Niet opgegeven";
-        if (enteredSize && article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(enteredSize)) throw Object.assign(new Error(`${enteredSize} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
         return { id: `variant-${randomBytes(5).toString("hex")}`, participantName: optional(variant.participantName, 120), quantity: variantQuantity, size, personalization, personalizationValues: applied, initialsSemantic: applied.initials ? (deviation && overrides.initialsSemantic ? overrides.initialsSemantic : standardPersonalization.initialsSemantic) : null, backNumberProduction: resolveBackNumberProductionContext(association, profile, appliedBackNumberSizeClass, size), deviation };
       });
       const distinctSizes = new Set(variants.map(({ size }) => size));

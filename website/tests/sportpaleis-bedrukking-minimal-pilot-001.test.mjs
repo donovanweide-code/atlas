@@ -43,14 +43,19 @@ function individualPayload(overrides = {}) {
 test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
   const { root, store, service, storeUser, patrick, support } = await fixture(context);
 
-  await context.test("Junior/Senior is verborgen semantiek zonder rugnummer en verplicht bij een individuele rugnummerorder", async () => {
+  await context.test("Junior/Senior is verborgen zonder rugnummer, wordt betrouwbaar afgeleid en is anders verplicht", async () => {
     const withoutBackNumber = await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({
       standardPersonalization: { initials: "PK", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
       items: [{ articleId: "sp-live-140226", size: "M", quantity: 1, deviation: false, overrides: {} }],
     }), "pilot-no-back-number");
     assert.equal(withoutBackNumber.value.standardPersonalization.backNumberSizeClass, "");
+    const inferred = await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({
+      standardPersonalization: { initials: "PK", name: "", backNumber: "10", backNumberSizeClass: "", shortsNumber: "" },
+    }), "pilot-inferred-size-class");
+    assert.equal(inferred.value.items[0].personalizationValues.backNumberSizeClass, "SENIOR");
     await assert.rejects(service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({
       standardPersonalization: { initials: "PK", name: "", backNumber: "10", backNumberSizeClass: "", shortsNumber: "" },
+      items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: {} }],
     }), "pilot-missing-size-class"), (error) => error.code === "BACK_NUMBER_SIZE_CLASS_REQUIRED");
     await assert.rejects(service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({
       standardPersonalization: { initials: "PK", name: "", backNumber: "", backNumberSizeClass: "JUNIOR", shortsNumber: "" },

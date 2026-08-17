@@ -106,6 +106,6 @@ test("Production history UX is vindbaar, mobile-first en hardware-safe", async (
   assert.match(source, /Bestandshash/);
   assert.match(source, /Snapshot-hash/);
   assert.match(source, /<summary>Technische details<\/summary>/);
-  assert.match(source, /Controleer het bestand altijd vóór je gaat plotten/);
+  assert.match(source, /Plaats de getoonde folierol en start de plotter/);
   assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.sp-production-job-facts \{ grid-template-columns:1fr; \}/);
 });
