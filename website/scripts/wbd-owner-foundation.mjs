@@ -30,6 +30,14 @@ import {
   reviewPromotion,
   validatePromotionBoundary,
 } from "./wbd-promotion-boundary.mjs";
+import {
+  createInitialAtlasControlPlane,
+  ingestConnectorSnapshot,
+  projectOwnerAtlasWorkspace,
+  resolveAttention,
+  searchOwnerReality,
+  validateAtlasControlPlane,
+} from "./wbd-atlas-control-plane.mjs";
 
 const SESSION_COOKIE = "wbd_owner_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -81,6 +89,7 @@ export function createInitialWbdOwnerState({ passwordRecord, now = new Date() })
     loginAttempts: {},
     capabilities: structuredClone(WBD_CAPABILITY_SEED),
     controlPlane: createInitialControlPlane({ ownerId: "wbd-owner-donovan", now }),
+    atlasControlPlane: createInitialAtlasControlPlane({ capabilities: WBD_CAPABILITY_SEED, now }),
     promotionBoundary: createInitialPromotionBoundary(),
     audit: [],
     boundaries: {
@@ -115,6 +124,10 @@ export function validateWbdOwnerState(input) {
   state.loginAttempts = state.loginAttempts && typeof state.loginAttempts === "object" ? state.loginAttempts : {};
   state.capabilities = validateWbdCapabilityCatalog(state.capabilities);
   if (state.controlPlane !== undefined) state.controlPlane = validateControlPlane(state.controlPlane);
+  state.atlasControlPlane = validateAtlasControlPlane(state.atlasControlPlane ?? createInitialAtlasControlPlane({
+    capabilities: state.capabilities,
+    now: new Date(state.owner.createdAt),
+  }));
   state.promotionBoundary = validatePromotionBoundary(state.promotionBoundary);
   state.audit = Array.isArray(state.audit) ? state.audit.map((event) => ({
     id: requiredString(event.id, "Audit-ID", 80),
@@ -124,6 +137,7 @@ export function validateWbdOwnerState(input) {
     occurredAt: requiredString(event.occurredAt, "Audittijd", 40),
   })) : [];
   state.boundaries = {
+    ...(state.boundaries && typeof state.boundaries === "object" ? state.boundaries : {}),
     commercial: "FUTURE_SLICE",
     strategy: "FUTURE_SLICE",
     operations: "FUTURE_SLICE",
@@ -275,8 +289,8 @@ export class WbdOwnerService {
     });
   }
 
-  async capabilityCatalog(token) {
-    const { state, owner } = await this.authenticate(token);
+  async capabilityCatalog(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
     return {
       organization: { id: state.organizationId, name: "We Build And Design" },
@@ -319,6 +333,71 @@ export class WbdOwnerService {
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
     if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
     return projectControlOverview(state.controlPlane, { revision: state.revision, releaseId: this.releaseId, now });
+  }
+
+  async atlasWorkspace(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    return projectOwnerAtlasWorkspace(state.atlasControlPlane, {
+      controlPlane: state.controlPlane,
+      capabilities: state.capabilities,
+      promotionView: publicPromotionView(state, { releaseId: this.releaseId }),
+      releaseId: this.releaseId,
+      revision: state.revision,
+      now,
+    });
+  }
+
+  async search(token, query, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    try {
+      return searchOwnerReality(state.atlasControlPlane, { query, controlPlane: state.controlPlane, capabilities: state.capabilities, promotionView: publicPromotionView(state, { releaseId: this.releaseId }), now });
+    } catch (cause) {
+      throw error(cause.message, 400, "VALIDATION_ERROR");
+    }
+  }
+
+  async markAtlasVisited(token, csrfToken, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    await this.#assertCsrf(token, csrfToken, now);
+    const result = await this.store.mutate(async (state) => {
+      state.atlasControlPlane.lastVisitedAt = iso(now);
+      appendAudit(state, owner.id, "Owner Workspace bekeken", "Atlas Today", now);
+      return { state, value: state.atlasControlPlane.lastVisitedAt };
+    });
+    return { revision: result.state.revision, lastVisitedAt: result.value };
+  }
+
+  async resolveAtlasAttention(token, csrfToken, attentionId, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 1) throw error("Expected revision ontbreekt.", 400, "VALIDATION_ERROR");
+    const result = await this.store.mutate(async (state) => {
+      if (state.revision !== payload.expectedRevision) throw error("De centrale WBD-waarheid is inmiddels gewijzigd.", 409, "REVISION_CONFLICT");
+      try {
+        state.atlasControlPlane = resolveAttention(state.atlasControlPlane, attentionId, payload.resolution ?? {}, owner.id, now);
+      } catch (cause) {
+        throw error(cause.message, 400, "VALIDATION_ERROR");
+      }
+      appendAudit(state, owner.id, "Attention opgelost", attentionId, now);
+      return { state, value: state.atlasControlPlane.attention.find(({ id }) => id === attentionId) };
+    });
+    return { revision: result.state.revision, attention: result.value };
+  }
+
+  async connectorState(connectorId) {
+    const state = await this.store.read();
+    return structuredClone(state.atlasControlPlane.connectorStates[connectorId] ?? null);
+  }
+
+  async ingestConnectorSnapshot(snapshot, now = new Date()) {
+    const result = await this.store.mutate(async (state) => {
+      state.atlasControlPlane = ingestConnectorSnapshot(state.atlasControlPlane, snapshot, now);
+      appendAudit(state, "atlas-connector", snapshot.status === "FAILED" ? "Connector refresh mislukt" : "Evidence ingested", snapshot.connectorId, now);
+      return { state, value: state.atlasControlPlane.connectorStates[snapshot.connectorId] };
+    });
+    return { revision: result.state.revision, connector: result.value };
   }
 
   async promotions(token, now = new Date()) {
@@ -457,7 +536,8 @@ function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(S
 
 export function createWbdOwnerRequestHandler(service, { onError } = {}) {
   return async function handle(request, response) {
-    const route = new URL(request.url ?? "/", "http://wbd-owner.local").pathname;
+    const requestUrl = new URL(request.url ?? "/", "http://wbd-owner.local");
+    const route = requestUrl.pathname;
     if (!route.startsWith("/api/wbd/v1/") && route !== "/health/wbd" && route !== "/ready/wbd") return false;
     try {
       if (request.headers.origin && request.headers.origin !== service.allowedOrigin) throw error("Origin niet toegestaan.", 403, "ORIGIN_FORBIDDEN");
@@ -480,6 +560,14 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
         return true;
       }
       if (route === "/api/wbd/v1/capabilities" && method === "GET") return json(response, 200, await service.capabilityCatalog(token)) ?? true;
+      if (route === "/api/wbd/v1/atlas" && method === "GET") return json(response, 200, await service.atlasWorkspace(token)) ?? true;
+      if (route === "/api/wbd/v1/atlas/search" && method === "GET") return json(response, 200, await service.search(token, requestUrl.searchParams.get("q"))) ?? true;
+      if (route === "/api/wbd/v1/atlas/visited" && method === "POST") return json(response, 200, await service.markAtlasVisited(token, csrfToken)) ?? true;
+      const attentionMatch = route.match(/^\/api\/wbd\/v1\/atlas\/attention\/([^/]+)\/resolve$/u);
+      if (attentionMatch && method === "POST") {
+        json(response, 200, await service.resolveAtlasAttention(token, csrfToken, decodeURIComponent(attentionMatch[1]), await readJson(request)));
+        return true;
+      }
       const capabilityMatch = route.match(/^\/api\/wbd\/v1\/capabilities\/([^/]+)$/u);
       if (capabilityMatch && method === "PATCH") {
         json(response, 200, await service.updateCapability(token, csrfToken, decodeURIComponent(capabilityMatch[1]), await readJson(request)));

@@ -20,6 +20,8 @@
     "verify:public-build": "node scripts/verify-public-build.mjs",
     "validate:release": "node scripts/release-validation.mjs",
     "sync:connector:wbd": "node --experimental-strip-types scripts/atlas-connector-sync.mjs",
+    "sync:connector:wbd-observation": "node --experimental-strip-types scripts/atlas-connector-wbd-observation-sync.mjs",
+    "prove:connector:wbd-owner": "node scripts/wbd-atlas-live-proof.mjs",
     "mail:smtp:controlled": "node scripts/wbd-controlled-smtp-validation.mjs",
     "mail:smtp:sportpaleis:controlled": "node scripts/sportpaleis-controlled-smtp-validation.mjs",
     "generate:sportpaleis:prepilot-winplot": "node --experimental-strip-types scripts/generate-sportpaleis-prepilot-winplot-acceptance.mjs",

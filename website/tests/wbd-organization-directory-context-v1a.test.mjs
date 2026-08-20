@@ -90,9 +90,9 @@ test("ontbrekende context blijft expliciet onbekend en Capabilities blijven WBD-
   assert.match(html, /Huidige fase<\/dt><dd>Niet centraal beschikbaar/u);
   assert.match(html, /ONBEKEND — er zijn geen centrale Effort Observations/u);
   assert.match(html, /geen actieve centrale Service Commitment|Actuele afspraak nog niet volledig bekend/u);
-  assert.match(html, /V1A koppelt daarvan bewust geen status aan deze Organization/u);
-  assert.match(html, /Omgevingen, historische milestones, Organization–Capability-gebruik, integraties, monitoring, usage en financiële bronprojecties/u);
-  assert.match(html, /Open centrale Capability Catalogus/u);
+  assert.match(html, /Alleen evidence-backed Organization-relaties/u);
+  assert.match(html, /Omgevingen, volledige historische milestones, usage en financiële bronprojecties/u);
+  assert.match(html, /Open centrale Capability Registry/u);
 });
 
 test("Kansen-projectie bevat alleen canonieke Opportunities", () => {
@@ -103,12 +103,12 @@ test("Kansen-projectie bevat alleen canonieke Opportunities", () => {
   assert.doesNotMatch(html, /candidate-store-v1|Commerce Workspace/u);
 });
 
-test("V1A voegt routes en projecties toe zonder schema, API of browserauthority", async () => {
+test("Owner-navigatie verbindt Today, Attention, Organizations en Search zonder browserauthority", async () => {
   const owner = await readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8");
   const context = await readFile(new URL("../src/wbd-organization-context.ts", import.meta.url), "utf8");
   const runtime = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
-  assert.match(owner, /Home[\s\S]*Organisaties[\s\S]*Kansen[\s\S]*Financiën[\s\S]*Meer/u);
-  assert.match(owner, /Finance is nog niet centraal beschikbaar/u);
+  assert.match(owner, /Today[\s\S]*Attention[\s\S]*Organisaties[\s\S]*Search[\s\S]*Meer/u);
+  assert.match(owner, /capabilitiesPath[\s\S]*opportunitiesPath[\s\S]*\/workspace\/experience[\s\S]*workContextPath/u);
   assert.doesNotMatch(owner + context, /localStorage|indexedDB|wbd-dossier-store|wbd-invoices|\/api\/wbd\/v1\/organization-context/u);
   assert.match(runtime, /ownerOrganizationRoute/u);
   assert.match(runtime, /workspaceOpportunities/u);

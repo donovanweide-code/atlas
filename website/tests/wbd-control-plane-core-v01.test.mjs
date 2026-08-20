@@ -176,7 +176,7 @@ test("vijf canonieke feiten zijn centraal, device-onafhankelijk en economisch co
   assert.equal(overview.nextBestAction.id, created.action.record.id);
   assert.equal(overview.opportunities[0].id, created.opportunity.record.id);
 
-  const catalog = await service.capabilityCatalog(login.token);
+  const catalog = await service.capabilityCatalog(login.token, fixedNow);
   assert.deepEqual(catalog.capabilities, WBD_CAPABILITY_SEED);
 });
 
@@ -359,14 +359,15 @@ test("HTTP-boundary is owner-only, no-store en beschermt mutaties met origin plu
   assert.equal((await fetch(`${origin}/api/wbd/v1/control/organizations`, { method: "POST", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json", "X-CSRF-Token": session.csrfToken }, body })).status, 200);
 });
 
-test("Home-route en ownerbundle blijven gescheiden van legacy browserdata en Atlas-writeauthority", async () => {
+test("Today-route en ownerbundle blijven gescheiden van legacy browserdata en Atlas-execution-authority", async () => {
   const [runtime, owner, home] = await Promise.all([
     readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/wbd-control-home.ts", import.meta.url), "utf8"),
   ]);
   assert.match(runtime, /const workspaceHome = `\$\{workspaceBoundary\}\/home`/u);
-  assert.match(owner, /\/api\/wbd\/v1\/control\/overview/u);
+  assert.match(owner, /\/api\/wbd\/v1\/atlas/u);
+  assert.match(owner, /renderAtlasToday/u);
   assert.match(home, /ONVOLDOENDE BEWIJS VOOR .* BESTE VOLGENDE ACTIE/u);
   assert.doesNotMatch(home, /indexedDB|localStorage|atlasCandidate|Atlas Candidate-store/iu);
   assert.doesNotMatch(owner + home, /atlasCandidate|Atlas Candidate-store/iu);
