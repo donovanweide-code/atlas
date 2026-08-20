@@ -59,7 +59,9 @@ test("Bedrukken toont dynamisch alleen de 16 verenigingen met actuele artikelen"
 
 test("werknemer 45 is onafhankelijk van logins en fysiek bewijs blijft immutable", () => {
   const state = createSportpaleisProductionBootstrap(new Date("2026-08-12T12:00:00.000Z"));
-  assert.deepEqual(state.employees, [{ id: "employee-donovan-45", name: "Donovan", salesNumber: "45", active: true, userId: null, revision: 1 }]);
+  assert.equal(state.employees.filter(({ salesNumber }) => salesNumber === "45").length, 1);
+  assert.ok(state.employees.every(({ userId }) => userId === null), "verkoopcodes maken geen loginaccounts");
+  assert.ok(state.employeeDirectorySource?.suppliedNamedCodes > 1);
   assert.equal(state.users.length, 0);
   const physical = state.productionJobs.find(({ jobNumber }) => jobNumber === "PLOT-2026-0004");
   assert.equal(physical.proofStatus, "PHYSICALLY_VALIDATED");

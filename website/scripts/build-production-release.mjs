@@ -137,6 +137,7 @@ async function main() {
     entrypoints: [
       path.join(websiteRoot, "scripts", "workspace-runtime.mjs"),
       path.join(websiteRoot, "scripts", "production-migrate.mjs"),
+      path.join(websiteRoot, "scripts", "sportpaleis-website-sync-job.mjs"),
     ],
     allowedRoots: [
       path.join(websiteRoot, "scripts"),
@@ -151,6 +152,8 @@ async function main() {
     [path.join(websiteRoot, "package-lock.json"), "app/package-lock.json"],
     [path.join(websiteRoot, "public", "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png"), "app/public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
+    [path.join(repositoryRoot, "ops", "production", "wbd-sportpaleis-website-sync.service"), "deployment/wbd-sportpaleis-website-sync.service"],
+    [path.join(repositoryRoot, "ops", "production", "wbd-sportpaleis-website-sync.timer"), "deployment/wbd-sportpaleis-website-sync.timer"],
     [path.join(repositoryRoot, "ops", "production", "nginx-workspace-predeployment.conf"), "deployment/nginx-workspace-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "nginx-workspace-sportpaleis-predeployment.conf"), "deployment/nginx-workspace-sportpaleis-predeployment.conf"],
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
@@ -184,7 +187,11 @@ async function main() {
     files: entries,
     persistentProductionArtifacts: productionArtifacts.references,
     runtimeDependencyGraph: {
-      entrypoints: ["app/scripts/workspace-runtime.mjs", "app/scripts/production-migrate.mjs"],
+      entrypoints: [
+        "app/scripts/workspace-runtime.mjs",
+        "app/scripts/production-migrate.mjs",
+        "app/scripts/sportpaleis-website-sync-job.mjs",
+      ],
       files: runtimeDependencies.map(({ archive }) => archive),
     },
     productionPolicy: {

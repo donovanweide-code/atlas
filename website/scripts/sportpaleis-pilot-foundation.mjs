@@ -28,6 +28,19 @@ import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
 } from "./workspace-auth-foundation.mjs";
+import {
+  reconcileSportpaleisEmployeeDirectory,
+} from "./sportpaleis-employee-directory.mjs";
+import {
+  createSportpaleisWebsiteSource,
+  createSportpaleisWebsiteSyncState,
+  failSportpaleisWebsiteSync,
+  publicSportpaleisWebsiteSync,
+  stageSportpaleisWebsiteSync,
+} from "./sportpaleis-website-sync.mjs";
+import {
+  createSportpaleisWebshopIntakeState,
+} from "./sportpaleis-divide-import.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -420,6 +433,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     nextProductionJobSequence: 5,
     users: [],
     employees: structuredClone(CONFIRMED_EMPLOYEES),
+    employeeDirectorySource: null,
     sessions: [],
     loginAttempts: {},
     orders: [],
@@ -433,6 +447,8 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     feedback: [],
     extraUserRequests: [],
     mailbatches: [],
+    websiteSync: createSportpaleisWebsiteSyncState(),
+    webshopIntake: createSportpaleisWebshopIntakeState(),
     productionElements: [],
     productionFonts: [structuredClone(PILOT_FONT)],
     productionElementRequirements: [],
@@ -468,6 +484,26 @@ export function migrateSportpaleisPilotState(input) {
   state.employees = Array.isArray(state.employees) ? state.employees : [];
   for (const sourceEmployee of CONFIRMED_EMPLOYEES) {
     if (!state.employees.some(({ id, salesNumber }) => id === sourceEmployee.id || salesNumber === sourceEmployee.salesNumber)) state.employees.push(structuredClone(sourceEmployee));
+  }
+  if (state.employeeDirectorySource?.sourceId !== "sportpaleis-visible-sales-codes-20260820") {
+    const reconciliation = reconcileSportpaleisEmployeeDirectory(state.employees);
+    state.employees.push(...reconciliation.additions);
+    state.employeeDirectorySource = reconciliation.summary;
+    state.audit ??= [];
+    state.audit.unshift({
+      id: `audit-employee-directory-${randomBytes(8).toString("hex")}`,
+      at: reconciliation.summary.comparedAt,
+      userId: "system:employee-directory",
+      action: "Verkoopnummers vergeleken",
+      subject: "Werknemers",
+      details: {
+        sourceId: reconciliation.summary.sourceId,
+        matched: reconciliation.summary.matched,
+        added: reconciliation.summary.added,
+        preservedNameDifferences: reconciliation.summary.preservedNameDifferences,
+        unverified: reconciliation.summary.unverified,
+      },
+    });
   }
   for (const profile of state.productionProfiles ?? []) if (profile.supports?.includes("initials")) {
       const existing = profile.initialsInfixRule;
@@ -603,6 +639,8 @@ export function migrateSportpaleisPilotState(input) {
   state.configurationVersion = SPORTPALEIS_CONFIGURATION_VERSION;
   state.activationInvites ??= [];
   state.mailbatches ??= [];
+  state.websiteSync = { ...createSportpaleisWebsiteSyncState(), ...(state.websiteSync ?? {}) };
+  state.webshopIntake = { ...createSportpaleisWebshopIntakeState(), ...(state.webshopIntake ?? {}) };
   state.productionElements ??= [];
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
@@ -786,7 +824,10 @@ export function validateSportpaleisPilotState(input) {
   for (const employee of state.employees) {
     if (!employee.name || !/^\d{1,8}$/u.test(employee.salesNumber) || typeof employee.active !== "boolean" || !Number.isInteger(employee.revision) || employee.revision < 1) throw new Error("Ongeldige werknemer in datastore.");
     if (employee.userId && !state.users.some(({ id }) => id === employee.userId)) throw new Error("Werknemer verwijst naar een ontbrekende Workspace-gebruiker.");
+    if (employee.accountType && !["HUMAN", "FUNCTION", "SYSTEM"].includes(employee.accountType)) throw new Error("Ongeldig verkoopnummer-accounttype.");
   }
+  if (state.websiteSync.mode !== "STAGE_ONLY") throw new Error("Website-sync mag alleen bronwijzigingen klaarzetten.");
+  if (state.webshopIntake.enabled !== false || state.webshopIntake.retrievalMode !== "OFF") throw new Error("Divide/PDF-retrieval moet expliciet uit blijven.");
   if (new Set(state.orders.map(({ id }) => id)).size !== state.orders.length) throw new Error("Dubbel ordernummer.");
   if (new Set(state.productionFonts.map(({ id }) => id)).size !== state.productionFonts.length || new Set(state.productionFonts.map(({ sha256: hash }) => hash)).size !== state.productionFonts.length) throw new Error("Dubbele productiefontbron.");
   if (new Set(state.productionJobs.map(({ id }) => id)).size !== state.productionJobs.length || new Set(state.productionJobs.map(({ jobNumber }) => jobNumber)).size !== state.productionJobs.length) throw new Error("Dubbele productiejob.");
@@ -1100,9 +1141,10 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
+    this.websiteSource = websiteSource;
     this.releaseId = releaseId;
     this.secureCookies = secureCookies;
     this.allowedOrigin = allowedOrigin;
@@ -1286,6 +1328,9 @@ export class SportpaleisPilotService {
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
+      websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
+      webshopIntake: admin ? structuredClone(state.webshopIntake) : undefined,
+      employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
       productionElements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElements.map((element) => ({ ...element, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElementRequirements) : [],
@@ -1595,7 +1640,7 @@ export class SportpaleisPilotService {
           stage: "ORDER",
           owner: user.name,
           acceptedBy: { userId: user.id, name: user.name, salesNumber: user.salesNumber ?? null, at: createdAt },
-          salesAttribution: { employeeId: salesEmployee?.id ?? null, salesNumber: requestedSalesNumber, label: salesEmployee?.name ?? "Niet gekoppeld", accountType: salesEmployee ? "HUMAN" : "UNASSIGNED", selectedByUserId: user.id, selectedAt: createdAt },
+          salesAttribution: { employeeId: salesEmployee?.id ?? null, salesNumber: requestedSalesNumber, label: salesEmployee?.name ?? "Niet gekoppeld", accountType: salesEmployee?.accountType ?? (salesEmployee ? "HUMAN" : "UNASSIGNED"), selectedByUserId: user.id, selectedAt: createdAt },
           sourceContext,
           orderKind,
           communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
@@ -1961,6 +2006,26 @@ export class SportpaleisPilotService {
       return { state, value: outcome };
     });
     return result.value;
+  }
+
+  async runWebsiteSync(token, csrfToken) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    let snapshot;
+    try {
+      snapshot = await this.websiteSource.snapshot();
+    } catch (error) {
+      await this.store.mutate(async (state) => ({ state, value: failSportpaleisWebsiteSync(state, error, { actorId: user.id }) }));
+      throw Object.assign(new Error("De websitecontrole kon niet volledig worden uitgevoerd. Bestaande Workspace-data is niet gewijzigd."), { statusCode: 502, code: String(error?.code ?? "WEBSITE_SYNC_FAILED") });
+    }
+    const current = await this.store.read();
+    if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint) return publicSportpaleisWebsiteSync(current);
+    const result = await this.store.mutate(async (state) => ({
+      state,
+      value: stageSportpaleisWebsiteSync(state, snapshot, { actorId: user.id, trigger: "manual" }),
+    }));
+    return publicSportpaleisWebsiteSync({ websiteSync: result.value });
   }
 
   async upsertProductionElement(token, csrfToken, payload) {
@@ -3919,6 +3984,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/mailbatches/import" && method === "POST") {
         json(response, 201, await service.importMailbatch(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/admin/website-sync/run" && method === "POST") {
+        json(response, 200, await service.runWebsiteSync(token, csrf));
         return true;
       }
       if (route === "/api/sportpaleis/v1/production-elements" && method === "POST") {

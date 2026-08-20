@@ -134,7 +134,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   assert.match(source, /data-direct-production-select[^]*?> Alles selecteren</u);
-  assert.match(source, /data-action="prepare-and-print-production-color"[^]*?>Printen</u);
+  assert.match(source, /data-action="prepare-and-print-production-color"[^]*?>Productiebestand maken</u);
   assert.match(source, /Klaar voor productie/u);
   assert.match(source, /Aandacht nodig/u);
   assert.match(source, />Oplossen ›</u);

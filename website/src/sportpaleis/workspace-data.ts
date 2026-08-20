@@ -97,6 +97,35 @@ export interface SportpaleisEmployee {
   active: boolean;
   userId: string | null;
   revision: number;
+  accountType?: "HUMAN" | "FUNCTION" | "SYSTEM";
+  provenance?: { sourceId: string; observedAt: string; importedAt: string };
+}
+
+export interface SportpaleisWebsiteSyncState {
+  enabled: boolean;
+  mode: "STAGE_ONLY";
+  cadence: "NIGHTLY_03_00_EUROPE_AMSTERDAM";
+  source: { sitemapUrl: string; associationPath: string; cadence: string };
+  status: "NOT_RUN" | "OK" | "ATTENTION" | "ERROR";
+  lastAttemptAt: string | null;
+  lastSuccessfulSyncAt: string | null;
+  nextRunAt: string | null;
+  sourceFingerprint: string | null;
+  counts: { associations: number; articles: number; new: number; changed: number; attention: number };
+  changes: { id: string; kind: string; sourceIdentifier: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string }[];
+  lastError: { code: string; message: string } | null;
+}
+
+export interface SportpaleisWebshopIntakeState {
+  enabled: false;
+  status: "NOT_ACTIVE";
+  startBoundary: null;
+  lastSuccessfulRetrievalAt: null;
+  highWaterMark: null;
+  processedSourceIdentifiers: string[];
+  processedOrderRevisionIdentifiers: string[];
+  retrievalMode: "OFF";
+  channel: "WEBSHOP_XPRT";
 }
 
 export interface OrderAcceptedBy {
@@ -549,6 +578,7 @@ export interface WorkspaceAuditEntry {
   userId: string;
   action: string;
   subject: string;
+  details?: Record<string, unknown>;
 }
 
 export interface SportpaleisWorkspaceState {
@@ -558,6 +588,7 @@ export interface SportpaleisWorkspaceState {
   currentUserId: string;
   users: SportpaleisUser[];
   employees?: SportpaleisEmployee[];
+  employeeDirectorySource?: { sourceId: string; comparedAt: string; suppliedNamedCodes: number; matched: number; added: number; preservedNameDifferences: number; unverified: number } | null;
   orders: WorkspaceOrder[];
   articles: CatalogArticle[];
   associations: AssociationConfiguration[];
@@ -582,6 +613,8 @@ export interface SportpaleisWorkspaceState {
   feedback: WorkspaceFeedback[];
   extraUserRequests: ExtraUserRequest[];
   mailbatches: SportpaleisMailbatch[];
+  websiteSync?: SportpaleisWebsiteSyncState;
+  webshopIntake?: SportpaleisWebshopIntakeState;
   productionElements: SportpaleisProductionElement[];
   productionFonts: SportpaleisProductionFont[];
   productionElementRequirements: SportpaleisProductionElementRequirement[];

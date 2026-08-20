@@ -235,8 +235,9 @@ test("productiebootstrap bevat alleen goedgekeurde referentieconfiguratie en nul
   assert.ok(state.articles.length > 0);
   assert.ok(state.associations.length > 0);
   assert.ok(state.productionProfiles.length > 0);
-  assert.equal(state.audit[0].details.ordersCreated, 0);
-  assert.equal(state.audit[0].details.usersCreated, 0);
+  const bootstrapAudit = state.audit.find(({ id }) => id === "audit-production-bootstrap");
+  assert.equal(bootstrapAudit.details.ordersCreated, 0);
+  assert.equal(bootstrapAudit.details.usersCreated, 0);
   assert.doesNotMatch(JSON.stringify(state), /Daniël Wouters|Interne productietest|example\.nl|Kevin Demo|Patrick Demo/);
 });
 

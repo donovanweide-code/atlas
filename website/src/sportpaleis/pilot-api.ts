@@ -470,6 +470,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/admin/associations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
+  async runWebsiteSync(): Promise<NonNullable<PilotBootstrap["websiteSync"]>> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/website-sync/run`, { method: "POST" }));
+  }
+
   async updateProductionProfile(profileId: string, input: {
     expectedRevision: number;
     placement?: string;

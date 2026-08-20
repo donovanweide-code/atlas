@@ -100,6 +100,12 @@ test("managed-font Rugnummer groter dan 18 cm legt de fysieke hoogte-as horizont
   assert.equal(source.productionGeometry.groups[0].rotationApplied, 0, "exact 18 cm behoudt de bronas");
   assert.equal(direct.productionGeometry.groups[0].mirrorApplied, true);
   assert.ok(direct.productionGeometry.groups[0].boundsMm.width > direct.productionGeometry.groups[0].boundsMm.height);
+  const secondPiece = createManagedFontProductionPiece({ fontRecord, bytes, content: "9", widthMm: 100, heightMm: 181, id: "physical-horizontal-2", sourceOrderId: "test-2", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit", requestedHeightAxis: "REQUESTED_HEIGHT_AXIS_HORIZONTAL" });
+  const sideBySide = createCutJobBatch({ organizationId: "sportpaleis", orderId: "physical-horizontal-pair", revision: 1, attemptIdPrefix: "horizontal-pair", createdAt: "2026-08-20T12:00:00.000Z", pieces: [piece, secondPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+  assert.equal(sideBySide.productionGeometry.groups.length, 2);
+  assert.equal(sideBySide.productionGeometry.groups[0].placementMm.y, sideBySide.productionGeometry.groups[1].placementMm.y, "twee volledige horizontale Rugnummergroepen passen naast elkaar op de actieve baan");
+  assert.ok(sideBySide.nesting.usedWidthMm <= 440);
+  assert.equal(sideBySide.nesting.scaleApplied, 1);
   assert.ok((await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8")).includes("data-contour-id"));
 });
 
