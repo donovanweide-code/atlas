@@ -1,0 +1,49 @@
+{
+  "proofVersion": 1,
+  "result": "PASS",
+  "isolated": true,
+  "productionChanged": false,
+  "source": "https://webuildanddesign.nl/",
+  "authorization": {
+    "mode": "NONE",
+    "status": "NOT_REQUIRED",
+    "credentialsStoredClientSide": false
+  },
+  "fetchedAt": "2026-08-20T15:03:00.795Z",
+  "observedAt": "2026-08-14T15:34:47.000Z",
+  "freshness": "LIVE",
+  "fetchDurationMs": 106.3,
+  "attemptCount": 1,
+  "rawHash": "e0efae44b946b30585e4ceaac3b1b9cf82ce549cd6c06992ad8e646a0c04b48d",
+  "normalizedHash": "09c59eef1e78590168bcdd135674b669a8b558deee5344b4ff13f347703a1d46",
+  "previousNormalizedHash": "09c59eef1e78590168bcdd135674b669a8b558deee5344b4ff13f347703a1d46",
+  "changedFields": [],
+  "provenance": {
+    "connectorId": "wbd-homepage-metadata",
+    "connectorType": "webpage-metadata",
+    "syncRunId": "wbd-homepage-metadata:2026-08-20T15:03:00.691Z:e7d1982e-814c-4693-a0e3-9d0bb7461ca9",
+    "source": "https://webuildanddesign.nl/",
+    "normalizerId": "wbd-homepage-head-metadata",
+    "normalizerVersion": "2.0.0",
+    "normalizedSchemaVersion": "wbd-homepage-metadata-v1",
+    "fetchedVia": "SERVER_SIDE_HTTPS"
+  },
+  "centralState": {
+    "path": ".atlas-review\\wbd-owner-live-proof-state-final.json",
+    "revision": 2,
+    "evidenceIds": [
+      "evidence-wbd-homepage-metadata-09c59eef1e78590168bcdd13"
+    ],
+    "attentionIds": [
+      "attention-77f0ac57e6196e7139eab447"
+    ],
+    "nextBestActionIds": [
+      "nba-77f0ac57e6196e7139eab447"
+    ],
+    "preparedActionIds": [],
+    "auditEvents": [
+      "EVIDENCE_INGESTED",
+      "ATTENTION_CREATED"
+    ]
+  }
+}

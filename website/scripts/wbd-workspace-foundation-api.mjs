@@ -2,6 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  WBD_HOMEPAGE_CONNECTOR_ID,
+  WBD_HOMEPAGE_CONTEXT_ID,
+  WBD_HOMEPAGE_SOURCE_URL,
+  createWbdHomepageConnector,
+  projectWbdHomepageObservationFeed,
+} from "../src/atlas-connector-wbd-homepage.ts";
+import { FileConnectorStateStore } from "./atlas-connector-file-store.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "../..");
@@ -9,6 +17,20 @@ const foundationRoot = path.join(repositoryRoot, "data", "wbd-workspace");
 const feedbackPath = path.join(foundationRoot, "feedback.json");
 const paymentsPath = path.join(foundationRoot, "payment-statuses.json");
 const apiPrefix = "/__wbd-foundation";
+const observationSourceUrl = process.env.ATLAS_WBD_OBSERVATION_SOURCE_URL ?? WBD_HOMEPAGE_SOURCE_URL;
+const observationContextId = process.env.ATLAS_WBD_OBSERVATION_CONTEXT_ID ?? WBD_HOMEPAGE_CONTEXT_ID;
+const observationConnectorId = process.env.ATLAS_WBD_OBSERVATION_CONNECTOR_ID ?? WBD_HOMEPAGE_CONNECTOR_ID;
+const observationDataRoot = path.resolve(
+  process.env.ATLAS_WBD_OBSERVATION_DATA_DIR
+    ?? path.join(repositoryRoot, "website", ".atlas-data", "connectors-v2"),
+);
+const observationConnector = createWbdHomepageConnector({
+  sourceUrl: observationSourceUrl,
+  contextId: observationContextId,
+  connectorId: observationConnectorId,
+  allowInsecureLocalhost: observationContextId.endsWith(":wbd-demo"),
+});
+const observationStore = new FileConnectorStateStore(observationDataRoot);
 
 const feedbackStatuses = new Set(["Nieuw", "In beoordeling", "Besloten"]);
 const paymentStatuses = new Set(["manual-unregistered", "open", "paid"]);
@@ -80,6 +102,12 @@ async function handleRequest(request, response) {
   const requestUrl = new URL(request.url ?? "/", "http://localhost");
   const pathname = requestUrl.pathname;
   const method = request.method ?? "GET";
+
+  if (pathname === `${apiPrefix}/observations` && method === "GET") {
+    const state = await observationStore.load(observationConnector.definition);
+    sendJson(response, 200, await projectWbdHomepageObservationFeed(state, observationSourceUrl));
+    return true;
+  }
 
   if (pathname === `${apiPrefix}/feedback` && method === "GET") {
     const feedback = await readJson(feedbackPath, []);
