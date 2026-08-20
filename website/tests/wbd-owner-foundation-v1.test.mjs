@@ -156,6 +156,8 @@ test("HTTP-boundary lekt zonder sessie geen capabilities en beschermt login/logo
   assert.doesNotMatch(await unauthorized.text(), /WooCommerce|Sportpaleis|capabilities"\s*:/i);
   assert.equal(unauthorized.headers.get("cache-control"), "no-store");
   assert.equal(unauthorized.headers.get("x-frame-options"), "DENY");
+  assert.equal((await fetch(`${origin}/api/wbd/v1/atlas`)).status, 401);
+  assert.equal((await fetch(`${origin}/api/wbd/v1/atlas/search?q=Sportpaleis`)).status, 401);
 
   const foreign = await fetch(`${origin}/api/wbd/v1/auth/login`, { method: "POST", headers: { Origin: "https://attacker.invalid", "Content-Type": "application/json" }, body: JSON.stringify({ email: "donovanweide@gmail.com", password }) });
   assert.equal(foreign.status, 403);
@@ -172,6 +174,13 @@ test("HTTP-boundary lekt zonder sessie geen capabilities en beschermt login/logo
   const catalogResponse = await fetch(`${origin}/api/wbd/v1/capabilities`, { headers: { Cookie: cookie } });
   assert.equal(catalogResponse.status, 200);
   assert.ok((await catalogResponse.json()).capabilities.length >= 25);
+  const atlasResponse = await fetch(`${origin}/api/wbd/v1/atlas`, { headers: { Cookie: cookie } });
+  assert.equal(atlasResponse.status, 200);
+  assert.equal(atlasResponse.headers.get("cache-control"), "no-store");
+  assert.equal((await atlasResponse.json()).autonomyPolicy.unknownRisk, "FAIL_CLOSED");
+  const searchResponse = await fetch(`${origin}/api/wbd/v1/atlas/search?q=Sportpaleis`, { headers: { Cookie: cookie } });
+  assert.equal(searchResponse.status, 200);
+  assert.ok((await searchResponse.json()).results.some(({ type }) => type === "CAPABILITY" || type === "ORGANIZATION" || type === "EVIDENCE"));
   const logout = await fetch(`${origin}/api/wbd/v1/auth/logout`, { method: "POST", headers: { Cookie: cookie, Origin: origin, "X-CSRF-Token": login.csrfToken } });
   assert.equal(logout.status, 200);
   assert.match(logout.headers.get("set-cookie"), /Max-Age=0/);

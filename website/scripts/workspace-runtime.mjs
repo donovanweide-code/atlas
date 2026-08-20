@@ -27,6 +27,11 @@ import {
   createWbdOwnerRequestHandler,
 } from "./wbd-owner-foundation.mjs";
 import { WbdOwnerMariaDbStore } from "./wbd-owner-mariadb-store.mjs";
+import {
+  WBD_HOMEPAGE_CONNECTOR_ID,
+  WBD_HOMEPAGE_SOURCE_URL,
+  WbdHomepageConnectorScheduler,
+} from "./wbd-homepage-live-connector.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -35,11 +40,14 @@ const sportpaleisBoundary = "/workspace/sportpaleis";
 export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
 const workspaceHome = `${workspaceBoundary}/home`;
+const workspaceAttention = `${workspaceBoundary}/attention`;
+const workspaceSearch = `${workspaceBoundary}/zoeken`;
+const workspaceManagement = `${workspaceBoundary}/beheer`;
 const workspaceCapabilities = `${workspaceBoundary}/capabilities`;
 const workspaceOrganizations = `${workspaceBoundary}/organisaties`;
 const workspaceOpportunities = `${workspaceBoundary}/kansen`;
 const workspaceWorkContext = `${workspaceBoundary}/werkcontext`;
-const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceCapabilities, workspaceOrganizations, workspaceOpportunities, workspaceWorkContext]);
+const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceAttention, workspaceSearch, workspaceManagement, workspaceCapabilities, workspaceOrganizations, workspaceOpportunities, workspaceWorkContext]);
 const ownerOrganizationRoute = /^\/workspace\/wbd\/organisaties\/[a-z0-9][a-z0-9-]*$/u;
 const isOwnerWorkspaceRoute = (pathname) => ownerWorkspaceRoutes.has(pathname) || ownerOrganizationRoute.test(pathname);
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
@@ -61,6 +69,8 @@ const workspaceRootAssets = new Set([
 
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
+  workspaceAttention,
+  workspaceSearch,
   workspaceCapabilities,
   `${workspaceBoundary}/overzicht`,
   `${workspaceBoundary}/organisaties`,
@@ -248,6 +258,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   let activeSportpaleisStore;
   let wbdOwnerHandlerPromise;
   let activeWbdOwnerStore;
+  let activeWbdOwnerService;
+  let wbdConnectorScheduler = options.wbdConnectorScheduler ?? null;
   const sportpaleisHandler = () => {
     if (!sportpaleisHandlerPromise) {
       sportpaleisHandlerPromise = (async () => {
@@ -317,6 +329,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           allowedOrigin: new URL(config.wbdWorkspaceBaseUrl).origin,
         });
         await service.initialize();
+        activeWbdOwnerService = service;
         return createWbdOwnerRequestHandler(service, {
           onError: ({ error, method, route, statusCode }) => log(config, statusCode >= 500 ? "error" : "warn", "wbd-owner-api-error", {
             method, route, statusCode, errorCode: String(error?.code ?? "INTERNAL_ERROR"), errorType: String(error?.name ?? typeof error),
@@ -445,8 +458,26 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       releaseId: config.releaseId,
       persistence: config.nodeEnv === "production" ? "mariadb" : "file-development",
     });
+    const connectorEnabled = options.wbdConnectorEnabled
+      ?? (config.nodeEnv === "production" || process.env.ATLAS_WBD_CONNECTOR_ENABLED === "true");
+    if (connectorEnabled) {
+      void (async () => {
+        await wbdOwnerHandler();
+        if (!wbdConnectorScheduler) {
+          wbdConnectorScheduler = new WbdHomepageConnectorScheduler({
+            readPrevious: () => activeWbdOwnerService.connectorState(WBD_HOMEPAGE_CONNECTOR_ID),
+            persistSnapshot: (snapshot) => activeWbdOwnerService.ingestConnectorSnapshot(snapshot),
+            intervalMs: Number(process.env.ATLAS_WBD_CONNECTOR_INTERVAL_MS || 15 * 60 * 1_000),
+            connectorOptions: { source: process.env.ATLAS_WBD_OBSERVATION_SOURCE_URL ?? WBD_HOMEPAGE_SOURCE_URL },
+            onEvent: (event) => log(config, event.status === "FAILED" ? "warn" : "info", event.event, event),
+          });
+        }
+        wbdConnectorScheduler.start();
+      })().catch((error) => log(config, "error", "atlas-connector-scheduler-start-failed", { errorCode: String(error?.code ?? "INTERNAL_ERROR") }));
+    }
   });
   server.on("close", () => {
+    wbdConnectorScheduler?.stop?.();
     if (typeof activeSportpaleisStore?.close === "function") {
       void activeSportpaleisStore.close().catch(() => undefined);
     }

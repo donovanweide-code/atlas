@@ -12,6 +12,10 @@ import {
   wbdProjects,
   type WbdProject,
 } from "./wbd-foundation-data";
+import type {
+  WbdHomepageObservationFeed,
+  WbdHomepageWorkspaceObservation,
+} from "./atlas-connector-wbd-homepage.ts";
 
 interface InvoiceSummary {
   id: string;
@@ -64,6 +68,16 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T12:00:00`));
 }
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function today(): string {
   const date = new Date();
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
@@ -77,6 +91,41 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(body.error || "De Workspace-gegevens konden niet worden geladen.");
   return body as T;
+}
+
+function liveObservationCard(observation: WbdHomepageWorkspaceObservation): string {
+  const changes = observation.changedFields.map((field) => `<li>
+    <strong>${escapeHtml(field.label)}</strong>
+    <div><span>Vorige toestand</span><p>${escapeHtml(field.previous)}</p></div>
+    <div><span>Huidige toestand</span><p>${escapeHtml(field.current)}</p></div>
+  </li>`).join("");
+  const contextLabel = observation.mode === "live" ? "Publieke website" : "Gecontroleerde demonstratie";
+  return `<article class="wbd-live-attention__card" data-wbd-live-observation="${escapeHtml(observation.id)}">
+    <header><div><p class="workspace-label">Aandacht · ${contextLabel}</p><h2>${escapeHtml(observation.title)}</h2></div><time datetime="${escapeHtml(observation.observedAt)}">${escapeHtml(formatDateTime(observation.observedAt))}</time></header>
+    <p>${escapeHtml(observation.summary)}</p>
+    <details>
+      <summary>Bekijken <span aria-hidden="true">→</span></summary>
+      <div class="wbd-live-attention__detail">
+        <ul>${changes}</ul>
+        <footer><p>Dit is een herleidbaar bronfeit. Atlas vult geen verklaring of betekenis in.</p><a href="${escapeHtml(observation.sourceUrl)}" target="_blank" rel="noreferrer">Open publieke bron <span aria-hidden="true">↗</span></a></footer>
+      </div>
+    </details>
+  </article>`;
+}
+
+async function loadLiveObservationAttention(app: HTMLDivElement): Promise<void> {
+  const target = app.querySelector<HTMLElement>("[data-wbd-live-attention]");
+  if (!target) return;
+  try {
+    const feed = await api<WbdHomepageObservationFeed>(`${foundationApi}/observations`);
+    const latest = feed.observations[0];
+    if (!latest) return;
+    target.innerHTML = liveObservationCard(latest);
+    target.hidden = false;
+  } catch {
+    target.hidden = true;
+    target.replaceChildren();
+  }
 }
 
 function renderShell(activeId: string, title: string, kicker: string, context: string, content: string): string {
@@ -150,6 +199,7 @@ function renderOverview(app: HTMLDivElement): void {
       <div><p class="workspace-label">Vastgelegde aandacht · Project 001C</p><h2 id="current-focus-title">${escapeHtml(currentWorkstream.title)} is de actieve werkstroom.</h2><p>${escapeHtml(currentWorkstream.summary)}</p></div>
       <dl><div><dt>Datastatus</dt><dd>Lokale, handmatig vastgelegde projectstatus</dd></div><div><dt>Hierna</dt><dd>002 · Infrastructure Foundation</dd></div></dl>
     </section>
+    <section class="workspace-section wbd-live-attention" data-wbd-live-attention hidden aria-live="polite" aria-label="Aandacht uit publieke bronnen"></section>
     <nav class="wbd-foundation-entry-grid" aria-label="Belangrijkste werkruimtes">
       <a href="/workspace/wbd/ontwikkelpartners"><span>01</span><strong>Ontwikkelpartner</strong><p>Sport 2000 Sportpaleis B.V. · actief</p></a>
       <a data-tone="cream" href="/workspace/wbd/ontwikkeling/monitor"><span>02</span><strong>Ontwikkelmonitor</strong><p>${escapeHtml(currentWorkstream.nextStep)}</p></a>
@@ -157,6 +207,7 @@ function renderOverview(app: HTMLDivElement): void {
       <a href="/workspace/wbd/infrastructuur"><span>04</span><strong>Infrastructuur</strong><p>${escapeHtml(next.nextValidatedStep)}</p></a>
     </nav>
     <section class="workspace-section wbd-foundation-quiet"><div><p class="workspace-label">Bewuste grens</p><h2>Polish zonder herontwerp.</h2></div><p>${escapeHtml(currentWorkstream.boundaries)} Hosting, domein, SSL, back-ups en zakelijke e-mail blijven daarom nog buiten de actieve werkstroom.</p></section>`);
+  void loadLiveObservationAttention(app);
 }
 
 function renderProjects(app: HTMLDivElement): void {
