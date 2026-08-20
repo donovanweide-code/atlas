@@ -99,7 +99,8 @@ test("Release 1 UI houdt override en deelproductie normaal en biedt dunne bulkac
   assert.match(source, /Automatisch gecontroleerd[^]*klaar voor Productie/u);
   assert.match(source, />Volgende order</u);
   assert.match(source, />Controleren</u);
-  assert.match(source, /Huidige \/ eerstvolgende foliekleur/u);
+  assert.match(source, /Nu produceren/u);
+  assert.match(source, /Daarna/u);
   assert.match(source, /data-action="prepare-and-print-production-color"[^]*>Productiebestand maken</u);
   assert.match(source, /data-production-group-select[^]*Alles selecteren[^]*>Productiebestand maken</u);
   assert.match(source, /productionClosure\?\.status === "ELIGIBLE"/u);

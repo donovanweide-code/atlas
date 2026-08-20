@@ -3285,8 +3285,8 @@ function deriveCatalogProductionLines(state, orderId, items) {
         const managedFont = versionedSource ? null : configuredManagedFont(state, profile);
         const heightMm = versionedSource?.heightMm ?? requestedHeightMm;
         const widthMm = versionedSource?.widthMm ?? (field === "initialsInfix" && !configuredHeight ? 0 : Math.round(Math.max(20, heightMm * Math.max(.5, content.length * .48)) * 1000) / 1000);
-        const reason = field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.verticalOffsetMm === null || infixRule.status === "DATA_GAP")
-          ? "De fysieke grootte en onderste positie van het tussenvoegsel zijn nog niet bevestigd."
+        const reason = field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.horizontalSpacingMm === null || infixRule.baselineOffsetMm === null || infixRule.status === "DATA_GAP")
+          ? "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd."
           : versionedSource || managedFont
           ? null
           : profile?.productionSourceSetId
@@ -3314,7 +3314,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
           provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}`,
           proofStatus: versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
           validation: { status: versionedSource || managedFont || field === "initialsInfix" && !reason ? "VALID" : "BLOCKED", reason },
-          ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "BOTTOM", verticalOffsetMm: infixRule?.verticalOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
+          ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "CENTER", horizontalSpacingMm: infixRule?.horizontalSpacingMm ?? null, baselineOffsetMm: infixRule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
         });
       }
     }

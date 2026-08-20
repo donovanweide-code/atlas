@@ -167,11 +167,12 @@ test("soft-delete verdwijnt uit operatie, is geautoriseerd en bewaart consequent
 test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Verwijderd zonder mailactie", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
-  assert.match(source, /data-direct-production-select[^]*?> Alles selecteren</u);
+  assert.match(source, /data-direct-production-select/u);
+  assert.match(source, /Alles selecteren · hele batch/u);
   assert.match(source, /data-action="prepare-and-print-production-color"[^]*?>Productiebestand maken</u);
   assert.match(source, /Klaar voor productie/u);
   assert.match(source, /Aandacht nodig/u);
-  assert.match(source, />Oplossen ›</u);
+  assert.match(source, /action: "Oplossen ›"/u);
   assert.match(source, /data-action="select-all-completion-orders"[^]*?>Alles selecteren</u);
   assert.match(source, /data-action="bulk-complete-production-orders"[^]*?>Gereed</u);
   assert.match(source, /data-filter="deleted"[^]*?>Verwijderd</u);

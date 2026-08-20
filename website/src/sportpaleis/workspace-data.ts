@@ -112,7 +112,7 @@ export interface SportpaleisWebsiteSyncState {
   nextRunAt: string | null;
   sourceFingerprint: string | null;
   counts: { raw?: number; live?: number; productionRelevant?: number; autoNoop?: number; associations: number; articles: number; new: number; changed: number; attention: number };
-  changes: { id: string; kind: string; sourceIdentifier: string; sourceFingerprint?: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string; sourceValue?: { name?: string; url?: string; productionRelevance?: { status: string; fields?: string[]; evidence?: string } }; workspaceValue?: { name?: string; url?: string | null } | null }[];
+  changes: { id: string; kind: string; sourceIdentifier: string; sourceFingerprint?: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string; sourceValue?: { name?: string; url?: string; imageUrl?: string; productionRelevance?: { status: string; fields?: string[]; evidence?: string } }; workspaceValue?: { name?: string; url?: string | null } | null }[];
   lastError: { code: string; message: string } | null;
 }
 
