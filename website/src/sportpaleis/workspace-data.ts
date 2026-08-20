@@ -364,7 +364,9 @@ export interface WorkspaceOrder {
   /** Server-derived operational status. Never use the stage alone as production readiness. */
   productionStatus?: "ATTENTION" | "READY" | "IN_PRODUCTION" | "DONE";
   productionStatusReason?: string | null;
+  productionClosure?: { status: "NOT_ELIGIBLE" | "ELIGIBLE" | "CONFIRMED"; reason: string | null };
   orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM" | "LEGACY";
+  teamContext?: string | null;
   owner: string;
   acceptedBy?: OrderAcceptedBy;
   salesAttribution?: { employeeId?: string | null; salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
@@ -381,8 +383,8 @@ export interface WorkspaceOrder {
   barcode?: { value: string; featureEnabled: false; hardwareValidated: false };
   pickup?: { status: "NOT_PICKED_UP" | "PICKED_UP"; pickedUpAt: string | null; pickedUpBy: string | null };
   payment?: { status: "UNKNOWN" | "DUE" | "PAID" | "REGISTER_PROCESSED"; updatedAt: string | null; updatedBy: string | null; source: "MANUAL_WORKSPACE" | "ACA_XPRT" | "UNKNOWN" };
-  fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null; feeEur?: number; address?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" } | null };
-  operationalFacts?: Partial<Record<"PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED", { at: string; userId: string; userName: string; source: "MANUAL_WORKSPACE" }>>;
+  fulfillment?: { mode: "PICKUP" | "DELIVERY"; status: "PENDING" | "READY_FOR_PICKUP" | "PICKED_UP" | "DELIVERED"; updatedAt: string | null; updatedBy: string | null; feeEur?: number; address?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" } | null };
+  operationalFacts?: Partial<Record<"PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "READY_FOR_PICKUP" | "PICKED_UP" | "DELIVERED", { at: string; userId: string; userName: string; source: "MANUAL_WORKSPACE" }>>;
   eventHistory?: { type: string; at: string; userId: string; userName: string; source: string; details?: Record<string, unknown> }[];
   deletion?: {
     status: "DELETED";

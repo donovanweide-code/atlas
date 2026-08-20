@@ -310,7 +310,7 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/pickup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision }) }));
   }
 
-  async recordOperationalEvent(order: WorkspaceOrder, action: "PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "PICKED_UP" | "DELIVERED"): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+  async recordOperationalEvent(order: WorkspaceOrder, action: "PRINTED" | "REGISTER_PROCESSED" | "PAID" | "CUSTOMER_INFORMED" | "READY_FOR_PICKUP" | "PICKED_UP" | "DELIVERED"): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/operational-event`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("operation") }, body: JSON.stringify({ action, expectedRevision: order.revision }) }));
   }
 

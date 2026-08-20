@@ -71,9 +71,16 @@ test("PRE-PILOT MASTER — organisatie, sessies, operatie en intake", async (con
       orderKind: "TEAM",
       standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
+      productionLines: [{ id: "prepilot-team-back", type: "NUMBER", content: "2", previewLabel: "Rugnummer 2", widthMm: 100, heightMm: 200, quantity: 1, sourceId: (await service.bootstrap(activeAdmin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID").id }],
     }), "prepilot-operation-team")).value;
     await store.mutate(async (state) => { const order = state.orders.find(({ id }) => id === created.id); order.communication.receipt.status = "CAPTURED"; return { state, value: undefined }; });
-    for (const key of ["control", "print", "done"]) created = (await service.advanceOrder(activeAdmin.token, activeAdmin.csrfToken, created.id, created.revision, `prepilot-team-${key}`)).value;
+    created = (await service.advanceOrder(activeAdmin.token, activeAdmin.csrfToken, created.id, created.revision, "prepilot-team-control")).value;
+    const proposal = (await service.createProductionProposal(activeAdmin.token, activeAdmin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "prepilot-team-proposal")).value;
+    const group = proposal.groups[0];
+    const job = (await service.createProductionJob(activeAdmin.token, activeAdmin.csrfToken, { proposalId: proposal.id, proposalGroupId: group.id, orders: group.orders }, "prepilot-team-job")).value;
+    await service.completeProductionJob(activeAdmin.token, activeAdmin.csrfToken, job.id, "prepilot-team-printed");
+    created = (await service.bootstrap(activeAdmin.token)).orders.find(({ id }) => id === created.id);
+    created = (await service.completeProductionOrders(activeAdmin.token, activeAdmin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "prepilot-team-ready")).value.completed[0];
     const paid = (await service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, created.id, { action: "PAID", expectedRevision: created.revision }, "prepilot-paid-event")).value;
     assert.equal(paid.payment.status, "PAID");
     assert.equal(paid.pickup.status, "NOT_PICKED_UP");

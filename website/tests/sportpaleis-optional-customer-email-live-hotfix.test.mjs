@@ -23,7 +23,7 @@ async function fixture(context) {
     store: new MemoryMailStore(),
     transport: new CaptureTransport({ captureDirectory: path.join(root, "captures") }),
   });
-  const service = new SportpaleisPilotService({ store, mailFoundation, allowedOrigin: "http://127.0.0.1", releaseId: "SPW-OPTIONAL-EMAIL-LIVE-HOTFIX-20260817", mailMode: "capture" });
+  const service = new SportpaleisPilotService({ store, mailFoundation, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), allowedOrigin: "http://127.0.0.1", releaseId: "SPW-OPTIONAL-EMAIL-LIVE-HOTFIX-20260817", mailMode: "capture" });
   await service.initialize();
   return {
     store,
@@ -86,15 +86,15 @@ test("Teamorder houdt alle contactvelden optioneel", async (context) => {
 test("een order zonder e-mail kan Klaar worden zonder communicatie- of referentiedatamutatie", async (context) => {
   const { service, store, storeUser, operator } = await fixture(context);
   const before = await store.read();
-  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload(), "optional-email-ready-order-0001")).value;
-  await store.mutate(async (state) => {
-    const order = state.orders.find(({ id }) => id === created.id);
-    order.stage = "PRINT";
-    order.revision += 1;
-    return { state, value: undefined };
-  });
+  const font = (await service.bootstrap(operator.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
+  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { ...individualPayload(), productionLines: [{ id: "optional-email-back", type: "NUMBER", content: "10", previewLabel: "Rugnummer 10", widthMm: 100, heightMm: 200, quantity: 1, sourceId: font.id }] }, "optional-email-ready-order-0001")).value;
+  const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "optional-email-control-0001")).value;
+  const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "optional-email-proposal-0001")).value;
+  const group = proposal.groups[0];
+  const job = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: group.id, orders: group.orders }, "optional-email-job-0001")).value;
+  await service.completeProductionJob(operator.token, operator.csrfToken, job.id, "optional-email-printed-0001");
   const printable = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
-  const ready = (await service.advanceOrder(operator.token, operator.csrfToken, printable.id, printable.revision, "optional-email-done-0001")).value;
+  const ready = (await service.completeProductionOrders(operator.token, operator.csrfToken, { orders: [{ id: printable.id, expectedRevision: printable.revision }] }, "optional-email-done-0001")).value.completed[0];
   assert.equal(ready.stage, "DONE");
   assert.equal(ready.communication.receipt.status, "NOT_SENT");
   assert.equal(ready.communication.ready.status, "NOT_SENT");

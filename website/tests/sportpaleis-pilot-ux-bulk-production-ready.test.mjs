@@ -77,11 +77,12 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   const mixedAfterWhite = state.orders.find(({ id }) => id === mixed.id);
   const whiteAfterWhite = state.orders.find(({ id }) => id === white.id);
   assert.equal(mixedAfterWhite.stage, "PRINT");
-  assert.equal(whiteAfterWhite.stage, "DONE");
+  assert.equal(whiteAfterWhite.stage, "PRINT");
+  assert.equal(whiteAfterWhite.productionClosure.status, "ELIGIBLE");
 
   const firstBulk = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: [mixedAfterWhite, whiteAfterWhite].map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-ux-ready-white")).value;
-  assert.deepEqual(firstBulk.completed.map(({ id }) => id), []);
-  assert.deepEqual(firstBulk.skipped.map(({ id, code }) => [id, code]), [[mixed.id, "PRODUCTION_LINES_PENDING"], [white.id, "ORDER_NOT_IN_PRODUCTION"]]);
+  assert.deepEqual(firstBulk.completed.map(({ id }) => id), [white.id]);
+  assert.deepEqual(firstBulk.skipped.map(({ id, code }) => [id, code]), [[mixed.id, "PRODUCTION_LINES_PENDING"]]);
   state = await service.bootstrap(admin.token);
   assert.equal(state.orders.find(({ id }) => id === mixed.id).stage, "PRINT");
   assert.equal(state.orders.find(({ id }) => id === white.id).stage, "DONE");
@@ -92,10 +93,46 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   await service.completeProductionJob(admin.token, admin.csrfToken, blueJob.id, "bulk-ux-blue-complete");
   state = await service.bootstrap(admin.token);
   const finalSelection = [mixed.id, blue.id].map((id) => state.orders.find((order) => order.id === id));
-  assert.ok(finalSelection.every(({ stage }) => stage === "DONE"), "de laatste Bedrukt-actie maakt iedere volledig geproduceerde Winkelorder Gereed");
+  assert.ok(finalSelection.every(({ stage, productionClosure }) => stage === "PRINT" && productionClosure.status === "ELIGIBLE"), "de laatste Bedrukt-actie maakt iedere volledig geproduceerde order alleen Gereed-eligible");
+  const finalBulk = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: finalSelection.map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-ux-ready-final")).value;
+  assert.deepEqual(new Set(finalBulk.completed.map(({ id }) => id)), new Set([mixed.id, blue.id]));
+  state = await service.bootstrap(admin.token);
   assert.ok([mixed.id, white.id, blue.id].every((id) => state.orders.find((order) => order.id === id).stage === "DONE"));
-  assert.ok(state.audit.some(({ action, subject }) => action === "Winkelorder Gereed na laatste productiegroep" && subject === mixed.id));
+  assert.ok(state.audit.some(({ action, subject }) => action === "Volledig geproduceerde order in bulk Gereed gemeld" && subject === mixed.id));
   assert.ok([whiteJob.id, blueJob.id].map((id) => state.productionJobs.find((job) => job.id === id)).every(({ snapshot }) => new Set(snapshot.productionLines.map(({ foilColor }) => foilColor)).size === 1), "kleur blijft een harde PlotJob-grens");
+});
+
+test("batch Gereed selecteert van acht geraakte orders uitsluitend de zes volledig geproduceerde", async (context) => {
+  const { service, admin } = await fixture(context);
+  const initial = await service.bootstrap(admin.token);
+  const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
+  if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
+  const shirt = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-116386");
+  if (shirt.foilColorOverride !== "Blauw") await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });
+
+  const whiteOrders = [];
+  for (let index = 0; index < 6; index += 1) whiteOrders.push(await controlledOrder(service, admin, `eight-white-${index}`, [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]));
+  const mixedOrders = [];
+  for (let index = 0; index < 2; index += 1) mixedOrders.push(await controlledOrder(service, admin, `eight-mixed-${index}`, [
+    { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
+    { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
+  ]));
+  const all = [...whiteOrders, ...mixedOrders];
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: all.map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-eight-proposal")).value;
+  const whiteGroup = proposal.groups.find(({ foilColor }) => foilColor === "Wit");
+  const whiteJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: whiteGroup.id, orders: whiteGroup.orders }, "bulk-eight-white-job")).value;
+  await service.completeProductionJob(admin.token, admin.csrfToken, whiteJob.id, "bulk-eight-white-printed");
+
+  const afterPrint = await service.bootstrap(admin.token);
+  const candidates = all.map(({ id }) => afterPrint.orders.find((order) => order.id === id));
+  assert.equal(candidates.filter(({ productionClosure }) => productionClosure.status === "ELIGIBLE").length, 6);
+  assert.equal(candidates.filter(({ productionClosure }) => productionClosure.status === "NOT_ELIGIBLE").length, 2);
+  const result = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: candidates.map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-eight-ready")).value;
+  assert.deepEqual(new Set(result.completed.map(({ id }) => id)), new Set(whiteOrders.map(({ id }) => id)));
+  assert.deepEqual(new Set(result.skipped.map(({ id, code }) => `${id}:${code}`)), new Set(mixedOrders.map(({ id }) => `${id}:PRODUCTION_LINES_PENDING`)));
+  const finalState = await service.bootstrap(admin.token);
+  assert.ok(whiteOrders.every(({ id }) => finalState.orders.find((order) => order.id === id).stage === "DONE"));
+  assert.ok(mixedOrders.every(({ id }) => finalState.orders.find((order) => order.id === id).stage === "PRINT"));
 });
 
 test("soft-delete verdwijnt uit operatie, is geautoriseerd en bewaart consequential productiehistorie", async (context) => {

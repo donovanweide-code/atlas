@@ -52,7 +52,7 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), beforeGolden);
 });
 
-test("Winkel: voorbereiden/openen/downloaden voltooit niets; laatste Bedrukt maakt Gereed en Kleding opgehaald blijft apart", async (context) => {
+test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, Gereed, Klaar om op te halen en Opgehaald blijven apart", async (context) => {
   const { store, service, admin, operator } = await fixture(context);
   const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const created = (await service.createOrder(admin.token, admin.csrfToken, { orderKind: "INDIVIDUAL", customer: "Lifecycle fixture", customerEmail: "", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: empty }], productionLines: [{ id: "lifecycle-dw", type: "INITIALS", content: "DW", previewLabel: "Initialen DW", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id }] }, "human-review-lifecycle-order")).value;
@@ -72,20 +72,31 @@ test("Winkel: voorbereiden/openen/downloaden voltooit niets; laatste Bedrukt maa
   assert.equal(tooEarly.value.skipped[0].code, "PRODUCTION_LINES_PENDING");
   await service.completeProductionJob(admin.token, admin.csrfToken, job.id, "human-review-lifecycle-printed");
   const printed = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
-  assert.equal(printed.stage, "DONE");
+  assert.equal(printed.stage, "PRINT");
+  assert.equal(printed.productionClosure.status, "ELIGIBLE");
   assert.equal(printed.pickup.status, "NOT_PICKED_UP");
-  assert.ok(printed.eventHistory.some(({ type, source }) => type === "READY" && source === "last-production-group"));
+  assert.ok(!printed.eventHistory.some(({ type }) => type === "PRODUCTION_READY"));
+  const readyResult = await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: [{ id: printed.id, expectedRevision: printed.revision }] }, "human-review-lifecycle-ready");
+  assert.equal(readyResult.value.completed.length, 1);
   const sharedReady = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
   assert.equal(sharedReady.stage, "DONE");
+  assert.equal(sharedReady.productionClosure.status, "CONFIRMED");
+  assert.equal(sharedReady.fulfillment.status, "PENDING");
   assert.equal(sharedReady.pickup.status, "NOT_PICKED_UP");
-  const picked = (await service.recordOperationalEvent(admin.token, admin.csrfToken, printed.id, { action: "PICKED_UP", expectedRevision: printed.revision }, "human-review-lifecycle-picked-up")).value;
+  assert.ok(sharedReady.eventHistory.some(({ type }) => type === "PRODUCTION_READY"));
+  assert.equal(sharedReady.communication.ready.status, "NOT_SENT");
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "PICKED_UP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-picked-too-early"), (error) => error.code === "ORDER_NOT_READY_FOR_PICKUP");
+  const pickupReady = (await service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "READY_FOR_PICKUP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-ready-for-pickup")).value;
+  assert.equal(pickupReady.fulfillment.status, "READY_FOR_PICKUP");
+  assert.equal(pickupReady.communication.ready.status, "NOT_SENT");
+  const picked = (await service.recordOperationalEvent(admin.token, admin.csrfToken, pickupReady.id, { action: "PICKED_UP", expectedRevision: pickupReady.revision }, "human-review-lifecycle-picked-up")).value;
   assert.equal(picked.stage, "DONE");
   assert.equal(picked.pickup.status, "PICKED_UP");
   assert.ok(picked.eventHistory.some(({ type }) => type === "PICKED_UP"));
   assert.equal((await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id).pickup.status, "PICKED_UP");
 });
 
-test("Winkel met meerdere productiegroepen wordt pas na de laatste Bedrukt-actie Gereed", async (context) => {
+test("Winkel met meerdere productiegroepen wordt pas na laatste Bedrukt eligible en daarna expliciet Gereed", async (context) => {
   const { service, admin, operator } = await fixture(context);
   const state = await service.bootstrap(admin.token);
   const blueArticle = state.articles.find(({ id }) => id === "sp-live-116386");
@@ -107,16 +118,23 @@ test("Winkel met meerdere productiegroepen wordt pas na de laatste Bedrukt-actie
   await service.completeProductionJob(admin.token, admin.csrfToken, firstJob.id, "human-review-lifecycle-first-printed");
   let shared = await service.bootstrap(operator.token);
   assert.equal(shared.orders.find(({ id }) => id === created.id).stage, "PRINT");
-  assert.equal(shared.orders.find(({ id }) => id === created.id).eventHistory.filter(({ type }) => type === "READY").length, 0);
+  assert.equal(shared.orders.find(({ id }) => id === created.id).productionClosure.status, "NOT_ELIGIBLE");
   const savedProposal = shared.productionProposals.find(({ id }) => id === proposal.id);
   const second = savedProposal.groups.find(({ id }) => id !== first.id);
   const secondJob = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: second.id, orders: second.orders }, "human-review-lifecycle-second-job")).value;
   await service.completeProductionJob(operator.token, operator.csrfToken, secondJob.id, "human-review-lifecycle-second-printed");
   shared = await service.bootstrap(admin.token);
   const ready = shared.orders.find(({ id }) => id === created.id);
-  assert.equal(ready.stage, "DONE");
+  assert.equal(ready.stage, "PRINT");
+  assert.equal(ready.productionClosure.status, "ELIGIBLE");
   assert.equal(ready.pickup.status, "NOT_PICKED_UP");
-  assert.equal(ready.eventHistory.filter(({ type }) => type === "READY").length, 1);
+  assert.equal(ready.eventHistory.filter(({ type }) => type === "PRODUCTION_READY").length, 0);
+  const completed = (await service.completeProductionOrders(operator.token, operator.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "human-review-lifecycle-multiple-ready")).value;
+  assert.equal(completed.completed.length, 1);
+  const done = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
+  assert.equal(done.stage, "DONE");
+  assert.equal(done.fulfillment.status, "PENDING");
+  assert.equal(done.eventHistory.filter(({ type }) => type === "PRODUCTION_READY").length, 1);
 });
 
 test("Teamorder structureert gemengde bulkinput en accepteert geen vereniging", async (context) => {
@@ -214,8 +232,13 @@ test("First-Use copy maakt voorbereiding, review en hard-off boundaries explicie
   assert.match(source, /Initialen/u);
   assert.match(source, /Overnemen/u);
   assert.match(source, /Behouden/u);
-  assert.match(source, /Gereed · klaar om op te halen/u);
+  assert.match(source, /data-filter="done"[^>]*>Gereed</u);
+  assert.match(source, /data-filter="ready-for-pickup"[^>]*>Klaar om op te halen</u);
   assert.match(source, /Kleding opgehaald/u);
+  assert.match(source, /data-production-order-search/u);
+  assert.match(source, /SP-2026-… of later 26…/u);
+  assert.match(source, /sourceContext\?\.externalReference/u);
+  assert.match(source, /complete-one-production-order/u);
   assert.match(source, /DIVIDE \/ WEBSHOPMAIL/u);
   assert.match(source, /Niet actief/u);
 });

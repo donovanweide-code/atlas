@@ -121,7 +121,9 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
 
   await context.test("afhalen is een aparte gebeurtenis na gereedmelden", async () => {
     const done = (await service.bootstrap(storeUser.token)).orders.find(({ stage }) => stage === "DONE");
-    const picked = await service.confirmPickup(storeUser.token, storeUser.csrfToken, done.id, {}, done.revision);
+    const pickupReady = (await service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, done.id, { action: "READY_FOR_PICKUP", expectedRevision: done.revision }, "review-007b-ready-for-pickup")).value;
+    const picked = await service.confirmPickup(storeUser.token, storeUser.csrfToken, pickupReady.id, {}, pickupReady.revision);
+    assert.ok(pickupReady.eventHistory.some(({ type }) => type === "READY_FOR_PICKUP"));
     assert.equal(picked.pickup.status, "PICKED_UP"); assert.equal(picked.eventHistory.at(-1).type, "PICKED_UP");
   });
 

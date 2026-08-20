@@ -1540,12 +1540,6 @@ export class SportpaleisPilotService {
           if (!order) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
           order.stage = "PRINT"; order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_GROUP_PRINTED", at, userId: user.id, userName: user.name, source: "production-job", details: { productionJobId: job.id, jobNumber: job.jobNumber, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: group.productionLineRefs.filter(({ orderId: id }) => id === order.id) } });
-          const progress = productionProgressForOrder(state, order);
-          if (order.orderKind === "INDIVIDUAL" && order.sourceContext?.source === "STORE" && progress?.trackedComplete && progress.complete) {
-            order.stage = "DONE";
-            order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "READY", at, userId: user.id, userName: user.name, source: "last-production-group", details: { productionJobId: job.id, productionGroupId: group.id, pickupStatus: "NOT_PICKED_UP" } });
-            audit(state, user.id, "Winkelorder Gereed na laatste productiegroep", order.id, { from: "PRINT", to: "DONE", productionJobId: job.id, productionGroupId: group.id, pickupStatus: "NOT_PICKED_UP", customerMailSent: false });
-          }
           syncOpenProposalOrderRevisions(state, order);
         }
         audit(state, user.id, "Productiegroep bedrukt", job.jobNumber, { productionJobId: job.id, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: structuredClone(group.productionLineRefs), snapshotHash: job.snapshotHash });
@@ -1699,10 +1693,7 @@ export class SportpaleisPilotService {
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
           throw Object.assign(new Error("Deze order wacht volledig op de juiste foliekleur."), { statusCode: 409, code: "COLOR_HOLD" });
         }
-        if (order.stage === "PRINT") {
-          const progress = productionProgressForOrder(state, order);
-          if (progress && (!progress.trackedComplete || !progress.complete)) throw Object.assign(new Error("De order kan pas Klaar wanneer alle productieregels per foliekleur als bedrukt zijn bevestigd."), { statusCode: 409, code: "PRODUCTION_LINES_PENDING" });
-        }
+        if (order.stage === "PRINT") throw Object.assign(new Error("Meld een volledig geproduceerde order vanuit Productie expliciet Gereed."), { statusCode: 409, code: "USE_PRODUCTION_READY_ACTION" });
         const previous = order.stage;
         order.stage = STAGE_ORDER[Math.min(STAGE_ORDER.length - 1, STAGE_ORDER.indexOf(order.stage) + 1)];
         order.revision += 1;
@@ -1744,10 +1735,7 @@ export class SportpaleisPilotService {
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
             throw Object.assign(new Error(`${order.id} wacht volledig op de juiste foliekleur.`), { statusCode: 409, code: "COLOR_HOLD" });
           }
-          if (order.stage === "PRINT") {
-            const progress = productionProgressForOrder(state, order);
-            if (progress && (!progress.trackedComplete || !progress.complete)) throw Object.assign(new Error(`${order.id} kan pas Klaar wanneer alle productieregels per foliekleur als bedrukt zijn bevestigd.`), { statusCode: 409, code: "PRODUCTION_LINES_PENDING" });
-          }
+          if (order.stage === "PRINT") throw Object.assign(new Error(`${order.id}: meld volledig geproduceerd werk vanuit Productie expliciet Gereed.`), { statusCode: 409, code: "USE_PRODUCTION_READY_ACTION" });
           const previous = order.stage;
           order.stage = STAGE_ORDER[Math.min(STAGE_ORDER.length - 1, STAGE_ORDER.indexOf(order.stage) + 1)];
           order.revision += 1;
@@ -1797,8 +1785,8 @@ export class SportpaleisPilotService {
           order.revision += 1;
           order.updatedAt = iso();
           order.eventHistory ??= [];
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "READY", at: order.updatedAt, userId: user.id, userName: user.name, source: "bulk-production-ready" });
-          audit(state, user.id, "Volledig geproduceerde order in bulk Gereed gemeld", order.id, { from: previous, to: order.stage, revision: order.revision });
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false } });
+          audit(state, user.id, selections.length === 1 ? "Volledig geproduceerde order Gereed gemeld" : "Volledig geproduceerde order in bulk Gereed gemeld", order.id, { from: previous, to: order.stage, revision: order.revision, customerMailSent: false });
           completed.push(order);
         }
         return { completed, skipped };
@@ -1948,7 +1936,7 @@ export class SportpaleisPilotService {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
       if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden afgehaald."), { statusCode: 409, code: "ORDER_DELETED" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-      if (order.stage !== "DONE") throw Object.assign(new Error("Alleen een gereedgemelde order kan worden afgehaald."), { statusCode: 409, code: "ORDER_NOT_READY" });
+      if (order.stage !== "DONE" || order.fulfillment?.status !== "READY_FOR_PICKUP") throw Object.assign(new Error("Meld de order eerst Klaar om op te halen."), { statusCode: 409, code: "ORDER_NOT_READY_FOR_PICKUP" });
       const at = iso(); order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id, exception: String(payload.exception ?? "").trim() || null }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; order.operationalFacts ??= {}; order.operationalFacts.PICKED_UP = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" }; order.revision += 1; order.updatedAt = at;
       order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PICKED_UP", at, userId: user.id, userName: user.name, source: payload.source === "barcode-emulation" ? "barcode-emulation" : "button" });
       audit(state, user.id, "Order afgehaald", order.id); return { state, value: structuredClone(order) };
@@ -1957,7 +1945,7 @@ export class SportpaleisPilotService {
 
   async recordOperationalEvent(token, csrfToken, orderId, payload, idempotencyKey) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
-    const action = allowedValue(payload.action, ["PRINTED", "REGISTER_PROCESSED", "PAID", "CUSTOMER_INFORMED", "PICKED_UP", "DELIVERED"], "Operationele actie");
+    const action = allowedValue(payload.action, ["PRINTED", "REGISTER_PROCESSED", "PAID", "CUSTOMER_INFORMED", "READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"], "Operationele actie");
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, `OPERATIONAL_EVENT:${orderId}:${action}`, () => {
         const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
@@ -1967,13 +1955,16 @@ export class SportpaleisPilotService {
           const progress = productionProgressForOrder(state, order);
           if (progress && (!progress.trackedComplete || !progress.complete)) throw Object.assign(new Error("Bevestig eerst iedere kleurproductie afzonderlijk vanuit de bijbehorende productiejob."), { statusCode: 409, code: "PRODUCTION_LINES_PENDING" });
         }
-        if (["PICKED_UP", "DELIVERED"].includes(action) && order.stage !== "DONE") throw Object.assign(new Error("Uitleveren kan pas nadat de order gereed is."), { statusCode: 409, code: "ORDER_NOT_READY" });
+        if (["READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"].includes(action) && order.stage !== "DONE") throw Object.assign(new Error("Uitleveren kan pas nadat Productie de order Gereed heeft gemeld."), { statusCode: 409, code: "ORDER_NOT_READY" });
         if (action === "PAID" && (order.orderKind !== "TEAM" || order.stage !== "DONE" || order.fulfillment?.mode === "DELIVERY")) throw Object.assign(new Error("Betaling wordt in Workspace alleen bij een gereed teamorder voor afhalen vastgelegd."), { statusCode: 409, code: "PAYMENT_ACTION_NOT_AVAILABLE" });
-        if (action === "PICKED_UP" && order.fulfillment?.mode === "DELIVERY") throw Object.assign(new Error("Deze order staat op bezorgen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
+        if (["READY_FOR_PICKUP", "PICKED_UP"].includes(action) && order.fulfillment?.mode === "DELIVERY") throw Object.assign(new Error("Deze order staat op bezorgen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
+        if (action === "READY_FOR_PICKUP" && order.fulfillment?.status !== "PENDING") throw Object.assign(new Error("Deze order is al vrijgegeven voor afhalen of afgehaald."), { statusCode: 409, code: "FULFILLMENT_ALREADY_ADVANCED" });
+        if (action === "PICKED_UP" && order.fulfillment?.status !== "READY_FOR_PICKUP") throw Object.assign(new Error("Meld de order eerst Klaar om op te halen."), { statusCode: 409, code: "ORDER_NOT_READY_FOR_PICKUP" });
         if (action === "DELIVERED" && order.fulfillment?.mode !== "DELIVERY") throw Object.assign(new Error("Deze order staat op afhalen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
         const at = iso(); order.operationalFacts ??= {}; order.operationalFacts[action] = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" };
         if (action === "REGISTER_PROCESSED") order.payment = { status: "REGISTER_PROCESSED", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
         if (action === "PAID") order.payment = { status: "PAID", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
+        if (action === "READY_FOR_PICKUP") order.fulfillment = { mode: "PICKUP", status: "READY_FOR_PICKUP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null };
         if (action === "PICKED_UP") { order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; }
         if (action === "DELIVERED") order.fulfillment = { ...(order.fulfillment ?? {}), mode: "DELIVERY", status: "DELIVERED", updatedAt: at, updatedBy: user.id, feeEur: order.fulfillment?.feeEur ?? state.settings.deliveryFeeEur };
         order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
@@ -3450,6 +3441,15 @@ function productionSourceLabel(sourceChannel) {
   return ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop", TEAM_MAIL: "Teamorder", INVOICE: "Factuur", MANUAL: "Handmatig" })[sourceChannel] ?? "Andere bron";
 }
 
+function productionClosureForOrder(state, order) {
+  if (order.stage === "DONE") return { status: "CONFIRMED", reason: null };
+  if (order.stage !== "PRINT") return { status: "NOT_ELIGIBLE", reason: "De order is nog niet volledig fysiek geproduceerd." };
+  const progress = productionProgressForOrder(state, order);
+  if (!progress?.trackedComplete) return { status: "NOT_ELIGIBLE", reason: "Niet alle vereiste productieregels zijn aan een fysieke productiegroep gekoppeld." };
+  if (!progress.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
+  return { status: "ELIGIBLE", reason: null };
+}
+
 function normalizedSourceValue(value) {
   return String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
 }
@@ -3716,17 +3716,17 @@ function productionProposalBlockReason(order, state = undefined) {
 }
 
 function productionStatusForOrder(state, order) {
-  if (order.stage === "DONE") return { productionStatus: "DONE", productionStatusReason: null };
-  if (order.stage === "PRINT") return { productionStatus: "IN_PRODUCTION", productionStatusReason: null };
+  if (order.stage === "DONE") return { productionStatus: "DONE", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
+  if (order.stage === "PRINT") return { productionStatus: "IN_PRODUCTION", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
   if (order.stage === "ORDER") {
     const contentBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
     return contentBlocker
-      ? { productionStatus: "ATTENTION", productionStatusReason: contentBlocker }
-      : { productionStatus: "READY", productionStatusReason: null };
+      ? { productionStatus: "ATTENTION", productionStatusReason: contentBlocker, productionClosure: productionClosureForOrder(state, order) }
+      : { productionStatus: "READY", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
   }
   const blocker = productionProposalBlockReason(order, state);
-  if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker };
-  return { productionStatus: "READY", productionStatusReason: null };
+  if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker, productionClosure: productionClosureForOrder(state, order) };
+  return { productionStatus: "READY", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
 }
 
 function applyProductionReadiness(items, productionLines) {
