@@ -129,11 +129,10 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   let state = await service.bootstrap(admin.token);
   const mixedAfterWhite = state.orders.find(({ id }) => id === mixed.id);
   const whiteAfterWhite = state.orders.find(({ id }) => id === whiteOnly.id);
-  assert.equal(mixedAfterWhite.stage, "PRINT"); assert.equal(whiteAfterWhite.stage, "PRINT");
+  assert.equal(mixedAfterWhite.stage, "PRINT"); assert.equal(whiteAfterWhite.stage, "DONE");
   assert.ok(mixedAfterWhite.eventHistory.some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details.foilColor === "Wit" && details.productionLineRefs.length === 1));
   await assert.rejects(service.advanceOrder(admin.token, admin.csrfToken, mixedAfterWhite.id, mixedAfterWhite.revision, "p0-mixed-premature-done"), (error) => error.code === "PRODUCTION_LINES_PENDING");
-  const whiteDone = (await service.advanceOrder(admin.token, admin.csrfToken, whiteAfterWhite.id, whiteAfterWhite.revision, "p0-white-done")).value;
-  assert.equal(whiteDone.stage, "DONE", "een volledig geproduceerde order mag de bestaande PRINT naar DONE-transition gebruiken");
+  assert.ok(whiteAfterWhite.eventHistory.some(({ type, source }) => type === "READY" && source === "last-production-group"), "de laatste Bedrukt-actie maakt een Winkelorder Gereed");
   await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: whiteGroup.id, orders: whiteGroup.orders }, "p0-white-repeat"), (error) => error.code === "PRODUCTION_GROUP_NOT_OPEN");
 
   state = await service.bootstrap(admin.token);
@@ -148,8 +147,7 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   await service.completeProductionJob(admin.token, admin.csrfToken, blueJob.id, "p0-blue-complete");
   state = await service.bootstrap(admin.token);
   const mixedFullyProduced = state.orders.find(({ id }) => id === mixed.id);
-  assert.equal(mixedFullyProduced.stage, "PRINT");
-  assert.equal((await service.advanceOrder(admin.token, admin.csrfToken, mixed.id, mixedFullyProduced.revision, "p0-mixed-done")).value.stage, "DONE");
+  assert.equal(mixedFullyProduced.stage, "DONE");
   assert.ok(state.audit.some(({ action, details }) => action === "Productiegroep bedrukt" && details.foilColor === "Wit" && details.snapshotHash === immutableHash));
 });
 

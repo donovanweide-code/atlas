@@ -31,7 +31,9 @@ test("Teamorder accepteert geldige verwerkte invoer zonder verborgen native requ
   ]);
   assert.throws(() => parseTeamProductionLines(""), /1 tot 50 regels/u);
   const source = await readFile(sourceUrl, "utf8");
-  assert.match(source, /name="teamProductionLines"[\s\S]*\$\{teamPreparedRows\.length \? "" : "required"\}/u);
+  assert.match(source, /name="teamLines:\$\{kind\}"/u);
+  for (const kind of ["backNumber", "shortsNumber", "initials", "name"]) assert.match(source, new RegExp(`block\\("${kind}"`, "u"));
+  assert.match(source, /data-action="prepare-team-production">Overzicht maken/u);
   assert.match(source, /type="submit" \$\{teamPreparedRows\.length \? "" : "disabled"\}>Teamorder bevestigen/u);
 });
 

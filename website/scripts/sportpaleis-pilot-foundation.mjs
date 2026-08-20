@@ -1540,6 +1540,12 @@ export class SportpaleisPilotService {
           if (!order) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
           order.stage = "PRINT"; order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_GROUP_PRINTED", at, userId: user.id, userName: user.name, source: "production-job", details: { productionJobId: job.id, jobNumber: job.jobNumber, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: group.productionLineRefs.filter(({ orderId: id }) => id === order.id) } });
+          const progress = productionProgressForOrder(state, order);
+          if (order.orderKind === "INDIVIDUAL" && order.sourceContext?.source === "STORE" && progress?.trackedComplete && progress.complete) {
+            order.stage = "DONE";
+            order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "READY", at, userId: user.id, userName: user.name, source: "last-production-group", details: { productionJobId: job.id, productionGroupId: group.id, pickupStatus: "NOT_PICKED_UP" } });
+            audit(state, user.id, "Winkelorder Gereed na laatste productiegroep", order.id, { from: "PRINT", to: "DONE", productionJobId: job.id, productionGroupId: group.id, pickupStatus: "NOT_PICKED_UP", customerMailSent: false });
+          }
           syncOpenProposalOrderRevisions(state, order);
         }
         audit(state, user.id, "Productiegroep bedrukt", job.jobNumber, { productionJobId: job.id, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: structuredClone(group.productionLineRefs), snapshotHash: job.snapshotHash });
@@ -1599,16 +1605,16 @@ export class SportpaleisPilotService {
         const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
         let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind);
         const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: false });
-        const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0 });
+        const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0, optionalAssociation: orderKind === "TEAM" });
         if (orderKind === "TEAM") items.forEach((item, index) => {
           if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
           item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
         });
         if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
         applyProductionReadiness(items, productionLines);
-        const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
-        if (orderKind === "TEAM" && associations.length === 0) throw Object.assign(new Error("Kies een vereniging voor de teamorder."), { statusCode: 400, code: "TEAM_ASSOCIATION_REQUIRED" });
-        const teamCustomerFallback = associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
+        const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
+        const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
+        const teamCustomerFallback = teamContext ? `Teamorder · ${teamContext}` : associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
         const createdAt = iso();
         const note = String(payload.internalNote ?? "").trim();
         const priority = validatePriority(payload.priority, user, createdAt);
@@ -1643,6 +1649,7 @@ export class SportpaleisPilotService {
           salesAttribution: { employeeId: salesEmployee?.id ?? null, salesNumber: requestedSalesNumber, label: salesEmployee?.name ?? "Niet gekoppeld", accountType: salesEmployee?.accountType ?? (salesEmployee ? "HUMAN" : "UNASSIGNED"), selectedByUserId: user.id, selectedAt: createdAt },
           sourceContext,
           orderKind,
+          ...(teamContext ? { teamContext } : {}),
           communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
           notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
           priority,
@@ -2012,20 +2019,57 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin"]);
+    const current = await this.store.read();
+    const knownProductionArticleIds = new Set((current.articles ?? []).filter(({ profileId, productionReadiness }) => profileId && profileId !== "profile-none" && productionReadiness?.status !== "NOT_RELEVANT").map((article) => currentArticleSourceIdentifier(article)).filter(Boolean));
     let snapshot;
     try {
-      snapshot = await this.websiteSource.snapshot();
+      snapshot = await this.websiteSource.snapshot(new Date(), { knownProductionArticleIds, relevanceIndex: current.websiteSync?.sourceRelevanceIndex ?? {} });
     } catch (error) {
       await this.store.mutate(async (state) => ({ state, value: failSportpaleisWebsiteSync(state, error, { actorId: user.id }) }));
       throw Object.assign(new Error("De websitecontrole kon niet volledig worden uitgevoerd. Bestaande Workspace-data is niet gewijzigd."), { statusCode: 502, code: String(error?.code ?? "WEBSITE_SYNC_FAILED") });
     }
-    const current = await this.store.read();
     if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint) return publicSportpaleisWebsiteSync(current);
     const result = await this.store.mutate(async (state) => ({
       state,
       value: stageSportpaleisWebsiteSync(state, snapshot, { actorId: user.id, trigger: "manual" }),
     }));
     return publicSportpaleisWebsiteSync({ websiteSync: result.value });
+  }
+
+  async reviewWebsiteSyncChange(token, csrfToken, changeId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    const action = allowedValue(payload.action, ["ACCEPT_SOURCE", "KEEP_WORKSPACE"], "Beoordeling");
+    const result = await this.store.mutate(async (state) => {
+      const change = state.websiteSync?.changes?.find(({ id }) => id === changeId);
+      if (!change || change.status !== "PENDING_REVIEW") throw Object.assign(new Error("Deze websitewijziging is niet meer open."), { statusCode: 409, code: "WEBSITE_SYNC_CHANGE_NOT_OPEN" });
+      const before = change.workspaceValue ?? null;
+      if (action === "ACCEPT_SOURCE") {
+        if (change.kind === "NEW_ASSOCIATION") {
+          if (!state.associations.some(({ name }) => normalizedSourceValue(name) === normalizedSourceValue(change.label))) state.associations.push(createStagedAssociationFromWebsite(change, user.id));
+        } else if (change.kind === "NEW_ARTICLE") {
+          if (!state.associations.some(({ name }) => normalizedSourceValue(name) === normalizedSourceValue(change.association))) throw Object.assign(new Error("Neem eerst de bijbehorende vereniging over."), { statusCode: 409, code: "WEBSITE_SYNC_ASSOCIATION_REQUIRED" });
+          if (!state.articles.some((article) => currentArticleSourceIdentifier(article) === change.sourceIdentifier)) state.articles.push(createStagedArticleFromWebsite(state, change, user.id));
+        } else if (["SOURCE_ARTICLE_CHANGED", "WORKSPACE_SOURCE_DIFFERENCE"].includes(change.kind)) {
+          const article = state.articles.find((candidate) => currentArticleSourceIdentifier(candidate) === change.sourceIdentifier);
+          if (!article) throw Object.assign(new Error("Het Workspace-artikel bestaat niet meer."), { statusCode: 409, code: "WEBSITE_SYNC_WORKSPACE_ARTICLE_MISSING" });
+          article.name = requiredText(change.sourceValue?.name, "Artikelnaam", 120);
+          article.catalogProvenance = { ...(article.catalogProvenance ?? {}), source: "SPORTPALEIS_LIVE_STOREFRONT", url: change.sourceValue.url, sourceIdentifier: change.sourceIdentifier, fingerprint: change.sourceFingerprint, acceptedAt: iso(), acceptedBy: user.id };
+          article.revision = Number(article.revision ?? 1) + 1;
+        } else if (change.kind === "SOURCE_RELEVANCE_AMBIGUOUS") {
+          throw Object.assign(new Error("Bedrukrelevantie is nog ambigu. Kies Behouden en beoordeel het artikel handmatig in Artikelbeheer."), { statusCode: 409, code: "WEBSITE_SYNC_RELEVANCE_AMBIGUOUS" });
+        }
+      }
+      state.websiteSync.reviewDecisions ??= {};
+      state.websiteSync.reviewDecisions[change.id] = { action, sourceFingerprint: change.sourceFingerprint ?? null, at: iso(), userId: user.id };
+      state.websiteSync.changes = state.websiteSync.changes.filter(({ id }) => id !== change.id);
+      state.websiteSync.counts.attention = state.websiteSync.changes.length;
+      state.websiteSync.status = state.websiteSync.changes.length ? "ATTENTION" : "OK";
+      audit(state, user.id, action === "ACCEPT_SOURCE" ? "Websitewijziging overgenomen" : "Workspacewaarde behouden", change.label, { changeId, kind: change.kind, sourceIdentifier: change.sourceIdentifier, before, sourceFingerprint: change.sourceFingerprint ?? null, productionConfigurationChanged: false });
+      return { state, value: publicSportpaleisWebsiteSync(state) };
+    });
+    return result.value;
   }
 
   async upsertProductionElement(token, csrfToken, payload) {
@@ -2436,6 +2480,26 @@ export class SportpaleisPilotService {
       }
       audit(state, user.id, previous ? "Werknemer gewijzigd" : "Werknemer toegevoegd", employee.id, { previous, next: structuredClone(employee) });
       return { state, value: structuredClone(employee) };
+    });
+    return result.value;
+  }
+
+  async deleteEmployee(token, csrfToken, employeeId) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    const result = await this.store.mutate(async (state) => {
+      const employee = state.employees.find(({ id }) => id === employeeId);
+      if (!employee) throw Object.assign(new Error("Werknemer niet gevonden."), { statusCode: 404, code: "EMPLOYEE_NOT_FOUND" });
+      const dependencies = {
+        orders: state.orders.filter(({ salesAttribution }) => salesAttribution?.employeeId === employee.id).length,
+        login: employee.userId ? 1 : 0,
+        audit: state.audit.filter(({ subject, details }) => subject === employee.id || details?.employeeId === employee.id).length,
+      };
+      if (Object.values(dependencies).some(Boolean)) throw Object.assign(new Error("Deze medewerker heeft historie of een login. Deactiveer de medewerker; historische orderattributie blijft dan intact."), { statusCode: 409, code: "EMPLOYEE_HAS_HISTORY", dependencies });
+      state.employees = state.employees.filter(({ id }) => id !== employee.id);
+      audit(state, user.id, "Werknemer definitief verwijderd", employee.id, { salesNumber: employee.salesNumber, dependencies });
+      return { state, value: { deleted: true, id: employee.id } };
     });
     return result.value;
   }
@@ -3386,6 +3450,41 @@ function productionSourceLabel(sourceChannel) {
   return ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop", TEAM_MAIL: "Teamorder", INVOICE: "Factuur", MANUAL: "Handmatig" })[sourceChannel] ?? "Andere bron";
 }
 
+function normalizedSourceValue(value) {
+  return String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
+}
+
+function currentArticleSourceIdentifier(article) {
+  const articleNumber = String(article?.articleNumber ?? "").trim();
+  return articleNumber || String(article?.id ?? "").match(/^sp-live-(.+)$/u)?.[1] || null;
+}
+
+function createStagedAssociationFromWebsite(change, userId) {
+  const at = iso();
+  return {
+    id: `association-${randomBytes(8).toString("hex")}`, name: requiredText(change.label, "Verenigingsnaam", 120), sourceName: requiredText(change.label, "Bronnaam", 120), active: false,
+    source: { file: "Sportpaleis live storefront", sheet: "Stage-only website-sync", range: String(change.sourceIdentifier).slice(0, 240) }, fontProfile: "DATA_GAP", foilColors: ["Onbekend"], defaultFoilColor: "Onbekend",
+    dimensionsCm: { initialsShirt: null, backNumberJuniorSourceValue: null, backNumberSenior: null, chestNumber: null, shortsNumber: null, nameHeight: null }, juniorValidationStatus: "DATA_GAP", juniorPhysicalHeightMm: null, juniorGarmentSizes: [],
+    juniorValidationNote: "Broncatalogus overgenomen; productie-instellingen zijn niet aangenomen.", notes: "Publieke clubstore overgenomen na menselijke review.", articleCatalogStatus: "DATA_GAP · productie-inrichting nog te beoordelen", revision: 1, updatedAt: at,
+    catalogProvenance: { source: "SPORTPALEIS_LIVE_STOREFRONT", url: change.sourceIdentifier, sourceIdentifier: change.sourceIdentifier, fingerprint: change.sourceFingerprint ?? null, acceptedAt: at, acceptedBy: userId },
+    validationHistory: [{ at, userId, field: "association", previous: null, next: { name: change.label, status: "DATA_GAP", active: false }, source: "Sportpaleis live storefront" }],
+  };
+}
+
+function createStagedArticleFromWebsite(state, change, userId) {
+  const source = change.sourceValue ?? {};
+  const at = iso();
+  return {
+    id: `article-${randomBytes(8).toString("hex")}`, articleNumber: requiredText(change.sourceIdentifier, "Artikelnummer", 80), name: requiredText(source.name ?? change.label, "Artikelnaam", 120),
+    imageKey: [...ARTICLE_IMAGE_KEYS][0], category: "Website · te beoordelen", association: requiredText(change.association, "Vereniging", 120), profileId: "profile-none", supports: [], active: false, revision: 1,
+    variantLabels: [], availableSizes: [], personalizationPolicy: { mode: "none", fields: {} }, foilColorOverride: null, productionDataGaps: ["Productieprofiel, maatvoering en bedrukregels moeten menselijk worden bevestigd"],
+    printRelevance: { status: "SOURCE_VISIBLE_PERSONALIZATION", source: source.productionRelevance?.evidence ?? "Sportpaleis live storefront", fields: source.productionRelevance?.fields ?? [] },
+    catalogProvenance: { source: "SPORTPALEIS_LIVE_STOREFRONT", url: source.url, sourceIdentifier: change.sourceIdentifier, fingerprint: change.sourceFingerprint ?? null, acceptedAt: at, acceptedBy: userId },
+    validation: { status: "DATA_GAP", source: "Sportpaleis live storefront · menselijke review", name: "SOURCE_CONFIRMED", sku: "SOURCE_CONFIRMED", image: "SOURCE_REFERENCE", variants: "DATA_GAP", sizes: "DATA_GAP", personalization: "SOURCE_VISIBLE_PERSONALIZATION" },
+    validationHistory: [{ at, userId, previous: null, next: { articleNumber: change.sourceIdentifier, association: change.association, profileId: "profile-none", status: "DATA_GAP", active: false }, source: "Sportpaleis live storefront" }],
+  };
+}
+
 function managedFontPhysicalOrientation(line) {
   const label = String(line.preview?.label ?? "").trim().toLocaleLowerCase("nl-NL");
   const isBackNumber = label.startsWith("rugnummer");
@@ -3759,9 +3858,10 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         backNumberProduction: variants.length === 1 ? variants[0].backNumberProduction : null,
       };
     }
-    const association = options.freeProduction ? "Vrije bedrukking" : requiredText(item.association ?? options.defaultAssociation, "Vereniging", 120);
+    const requestedAssociation = String(item.association ?? options.defaultAssociation ?? "").trim();
+    const association = options.freeProduction ? "Vrije bedrukking" : options.optionalAssociation && !requestedAssociation ? "Geen vereniging" : requiredText(requestedAssociation, "Vereniging", 120);
     const legacyTrusted = options.requireBackNumberSizeClass !== true && Boolean(options.defaultAssociation) && !item.association;
-    if (!options.freeProduction && !state.associations.some(({ name }) => name === association)) throw Object.assign(new Error("Kies een bekende Sportpaleis-vereniging."), { statusCode: 400, code: "ASSOCIATION_UNKNOWN" });
+    if (!options.freeProduction && association !== "Geen vereniging" && !state.associations.some(({ name }) => name === association)) throw Object.assign(new Error("Kies een bekende Sportpaleis-vereniging."), { statusCode: 400, code: "ASSOCIATION_UNKNOWN" });
     const profile = item.productionProfileId ? state.productionProfiles.find(({ id }) => id === item.productionProfileId) : null;
     if (item.productionProfileId && !profile) throw Object.assign(new Error("Het gekozen productieprofiel bestaat niet."), { statusCode: 400, code: "PROFILE_MISSING" });
     const variants = requestedVariants.map((variant) => ({
@@ -3990,6 +4090,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.runWebsiteSync(token, csrf));
         return true;
       }
+      const websiteSyncChangeMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/website-sync\/changes\/([^/]+)$/);
+      if (websiteSyncChangeMatch && method === "POST") {
+        json(response, 200, await service.reviewWebsiteSyncChange(token, csrf, decodeURIComponent(websiteSyncChangeMatch[1]), await readJson(request)));
+        return true;
+      }
       if (route === "/api/sportpaleis/v1/production-elements" && method === "POST") {
         json(response, 201, await service.upsertProductionElement(token, csrf, await readJson(request)));
         return true;
@@ -4083,6 +4188,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/admin/employees" && method === "POST") {
         json(response, 200, await service.upsertEmployee(token, csrf, await readJson(request)));
+        return true;
+      }
+      const employeeMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/employees\/([^/]+)$/);
+      if (employeeMatch && method === "DELETE") {
+        json(response, 200, await service.deleteEmployee(token, csrf, decodeURIComponent(employeeMatch[1])));
         return true;
       }
       const userMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)$/);

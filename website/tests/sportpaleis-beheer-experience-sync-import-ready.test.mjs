@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { reconcileSportpaleisEmployeeDirectory, SPORTPALEIS_UNVERIFIED_SALES_CODES } from "../scripts/sportpaleis-employee-directory.mjs";
 import { createSportpaleisWebshopIntakeState, normalizeDividePersonalization, parseSportpaleisDividePdfText, reconcileSportpaleisDivideRevision } from "../scripts/sportpaleis-divide-import.mjs";
-import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
+import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
@@ -31,13 +31,17 @@ function productCard({ sourceId = "137294", websiteId = "99601", name = "Trainin
 test("officiële websitebron parseert stabiele verenigingen, paginatie en gestructureerde artikeldata", async () => {
   const sitemap = `<urlset><url><loc>https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/</loc><lastmod>2026-08-20</lastmod></url><url><loc>https://www.sportpaleis.nl/over-ons/</loc></url></urlset>`;
   assert.equal(parseSportpaleisAssociationSitemap(sitemap).length, 1);
+  const directory = `<span class="count">25</span> Producten<h2>Voetbalverenigingen</h2><ul><li><a href="/verenigingen/a-s-c-waterwijk/">A.S.C. Waterwijk</a></li></ul><h2>Complete Clubondersteuning</h2>`;
+  assert.equal(parseSportpaleisLiveAssociationDirectory(directory).length, 1);
+  assert.equal(parseSportpaleisProductionRelevance(`<main><div class="row type-description"><span class="title">Rugnummer</span></div></main>`).status, "RELEVANT");
+  assert.equal(parseSportpaleisProductionRelevance(`<main><h1>Voetbalkous</h1></main>`).status, "NOT_RELEVANT");
   const first = `<span class="count">25</span> Producten ${Array.from({ length: 24 }, (_, index) => productCard({ sourceId: String(137294 + index), websiteId: String(99601 + index) })).join("")}`;
   const second = `<span class="count">25</span> Producten ${productCard({ sourceId: "199999", websiteId: "109999", name: "Tweede pagina" })}`;
   assert.equal(parseSportpaleisAssociationPage(first, "https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/").articles.length, 24);
   const requested = [];
   const source = createSportpaleisWebsiteSource({ fetcher: async (url) => {
     requested.push(String(url));
-    const body = String(url).includes("sitemap/categories") ? sitemap : String(url).includes("?p=2") ? second : first;
+    const body = String(url).includes("sitemap/categories") ? sitemap : String(url) === "https://www.sportpaleis.nl/verenigingen/" ? directory : String(url).includes("?p=2") ? second : String(url).includes("/product/") ? `<main><div class="row type-description"><span class="title">Initialen</span></div></main>` : first;
     return { ok: true, status: 200, text: async () => body };
   } });
   const snapshot = await source.snapshot(new Date("2026-08-20T12:00:00Z"));
@@ -45,10 +49,29 @@ test("officiële websitebron parseert stabiele verenigingen, paginatie en gestru
   assert.ok(requested.some((url) => url.endsWith("?p=2")));
 });
 
+test("dode of inhoudsloze directorylink wordt niet als live operationele clubstore behandeld", async () => {
+  const sitemap = `<urlset><url><loc>https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/</loc></url><url><loc>https://www.sportpaleis.nl/verenigingen/as80/</loc></url><url><loc>https://www.sportpaleis.nl/verenigingen/roda-23/</loc></url></urlset>`;
+  const directory = `<h2>Voetbalverenigingen</h2><a href="/verenigingen/a-s-c-waterwijk/">A.S.C. Waterwijk</a><a href="/verenigingen/as80/">AS'80</a><a href="/verenigingen/roda-23/">Roda '23</a><h2>Complete Clubondersteuning</h2>`;
+  const livePage = `<span class="count">1</span> Producten ${productCard()}`;
+  const source = createSportpaleisWebsiteSource({ fetcher: async (url) => {
+    const value = String(url);
+    if (value.includes("sitemap/categories")) return { ok: true, status: 200, text: async () => sitemap };
+    if (value === "https://www.sportpaleis.nl/verenigingen/") return { ok: true, status: 200, text: async () => directory };
+    if (value === "https://www.sportpaleis.nl/verenigingen/as80/") return { ok: false, status: 404, text: async () => "" };
+    if (value === "https://www.sportpaleis.nl/verenigingen/roda-23/") return { ok: true, status: 200, text: async () => `<main><h1>Sportpaleis &amp; Verenigingen</h1></main>` };
+    if (value.includes("/product/")) return { ok: true, status: 200, text: async () => `<main><div class="row type-description"><span class="title">Initialen</span></div></main>` };
+    return { ok: true, status: 200, text: async () => livePage };
+  } });
+  const snapshot = await source.snapshot(new Date("2026-08-20T12:00:00Z"));
+  assert.equal(snapshot.associations.length, 1);
+  assert.equal(snapshot.associations[0].name, "A.S.C. Waterwijk");
+  assert.equal(snapshot.notLiveAssociationCandidates, 2);
+});
+
 test("website-sync stage-only bewaart lokale productieconfig, detecteert wijzigingen en is inhoudelijk idempotent", () => {
   const article = { id: "sp-live-137294", name: "Trainingsshirt", catalogProvenance: { url: "https://www.sportpaleis.nl/product/137294/" }, profileId: "senior", foilColorOverride: "Wit" };
   const state = { revision: 10, articles: [structuredClone(article)], associations: [{ id: "waterwijk", name: "A.S.C. Waterwijk", production: { workingWidthMm: 440 } }], audit: [], websiteSync: createSportpaleisWebsiteSyncState() };
-  const sourceArticle = { sourceIdentifier: "137294", name: "Nieuw bronlabel", associationName: "A.S.C. Waterwijk", url: "https://www.sportpaleis.nl/product/137294/", fingerprint: "article-v2" };
+  const sourceArticle = { sourceIdentifier: "137294", name: "Nieuw bronlabel", associationName: "A.S.C. Waterwijk", url: "https://www.sportpaleis.nl/product/137294/", fingerprint: "article-v2", storefrontStatus: "LIVE", productionRelevance: { status: "RELEVANT", fields: ["Initialen"], evidence: "PUBLIC_PERSONALIZATION_FIELDS" } };
   const snapshot = { fingerprint: "snapshot-v2", associations: [{ sourceIdentifier: "https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/", name: "A.S.C. Waterwijk", fingerprint: "association-v2", articles: [sourceArticle] }] };
   const before = structuredClone({ article: state.articles[0], association: state.associations[0] });
   const comparison = compareSportpaleisWebsiteSnapshot(state, snapshot);
@@ -67,7 +90,7 @@ test("website-sync endpoint is admin-only en herhaalt een identieke bron zonder 
   context.after(() => rm(root, { recursive: true, force: true }));
   const passwords = { kevin: "Sync-Admin-2026!", patrick: "Sync-Operator-2026!", collega: "Sync-Store-2026!", "donovan-support": "Sync-Support-2026!" };
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const sourceArticle = { sourceIdentifier: "137294", name: "Nike Dri-FIT Academy 23 Top", associationName: "A.S.C. Waterwijk", url: "https://www.sportpaleis.nl/product/137294/", fingerprint: "article-stable" };
+  const sourceArticle = { sourceIdentifier: "137294", name: "Nike Dri-FIT Academy 23 Top", associationName: "A.S.C. Waterwijk", url: "https://www.sportpaleis.nl/product/137294/", fingerprint: "article-stable", storefrontStatus: "LIVE", productionRelevance: { status: "RELEVANT", fields: ["Initialen"], evidence: "PUBLIC_PERSONALIZATION_FIELDS" } };
   const snapshot = { fingerprint: "snapshot-stable", associations: [{ sourceIdentifier: "https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/", name: "A.S.C. Waterwijk", fingerprint: "association-stable", articles: [sourceArticle] }] };
   const service = new SportpaleisPilotService({ store, websiteSource: { snapshot: async () => structuredClone(snapshot) }, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime") });
   await service.initialize();

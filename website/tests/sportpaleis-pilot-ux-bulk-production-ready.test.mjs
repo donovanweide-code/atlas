@@ -77,11 +77,11 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   const mixedAfterWhite = state.orders.find(({ id }) => id === mixed.id);
   const whiteAfterWhite = state.orders.find(({ id }) => id === white.id);
   assert.equal(mixedAfterWhite.stage, "PRINT");
-  assert.equal(whiteAfterWhite.stage, "PRINT");
+  assert.equal(whiteAfterWhite.stage, "DONE");
 
   const firstBulk = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: [mixedAfterWhite, whiteAfterWhite].map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-ux-ready-white")).value;
-  assert.deepEqual(firstBulk.completed.map(({ id }) => id), [white.id]);
-  assert.deepEqual(firstBulk.skipped.map(({ id, code }) => [id, code]), [[mixed.id, "PRODUCTION_LINES_PENDING"]]);
+  assert.deepEqual(firstBulk.completed.map(({ id }) => id), []);
+  assert.deepEqual(firstBulk.skipped.map(({ id, code }) => [id, code]), [[mixed.id, "PRODUCTION_LINES_PENDING"], [white.id, "ORDER_NOT_IN_PRODUCTION"]]);
   state = await service.bootstrap(admin.token);
   assert.equal(state.orders.find(({ id }) => id === mixed.id).stage, "PRINT");
   assert.equal(state.orders.find(({ id }) => id === white.id).stage, "DONE");
@@ -92,12 +92,9 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   await service.completeProductionJob(admin.token, admin.csrfToken, blueJob.id, "bulk-ux-blue-complete");
   state = await service.bootstrap(admin.token);
   const finalSelection = [mixed.id, blue.id].map((id) => state.orders.find((order) => order.id === id));
-  const secondBulk = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: finalSelection.map(({ id, revision }) => ({ id, expectedRevision: revision })) }, "bulk-ux-ready-blue")).value;
-  assert.deepEqual(new Set(secondBulk.completed.map(({ id }) => id)), new Set([mixed.id, blue.id]));
-  assert.equal(secondBulk.skipped.length, 0);
-  state = await service.bootstrap(admin.token);
+  assert.ok(finalSelection.every(({ stage }) => stage === "DONE"), "de laatste Bedrukt-actie maakt iedere volledig geproduceerde Winkelorder Gereed");
   assert.ok([mixed.id, white.id, blue.id].every((id) => state.orders.find((order) => order.id === id).stage === "DONE"));
-  assert.ok(state.audit.some(({ action, subject }) => action === "Volledig geproduceerde order in bulk Gereed gemeld" && subject === mixed.id));
+  assert.ok(state.audit.some(({ action, subject }) => action === "Winkelorder Gereed na laatste productiegroep" && subject === mixed.id));
   assert.ok([whiteJob.id, blueJob.id].map((id) => state.productionJobs.find((job) => job.id === id)).every(({ snapshot }) => new Set(snapshot.productionLines.map(({ foilColor }) => foilColor)).size === 1), "kleur blijft een harde PlotJob-grens");
 });
 

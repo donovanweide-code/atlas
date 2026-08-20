@@ -6,6 +6,7 @@ export interface TeamProductionLine {
 export function parseTeamProductionLines(input: string): TeamProductionLine[] {
   const results: TeamProductionLine[] = [];
   for (const raw of input.split(/[\n,;]+/).map((value) => value.trim()).filter(Boolean)) {
+    if (/[?]/u.test(raw) || /\b(?:een|één|twee|drie|vier|vijf|zes|zeven|acht|negen)\b/iu.test(raw) && !/^nummer\s+.+?\s+twee\s+keer$/iu.test(raw)) throw new Error(`Deze regel begrijp ik niet helemaal: "${raw}". Gebruik bijvoorbeeld 'DW x 2'.`);
     const range = raw.match(/^(?:nummer\s+)?(\d+)\s*(?:t\/?m|tot(?:\s+en\s+met)?|[-–])\s*(\d+)$/i);
     if (range) {
       const start = Number(range[1]);

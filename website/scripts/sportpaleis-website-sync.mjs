@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 export const SPORTPALEIS_WEBSITE_SYNC_SOURCE = Object.freeze({
+  storefrontUrl: "https://www.sportpaleis.nl/verenigingen/",
   sitemapUrl: "https://www.sportpaleis.nl/sitemap/categories.xml?culture=nl-NL",
   associationPath: "/verenigingen/",
   cadence: "NIGHTLY_03_00_EUROPE_AMSTERDAM",
@@ -18,7 +19,11 @@ export function createSportpaleisWebsiteSyncState() {
     nextRunAt: null,
     sourceFingerprint: null,
     sourceFingerprintIndex: {},
-    counts: { associations: 0, articles: 0, new: 0, changed: 0, attention: 0 },
+    sourceScopeIndex: {},
+    sourceRelevanceIndex: {},
+    reviewDecisions: {},
+    reconciliationHistory: [],
+    counts: { raw: 0, live: 0, productionRelevant: 0, autoNoop: 0, associations: 0, articles: 0, new: 0, changed: 0, attention: 0 },
     changes: [],
     lastError: null,
   };
@@ -49,6 +54,35 @@ export function parseSportpaleisAssociationSitemap(xml) {
     });
   if (!entries.length) throw Object.assign(new Error("De Sportpaleis-sitemap bevat geen betrouwbare verenigingspagina's."), { code: "WEBSITE_SYNC_SOURCE_EMPTY" });
   return entries.sort((left, right) => left.url.localeCompare(right.url));
+}
+
+export function parseSportpaleisLiveAssociationDirectory(html, sourceUrl = SPORTPALEIS_WEBSITE_SYNC_SOURCE.storefrontUrl) {
+  const body = String(html ?? "");
+  const start = body.search(/<h2[^>]*>\s*Voetbalverenigingen\s*<\/h2>/iu);
+  const end = body.search(/<h2[^>]*>\s*Complete Clubondersteuning\s*<\/h2>/iu);
+  if (start < 0 || end <= start) throw Object.assign(new Error("De publieke verenigingenlijst mist de verwachte redactionele grens."), { code: "WEBSITE_SYNC_LIVE_DIRECTORY_MISSING" });
+  const section = body.slice(start, end);
+  const entries = [...section.matchAll(/<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/giu)].map(([, href, label]) => ({
+    url: absoluteUrl(href, sourceUrl),
+    name: decodeHtml(label.replace(/<[^>]+>/gu, " ")).replace(/\s+/gu, " ").trim(),
+  })).filter(({ url, name }) => {
+    const parsed = new URL(url);
+    return parsed.hostname === "www.sportpaleis.nl" && parsed.pathname.startsWith(SPORTPALEIS_WEBSITE_SYNC_SOURCE.associationPath) && parsed.pathname !== SPORTPALEIS_WEBSITE_SYNC_SOURCE.associationPath && Boolean(name);
+  });
+  const unique = [...new Map(entries.map((entry) => [new URL(entry.url).pathname.replace(/\/+$/u, "/"), entry])).values()];
+  if (!unique.length) throw Object.assign(new Error("De publieke verenigingenlijst bevat geen betrouwbare clubstores."), { code: "WEBSITE_SYNC_LIVE_DIRECTORY_EMPTY" });
+  return unique.sort((left, right) => left.url.localeCompare(right.url));
+}
+
+export function parseSportpaleisProductionRelevance(html) {
+  const body = String(html ?? "");
+  if (!/<(?:main|form|div)\b/iu.test(body)) return { status: "AMBIGUOUS", fields: [], evidence: "PRODUCT_PAGE_STRUCTURE_MISSING" };
+  const fields = [...body.matchAll(/<div[^>]*class="[^"]*row\s+type-description[^"]*"[\s\S]*?<span[^>]*class="title"[^>]*>([\s\S]*?)<\/span>/giu)]
+    .map(([, value]) => decodeHtml(value.replace(/<[^>]+>/gu, " ")).replace(/\s+/gu, " ").trim())
+    .filter((value) => /^(?:rugnummer|shortnummer|initialen|naam(?:\s*\(rug\))?)\b/iu.test(value));
+  return fields.length
+    ? { status: "RELEVANT", fields: [...new Set(fields)], evidence: "PUBLIC_PERSONALIZATION_FIELDS" }
+    : { status: "NOT_RELEVANT", fields: [], evidence: "NO_PUBLIC_PERSONALIZATION_FIELDS" };
 }
 
 export function parseSportpaleisAssociationPage(html, sourceUrl) {
@@ -82,12 +116,13 @@ export function parseSportpaleisAssociationPage(html, sourceUrl) {
   return { associationName, declaredCount, articles };
 }
 
-async function fetchText(fetcher, url) {
+async function fetchText(fetcher, url, { allowNotFound = false } = {}) {
   const response = await fetcher(url, {
     headers: { accept: "text/html,application/xml;q=0.9", "user-agent": "WBD-Sportpaleis-Sync/1.0" },
     redirect: "follow",
     signal: AbortSignal.timeout(25_000),
   });
+  if (allowNotFound && response.status === 404) return null;
   if (!response.ok) throw Object.assign(new Error(`Sportpaleis-bron gaf HTTP ${response.status}.`), { code: "WEBSITE_SYNC_SOURCE_UNAVAILABLE" });
   const text = await response.text();
   if (Buffer.byteLength(text, "utf8") > 2_500_000) throw Object.assign(new Error("Sportpaleis-bronantwoord is onverwacht groot."), { code: "WEBSITE_SYNC_SOURCE_TOO_LARGE" });
@@ -110,16 +145,30 @@ async function mapConcurrent(items, concurrency, mapper) {
 export function createSportpaleisWebsiteSource({ fetcher = globalThis.fetch } = {}) {
   if (typeof fetcher !== "function") throw new Error("Een fetch-implementatie is vereist.");
   return {
-    async snapshot(now = new Date()) {
-      const sitemap = await fetchText(fetcher, SPORTPALEIS_WEBSITE_SYNC_SOURCE.sitemapUrl);
-      const entries = parseSportpaleisAssociationSitemap(sitemap);
-      const associations = await mapConcurrent(entries, 3, async (entry) => {
+    async snapshot(now = new Date(), { knownProductionArticleIds = new Set(), relevanceIndex = {} } = {}) {
+      const [sitemap, directoryHtml] = await Promise.all([
+        fetchText(fetcher, SPORTPALEIS_WEBSITE_SYNC_SOURCE.sitemapUrl),
+        fetchText(fetcher, SPORTPALEIS_WEBSITE_SYNC_SOURCE.storefrontUrl),
+      ]);
+      const sitemapEntries = parseSportpaleisAssociationSitemap(sitemap);
+      const sitemapByPath = new Map(sitemapEntries.map((entry) => [new URL(entry.url).pathname.replace(/\/+$/u, "/"), entry]));
+      const entries = parseSportpaleisLiveAssociationDirectory(directoryHtml).map((entry) => ({ ...entry, lastModified: sitemapByPath.get(new URL(entry.url).pathname.replace(/\/+$/u, "/"))?.lastModified ?? null }));
+      const rawArticleCandidates = Number(directoryHtml.match(/<span class="count">\s*([0-9]+)\s*<\/span>\s*Producten/iu)?.[1] ?? 0);
+      const associationCandidates = await mapConcurrent(entries, 3, async (entry) => {
+        const firstPage = await fetchText(fetcher, entry.url, { allowNotFound: true });
+        if (firstPage === null) return null;
         const articles = new Map();
         let associationName = "";
         let declaredCount = 0;
         for (let page = 1; page <= 30; page += 1) {
           const pageUrl = page === 1 ? entry.url : `${entry.url}${entry.url.includes("?") ? "&" : "?"}p=${page}`;
-          const parsed = parseSportpaleisAssociationPage(await fetchText(fetcher, pageUrl), entry.url);
+          let parsed;
+          try { parsed = parseSportpaleisAssociationPage(page === 1 ? firstPage : await fetchText(fetcher, pageUrl), entry.url); }
+          catch (error) {
+            if (page === 1 && error?.code === "WEBSITE_SYNC_PRODUCTS_EMPTY") return null;
+            Object.defineProperty(error, "sourceUrl", { configurable: true, value: pageUrl });
+            throw error;
+          }
           associationName ||= parsed.associationName;
           declaredCount = Math.max(declaredCount, parsed.declaredCount);
           const before = articles.size;
@@ -128,10 +177,20 @@ export function createSportpaleisWebsiteSource({ fetcher = globalThis.fetch } = 
           if (articles.size === before) throw Object.assign(new Error(`Paginatie voor ${entry.url} levert geen nieuwe artikelen.`), { code: "WEBSITE_SYNC_PAGINATION_STALLED" });
         }
         if (declaredCount > 0 && articles.size !== declaredCount) throw Object.assign(new Error(`Verenigingspagina ${entry.url} meldt ${declaredCount} artikelen, maar ${articles.size} zijn volledig gelezen.`), { code: "WEBSITE_SYNC_INCOMPLETE" });
-        const result = { sourceIdentifier: entry.url, name: associationName, url: entry.url, lastModified: entry.lastModified, articles: [...articles.values()].sort((left, right) => left.sourceIdentifier.localeCompare(right.sourceIdentifier)) };
+        const classified = await mapConcurrent([...articles.values()], 4, async (article) => {
+          const cached = relevanceIndex[article.sourceIdentifier];
+          const productionRelevance = knownProductionArticleIds.has(article.sourceIdentifier)
+            ? { status: "RELEVANT", fields: [], evidence: "WORKSPACE_PRODUCTION_CONFIGURATION" }
+            : cached?.fingerprint === article.fingerprint
+              ? cached.productionRelevance
+              : parseSportpaleisProductionRelevance(await fetchText(fetcher, article.url));
+          return { ...article, storefrontStatus: "LIVE", productionRelevance };
+        });
+        const result = { sourceIdentifier: entry.url, name: associationName, url: entry.url, lastModified: entry.lastModified, storefrontStatus: "LIVE", articles: classified.sort((left, right) => left.sourceIdentifier.localeCompare(right.sourceIdentifier)) };
         return { ...result, fingerprint: sha256(JSON.stringify(result)) };
       });
-      const snapshot = { source: SPORTPALEIS_WEBSITE_SYNC_SOURCE.sitemapUrl, detectedAt: now.toISOString(), associations };
+      const associations = associationCandidates.filter(Boolean);
+      const snapshot = { source: SPORTPALEIS_WEBSITE_SYNC_SOURCE.storefrontUrl, detectedAt: now.toISOString(), rawArticleCandidates, notLiveAssociationCandidates: entries.length - associations.length, associations };
       return { ...snapshot, fingerprint: sha256(JSON.stringify(snapshot.associations)) };
     },
   };
@@ -148,14 +207,18 @@ export function compareSportpaleisWebsiteSnapshot(state, snapshot) {
   const currentArticles = new Map((state.articles ?? []).map((article) => [currentArticleSourceId(article), article]).filter(([id]) => id));
   const currentAssociations = new Map((state.associations ?? []).map((association) => [normalized(association.name), association]));
   const nextIndex = {};
+  const nextScopeIndex = {};
+  const nextRelevanceIndex = {};
   const changes = [];
 
   for (const association of snapshot.associations) {
     const associationKey = `association:${association.sourceIdentifier}`;
     nextIndex[associationKey] = association.fingerprint;
+    nextScopeIndex[associationKey] = "LIVE_STOREFRONT";
     if (!currentAssociations.has(normalized(association.name))) changes.push({
       id: `sync-change-${sha256(associationKey).slice(0, 16)}`,
       kind: "NEW_ASSOCIATION", sourceIdentifier: association.sourceIdentifier,
+      sourceFingerprint: association.fingerprint,
       label: association.name, status: "PENDING_REVIEW",
       explanation: "Nieuwe vereniging op de website. Workspace heeft niets automatisch overschreven.",
       nextBestAction: "Controleer de vereniging",
@@ -163,11 +226,19 @@ export function compareSportpaleisWebsiteSnapshot(state, snapshot) {
     for (const article of association.articles) {
       const key = `article:${article.sourceIdentifier}`;
       nextIndex[key] = article.fingerprint;
+      nextScopeIndex[key] = "LIVE_STOREFRONT";
+      nextRelevanceIndex[article.sourceIdentifier] = { fingerprint: article.fingerprint, productionRelevance: article.productionRelevance };
+      if (article.productionRelevance?.status === "NOT_RELEVANT") continue;
+      if (article.productionRelevance?.status !== "RELEVANT") {
+        changes.push({ id: `sync-change-${sha256(`${key}:relevance`).slice(0, 16)}`, kind: "SOURCE_RELEVANCE_AMBIGUOUS", sourceIdentifier: article.sourceIdentifier, label: article.name, association: association.name, status: "PENDING_REVIEW", sourceValue: structuredClone(article), workspaceValue: currentArticles.get(article.sourceIdentifier) ? { name: currentArticles.get(article.sourceIdentifier).name } : null, sourceFingerprint: article.fingerprint, explanation: "Dit live artikel kan niet betrouwbaar als wel of niet bedrukbaar worden geclassificeerd. Workspace heeft niets gewijzigd.", nextBestAction: "Beoordeel de bedrukrelevantie" });
+        continue;
+      }
       const current = currentArticles.get(article.sourceIdentifier);
       if (!current) changes.push({
         id: `sync-change-${sha256(key).slice(0, 16)}`,
         kind: "NEW_ARTICLE", sourceIdentifier: article.sourceIdentifier,
         label: article.name, association: association.name, status: "PENDING_REVIEW",
+        sourceValue: structuredClone(article), workspaceValue: null, sourceFingerprint: article.fingerprint,
         explanation: "Nieuw artikel op de website. Productie-instellingen zijn nog niet gekoppeld.",
         nextBestAction: "Controleer het artikel",
       });
@@ -175,6 +246,7 @@ export function compareSportpaleisWebsiteSnapshot(state, snapshot) {
         id: `sync-change-${sha256(`${key}:${article.fingerprint}`).slice(0, 16)}`,
         kind: "SOURCE_ARTICLE_CHANGED", sourceIdentifier: article.sourceIdentifier,
         label: article.name, association: association.name, status: "PENDING_REVIEW",
+        sourceValue: structuredClone(article), workspaceValue: { name: current.name, url: current.catalogProvenance?.url ?? null }, sourceFingerprint: article.fingerprint,
         explanation: "Het websiteartikel is gewijzigd. Lokale productie-instellingen blijven behouden.",
         nextBestAction: "Bekijk de wijziging",
       });
@@ -182,20 +254,24 @@ export function compareSportpaleisWebsiteSnapshot(state, snapshot) {
         id: `sync-change-${sha256(`${key}:workspace-difference`).slice(0, 16)}`,
         kind: "WORKSPACE_SOURCE_DIFFERENCE", sourceIdentifier: article.sourceIdentifier,
         label: article.name, association: association.name, status: "PENDING_REVIEW",
+        sourceValue: structuredClone(article), workspaceValue: { name: current.name, url: current.catalogProvenance?.url ?? null }, sourceFingerprint: article.fingerprint,
         explanation: "Website en Workspace tonen verschillende catalogusgegevens. Productie-instellingen blijven behouden.",
         nextBestAction: "Vergelijk de brongegevens",
       });
     }
   }
 
-  for (const key of Object.keys(previousIndex)) if (!nextIndex[key]) changes.push({
+  for (const key of Object.keys(previousIndex)) if (!nextIndex[key] && state.websiteSync?.sourceScopeIndex?.[key] === "LIVE_STOREFRONT") changes.push({
     id: `sync-change-${sha256(`${key}:missing`).slice(0, 16)}`,
     kind: "MISSING_FROM_SOURCE", sourceIdentifier: key.split(":").slice(1).join(":"),
+    sourceFingerprint: null,
     label: "Niet meer gevonden op de website", status: "PENDING_REVIEW",
     explanation: "De eerdere bronvermelding ontbreekt. Workspace verwijdert niets automatisch.",
     nextBestAction: "Controleer de bron",
   });
-  return { changes: changes.slice(0, 500), nextIndex };
+  const reviewDecisions = state.websiteSync?.reviewDecisions ?? {};
+  const unresolved = changes.filter((change) => reviewDecisions[change.id]?.sourceFingerprint !== change.sourceFingerprint);
+  return { changes: unresolved.slice(0, 500), nextIndex, nextScopeIndex, nextRelevanceIndex, reconciledLegacyCount: Object.keys(previousIndex).filter((key) => !nextIndex[key] && state.websiteSync?.sourceScopeIndex?.[key] !== "LIVE_STOREFRONT").length };
 }
 
 function nextNightlyRun(now) {
@@ -205,10 +281,11 @@ function nextNightlyRun(now) {
 }
 
 export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system:website-sync", trigger = "manual", now = new Date(), enabled = state.websiteSync?.enabled === true } = {}) {
-  const { changes, nextIndex } = compareSportpaleisWebsiteSnapshot(state, snapshot);
+  const { changes, nextIndex, nextScopeIndex, nextRelevanceIndex, reconciledLegacyCount } = compareSportpaleisWebsiteSnapshot(state, snapshot);
   const newCount = changes.filter(({ kind }) => kind === "NEW_ASSOCIATION" || kind === "NEW_ARTICLE").length;
   const changedCount = changes.filter(({ kind }) => kind === "SOURCE_ARTICLE_CHANGED" || kind === "WORKSPACE_SOURCE_DIFFERENCE").length;
   const articleCount = snapshot.associations.reduce((sum, association) => sum + association.articles.length, 0);
+  const productionRelevant = snapshot.associations.reduce((sum, association) => sum + association.articles.filter(({ productionRelevance }) => productionRelevance?.status === "RELEVANT").length, 0);
   state.websiteSync = {
     ...(state.websiteSync ?? createSportpaleisWebsiteSyncState()),
     enabled,
@@ -219,7 +296,11 @@ export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system
     nextRunAt: enabled ? nextNightlyRun(now) : null,
     sourceFingerprint: snapshot.fingerprint,
     sourceFingerprintIndex: nextIndex,
-    counts: { associations: snapshot.associations.length, articles: articleCount, new: newCount, changed: changedCount, attention: changes.length },
+    sourceScopeIndex: nextScopeIndex,
+    sourceRelevanceIndex: nextRelevanceIndex,
+    reviewDecisions: state.websiteSync?.reviewDecisions ?? {},
+    reconciliationHistory: [{ at: now.toISOString(), actorId, fromAttention: state.websiteSync?.counts?.attention ?? 0, toAttention: changes.length, removedAsLegacyOutOfBoundary: reconciledLegacyCount }, ...(state.websiteSync?.reconciliationHistory ?? [])].slice(0, 20),
+    counts: { raw: snapshot.rawArticleCandidates || articleCount, live: articleCount, productionRelevant, autoNoop: Math.max(0, articleCount - productionRelevant), associations: snapshot.associations.length, articles: articleCount, new: newCount, changed: changedCount, attention: changes.length },
     changes,
     lastError: null,
   };
@@ -234,17 +315,30 @@ export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system
 
 export function failSportpaleisWebsiteSync(state, error, { actorId = "system:website-sync", now = new Date() } = {}) {
   const current = state.websiteSync ?? createSportpaleisWebsiteSyncState();
+  const code = String(error?.code ?? "WEBSITE_SYNC_FAILED");
+  const sourceContractUnreliable = new Set([
+    "WEBSITE_SYNC_LIVE_DIRECTORY_MISSING",
+    "WEBSITE_SYNC_LIVE_DIRECTORY_EMPTY",
+    "WEBSITE_SYNC_SOURCE_EMPTY",
+    "WEBSITE_SYNC_PRODUCTS_EMPTY",
+    "WEBSITE_SYNC_PRODUCT_INVALID",
+    "WEBSITE_SYNC_PRODUCT_ID_MISSING",
+    "WEBSITE_SYNC_INCOMPLETE",
+    "WEBSITE_SYNC_PAGINATION_STALLED",
+  ]).has(code);
   state.websiteSync = {
     ...current,
+    enabled: sourceContractUnreliable ? false : current.enabled,
     status: "ERROR",
     lastAttemptAt: now.toISOString(),
-    lastError: { code: String(error?.code ?? "WEBSITE_SYNC_FAILED"), message: "De websitecontrole kon niet volledig worden uitgevoerd. Bestaande Workspace-data is niet gewijzigd." },
+    nextRunAt: sourceContractUnreliable ? null : current.nextRunAt,
+    lastError: { code, message: "De websitecontrole kon niet volledig worden uitgevoerd. Bestaande Workspace-data is niet gewijzigd." },
   };
   state.audit.unshift({ id: `audit-website-sync-${randomBytes(8).toString("hex")}`, at: now.toISOString(), userId: actorId, action: "Websitecontrole mislukt", subject: "Verenigingen en artikelen", details: { code: state.websiteSync.lastError.code } });
   return state.websiteSync;
 }
 
 export function publicSportpaleisWebsiteSync(state) {
-  const { sourceFingerprintIndex: _sourceFingerprintIndex, ...summary } = state.websiteSync ?? createSportpaleisWebsiteSyncState();
+  const { sourceFingerprintIndex: _sourceFingerprintIndex, sourceScopeIndex: _sourceScopeIndex, sourceRelevanceIndex: _sourceRelevanceIndex, reviewDecisions: _reviewDecisions, ...summary } = state.websiteSync ?? createSportpaleisWebsiteSyncState();
   return structuredClone(summary);
 }

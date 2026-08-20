@@ -105,14 +105,14 @@ export interface SportpaleisWebsiteSyncState {
   enabled: boolean;
   mode: "STAGE_ONLY";
   cadence: "NIGHTLY_03_00_EUROPE_AMSTERDAM";
-  source: { sitemapUrl: string; associationPath: string; cadence: string };
+  source: { storefrontUrl?: string; sitemapUrl: string; associationPath: string; cadence: string };
   status: "NOT_RUN" | "OK" | "ATTENTION" | "ERROR";
   lastAttemptAt: string | null;
   lastSuccessfulSyncAt: string | null;
   nextRunAt: string | null;
   sourceFingerprint: string | null;
-  counts: { associations: number; articles: number; new: number; changed: number; attention: number };
-  changes: { id: string; kind: string; sourceIdentifier: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string }[];
+  counts: { raw?: number; live?: number; productionRelevant?: number; autoNoop?: number; associations: number; articles: number; new: number; changed: number; attention: number };
+  changes: { id: string; kind: string; sourceIdentifier: string; sourceFingerprint?: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string; sourceValue?: { name?: string; url?: string; productionRelevance?: { status: string; fields?: string[]; evidence?: string } }; workspaceValue?: { name?: string; url?: string | null } | null }[];
   lastError: { code: string; message: string } | null;
 }
 

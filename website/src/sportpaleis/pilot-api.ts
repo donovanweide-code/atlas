@@ -237,6 +237,7 @@ export class SportpaleisPilotApi {
 
   async createOrder(input: {
     orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM";
+    teamContext?: string;
     customer: string;
     customerEmail: string;
     customerPhone: string;
@@ -390,6 +391,10 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async deleteEmployee(employeeId: string): Promise<{ deleted: true; id: string }> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/employees/${encodeURIComponent(employeeId)}`, { method: "DELETE" }));
+  }
+
   async setQuickPin(userId: string, input: { pin?: string; disable?: boolean }): Promise<SportpaleisUser> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/quick-pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
@@ -472,6 +477,10 @@ export class SportpaleisPilotApi {
 
   async runWebsiteSync(): Promise<NonNullable<PilotBootstrap["websiteSync"]>> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/website-sync/run`, { method: "POST" }));
+  }
+
+  async reviewWebsiteSyncChange(changeId: string, action: "ACCEPT_SOURCE" | "KEEP_WORKSPACE"): Promise<NonNullable<PilotBootstrap["websiteSync"]>> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/website-sync/changes/${encodeURIComponent(changeId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) }));
   }
 
   async updateProductionProfile(profileId: string, input: {
