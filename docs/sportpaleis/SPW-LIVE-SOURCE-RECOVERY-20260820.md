@@ -21,7 +21,7 @@ De drie refs zijn zonder force-push op `origin` vastgelegd. De historische commi
 - Embedded manifest/live manifest SHA-256: `4c627bd5c95d95f7caa04d64b8b189be4a2118178fa736be1570950350dbdb7d`
 - Live assetmanifest-fingerprint: `04692e7d66e9d0369c99525c57abd87897256fbfe2c354cb3b1c5fc5576631a4`
 - Live hoofdasset: `workspace-C8_l-zZ4.js`
-- Live hoofdasset SHA-256: `55dfbd8cfc7bfb36589b047ea98cbd8df1a380022a526f60c8dd2c781815be08`
+- Live hoofdasset SHA-256: `55dfbd194914747720d2daf47d015b850523aeaceccdf746c653ecad1a98be08`
 
 ## Rebuild-equivalence
 
