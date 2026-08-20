@@ -195,8 +195,11 @@ test("UI is werkgericht, progressive en mobile-first zonder fake AI-claim", asyn
     readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8"),
   ]);
   for (const marker of ["Today", "Attention", "Organisaties", "Search", "Capabilities"]) assert.match(owner, new RegExp(marker));
-  for (const marker of ["Sinds je laatste bezoek", "Atlas heeft onderzocht", "Beslissing nodig", "Kan wachten", "Waarom zegt Atlas dit?", "Next Best Action"]) assert.match(atlasUi, new RegExp(marker));
+  for (const marker of ["Dit speelt er vandaag", "Wat ertoe doet", "Atlas inzicht", "Beslissing nodig", "Kan wachten", "Waarom zegt Atlas dit?", "Next Best Action"]) assert.match(atlasUi, new RegExp(marker));
+  assert.match(atlasUi, /\.slice\(0, 6\)/u);
+  assert.match(atlasUi, /Hoe Atlas werkt[\s\S]*wbd-atlas-autonomy/u);
   assert.match(css, /@media \(max-width:520px\)/u);
+  assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/u);
   assert.match(runtime, /WbdHomepageConnectorScheduler/u);
   assert.doesNotMatch(atlasUi, /AI heeft bepaald|autonoom uitgevoerd in productie/iu);
 });
