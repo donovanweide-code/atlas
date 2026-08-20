@@ -21,9 +21,12 @@ import type {
   SportpaleisProductionLine,
   SportpaleisEmployee,
 } from "./workspace-data.ts";
+import { createNonCriticalReadonlyCache, type ReadonlyCacheObservation } from "../workspace-readonly-cache.ts";
 
 const API = "/api/sportpaleis/v1";
-const CACHE_KEY = "sportpaleis.workspace.readonly-cache.012";
+export const SPORTPALEIS_READONLY_CACHE_KEY = "sportpaleis.workspace.readonly-cache.013";
+export const SPORTPALEIS_READONLY_CACHE_MAX_BYTES = 2 * 1024 * 1024;
+const CACHE_PREFIX = "sportpaleis.workspace.readonly-cache.";
 
 interface ApiErrorBody {
   error?: string;
@@ -100,6 +103,39 @@ export interface MailHistoryEntry {
   automaticRetryAllowed: false;
 }
 
+function isPilotBootstrapCache(value: unknown): value is PilotBootstrap {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<PilotBootstrap>;
+  return Number.isInteger(candidate.revision)
+    && Boolean(candidate.currentUser && typeof candidate.currentUser === "object")
+    && Array.isArray(candidate.orders)
+    && Array.isArray(candidate.articles)
+    && Array.isArray(candidate.associations)
+    && Array.isArray(candidate.productionProfiles)
+    && Boolean(candidate.capabilities && typeof candidate.capabilities === "object");
+}
+
+function cacheProjection(result: PilotBootstrap): PilotBootstrap {
+  const { csrfToken: _csrfToken, ...withoutCsrf } = result;
+  return {
+    ...withoutCsrf,
+    productionProfiles: result.productionProfiles.map(({ validationHistory: _validationHistory, ...profile }) => profile),
+  };
+}
+
+function observeReadonlyCache(observation: ReadonlyCacheObservation): void {
+  globalThis.console?.info?.("Non-critical Workspace cache skipped.", { observation });
+}
+
+const readonlyCache = createNonCriticalReadonlyCache<PilotBootstrap>({
+  key: SPORTPALEIS_READONLY_CACHE_KEY,
+  keyPrefix: CACHE_PREFIX,
+  maxBytes: SPORTPALEIS_READONLY_CACHE_MAX_BYTES,
+  resolveStorage: () => globalThis.sessionStorage,
+  validate: isPilotBootstrapCache,
+  observe: observeReadonlyCache,
+});
+
 export interface EditableOrderItemInput {
   articleId?: string;
   product?: string;
@@ -141,7 +177,7 @@ export class SportpaleisPilotApi {
   async fastSwitch(targetUserId: string, credential: { authMode: "PIN"; pin: string } | { authMode: "PASSWORD"; password: string }, deviceMode: "SHARED" | "PERSONAL"): Promise<SportpaleisUser> {
     const result = await responseBody<{ user: SportpaleisUser; csrfToken: string }>(await this.#mutatingFetch(`${API}/auth/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId, ...credential, deviceMode }) }));
     this.#csrfToken = result.csrfToken;
-    sessionStorage.removeItem(CACHE_KEY);
+    readonlyCache.clear();
     return result.user;
   }
 
@@ -164,7 +200,7 @@ export class SportpaleisPilotApi {
   async logout(): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/auth/logout`, { method: "POST" }));
     this.#csrfToken = "";
-    sessionStorage.removeItem(CACHE_KEY);
+    readonlyCache.clear();
   }
 
   async session(): Promise<SportpaleisUser> {
@@ -182,9 +218,7 @@ export class SportpaleisPilotApi {
       headers: { Accept: "application/json" },
     }));
     if (result.csrfToken) this.#csrfToken = result.csrfToken;
-    const cacheable = { ...result };
-    delete cacheable.csrfToken;
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheable));
+    readonlyCache.replace(cacheProjection(result));
     return result;
   }
 
@@ -197,12 +231,8 @@ export class SportpaleisPilotApi {
   }
 
   cachedBootstrap(): PilotBootstrap | undefined {
-    try {
-      const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? "null") as PilotBootstrap | null;
-      return cached ? { ...cached, readOnlyFallback: true } : undefined;
-    } catch {
-      return undefined;
-    }
+    const cached = readonlyCache.read();
+    return cached ? { ...cached, readOnlyFallback: true } : undefined;
   }
 
   async createOrder(input: {

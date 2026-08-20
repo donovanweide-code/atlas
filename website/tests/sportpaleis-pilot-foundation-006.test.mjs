@@ -217,7 +217,8 @@ test("Pilot Foundation 006 — auth, rollen, gedeelde data, concurrency en herst
   await context.test("tijdelijke API-uitval gebruikt alleen een niet-autoritatieve alleen-lezen cache", async () => {
     const apiSource = await readFile(new URL("../src/sportpaleis/pilot-api.ts", import.meta.url), "utf8");
     const workspaceSource = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-    assert.match(apiSource, /sessionStorage\.setItem\(CACHE_KEY/);
+    assert.match(apiSource, /createNonCriticalReadonlyCache<PilotBootstrap>/);
+    assert.match(apiSource, /readonlyCache\.replace\(cacheProjection\(result\)\)/);
     assert.match(apiSource, /readOnlyFallback: true/);
     assert.doesNotMatch(apiSource, /localStorage/);
     assert.match(workspaceSource, /Alleen-lezen herstelweergave/);
