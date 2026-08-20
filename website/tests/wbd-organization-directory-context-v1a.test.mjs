@@ -103,11 +103,14 @@ test("Kansen-projectie bevat alleen canonieke Opportunities", () => {
   assert.doesNotMatch(html, /candidate-store-v1|Commerce Workspace/u);
 });
 
-test("Owner-navigatie verbindt Today, Attention, Organizations en Search zonder browserauthority", async () => {
+test("Owner-navigatie houdt Today dominant en plaatst secundaire werkgebieden onder Meer", async () => {
   const owner = await readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8");
   const context = await readFile(new URL("../src/wbd-organization-context.ts", import.meta.url), "utf8");
   const runtime = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
-  assert.match(owner, /Today[\s\S]*Attention[\s\S]*Organisaties[\s\S]*Search[\s\S]*Meer/u);
+  assert.match(owner, /Primaire WBD-navigatie[\s\S]*Today[\s\S]*Mail[\s\S]*Search/u);
+  assert.match(owner, /Primaire mobiele WBD-navigatie[\s\S]*Today[\s\S]*Attention[\s\S]*Search[\s\S]*Meer/u);
+  assert.match(owner, /Mail<small>later<\/small>/u);
+  assert.doesNotMatch(owner, /href="\/workspace\/wbd\/mail"/u);
   assert.match(owner, /capabilitiesPath[\s\S]*opportunitiesPath[\s\S]*\/workspace\/experience[\s\S]*workContextPath/u);
   assert.doesNotMatch(owner + context, /localStorage|indexedDB|wbd-dossier-store|wbd-invoices|\/api\/wbd\/v1\/organization-context/u);
   assert.match(runtime, /ownerOrganizationRoute/u);

@@ -106,12 +106,21 @@ function capabilityCard(capability: Capability, atlas?: AtlasWorkspaceView): str
 
 type OwnerSection = "home" | "attention" | "organizations" | "search" | "management" | "opportunities" | "capabilities" | "workcontext";
 
-function ownerTopbar(session: SessionView, active: OwnerSection): string {
-  const moreActive = active === "management" || active === "capabilities" || active === "workcontext" || active === "opportunities";
+function ownerMoreLinks(active: OwnerSection, atlas: AtlasWorkspaceView, includeAttention: boolean): string {
+  const attention = includeAttention ? `<a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}"><span>Attention</span><small>${atlas.attention.length}</small></a>` : "";
+  const decisionCount = atlas.decisionsNeeded.length;
+  return `${attention}<a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}"><span>Organisaties</span></a><a href="${managementPath}" aria-current="${active === "management" ? "page" : "false"}"><span>Beheer &amp; GO</span>${decisionCount ? `<small>${decisionCount} nodig</small>` : ""}</a><a href="${capabilitiesPath}" aria-current="${active === "capabilities" ? "page" : "false"}"><span>Capabilities</span></a><a href="${opportunitiesPath}" aria-current="${active === "opportunities" ? "page" : "false"}"><span>Kansen</span></a><a href="/workspace/experience"><span>Experience</span></a><a href="${workContextPath}" aria-current="${active === "workcontext" ? "page" : "false"}"><span>Bestaande werkcontext</span></a>`;
+}
+
+function ownerTopbar(session: SessionView, active: OwnerSection, atlas: AtlasWorkspaceView): string {
+  const secondaryActive = new Set<OwnerSection>(["attention", "organizations", "management", "capabilities", "workcontext", "opportunities"]).has(active);
+  const mobileMoreActive = new Set<OwnerSection>(["organizations", "management", "capabilities", "workcontext", "opportunities"]).has(active);
+  const decisionCount = atlas.decisionsNeeded.length;
   return `<header class="wbd-owner-topbar">
     <a class="wbd-owner-brand" href="${homePath}" aria-label="WBD Workspace"><span class="wbd-owner-mark" aria-hidden="true">W</span><span>WBD Workspace</span></a>
-    <nav class="wbd-owner-sections" aria-label="WBD werkgebieden"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">Today</a><a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}">Attention</a><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">Organisaties</a><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">Search</a><details class="wbd-owner-more"><summary aria-current="${moreActive ? "page" : "false"}">Meer</summary><div><a href="${capabilitiesPath}" aria-current="${active === "capabilities" ? "page" : "false"}">Capabilities</a><a href="${opportunitiesPath}" aria-current="${active === "opportunities" ? "page" : "false"}">Kansen</a><a href="/workspace/experience">Experience</a><a href="${managementPath}" aria-current="${active === "management" ? "page" : "false"}">Beheer & GO</a><a href="${workContextPath}" aria-current="${active === "workcontext" ? "page" : "false"}">Lokale werkcontext</a></div></details></nav>
-    <div><span>${escapeHtml(session.owner.name)}</span><button type="button" data-logout>Uitloggen</button></div>
+    <nav class="wbd-owner-primary" aria-label="Primaire WBD-navigatie"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">Today</a><span class="wbd-owner-sections__unavailable" aria-disabled="true" title="Mail krijgt hier een plek zodra een echte Owner Mail-workarea is aangesloten">Mail<small>later</small></span><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">Search</a></nav>
+    <div class="wbd-owner-actions">${decisionCount ? `<a class="wbd-owner-go-status" href="${managementPath}">${decisionCount} beslissing${decisionCount === 1 ? "" : "en"}</a>` : ""}<details class="wbd-owner-more wbd-owner-more--desktop"><summary aria-current="${secondaryActive ? "page" : "false"}">Meer</summary><div>${ownerMoreLinks(active, atlas, true)}</div></details><div class="wbd-owner-profile"><span>${escapeHtml(session.owner.name)}</span><button type="button" data-logout>Uitloggen</button></div></div>
+    <nav class="wbd-owner-mobile-sections" aria-label="Primaire mobiele WBD-navigatie"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">Today</a><a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}">Attention</a><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">Search</a><details class="wbd-owner-more wbd-owner-more--mobile"><summary aria-current="${mobileMoreActive ? "page" : "false"}">Meer</summary><div>${ownerMoreLinks(active, atlas, false)}</div></details></nav>
   </header>`;
 }
 
@@ -123,12 +132,12 @@ function organizationIdFromPath(pathname: string): string | null {
   try { return decodeURIComponent(encoded); } catch { return null; }
 }
 
-function workspaceView(session: SessionView, catalog: CatalogView, filter: FilterId, atlas?: AtlasWorkspaceView): string {
+function workspaceView(session: SessionView, catalog: CatalogView, filter: FilterId, atlas: AtlasWorkspaceView): string {
   const visible = catalog.capabilities.filter((capability) => matchesFilter(capability, filter));
   const proven = catalog.capabilities.filter(({ status }) => status.startsWith("PROVEN_")).length;
   const sellable = catalog.capabilities.filter(({ sellNow }) => sellNow).length;
   return `<main class="wbd-owner-workspace">
-    ${ownerTopbar(session, "capabilities")}
+    ${ownerTopbar(session, "capabilities", atlas)}
     <section class="wbd-owner-intro"><div><p class="wbd-owner-eyebrow">Owner Foundation · centrale waarheid</p><h1>Capabilities</h1><p>Wat WBD vandaag aantoonbaar kan, waar het bewezen is en wat nog niet verkocht moet worden.</p></div><dl><div><dt>Totaal</dt><dd>${catalog.capabilities.length}</dd></div><div><dt>Bewezen</dt><dd>${proven}</dd></div><div><dt>Nu verkoopbaar</dt><dd>${sellable}</dd></div><div><dt>Nog niet</dt><dd>${catalog.capabilities.length - sellable}</dd></div></dl></section>
     <nav class="wbd-owner-filters" aria-label="Capabilityfilters">${filters.map(({ id, label }) => `<button type="button" data-filter="${id}" aria-pressed="${filter === id}">${escapeHtml(label)}</button>`).join("")}</nav>
     <section class="wbd-capability-list" aria-live="polite" aria-label="${visible.length} capabilities">${visible.length ? visible.map((capability) => capabilityCard(capability, atlas)).join("") : '<p class="wbd-owner-empty">Geen capabilities binnen dit filter.</p>'}</section>
@@ -136,9 +145,9 @@ function workspaceView(session: SessionView, catalog: CatalogView, filter: Filte
   </main>`;
 }
 
-function workContextView(session: SessionView, mobileDevice: boolean): string {
+function workContextView(session: SessionView, mobileDevice: boolean, atlas: AtlasWorkspaceView): string {
   return `<main class="wbd-owner-workspace">
-    ${ownerTopbar(session, "workcontext")}
+    ${ownerTopbar(session, "workcontext", atlas)}
     <section class="wbd-workcontext" data-mobile-device="${mobileDevice}" aria-labelledby="workcontext-title">
       <p class="wbd-owner-eyebrow">Tijdelijke continuïteitsbrug</p>
       <h1 id="workcontext-title">Bestaande werkcontext</h1>
@@ -221,14 +230,14 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     const capabilitiesActive = pathname === capabilitiesPath;
     const pageTitle = homeActive ? "Today" : attentionActive ? "Attention" : searchActive ? "Search" : managementActive ? "Beheer & GO" : organizationDirectoryActive ? "Organisaties" : organizationId ? control.organizations.find(({ id }) => id === organizationId)?.name ?? "Organization" : opportunitiesActive ? "Kansen" : workContextActive ? "Bestaande werkcontext" : "Capabilities";
     document.title = `${pageTitle} — WBD Workspace`;
-    if (homeActive) app.innerHTML = renderAtlasToday(ownerTopbar(session, "home"), atlas);
-    else if (attentionActive) app.innerHTML = renderAtlasAttention(ownerTopbar(session, "attention"), atlas);
-    else if (searchActive) app.innerHTML = renderAtlasSearch(ownerTopbar(session, "search"), searchView);
-    else if (managementActive) app.innerHTML = renderControlHome(ownerTopbar(session, "management"), control, overview, promotions);
-    else if (organizationDirectoryActive) app.innerHTML = renderOrganizationDirectory(ownerTopbar(session, "organizations"), control);
-    else if (organizationId) app.innerHTML = renderOrganizationContext(ownerTopbar(session, "organizations"), control, organizationId, catalog.capabilities.length, atlas);
-    else if (opportunitiesActive) app.innerHTML = renderOpportunityDirectory(ownerTopbar(session, "opportunities"), control);
-    else if (workContextActive) app.innerHTML = workContextView(session, isCurrentDeviceMobile());
+    if (homeActive) app.innerHTML = renderAtlasToday(ownerTopbar(session, "home", atlas), atlas, session.owner.name);
+    else if (attentionActive) app.innerHTML = renderAtlasAttention(ownerTopbar(session, "attention", atlas), atlas);
+    else if (searchActive) app.innerHTML = renderAtlasSearch(ownerTopbar(session, "search", atlas), searchView);
+    else if (managementActive) app.innerHTML = renderControlHome(ownerTopbar(session, "management", atlas), control, overview, promotions);
+    else if (organizationDirectoryActive) app.innerHTML = renderOrganizationDirectory(ownerTopbar(session, "organizations", atlas), control);
+    else if (organizationId) app.innerHTML = renderOrganizationContext(ownerTopbar(session, "organizations", atlas), control, organizationId, catalog.capabilities.length, atlas);
+    else if (opportunitiesActive) app.innerHTML = renderOpportunityDirectory(ownerTopbar(session, "opportunities", atlas), control);
+    else if (workContextActive) app.innerHTML = workContextView(session, isCurrentDeviceMobile(), atlas);
     else app.innerHTML = workspaceView(session, catalog, activeFilter, atlas);
     if (homeActive && !visitRecorded) {
       visitRecorded = true;
