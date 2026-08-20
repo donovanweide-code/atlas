@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { verifyPublicBuild } from "../scripts/verify-public-build.mjs";
+import {
+  collectApprovedPublicStaticAssets,
+  PUBLIC_STATIC_ALLOWLIST,
+} from "../scripts/public-static-boundary.mjs";
 
 test("neemt de juridische basis op in routes, footer en sitemap", async () => {
   const [experienceSource, homepageSource, legalSource, sitemap] = await Promise.all([
@@ -58,8 +62,48 @@ async function withBuild(files, assertion) {
 test("accepteert uitsluitend een publieke entry en publieke assets", async () => {
   await withBuild({
     "index.html": '<script type="module" src="/assets/index.js"></script>',
-    "assets/index.js": 'document.title="We Build And Design";',
+    "assets/index.js": 'document.title="We Build And Design"; const image="/assets/atlas-landscape.webp";',
     "assets/atlas-landscape.webp": "publieke afbeelding",
+  }, async (directory) => {
+    const result = await verifyPublicBuild(directory);
+    assert.equal(result.files, 3);
+  });
+});
+
+test("kopieert alleen expliciet toegestane publieke statics", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "wbd-public-source-"));
+  try {
+    for (const fileName of PUBLIC_STATIC_ALLOWLIST) {
+      const destination = path.join(directory, fileName);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, `approved:${fileName}`);
+    }
+    await mkdir(path.join(directory, "assets/organizations/example"), { recursive: true });
+    await writeFile(path.join(directory, "assets/organizations/example/private.json"), "{}");
+
+    const assets = await collectApprovedPublicStaticAssets(directory);
+    assert.deepEqual(assets.map(({ fileName }) => fileName), [...PUBLIC_STATIC_ALLOWLIST]);
+    assert.equal(assets.some(({ fileName }) => fileName.includes("organizations")), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("weigert organization- en provenance-assets ook wanneer code ernaar verwijst", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": 'const evidence="/assets/organizations/example/provenance.json";',
+    "assets/organizations/example/provenance.json": '{"source":"internal"}',
+  }, async (directory) => {
+    await assert.rejects(() => verifyPublicBuild(directory), /intern artefact/);
+  });
+});
+
+test("accepteert expliciet geïmporteerde geschoonde publieke caseassets", async () => {
+  await withBuild({
+    "index.html": '<script type="module" src="/assets/index.js"></script>',
+    "assets/index.js": 'const proof="/assets/sportpaleis-public-proof-A1b2C3.png";',
+    "assets/sportpaleis-public-proof-A1b2C3.png": "geschoond publiek bewijs",
   }, async (directory) => {
     const result = await verifyPublicBuild(directory);
     assert.equal(result.files, 3);

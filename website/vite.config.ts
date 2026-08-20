@@ -3,6 +3,7 @@ import { createWbdInvoiceDevelopmentMiddleware } from "./scripts/wbd-invoice-dev
 import { createWbdWorkspaceFoundationMiddleware } from "./scripts/wbd-workspace-foundation-api.mjs";
 import { createSportpaleisPilotDevelopmentMiddleware } from "./scripts/sportpaleis-pilot-development-api.mjs";
 import { createEnvironmentMailFoundation } from "./scripts/mail-foundation.mjs";
+import { createPublicStaticBoundaryPlugin } from "./scripts/public-static-boundary.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,8 +59,11 @@ function handleWorkspaceProbe(
 }
 
 export default defineConfig(({ command }) => ({
-  plugins: command === "serve"
-    ? [
+  publicDir: command === "serve" ? "public" : false,
+  plugins: [
+    createPublicStaticBoundaryPlugin({ publicDirectory: path.join(websiteRoot, "public") }),
+    ...(command === "serve"
+      ? [
         {
           name: "atlas-internal-development-routes",
           transformIndexHtml(html, context) {
@@ -94,5 +98,6 @@ export default defineConfig(({ command }) => ({
           },
         },
       ]
-    : [],
+      : []),
+  ],
 }));

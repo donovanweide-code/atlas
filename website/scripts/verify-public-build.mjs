@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { PUBLIC_STATIC_ALLOWLIST } from "./public-static-boundary.mjs";
 
 const textExtensions = new Set([
   ".css",
@@ -14,12 +15,21 @@ const textExtensions = new Set([
 ]);
 
 const forbiddenPaths = [
+  /^assets\/organizations(?:\/|$)/i,
+  /(?:^|\/)provenance(?:[._-]|$)/i,
   /atlas-(?:workspace|workspace-data|lab|observe|observations|orientations|delivery-review|understanding|case-guidance|case-snapshot|aquaflask-profile)/i,
   /aqua[-_]?flask/i,
   /case[-_]?snapshot/i,
   /(?:development|internal)-main/i,
   /internal\.html$/i,
 ];
+
+const approvedRootFiles = new Set(["index.html", ...PUBLIC_STATIC_ALLOWLIST]);
+
+function assetReferences(content) {
+  return [...content.matchAll(/(?:^|["'(`=:\s])\/?(assets\/[A-Za-z0-9._/-]+)/g)]
+    .map((match) => match[1]);
+}
 
 const forbiddenContent = [
   { label: "interne Atlas-route", pattern: /\/atlas(?:-lab)?(?:[\"'?#/]|$)/i },
@@ -64,17 +74,43 @@ export async function verifyPublicBuild(distDirectory) {
   const forbiddenFile = relativeFiles.find((file) => forbiddenPaths.some((pattern) => pattern.test(file)));
   if (forbiddenFile) throw new Error(`Publieke build bevat intern artefact: ${forbiddenFile}.`);
 
+  const unexpectedStaticFile = relativeFiles.find((file) => !file.startsWith("assets/") && !approvedRootFiles.has(file));
+  if (unexpectedStaticFile) {
+    throw new Error(`Publieke build bevat niet-geallowlist statisch artefact: ${unexpectedStaticFile}.`);
+  }
+
   let scannedTextFiles = 0;
+  const textByRelativeFile = new Map();
   for (const file of files) {
     if (!textExtensions.has(path.extname(file).toLowerCase()) && path.basename(file) !== ".htaccess") continue;
     scannedTextFiles += 1;
     const content = await readFile(file, "utf8");
+    textByRelativeFile.set(path.relative(dist, file).replaceAll("\\", "/"), content);
     const contentWithoutApprovedPublicAnchors = content.replace(/Design the understanding first\.?/gi, "");
     const violation = forbiddenContent.find(({ pattern }) => pattern.test(contentWithoutApprovedPublicAnchors));
     if (violation) {
       const relativeFile = path.relative(dist, file).replaceAll("\\", "/");
       throw new Error(`Publieke build lekt ${violation.label} via ${relativeFile}.`);
     }
+  }
+
+  const reachableAssets = new Set();
+  const pendingTextFiles = [...approvedRootFiles].filter((file) => textByRelativeFile.has(file));
+  const visitedTextFiles = new Set();
+  while (pendingTextFiles.length > 0) {
+    const relativeFile = pendingTextFiles.shift();
+    if (!relativeFile || visitedTextFiles.has(relativeFile)) continue;
+    visitedTextFiles.add(relativeFile);
+    for (const reference of assetReferences(textByRelativeFile.get(relativeFile) ?? "")) {
+      if (!relativeFiles.includes(reference) || reachableAssets.has(reference)) continue;
+      reachableAssets.add(reference);
+      if (textByRelativeFile.has(reference)) pendingTextFiles.push(reference);
+    }
+  }
+
+  const unreferencedAsset = relativeFiles.find((file) => file.startsWith("assets/") && !reachableAssets.has(file));
+  if (unreferencedAsset) {
+    throw new Error(`Publieke build bevat niet-bereikbaar of niet-expliciet gebruikt asset: ${unreferencedAsset}.`);
   }
 
   return { files: files.length, scannedTextFiles };
