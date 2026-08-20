@@ -17,9 +17,23 @@ function normalized(value: unknown): string {
     .trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
 }
 
+export function isConfirmedPilotTestOrder(order: PilotBootstrap["orders"][number]): boolean {
+  const email = String(order.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL");
+  const customer = String(order.customer ?? "").trim().toLocaleLowerCase("nl-NL");
+  return email.endsWith("@example.invalid")
+    || /^snijtest-/iu.test(order.id)
+    || /^interne productietest\b/u.test(customer)
+    || /^pilot groepstest\b/u.test(customer)
+    || /^test(?:\s|\d|$)/u.test(customer);
+}
+
+export function isOperationalOrder(order: PilotBootstrap["orders"][number]): boolean {
+  return !order.deletion && !isConfirmedPilotTestOrder(order);
+}
+
 export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/workspace/sportpaleis"): WorkspaceSearchItem[] {
   const items: WorkspaceSearchItem[] = [];
-  for (const order of state.orders.filter(({ deletion }) => !deletion)) {
+  for (const order of state.orders.filter(isOperationalOrder)) {
     const articleTerms = order.items.flatMap(({ articleNumber, product, association, variants }) => [articleNumber, product, association, ...(variants ?? []).map(({ participantName }) => participantName)]).filter(Boolean);
     items.push({
       id: order.id, kind: "ORDER", group: order.sourceContext?.source === "WEBSHOP_XPRT" ? "Webshoporders" : "Winkelorders",

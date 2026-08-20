@@ -136,7 +136,7 @@ test("Divide contract segmenteert multi-page 26-orders en stuurt alleen geperson
 function searchState(size = 1) {
   return {
     capabilities: { admin: true, operator: true },
-    orders: Array.from({ length: size }, (_, index) => ({ id: `SP-${1000 + index}`, customer: `Klant ${index}`, customerEmail: `klant${index}@example.invalid`, customerPhone: "", association: "Waterwijk", items: [{ articleNumber: `ART-${index}`, product: `Shirt ${index}`, association: "Waterwijk", variants: [] }], sourceContext: index === 7 ? { source: "WEBSHOP_XPRT", externalReference: "26340007" } : { source: "STORE", externalReference: null }, salesAttribution: { salesNumber: "45", label: "Medewerker 45" } })),
+    orders: Array.from({ length: size }, (_, index) => ({ id: `SP-${1000 + index}`, customer: `Klant ${index}`, customerEmail: `klant${index}@example.nl`, customerPhone: "", association: "Waterwijk", items: [{ articleNumber: `ART-${index}`, product: `Shirt ${index}`, association: "Waterwijk", variants: [] }], sourceContext: index === 7 ? { source: "WEBSHOP_XPRT", externalReference: "26340007" } : { source: "STORE", externalReference: null }, salesAttribution: { salesNumber: "45", label: "Medewerker 45" } })),
     articles: Array.from({ length: size }, (_, index) => ({ id: `article-${index}`, name: `Artikel ${index}`, articleNumber: `ART-${index}`, supplierArticleNumber: "", association: "Waterwijk", category: "Teamwear" })),
     associations: [{ id: "waterwijk", name: "Waterwijk", active: true, notes: "" }],
     employees: [{ id: "employee-45", name: "Medewerker 45", salesNumber: "45", active: true }],

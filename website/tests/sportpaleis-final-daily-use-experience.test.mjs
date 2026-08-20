@@ -6,13 +6,13 @@ test("Productie toont fysieke batches en houdt technische PlotJob-identiteit in 
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /Nu maken/u);
   assert.match(source, /\+ Bekijk wat meegaat/u);
-  assert.match(source, /Productiebestand openen/u);
-  assert.match(source, /Een productiebestand is voorbereiding\. Alleen Bedrukt rondt de fysieke stap af/u);
+  assert.match(source, /Plot-\/printhistorie/u);
+  assert.match(source, /Een productiebestand is voorbereiding; alleen Bedrukt rondt de stap af/u);
   assert.match(source, /BATCH AFGEROND/u);
   assert.match(source, /select-completed-batch-orders/u);
   assert.match(source, /Eerder productiewerk/u);
   assert.match(source, /data-action="production-filter" data-filter="attention"[^]*?statusCounts\.attention/u);
-  const primary = source.slice(source.indexOf("const currentJobCards"), source.indexOf("const productionSearchOrders"));
+  const primary = source.slice(source.indexOf("const persistedGroupCards"), source.indexOf("const productionSearchOrders"));
   assert.doesNotMatch(primary, /jobNumber/u, "technisch PlotJob-nummer domineert de primaire fysieke werkkaart niet");
 });
 

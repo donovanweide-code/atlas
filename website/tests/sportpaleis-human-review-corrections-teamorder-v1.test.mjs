@@ -226,7 +226,7 @@ test("syncreview is admin-only en Overnemen wijzigt geen lokale productieconfig"
 
 test("First-Use copy maakt voorbereiding, review en hard-off boundaries expliciet", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /Een productiebestand is voorbereiding\. Alleen Bedrukt rondt de fysieke stap af/u);
+  assert.match(source, /Een productiebestand is voorbereiding; alleen Bedrukt rondt de stap af/u);
   assert.match(source, /Vereniging \(optioneel\)/u);
   assert.match(source, /Rugnummers/u);
   assert.match(source, /Initialen/u);
