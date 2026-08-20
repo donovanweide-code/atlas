@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createSportpaleisProductionBootstrap } from "./sportpaleis-pilot-foundation.mjs";
 import { collectRuntimeDependencyGraph } from "./release-runtime-graph.mjs";
+import { assertRemoteSourceTag } from "./release-provenance-core.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -121,6 +122,15 @@ async function main() {
   const commit = git("rev-parse", "HEAD");
   if (git("rev-parse", `${tag}^{commit}`) !== commit) throw new Error("Tag wijst niet naar de actuele commit.");
   const baseFreezeCommit = git("rev-parse", `${baseFreezeTag}^{commit}`);
+  const sourceTree = git("rev-parse", "HEAD^{tree}");
+  const sourceRemote = process.env.RELEASE_SOURCE_REMOTE ?? "origin";
+  const remoteTagOutput = git("ls-remote", "--tags", sourceRemote, `refs/tags/${tag}`, `refs/tags/${tag}^{}`);
+  const remoteTagCommit = assertRemoteSourceTag({
+    output: remoteTagOutput,
+    remote: sourceRemote,
+    tag,
+    expectedCommit: commit,
+  });
 
   const runtimeDependencies = await collectRuntimeDependencyGraph({
     websiteRoot,
@@ -204,6 +214,10 @@ async function main() {
   const externalManifest = {
     releaseId, commit, tag, artifact: artifactName, artifactBytes: artifact.length, artifactSha256: sha256(artifact),
     baseFreezeTag, baseFreezeCommit,
+    buildTimestamp: new Date().toISOString(),
+    assetManifestFingerprint: sha256(Buffer.from(`${JSON.stringify(entries.filter(({ path: entryPath }) => entryPath.startsWith("app/dist-workspace/")))}\n`, "utf8")),
+    sourceProvenance: { remote: sourceRemote, tag, commit: remoteTagCommit, tree: sourceTree, verifiedAtBuild: true },
+    deployability: { rollbackArtifactRequired: true },
     runtimeDependencyCount: runtimeDependencies.length,
     persistentProductionArtifactCount: productionArtifacts.references.length,
     reproducibleCommand: `node website/scripts/build-production-release.mjs ${releaseId} ${tag} ${baseFreezeTag}`,
