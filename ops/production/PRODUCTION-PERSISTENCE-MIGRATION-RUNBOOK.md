@@ -18,6 +18,14 @@ The permanent runtime users and the temporary migrator user are different princi
 
 ## Status check
 
+Before a candidate can be called deployable, run the provenance guard with its generated manifest, immutable artifact, previous known-good rollback artifact and the independently recorded rollback SHA-256:
+
+```text
+npm run verify:production-release -- <manifest> <artifact> <rollback-artifact> <rollback-sha256>
+```
+
+The guard fails closed when the immutable source tag is not recoverable from the configured central Git remote, the commit/tree/build/asset manifest is incomplete, the release artifact hash differs, or the rollback artifact is absent or corrupt. Do not switch the production symlink after a failed or omitted provenance guard.
+
 From the unpacked release directory, with `NODE_ENV=production` and the database plus masked migrator environment variables loaded locally:
 
 ```text

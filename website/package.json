@@ -16,6 +16,7 @@
     "start:workspace": "node scripts/workspace-runtime.mjs",
     "migrate:production": "node scripts/production-migrate.mjs",
     "release:production": "node scripts/build-production-release.mjs",
+    "verify:production-release": "node scripts/verify-production-release-provenance.mjs",
     "verify:public-build": "node scripts/verify-public-build.mjs",
     "validate:release": "node scripts/release-validation.mjs",
     "sync:connector:wbd": "node --experimental-strip-types scripts/atlas-connector-sync.mjs",
