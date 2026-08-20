@@ -138,6 +138,7 @@ async function main() {
       path.join(websiteRoot, "scripts", "workspace-runtime.mjs"),
       path.join(websiteRoot, "scripts", "production-migrate.mjs"),
       path.join(websiteRoot, "scripts", "sportpaleis-website-sync-job.mjs"),
+      path.join(websiteRoot, "scripts", "sportpaleis-prelive-order-cleanup.mjs"),
     ],
     allowedRoots: [
       path.join(websiteRoot, "scripts"),
@@ -191,6 +192,7 @@ async function main() {
         "app/scripts/workspace-runtime.mjs",
         "app/scripts/production-migrate.mjs",
         "app/scripts/sportpaleis-website-sync-job.mjs",
+        "app/scripts/sportpaleis-prelive-order-cleanup.mjs",
       ],
       files: runtimeDependencies.map(({ archive }) => archive),
     },
