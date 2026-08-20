@@ -149,7 +149,26 @@ function contourCommands(commands, offsetX, offsetY, bounds, scale) {
   return contours;
 }
 
-export function createManagedFontProductionPiece({ fontRecord, bytes, content, widthMm, heightMm, id, sourceOrderId, product, association, foilColor }) {
+function productionRotationForRequestedHeightAxis(requestedHeightAxis) {
+  if (requestedHeightAxis === "SOURCE") return 0;
+  if (requestedHeightAxis !== "REQUESTED_HEIGHT_AXIS_HORIZONTAL") throw managedFontError("Onbekende fysieke productieoriëntatie.");
+  const sourceHeightAxis = { x: 0, y: 1 };
+  const rotations = [0, 90, 180, 270];
+  const rotateAxis = (rotation) => ({
+    0: sourceHeightAxis,
+    90: { x: -sourceHeightAxis.y, y: sourceHeightAxis.x },
+    180: { x: -sourceHeightAxis.x, y: -sourceHeightAxis.y },
+    270: { x: sourceHeightAxis.y, y: -sourceHeightAxis.x },
+  })[rotation];
+  const rotation = rotations.find((candidate) => {
+    const axis = rotateAxis(candidate);
+    return Math.abs(axis.x) === 1 && axis.y === 0;
+  });
+  if (rotation === undefined) throw managedFontError("De fysieke horizontale productierichting kan niet veilig worden bepaald.");
+  return rotation;
+}
+
+export function createManagedFontProductionPiece({ fontRecord, bytes, content, widthMm, heightMm, id, sourceOrderId, product, association, foilColor, requestedHeightAxis = "SOURCE" }) {
   const sourceBytes = Buffer.from(bytes);
   const actualHash = sha256(sourceBytes);
   if (actualHash !== fontRecord.sha256 || fontRecord.status !== "TECHNICALLY_VALID") {
@@ -186,10 +205,10 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     association,
     printType: "Beheerd productiefont",
     requestedPhysicalSizeMm: { widthMm: contourBounds.width, heightMm: contourBounds.height },
-    sizing: { mode: "HEIGHT_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm) },
+    sizing: { mode: "HEIGHT_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm), requestedHeightAxis },
     vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
     material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
     contours: productionContours,
-    productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0] },
+    productionRule: { mirror: true, rotation: productionRotationForRequestedHeightAxis(requestedHeightAxis), allowedNestingRotations: [0] },
   };
 }

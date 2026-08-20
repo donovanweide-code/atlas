@@ -450,7 +450,7 @@ export interface ProductionJobSnapshot {
   productionProfile: { id: string; revision: number; name: string };
   sourceContours: { id: string; version: string; proofStatus: ProductionProofStatus; immutable: true }[];
   outputWriter?: { id: string; version: string; format: "SVG" | "AI" | "PDF" | "EPS"; proofStatus: ProductionProofStatus; physicalRouteStatus: "VALIDATED" | "HUMAN_VALIDATION_REQUIRED" };
-  productionGroup: { foilColor: string; material: string; workingWidthMm: number };
+  productionGroup: { id?: string; label?: string; sourceChannel?: SportpaleisOrderSource; foilColor: string; material: string; workingWidthMm: number };
   layout: {
     strategy: string;
     objectCount: number;
@@ -494,6 +494,7 @@ export interface ProductionProposal {
     id: string;
     label: string;
     foilColor: string;
+    sourceChannel?: SportpaleisOrderSource;
     outputWriter: { id: string; version: string };
     orders: { id: string; expectedRevision: number }[];
     productionLineRefs: { orderId: string; lineId: string }[];

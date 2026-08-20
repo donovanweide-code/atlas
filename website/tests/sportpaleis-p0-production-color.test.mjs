@@ -86,13 +86,13 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });
 
   const mixed = await controlledPioneersOrder(service, admin, "mixed", [
-    { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
     { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
+    { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
   ]);
   const whiteOnly = await controlledPioneersOrder(service, admin, "white", [
     { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
   ]);
-  assert.deepEqual(mixed.items.map(({ foilColor }) => foilColor), ["Blauw", "Wit"]);
+  assert.deepEqual(mixed.items.map(({ foilColor }) => foilColor), ["Wit", "Blauw"]);
   assert.ok([...mixed.productionLines, ...whiteOnly.productionLines].every(({ heightMm, validation }) => heightMm === 200 && validation.status === "VALID"));
 
   const beforeUnsafeDirect = await service.bootstrap(admin.token);
@@ -109,6 +109,8 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   assert.equal(blueGroup.productionLineRefs.length, 1);
   assert.deepEqual(new Set(whiteGroup.orders.map(({ id }) => id)), new Set([mixed.id, whiteOnly.id]));
   assert.deepEqual(blueGroup.orders.map(({ id }) => id), [mixed.id]);
+
+  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: blueGroup.id, orders: blueGroup.orders }, "p0-blue-too-early"), (error) => error.code === "PRODUCTION_GROUP_OUT_OF_SEQUENCE");
 
   const whiteJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: whiteGroup.id, orders: whiteGroup.orders }, "p0-white-job")).value;
   assert.equal(whiteJob.snapshot.productionGroup.foilColor, "Wit");

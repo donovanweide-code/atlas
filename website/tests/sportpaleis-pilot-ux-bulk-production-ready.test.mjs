@@ -58,8 +58,8 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   if (shirt.foilColorOverride !== "Blauw") await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });
 
   const mixed = await controlledOrder(service, admin, "mixed", [
-    { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
     { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
+    { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
   ]);
   const white = await controlledOrder(service, admin, "white", [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]);
   const blue = await controlledOrder(service, admin, "blue", [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }]);
@@ -147,6 +147,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(server, /PRODUCTION_LINES_PENDING/u);
   assert.match(server, /ORDER_DELETED/u);
   assert.match(server, /PRODUCTION_FOIL_COLOR_UNMANAGED/u);
-  assert.match(source, /managedFoilColors[^]*openGroups\.splice/u);
+  assert.match(source, /proposalGroupSequenceState\(state, groups, id\) === "CURRENT"/u);
+  assert.match(source, /managedFoilColors\.has/u);
   assert.match(source, /actieve beheerde foliekleur ontbreekt/u);
 });

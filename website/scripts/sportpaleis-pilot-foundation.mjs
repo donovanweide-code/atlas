@@ -23,6 +23,7 @@ import {
   createManagedFontProductionPiece,
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
+import { sequentialStepState } from "../src/workspace-sequence.ts";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -42,6 +43,8 @@ const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
+const NON_WINKEL_ORDER_MAIL_TEMPLATES = new Set(["ORDER_QUESTION"]);
+const MAX_NON_HORIZONTAL_BACK_NUMBER_HEIGHT_MM = 180;
 const PRODUCTION_PROOF_STATUSES = new Set(["CONFIGURED", "GEOMETRY_VALIDATED", "WINPLOT_VALIDATED", "PHYSICALLY_VALIDATED", "DATA_GAP"]);
 const PRODUCTION_LINE_TYPES = new Set(["TEXT", "INITIALS", "NUMBER", "LOGO", "PRODUCTION_ELEMENT"]);
 const FONT_SIGNATURES = new Map([
@@ -1423,6 +1426,7 @@ export class SportpaleisPilotService {
           ? proposal.groups.find(({ id }) => id === payload.proposalGroupId) ?? (proposal.groups.length === 1 && !payload.proposalGroupId ? proposal.groups[0] : null)
           : null;
         if (proposal?.groups?.length && (!proposalGroup || proposalGroup.status !== "OPEN")) throw Object.assign(new Error("De productiegroep is niet meer open."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_OPEN" });
+        if (proposalGroup && productionGroupSequenceState(state, proposal, proposalGroup.id) !== "CURRENT") throw Object.assign(new Error("Rond eerst de huidige productiestap af; deze foliekleur komt daarna."), { statusCode: 409, code: "PRODUCTION_GROUP_OUT_OF_SEQUENCE" });
         if (proposalGroup && !managedFoilColor(state, proposalGroup.foilColor)) throw Object.assign(new Error("De productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         const expectedSelections = proposalGroup?.orders ?? selections;
         if (proposalGroup) {
@@ -1447,7 +1451,7 @@ export class SportpaleisPilotService {
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, proposalGroup ? { lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, groupId: proposalGroup.id, groupLabel: proposalGroup.label } : undefined);
+        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, proposalGroup ? { lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label } : undefined);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
@@ -2045,11 +2049,12 @@ export class SportpaleisPilotService {
   async captureOrderMail(token, csrfToken, orderId, payload, idempotencyKey) {
     const { state, user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
+    const orderMailRequest = this.#orderMailRequest(state, user, orderId, payload);
     const currentOrder = state.orders.find(({ id }) => id === orderId);
     if (payload.templateKey === "ORDER_RECEIVED" && currentOrder?.communication?.receipt.status === "UNKNOWN") {
       throw Object.assign(new Error("De vorige verzenduitkomst is onbekend. Menselijke controle is vereist voordat opnieuw verzonden mag worden."), { statusCode: 409, code: "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW" });
     }
-    const request = { ...this.#orderMailRequest(state, user, orderId, payload), idempotencyKey };
+    const request = { ...orderMailRequest, idempotencyKey };
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role }, { simulation: payload.simulation ?? "success" });
     if (result.duplicate) return result;
     await this.store.mutate(async (next) => {
@@ -2094,6 +2099,10 @@ export class SportpaleisPilotService {
     const order = state.orders.find(({ id }) => id === orderId);
     if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
     const templateKey = String(payload.templateKey ?? "");
+    const sourceChannel = order.sourceContext?.source ?? "STORE";
+    if (sourceChannel === "WEBSHOP_XPRT" && templateKey.startsWith("ORDER_") && !NON_WINKEL_ORDER_MAIL_TEMPLATES.has(templateKey)) {
+      throw Object.assign(new Error("Webshoporders gebruiken geen automatische Winkel-statusberichten."), { statusCode: 409, code: "WEBSHOP_WINKEL_MAIL_BLOCKED" });
+    }
     const question = templateKey === "ORDER_QUESTION" ? requiredText(payload.question, "Vraag", 1_000) : "Niet van toepassing";
     const itemLines = order.items.map((item) => `${item.quantity}× ${item.product}${item.association ? ` · ${item.association}` : ""} · ${item.personalization}`).join("\n");
     return {
@@ -3262,6 +3271,13 @@ function syncOpenProposalOrderRevisions(state, order) {
   }
 }
 
+function productionGroupSequenceState(state, proposal, groupId) {
+  return sequentialStepState(proposal?.groups ?? [], groupId, (group) => {
+    if (!group.productionJobId) return false;
+    return state.productionJobs.find(({ id }) => id === group.productionJobId)?.status === "COMPLETED";
+  });
+}
+
 function productionProgressForOrder(state, order) {
   const proposal = (state.productionProposals ?? []).find((candidate) => candidate.groups?.some((group) => group.productionLineRefs.some(({ orderId }) => orderId === order.id)));
   const groups = (proposal?.groups ?? []).filter((group) => group.productionLineRefs.some(({ orderId }) => orderId === order.id));
@@ -3301,6 +3317,18 @@ function productionLineFoilColor(state, order, line) {
   return String(item?.foilColor ?? state.settings.productionDefaults?.defaultFoilColor ?? "Onbekend").trim() || "Onbekend";
 }
 
+function productionSourceLabel(sourceChannel) {
+  return ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop", TEAM_MAIL: "Teamorder", INVOICE: "Factuur", MANUAL: "Handmatig" })[sourceChannel] ?? "Andere bron";
+}
+
+function managedFontPhysicalOrientation(line) {
+  const label = String(line.preview?.label ?? "").trim().toLocaleLowerCase("nl-NL");
+  const isBackNumber = label.startsWith("rugnummer");
+  return isBackNumber && Number(line.heightMm) > MAX_NON_HORIZONTAL_BACK_NUMBER_HEIGHT_MM
+    ? "REQUESTED_HEIGHT_AXIS_HORIZONTAL"
+    : "SOURCE";
+}
+
 function productionLineWriterIdentity(state, line) {
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
@@ -3322,19 +3350,21 @@ function buildProductionProposalGroups(state, orders) {
     for (const line of order.productionLines) {
       const writer = productionLineWriterIdentity(state, line);
       const foilColor = productionLineFoilColor(state, order, line);
-      const key = `${foilColor.toLocaleLowerCase("nl-NL")}|${writer.id}@${writer.version}`;
-      const group = grouped.get(key) ?? { foilColor, outputWriter: writer, entries: [] };
+      const sourceChannel = order.sourceContext?.source ?? "STORE";
+      const key = `${sourceChannel}|${foilColor.toLocaleLowerCase("nl-NL")}|${writer.id}@${writer.version}`;
+      const group = grouped.get(key) ?? { sourceChannel, foilColor, outputWriter: writer, entries: [] };
       group.entries.push({ order, line });
       grouped.set(key, group);
     }
   }
-  return [...grouped.values()].map(({ foilColor, outputWriter, entries: unsortedEntries }) => {
+  return [...grouped.values()].map(({ sourceChannel, foilColor, outputWriter, entries: unsortedEntries }) => {
     const entries = stableProductionTypeSort(unsortedEntries);
     const groupOrders = [...new Map(entries.map(({ order }) => [order.id, order])).values()];
     return {
       id: `production-group-${randomBytes(10).toString("hex")}`,
-      label: `${foilColor} — ${groupOrders.length} ${groupOrders.length === 1 ? "order" : "orders"}`,
+      label: `${foilColor}${sourceChannel === "STORE" ? "" : ` · ${productionSourceLabel(sourceChannel)}`} — ${groupOrders.length} ${groupOrders.length === 1 ? "order" : "orders"}`,
       foilColor,
+      sourceChannel,
       outputWriter,
       orders: groupOrders.map(({ id, revision }) => ({ id, expectedRevision: revision })),
       productionLineRefs: entries.map(({ order, line }) => ({ orderId: order.id, lineId: line.id })),
@@ -3418,6 +3448,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
           product: item?.product ?? "Productiefont",
           association: item?.association ?? order.association,
           foilColor: item?.foilColor ?? state.settings.productionDefaults.defaultFoilColor,
+          requestedHeightAxis: managedFontPhysicalOrientation(line),
         });
       },
     };
@@ -3497,7 +3528,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
-    productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm },
+    productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm },
     layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, boundsMm }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height })) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
     scale: 1,

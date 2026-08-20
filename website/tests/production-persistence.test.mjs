@@ -206,6 +206,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
       fileURLToPath(new URL("../scripts", import.meta.url)),
       fileURLToPath(new URL("../config", import.meta.url)),
       fileURLToPath(new URL("../src/sportpaleis", import.meta.url)),
+      fileURLToPath(new URL("../src/workspace-sequence.ts", import.meta.url)),
     ],
   });
   const packaged = new Set(graph.map(({ archive }) => archive));
@@ -215,6 +216,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
     "app/scripts/organization-brand-foundation.mjs",
     "app/scripts/sportpaleis-production-mail.mjs",
     "app/scripts/sportpaleis-pilot-foundation.mjs",
+    "app/src/workspace-sequence.ts",
     "app/src/sportpaleis/production-sources.ts",
     "app/src/sportpaleis/direct-print/index.ts",
     "app/src/sportpaleis/direct-print/cut-job.ts",

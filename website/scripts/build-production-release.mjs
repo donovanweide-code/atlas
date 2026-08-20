@@ -142,6 +142,7 @@ async function main() {
       path.join(websiteRoot, "scripts"),
       path.join(websiteRoot, "config"),
       path.join(websiteRoot, "src", "sportpaleis"),
+      path.join(websiteRoot, "src", "workspace-sequence.ts"),
     ],
   });
 
