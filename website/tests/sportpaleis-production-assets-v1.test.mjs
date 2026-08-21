@@ -27,6 +27,11 @@ function vectorPdf(rectangles) {
   return Buffer.from(source, "latin1");
 }
 
+function vectorSvg(rectangles) {
+  const shapes = rectangles.map(({ x, y, width, height }) => `<path d="M ${x} ${y} H ${x + width} V ${y + height} H ${x} Z" fill="#000000"/>`).join("");
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1000 1000">${shapes}</svg>`, "utf8");
+}
+
 async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-assets-v1-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -34,10 +39,6 @@ async function fixture(context) {
   const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), allowedOrigin: "http://127.0.0.1", uploadsEnabled: true });
   await service.initialize();
   return { root, store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }) };
-}
-
-async function acceptSourceFidelity(service, admin, source) {
-  return service.reviewProductionAssetSourceFidelity(admin.token, admin.csrfToken, source.id, { status: "MATCHED", expectedRevision: source.revision, proofAuthority: "HUMAN_SOURCE_COMPARISON" });
 }
 
 const emptyPersonalization = { initials: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -55,11 +56,28 @@ test("Production Assets V1 inspecteert deterministische vectorvormen zonder teks
   assert.ok(inspected.candidates.every(({ previewSvg, controlledVector, geometryHash }) => previewSvg.startsWith("<svg") && controlledVector.contours.length >= 1 && /^[A-F0-9]{64}$/u.test(geometryHash)));
 });
 
+test("canonical SVG intake weigert actieve, externe, raster- en fontafhankelijke inhoud fail-closed", async () => {
+  const safe = await inspectProductionAssetSource({ bytes: vectorSvg([{ x: 10, y: 10, width: 80, height: 40 }]), filename: "safe.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
+  assert.equal(safe.source.format, "SVG");
+  assert.equal(safe.inspection.engine, "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1");
+  assert.equal(safe.candidates.length, 1);
+  const unsafe = [
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><path d="M0 0H10V10Z"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.invalid/logo.png"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><text x="0" y="10">ABC</text></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><path style="fill:red" d="M0 0H10V10Z"/></svg>',
+    '<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0H10V10Z"/></svg>',
+  ];
+  for (const [index, source] of unsafe.entries()) await assert.rejects(inspectProductionAssetSource({ bytes: Buffer.from(source), filename: `unsafe-${index}.svg`, mimeType: "image/svg+xml", intakeKind: "ARTWORK" }), (error) => /^PRODUCTION_ASSET_SVG_/u.test(error.code));
+});
+
 test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en schrijft echte CutJob-SVG", async (context) => {
   const { root, store, service, admin, operator } = await fixture(context);
-  const bytes = vectorPdf([{ x: 20, y: 20, width: 100, height: 50 }, { x: 300, y: 300, width: 40, height: 80 }]);
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-city-assets.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde V1-regressiebron" });
-  assert.equal(source.candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION").length, 2);
+  const bytes = vectorSvg([{ x: 20, y: 20, width: 100, height: 50 }, { x: 140, y: 20, width: 40, height: 50 }]);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-sponsor.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde V1-regressiebron", intakeKind: "ARTWORK", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  assert.equal(source.candidates.filter(({ selectionMode }) => selectionMode === "FULL_ARTWORK").length, 1);
+  assert.equal(source.conversion.method, "HUMAN_VERIFIED_SVG");
+  assert.equal(source.fidelity.comparisonMethod, "CANONICAL_SVG_PREVIEW");
   assert.equal(source.original.dataBase64, undefined);
   assert.equal(source.documentPreviewSvg, undefined);
   const operatorBootstrap = await service.bootstrap(operator.token);
@@ -70,13 +88,11 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   assert.equal(bootstrap.productionAssetSources[0].documentPreviewSvg, undefined);
   await assert.rejects(service.promoteProductionAsset(operator.token, operator.csrfToken, source.id, {}), (error) => error.code === "FORBIDDEN");
   await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [source.candidates[0].id], proofAuthority: "NO" }), (error) => error.code === "PRODUCTION_PROOF_AUTHORITY_REQUIRED");
-  const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "VISUAL_REGION");
-  await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Nog niet vergeleken", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm: 80, applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "PRODUCTION_ASSET_SOURCE_FIDELITY_REQUIRED");
+  const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK");
   const original = await service.productionAssetOriginal(admin.token, source.id);
   assert.equal(original.sha256, source.original.sha256);
-  assert.equal(original.allowSameOriginFrame, true);
+  assert.equal(original.allowSameOriginFrame, false);
   assert.deepEqual(original.bytes, bytes);
-  await acceptSourceFidelity(service, admin, source);
   await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Onjuiste verhouding", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm: 80, heightMm: 80, applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "PRODUCTION_ASSET_ASPECT_RATIO_MISMATCH");
   const physicalWidthMm = 80;
   const physicalHeightMm = physicalWidthMm * candidate.boundsMm.height / candidate.boundsMm.width;
@@ -114,14 +130,14 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   assert.ok(persisted.productionElements.find(({ id }) => id === asset.id).controlledVector.contours.length);
 });
 
-test("officiële artworkbron blijft fail-closed en gecontroleerde Illustrator-export blijft immutable herleidbaar", async (context) => {
+test("AI/PDF blijft provenance-only en alleen canonical SVG kan productieroute worden", async (context) => {
   const { service, admin, operator, store } = await fixture(context);
   const originalBytes = vectorPdf([{ x: 20, y: 20, width: 120, height: 60 }, { x: 170, y: 20, width: 30, height: 60 }]);
   const original = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "official-artwork.ai", mimeType: "application/illustrator", dataBase64: originalBytes.toString("base64"), provenance: "Officiële immutable productiebron" });
   const rejected = await service.reviewProductionAssetSourceFidelity(admin.token, admin.csrfToken, original.id, { status: "MISMATCH", expectedRevision: original.revision, note: "De Workspace-afleiding mist een zichtbaar onderdeel.", proofAuthority: "HUMAN_SOURCE_COMPARISON" });
   assert.equal(rejected.fidelity.status, "MISMATCH");
   const candidate = original.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK");
-  await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, original.id, { candidateIds: [candidate.id], name: "Onveilige bron", ownerType: "SPONSOR", ownerName: "Fictief", productionMethod: "SELF_PRODUCED", widthMm: 120, applications: [{ kind: "ARTWORK", placement: null }], proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "PRODUCTION_ASSET_SOURCE_FIDELITY_REQUIRED");
+  await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, original.id, { candidateIds: [candidate.id], name: "Onveilige bron", ownerType: "SPONSOR", ownerName: "Fictief", productionMethod: "SELF_PRODUCED", widthMm: 120, applications: [{ kind: "ARTWORK", placement: null }], proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "PRODUCTION_ASSET_CANONICAL_SVG_REQUIRED");
 
   const exportedBytes = vectorPdf([{ x: 30, y: 30, width: 120, height: 60 }, { x: 180, y: 30, width: 30, height: 60 }]);
   const derived = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "official-artwork-controlled-export.pdf", mimeType: "application/pdf", dataBase64: exportedBytes.toString("base64"), provenance: "Eenmalige gecontroleerde Illustrator vector-PDF-export", derivedFromSourceId: original.id, conversionMethod: "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT" });
@@ -130,6 +146,8 @@ test("officiële artworkbron blijft fail-closed en gecontroleerde Illustrator-ex
   assert.equal(derived.conversion.derivedFromSha256, original.original.sha256);
   assert.equal(derived.fidelity.referenceSha256, original.original.sha256);
   assert.equal(derived.fidelity.status, "REFERENCE_REQUIRED");
+  const derivedCandidate = derived.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK");
+  await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, derived.id, { candidateIds: [derivedCandidate.id], name: "Nog steeds geen SVG", ownerType: "SPONSOR", ownerName: "Fictief", productionMethod: "SELF_PRODUCED", widthMm: 120, applications: [{ kind: "ARTWORK", placement: null }], proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "PRODUCTION_ASSET_CANONICAL_SVG_REQUIRED");
   const persisted = await store.read();
   assert.equal(persisted.productionAssetSources.find(({ id }) => id === original.id).original.dataBase64, originalBytes.toString("base64"));
   assert.equal(persisted.productionAssetSources.find(({ id }) => id === derived.id).original.dataBase64, exportedBytes.toString("base64"));
@@ -152,9 +170,9 @@ test("Beheerde nummerbron zet willekeurige combinaties zonder fontsubstitutie en
 
 test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyphgeometrie", async (context) => {
   const { service, admin, operator } = await fixture(context);
-  const bytes = vectorPdf(Array.from({ length: 10 }, (_, index) => ({ x: 20, y: 20 + index * 70, width: 20 + index, height: 40 })));
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-hockey-numbers.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde glyphreview" });
-  const candidates = source.candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION").slice(0, 10);
+  const bytes = vectorSvg(Array.from({ length: 10 }, (_, index) => ({ x: 20 + index * 60, y: 20, width: 10 + index * 2, height: 40 })));
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-hockey-numbers.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde glyphreview", intakeKind: "NUMBER_SET", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const candidates = source.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
   assert.equal(candidates.length, 10);
   const glyphMap = Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id]));
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers gedeeld", ownerType: "OWN_BRAND", ownerName: "Alle hockeyverenigingen", productionMethod: "SELF_PRODUCED", heightMm: 75, applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
@@ -189,14 +207,13 @@ test("mixed Teamorder met logo, geschaalde sponsor en hockeynummer spiegelt iede
 
 test("meerdere visuele assets houden eigen veilige maat en foliekleur en groeperen server-side", async (context) => {
   const { service, admin, operator } = await fixture(context);
-  const bytes = vectorPdf([{ x: 20, y: 20, width: 100, height: 50 }, { x: 300, y: 300, width: 40, height: 80 }]);
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-two-sponsors.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde multi-asset regressie" });
-  await acceptSourceFidelity(service, admin, source);
-  const visualCandidates = source.candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION");
-  const firstHeight = 80 * visualCandidates[0].boundsMm.height / visualCandidates[0].boundsMm.width;
-  const secondHeight = 40 * visualCandidates[1].boundsMm.height / visualCandidates[1].boundsMm.width;
-  const first = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [visualCandidates[0].id], name: "Sponsor wit", ownerType: "SPONSOR", ownerName: "Sponsor A", productionMethod: "SELF_PRODUCED", widthMm: 80, heightMm: firstHeight, sizePolicyMode: "FIXED", defaultFoilColor: "Wit", applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
-  const second = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [visualCandidates[1].id], name: "Sponsor zwart", ownerType: "SPONSOR", ownerName: "Sponsor B", productionMethod: "SELF_PRODUCED", widthMm: 40, heightMm: secondHeight, sizePolicyMode: "DEFAULT_WITH_LIMITS", minWidthMm: 20, maxWidthMm: 60, defaultFoilColor: "Zwart", applications: [{ kind: "SPONSOR", placement: "Rug" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const whiteSource = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-sponsor-white.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg([{ x: 20, y: 20, width: 100, height: 50 }]).toString("base64"), provenance: "Gesanitiseerde sponsor A", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const blackSource = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-sponsor-black.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg([{ x: 20, y: 20, width: 40, height: 80 }]).toString("base64"), provenance: "Gesanitiseerde sponsor B", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const whiteCandidate = whiteSource.candidates[0]; const blackCandidate = blackSource.candidates[0];
+  const firstHeight = 80 * whiteCandidate.boundsMm.height / whiteCandidate.boundsMm.width;
+  const secondHeight = 40 * blackCandidate.boundsMm.height / blackCandidate.boundsMm.width;
+  const first = await service.promoteProductionAsset(admin.token, admin.csrfToken, whiteSource.id, { candidateIds: [whiteCandidate.id], name: "Sponsor wit", ownerType: "SPONSOR", ownerName: "Sponsor A", productionMethod: "SELF_PRODUCED", widthMm: 80, heightMm: firstHeight, sizePolicyMode: "FIXED", defaultFoilColor: "Wit", applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const second = await service.promoteProductionAsset(admin.token, admin.csrfToken, blackSource.id, { candidateIds: [blackCandidate.id], name: "Sponsor zwart", ownerType: "SPONSOR", ownerName: "Sponsor B", productionMethod: "SELF_PRODUCED", widthMm: 40, heightMm: secondHeight, sizePolicyMode: "DEFAULT_WITH_LIMITS", minWidthMm: 20, maxWidthMm: 60, defaultFoilColor: "Zwart", applications: [{ kind: "SPONSOR", placement: "Rug" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   await assert.rejects(service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Maatgrens", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: "", size: "", quantity: 1, personalization: "Sponsor", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ type: "LOGO", content: second.name, sourceId: second.id, widthMm: 70, heightMm: 70 * secondHeight / 40, foilColor: "Zwart", quantity: 1, provenance: "test" }] }, "assets-size-invalid"), (error) => error.code === "PRODUCTION_ASSET_SIZE_OUT_OF_RANGE");
   const created = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Twee sponsors", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: "", size: "", quantity: 3, personalization: "Twee sponsors", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ id: "white", type: "LOGO", content: first.name, sourceId: first.id, widthMm: 80, heightMm: firstHeight, foilColor: "Wit", quantity: 2, provenance: "test" }, { id: "black", type: "LOGO", content: second.name, sourceId: second.id, widthMm: 30, heightMm: 30 * secondHeight / 40, foilColor: "Zwart", quantity: 1, provenance: "test" }] }, "assets-two-color-order")).value;
   assert.deepEqual(created.productionLines.map(({ foilColor }) => foilColor), ["Wit", "Zwart"]);
@@ -208,9 +225,9 @@ test("meerdere visuele assets houden eigen veilige maat en foliekleur en groeper
 
 test("PHYSICAL_TRANSFER blijft beheersbaar maar gaat nooit door de SELF_PRODUCED plotroute", async (context) => {
   const { service, admin, operator } = await fixture(context);
-  const bytes = vectorPdf([{ x: 20, y: 20, width: 100, height: 50 }]);
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-transfer.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde transfer-regressie" });
-  const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "VISUAL_REGION"); const widthMm = 80; const heightMm = widthMm * candidate.boundsMm.height / candidate.boundsMm.width;
+  const bytes = vectorSvg([{ x: 20, y: 20, width: 100, height: 50 }]);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-transfer.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde transfer-regressie", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const candidate = source.candidates[0]; const widthMm = 80; const heightMm = widthMm * candidate.boundsMm.height / candidate.boundsMm.width;
   const transfer = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Extern clublogo", ownerType: "ASSOCIATION", ownerName: "Fictieve club", productionMethod: "PHYSICAL_TRANSFER", widthMm, heightMm, sizePolicyMode: "FIXED", applications: [{ kind: "LOGO", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   assert.equal(transfer.productionMethod, "PHYSICAL_TRANSFER");
   assert.deepEqual(transfer.physicalTransfer, { supplier: null, location: null, stock: null, reserved: null });
@@ -228,21 +245,23 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /Visuele productiebibliotheek/u);
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
-  assert.match(source, /Volledig bronoverzicht/u);
-  assert.match(source, /Kies op beeld wat u werkelijk wilt produceren/u);
+  assert.match(source, /SVG-productiebron toevoegen/u);
+  assert.match(source, /Preview en productie gebruiken exact dezelfde gevalideerde vectorvorm/u);
   assert.match(source, /data-production-asset-lifecycle-form/u);
   assert.match(source, /Logo\/opdruk toevoegen/u);
   assert.match(source, /exacte vectornummerbron/u);
   assert.match(source, /Dit is exact wat wij straks willen produceren/u);
   assert.match(source, /\+ Technische details/u);
-  assert.match(source, /Kies het cijfer, of wijs deze vorm af/u);
+  assert.match(source, /Kies het cijfer, of kies Niet gebruiken/u);
   assert.match(source, /teamAssetDrafts/u);
   assert.match(source, /freeAssetDrafts/u);
   assert.match(source, /data-asset-draft-field="foilColor"/u);
   assert.match(source, /data-asset-draft-field="widthMm"/u);
-  assert.match(source, /lowerFilename\.endsWith\("\.ai"\) \? "application\/illustrator"/u);
+  assert.match(source, /lowerFilename\.endsWith\("\.svg"\)/u);
+  assert.match(source, /conversionMethod: "HUMAN_VERIFIED_SVG"/u);
   assert.doesNotMatch(source, /\$\{source\.candidates\.length\} vectorvorm/u);
   assert.match(assetModule, /geometryNeverAiGenerated:\s*true/u);
+  assert.match(server, /PRODUCTION_ASSET_CANONICAL_SVG_REQUIRED/u);
   assert.match(assetModule, /collapseEquivalentVectorComponents/u);
   assert.match(server, /dataBase64: _dataBase64/u);
   assert.match(server, /PRODUCTION_ASSET_IDENTITY_MISMATCH/u);
@@ -262,31 +281,37 @@ test("Productieasset-search is visual-first en zoekt op gedeelde context", () =>
 });
 
 test("glyphreview toont uitsluitend gededupliceerde enkelvoudige cijfercomponenten", async () => {
-  const bytes = vectorPdf(Array.from({ length: 10 }, (_, index) => ({ x: 20 + index * 70, y: 100, width: 8 + index * 5, height: 100 })));
-  const inspected = await inspectProductionAssetSource({ bytes, filename: "sanitized-number-sheet.pdf", mimeType: "application/pdf" });
+  const bytes = vectorSvg(Array.from({ length: 10 }, (_, index) => ({ x: 20 + index * 70, y: 100, width: 8 + index * 5, height: 100 })));
+  const inspected = await inspectProductionAssetSource({ bytes, filename: "sanitized-number-sheet.svg", mimeType: "image/svg+xml", intakeKind: "NUMBER_SET" });
   const glyphs = inspected.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
   assert.equal(glyphs.length, 10);
-  assert.ok(glyphs.every(({ selectionMode, aspectRatio }) => selectionMode === "VECTOR_COMPONENT" && aspectRatio <= 0.75));
-  assert.ok(inspected.candidates.some(({ selectionMode }) => selectionMode === "FULL_ARTWORK"));
-  assert.ok(inspected.candidates.filter(({ selectionMode }) => selectionMode !== "VECTOR_COMPONENT").every(({ reviewCategory }) => reviewCategory !== "NUMBER_GLYPH"));
+  assert.ok(glyphs.every(({ selectionMode, aspectRatio }) => selectionMode === "VECTOR_COMPONENT" && aspectRatio <= 1));
+  assert.equal(inspected.inspection.engine, "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1");
 });
 
-test("multi-logo bron bewaart gekozen complete composition zonder fragmentatie", async (context) => {
+test("samengesteld bronvoorbeeld wordt nooit als één cijferglyph aangeboden", async () => {
+  const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120"><g><path d="M10 10H20V110H10Z"/><path d="M25 10H35V110H25Z"/></g></svg>');
+  const inspected = await inspectProductionAssetSource({ bytes, filename: "sanitized-composed-number-example.svg", mimeType: "image/svg+xml", intakeKind: "NUMBER_SET" });
+  const glyphs = inspected.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
+  assert.equal(glyphs.length, 1);
+  assert.ok(glyphs.every(({ contourCount }) => contourCount === 1));
+});
+
+test("één SVG blijft één complete composition zonder fragmentatie", async (context) => {
   const { service, admin, operator } = await fixture(context);
-  const bytes = vectorPdf([
+  const bytes = vectorSvg([
     { x: 20, y: 100, width: 20, height: 20 },
     { x: 45, y: 100, width: 20, height: 20 },
     { x: 70, y: 100, width: 20, height: 20 },
     { x: 360, y: 500, width: 60, height: 40 },
   ]);
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-city-field.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde complete-composition proof" });
-  await acceptSourceFidelity(service, admin, source);
-  const composition = source.candidates.find(({ selectionMode, contourCount }) => selectionMode === "VISUAL_REGION" && contourCount === 3);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-complete-artwork.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde complete-composition proof", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const composition = source.candidates.find(({ selectionMode, contourCount }) => selectionMode === "FULL_ARTWORK" && contourCount === 4);
   assert.ok(composition);
   const widthMm = 120; const heightMm = widthMm * composition.boundsMm.height / composition.boundsMm.width;
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [composition.id], name: "Compleet sponsorwoordmerk", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm, heightMm, applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   const preview = await service.productionAssetPreview(operator.token, asset.id);
-  assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, 3);
+  assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, 4);
   assert.equal(asset.sourceSelection.candidateIds.length, 1);
 });
 
@@ -308,14 +333,14 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
   assert.match(source, /data-managed-asset-search/u);
   assert.match(source, /Niet gebruiken/u);
   assert.match(source, /Nummerset compleet/u);
-  assert.match(source, /Bron en productiepreview vergelijken/u);
-  assert.match(source, /Deze bron vereist éénmalige productie-export/u);
+  assert.match(source, /source\.original\.format === "SVG" \|\| glyphReview/u);
+  assert.match(source, /alleen deze gevalideerde SVG wordt productiegeometrie/u);
   assert.match(source, /normalReviewRepresentative !== false/u);
   assert.match(source, /fidelityStatus === "MATCHED" \? visualCandidates : \[\]/u);
   assert.match(source, /technicalReviewCandidates/u);
   assert.match(source, /review=production-assets/u);
   assert.match(source, /A · Bibliotheek/u);
-  assert.match(source, /H\/I · Productie & dashboard/u);
-  assert.match(server, /PRODUCTION_ASSET_SOURCE_FIDELITY_REQUIRED/u);
+  assert.match(source, /G\/H · Productie & dashboard/u);
+  assert.match(server, /PRODUCTION_ASSET_CANONICAL_SVG_REQUIRED/u);
   assert.match(server, /ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT/u);
 });

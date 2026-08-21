@@ -652,8 +652,12 @@ export function migrateSportpaleisPilotState(input) {
   state.productionAssetSources ??= [];
   for (const source of state.productionAssetSources) {
     source.revision ??= 1;
-    source.conversion ??= { method: "ORIGINAL_PDF_INTERPRETATION", methodVersion: "1", derivedFromSourceId: null, derivedFromSha256: null };
-    source.fidelity ??= { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.original.sha256, checkedAt: null, checkedBy: null, note: null };
+    source.intakeKind ??= source.inspection?.intakeKind ?? "ARTWORK";
+    const canonicalSvg = source.original?.format === "SVG";
+    source.conversion ??= { method: canonicalSvg ? "HUMAN_VERIFIED_SVG" : "ORIGINAL_PDF_INTERPRETATION", methodVersion: "1", derivedFromSourceId: null, derivedFromSha256: null };
+    source.fidelity ??= canonicalSvg
+      ? { status: "MATCHED", comparisonMethod: "CANONICAL_SVG_PREVIEW", referenceSha256: source.original.sha256, checkedAt: source.uploadedAt ?? null, checkedBy: source.uploadedBy ?? null, note: "Preview en productie gebruiken dezelfde gevalideerde SVG-geometrie." }
+      : { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.original.sha256, checkedAt: null, checkedBy: null, note: null };
   }
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
@@ -849,6 +853,7 @@ export function validateSportpaleisPilotState(input) {
     if (!source.original?.immutable || sha256(Buffer.from(source.original.dataBase64, "base64")).toUpperCase() !== source.original.sha256) throw new Error("Immutable productieassetbron ontbreekt of is gewijzigd.");
     if (!source.candidates?.length || source.candidates.some(({ geometryHash, controlledVector }) => sha256(JSON.stringify(controlledVector.contours)).toUpperCase() !== geometryHash)) throw new Error("Productieassetkandidaten zijn gewijzigd of onvolledig.");
     if (!Number.isInteger(Number(source.revision ?? 1)) || Number(source.revision ?? 1) < 1 || !["REFERENCE_REQUIRED", "MATCHED", "MISMATCH"].includes(source.fidelity?.status ?? "REFERENCE_REQUIRED")) throw new Error("Ongeldige bronfidelitystatus.");
+    if (source.original?.format === "SVG" && (source.conversion?.method !== "HUMAN_VERIFIED_SVG" || source.inspection?.engine !== "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1" || source.fidelity?.status !== "MATCHED")) throw new Error("Een SVG-productiebron mist het canonical SVG-validatiecontract.");
     if (source.conversion?.method === "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT") {
       const reference = state.productionAssetSources.find(({ id }) => id === source.conversion.derivedFromSourceId);
       if (!reference || reference.original.sha256 !== source.conversion.derivedFromSha256 || source.fidelity?.referenceSha256 !== reference.original.sha256) throw new Error("Afgeleide productiebron mist immutable herleidbaarheid naar het origineel.");
@@ -2099,24 +2104,30 @@ export class SportpaleisPilotService {
     if (!this.uploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
     const bytes = Buffer.from(requiredText(payload.dataBase64, "Bronbestand", 12 * 1024 * 1024), "base64");
     const filename = requiredText(payload.filename, "Bestandsnaam", 180);
-    const mimeType = allowedValue(payload.mimeType, ["application/pdf", "application/illustrator", "application/octet-stream"], "Bestandstype");
-    const inspected = await inspectProductionAssetSource({ bytes, filename, mimeType });
+    const mimeType = allowedValue(payload.mimeType, ["image/svg+xml", "application/pdf", "application/illustrator", "application/octet-stream"], "Bestandstype");
+    const intakeKind = allowedValue(payload.intakeKind ?? "ARTWORK", ["ARTWORK", "NUMBER_SET"], "Bronsoort");
+    const inspected = await inspectProductionAssetSource({ bytes, filename, mimeType, intakeKind });
     const result = await this.store.mutate(async (state) => {
       state.productionAssetSources ??= [];
       const existing = state.productionAssetSources.find(({ original }) => original.sha256 === inspected.source.sha256);
       if (existing) return { state, value: publicProductionAssetSource(existing), changed: false };
       const derivedFromSourceId = optional(payload.derivedFromSourceId, 180) || null;
-      const conversionMethod = allowedValue(payload.conversionMethod ?? "ORIGINAL_PDF_INTERPRETATION", ["ORIGINAL_PDF_INTERPRETATION", "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT"], "Conversiemethode");
+      const canonicalSvg = inspected.source.format === "SVG";
+      const conversionMethod = allowedValue(payload.conversionMethod ?? (canonicalSvg ? "HUMAN_VERIFIED_SVG" : "ORIGINAL_PDF_INTERPRETATION"), ["HUMAN_VERIFIED_SVG", "ORIGINAL_PDF_INTERPRETATION", "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT"], "Conversiemethode");
       const referenceSource = derivedFromSourceId ? state.productionAssetSources.find(({ id }) => id === derivedFromSourceId) : null;
       if (derivedFromSourceId && !referenceSource) throw Object.assign(new Error("De oorspronkelijke productiebron voor deze export bestaat niet."), { statusCode: 404, code: "PRODUCTION_ASSET_REFERENCE_SOURCE_NOT_FOUND" });
       if (Boolean(derivedFromSourceId) !== (conversionMethod === "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT")) throw Object.assign(new Error("Een Illustrator-export moet expliciet aan de immutable oorspronkelijke bron gekoppeld zijn."), { statusCode: 400, code: "PRODUCTION_ASSET_CONVERSION_LINK_INVALID" });
+      if (canonicalSvg !== (conversionMethod === "HUMAN_VERIFIED_SVG")) throw Object.assign(new Error("Alleen een veilig gevalideerde SVG mag de canonical SVG-productieroute gebruiken."), { statusCode: 400, code: "PRODUCTION_ASSET_CONVERSION_METHOD_INVALID" });
       const source = {
         id: `production-source-${inspected.source.sha256.slice(0, 16).toLowerCase()}`,
         version: `1-${inspected.source.sha256.slice(0, 12)}`,
         revision: 1,
+        intakeKind,
         original: { ...inspected.source, dataBase64: bytes.toString("base64") },
         conversion: { method: conversionMethod, methodVersion: "1", derivedFromSourceId, derivedFromSha256: referenceSource?.original.sha256 ?? null },
-        fidelity: { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: referenceSource?.original.sha256 ?? inspected.source.sha256, checkedAt: null, checkedBy: null, note: null },
+        fidelity: canonicalSvg
+          ? { status: "MATCHED", comparisonMethod: "CANONICAL_SVG_PREVIEW", referenceSha256: inspected.source.sha256, checkedAt: iso(), checkedBy: { userId: user.id, name: user.name }, note: "Preview en productie gebruiken dezelfde gevalideerde SVG-geometrie." }
+          : { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: referenceSource?.original.sha256 ?? inspected.source.sha256, checkedAt: null, checkedBy: null, note: null },
         provenance: requiredText(payload.provenance, "Herkomst", 500),
         uploadedAt: iso(),
         uploadedBy: { userId: user.id, name: user.name },
@@ -2125,7 +2136,7 @@ export class SportpaleisPilotService {
         candidates: inspected.candidates,
       };
       state.productionAssetSources.push(source);
-      audit(state, user.id, "Vectorbron geïnspecteerd", source.id, { version: source.version, sha256: source.original.sha256, candidates: source.candidates.length, filename: source.original.filename, conversionMethod, derivedFromSourceId });
+      audit(state, user.id, canonicalSvg ? "SVG-productiebron veilig gevalideerd" : "Vectorbron diagnostisch geïnspecteerd", source.id, { version: source.version, sha256: source.original.sha256, candidates: source.candidates.length, filename: source.original.filename, conversionMethod, derivedFromSourceId, intakeKind });
       return { state, value: publicProductionAssetSource(source) };
     });
     return result.value;
@@ -2136,7 +2147,7 @@ export class SportpaleisPilotService {
     const state = await this.store.read();
     const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
     if (!source?.original?.dataBase64) throw Object.assign(new Error("Oorspronkelijke productiebron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
-    return { mimeType: "application/pdf", bytes: Buffer.from(source.original.dataBase64, "base64"), filename: source.original.filename, sha256: source.original.sha256, cacheControl: "private, no-store", allowSameOriginFrame: true };
+    return { mimeType: source.original.mimeType, bytes: Buffer.from(source.original.dataBase64, "base64"), filename: source.original.filename, sha256: source.original.sha256, cacheControl: "private, no-store", allowSameOriginFrame: source.original.format === "PDF" };
   }
 
   async reviewProductionAssetSourceFidelity(token, csrfToken, sourceId, payload) {
@@ -2146,6 +2157,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
       if (!source) throw Object.assign(new Error("Vectorbron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+      if (source.original?.format === "SVG") throw Object.assign(new Error("Deze SVG-preview is de gevalideerde productiegeometrie zelf; de productievrijgave gebeurt via Human GO."), { statusCode: 409, code: "PRODUCTION_ASSET_SVG_FIDELITY_CANONICAL" });
       if (Number(payload.expectedRevision) !== Number(source.revision ?? 1)) throw Object.assign(new Error("De bronreview is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: Number(source.revision ?? 1) });
       const note = optional(payload.note, 500) || null;
       if (status === "MISMATCH" && !note) throw Object.assign(new Error("Beschrijf kort welke zichtbare afwijking is gevonden."), { statusCode: 400, code: "PRODUCTION_ASSET_FIDELITY_NOTE_REQUIRED" });
@@ -2201,6 +2213,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
       if (!source) throw Object.assign(new Error("Vectorbron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+      if (source.original?.format !== "SVG" || source.conversion?.method !== "HUMAN_VERIFIED_SVG") throw Object.assign(new Error("Deze AI/PDF-bron is uitsluitend provenance/diagnostiek. Voeg de menselijke SVG-export toe voor productie."), { statusCode: 409, code: "PRODUCTION_ASSET_CANONICAL_SVG_REQUIRED" });
       const candidateIds = [...new Set(Array.isArray(payload.candidateIds) ? payload.candidateIds.map(String) : [])];
       const candidates = candidateIds.map((id) => source.candidates.find((candidate) => candidate.id === id));
       if (!candidateIds.length || candidates.some((candidate) => !candidate)) throw Object.assign(new Error("Kies één of meer geldige vectorvormen."), { statusCode: 400, code: "PRODUCTION_ASSET_SELECTION_INVALID" });

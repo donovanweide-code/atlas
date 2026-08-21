@@ -404,7 +404,7 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/production-elements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createProductionAssetSource(input: { filename: string; mimeType: string; dataBase64: string; provenance: string; derivedFromSourceId?: string; conversionMethod?: "ORIGINAL_PDF_INTERPRETATION" | "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT" }): Promise<SportpaleisProductionAssetSource> {
+  async createProductionAssetSource(input: { filename: string; mimeType: string; dataBase64: string; provenance: string; intakeKind?: "ARTWORK" | "NUMBER_SET"; derivedFromSourceId?: string; conversionMethod?: "HUMAN_VERIFIED_SVG" | "ORIGINAL_PDF_INTERPRETATION" | "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT" }): Promise<SportpaleisProductionAssetSource> {
     return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

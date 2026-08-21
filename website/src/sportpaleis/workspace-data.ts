@@ -463,16 +463,17 @@ export interface SportpaleisProductionAssetSource {
   id: string;
   version: string;
   revision?: number;
-  original: { filename: string; mimeType: string; format: "PDF" | "ILLUSTRATOR_PDF"; sha256: string; sizeBytes: number; immutable: true; documentMetadata?: { pdfVersion: string | null; creator: string | null; producer: string | null; illustratorVersion: string | null; embeddedPdfCompatible: true } };
+  intakeKind?: "ARTWORK" | "NUMBER_SET";
+  original: { filename: string; mimeType: string; format: "SVG" | "PDF" | "ILLUSTRATOR_PDF"; sha256: string; sizeBytes: number; immutable: true; documentMetadata?: { pdfVersion?: string | null; creator?: string | null; producer?: string | null; illustratorVersion?: string | null; embeddedPdfCompatible?: true; svgVersion?: string | null; generator?: string | null } };
   conversion?: {
-    method: "ORIGINAL_PDF_INTERPRETATION" | "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT";
+    method: "HUMAN_VERIFIED_SVG" | "ORIGINAL_PDF_INTERPRETATION" | "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT";
     methodVersion: string;
     derivedFromSourceId: string | null;
     derivedFromSha256: string | null;
   };
   fidelity?: {
     status: "REFERENCE_REQUIRED" | "MATCHED" | "MISMATCH";
-    comparisonMethod: "HUMAN_SIDE_BY_SIDE";
+    comparisonMethod: "CANONICAL_SVG_PREVIEW" | "HUMAN_SIDE_BY_SIDE";
     referenceSha256: string;
     checkedAt: string | null;
     checkedBy: { userId: string; name: string } | null;
@@ -482,14 +483,14 @@ export interface SportpaleisProductionAssetSource {
   uploadedAt: string;
   uploadedBy: { userId: string; name: string };
   inspection: {
-    engine: "WBD_PRODUCTION_ASSET_INTAKE_V1";
+    engine: "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1" | "WBD_PRODUCTION_ASSET_INTAKE_V1";
     engineVersion: "1";
     candidateCount: number;
     rawCandidateCount?: number;
     equivalentComponentCount?: number;
     glyphReviewCandidateCount?: number;
     normalReviewCandidateCount?: number;
-    requiresHumanSelection: true;
+    requiresHumanSelection: boolean;
     geometryNeverAiGenerated: true;
   };
   candidates: {

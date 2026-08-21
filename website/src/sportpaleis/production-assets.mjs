@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { inflateSync } from "node:zlib";
 
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
 
 const POINT_TO_MM = 25.4 / 72;
 export const NUMBER_GLYPH_SPACING_MM = 30;
@@ -510,16 +511,18 @@ function illustratorContours(source) {
 
 function sourceKind(filename, mimeType) {
   const extension = String(filename).toLocaleLowerCase("nl-NL").split(".").at(-1);
+  if (extension === "svg" || mimeType === "image/svg+xml") return "SVG";
   if (extension === "ai" || mimeType === "application/illustrator") return "ILLUSTRATOR_PDF";
   if (extension === "pdf" || mimeType === "application/pdf") return "PDF";
-  throw assetError("V1 accepteert uitsluitend vector-PDF en PDF-compatible Illustrator-bestanden.", "PRODUCTION_ASSET_FORMAT_UNSUPPORTED");
+  throw assetError("Gebruik voor een productieasset een gecontroleerde SVG.", "PRODUCTION_ASSET_FORMAT_UNSUPPORTED");
 }
 
-export async function inspectProductionAssetSource({ bytes, filename, mimeType = "application/octet-stream" }) {
+export async function inspectProductionAssetSource({ bytes, filename, mimeType = "application/octet-stream", intakeKind = "ARTWORK" }) {
   const sourceBytes = Buffer.from(bytes);
   if (!sourceBytes.length || sourceBytes.length > MAX_SOURCE_BYTES) throw assetError("Het bronbestand is leeg of groter dan 8 MB.", "PRODUCTION_ASSET_SOURCE_SIZE_INVALID", 413);
-  if (!sourceBytes.subarray(0, 8).toString("latin1").startsWith("%PDF-")) throw assetError("Alleen PDF-compatible vectorbronnen zijn in V1 veilig inspecteerbaar.", "PRODUCTION_ASSET_FORMAT_UNSUPPORTED");
   const kind = sourceKind(filename, mimeType);
+  if (kind === "SVG") return inspectProductionAssetSvg({ bytes: sourceBytes, filename, mimeType: "image/svg+xml", intakeKind });
+  if (!sourceBytes.subarray(0, 8).toString("latin1").startsWith("%PDF-")) throw assetError("Gebruik voor een productieasset een gecontroleerde SVG.", "PRODUCTION_ASSET_FORMAT_UNSUPPORTED");
   const documentMetadata = sourceDocumentMetadata(sourceBytes);
   const publicInspection = await inspectPdf(sourceBytes);
   let candidates = publicInspection.candidates;
