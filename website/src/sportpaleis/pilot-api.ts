@@ -20,6 +20,7 @@ import type {
   SportpaleisProductionFont,
   SportpaleisProductionLine,
   SportpaleisEmployee,
+  SportpaleisProductionAssetSource,
 } from "./workspace-data.ts";
 import { createNonCriticalReadonlyCache, type ReadonlyCacheObservation } from "../workspace-readonly-cache.ts";
 
@@ -401,6 +402,18 @@ export class SportpaleisPilotApi {
 
   async upsertProductionElement(input: Omit<SportpaleisProductionElement, "id" | "revision" | "sourceLayers"> & { id?: string; expectedRevision?: number; sourceLayers?: { visualSource?: { filename: string; mimeType: string; dataBase64: string }; vectorSource?: { filename: string; mimeType: string; dataBase64: string } } }): Promise<SportpaleisProductionElement> {
     return responseBody(await this.#mutatingFetch(`${API}/production-elements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async createProductionAssetSource(input: { filename: string; mimeType: string; dataBase64: string; provenance: string }): Promise<SportpaleisProductionAssetSource> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async promoteProductionAsset(sourceId: string, input: { candidateIds: string[]; name: string; ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND"; ownerName: string; productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER"; widthMm: number; heightMm: number; variantLabel?: string; contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[]; applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[]; glyphMap?: Record<string, string>; proofAuthority: "HUMAN_ACCEPTANCE"; strokeReviewAccepted?: boolean }): Promise<SportpaleisProductionElement> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources/${encodeURIComponent(sourceId)}/promote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async setProductionAssetLifecycle(elementId: string, input: { lifecycleStatus: "PRODUCTION_READY" | "ARCHIVED"; expectedRevision: number }): Promise<SportpaleisProductionElement> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-assets/${encodeURIComponent(elementId)}/lifecycle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
   async setProductionElementRequirement(input: Omit<SportpaleisProductionElementRequirement, "id" | "recordedAt" | "recordedBy">): Promise<SportpaleisProductionInventoryView[]> {

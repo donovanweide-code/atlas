@@ -23,6 +23,10 @@ import {
   createManagedFontProductionPiece,
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
+import {
+  inspectProductionAssetSource,
+  productionAssetPiece,
+} from "../src/sportpaleis/production-assets.mjs";
 import { sequentialStepState } from "../src/workspace-sequence.ts";
 import {
   createWorkspacePasswordRecord,
@@ -642,6 +646,7 @@ export function migrateSportpaleisPilotState(input) {
   state.websiteSync = { ...createSportpaleisWebsiteSyncState(), ...(state.websiteSync ?? {}) };
   state.webshopIntake = { ...createSportpaleisWebshopIntakeState(), ...(state.webshopIntake ?? {}) };
   state.productionElements ??= [];
+  state.productionAssetSources ??= [];
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
   state.productionElementRequirements ??= [];
@@ -773,6 +778,7 @@ export function validateSportpaleisPilotState(input) {
   state.activationInvites ??= [];
   state.mailbatches ??= [];
   state.productionElements ??= [];
+  state.productionAssetSources ??= [];
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
   state.productionElementRequirements ??= [];
@@ -830,6 +836,14 @@ export function validateSportpaleisPilotState(input) {
   if (state.webshopIntake.enabled !== false || state.webshopIntake.retrievalMode !== "OFF") throw new Error("Divide/PDF-retrieval moet expliciet uit blijven.");
   if (new Set(state.orders.map(({ id }) => id)).size !== state.orders.length) throw new Error("Dubbel ordernummer.");
   if (new Set(state.productionFonts.map(({ id }) => id)).size !== state.productionFonts.length || new Set(state.productionFonts.map(({ sha256: hash }) => hash)).size !== state.productionFonts.length) throw new Error("Dubbele productiefontbron.");
+  if (new Set((state.productionAssetSources ?? []).map(({ id }) => id)).size !== (state.productionAssetSources ?? []).length || new Set((state.productionAssetSources ?? []).map(({ original }) => original.sha256)).size !== (state.productionAssetSources ?? []).length) throw new Error("Dubbele productieassetbron.");
+  for (const source of state.productionAssetSources ?? []) {
+    if (!source.original?.immutable || sha256(Buffer.from(source.original.dataBase64, "base64")).toUpperCase() !== source.original.sha256) throw new Error("Immutable productieassetbron ontbreekt of is gewijzigd.");
+    if (!source.candidates?.length || source.candidates.some(({ geometryHash, controlledVector }) => sha256(JSON.stringify(controlledVector.contours)).toUpperCase() !== geometryHash)) throw new Error("Productieassetkandidaten zijn gewijzigd of onvolledig.");
+  }
+  for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
+    if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
+  }
   if (new Set(state.productionJobs.map(({ id }) => id)).size !== state.productionJobs.length || new Set(state.productionJobs.map(({ jobNumber }) => jobNumber)).size !== state.productionJobs.length) throw new Error("Dubbele productiejob.");
   if (new Set(state.productionProposals.map(({ id }) => id)).size !== state.productionProposals.length || new Set(state.productionProposals.map(({ proposalNumber }) => proposalNumber)).size !== state.productionProposals.length) throw new Error("Dubbel productievoorstel.");
   for (const user of state.users) {
@@ -1331,7 +1345,8 @@ export class SportpaleisPilotService {
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
       webshopIntake: admin ? structuredClone(state.webshopIntake) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
-      productionElements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElements.map((element) => ({ ...element, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
+      productionElements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElements.map((element) => ({ ...element, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
+      productionAssetSources: ["admin", "operator"].includes(user.role) ? structuredClone((state.productionAssetSources ?? []).map((source) => ({ ...(({ documentPreviewSvg: _documentPreviewSvg, ...metadata }) => metadata)(source), original: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(source.original), candidates: source.candidates.map((candidate) => (({ previewSvg: _previewSvg, controlledVector: _controlledVector, ...metadata }) => metadata)(candidate)) }))) : [],
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElementRequirements) : [],
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
@@ -2059,6 +2074,139 @@ export class SportpaleisPilotService {
       state.websiteSync.status = state.websiteSync.changes.length ? "ATTENTION" : "OK";
       audit(state, user.id, action === "ACCEPT_SOURCE" ? "Websitewijziging overgenomen" : "Workspacewaarde behouden", change.label, { changeId, kind: change.kind, sourceIdentifier: change.sourceIdentifier, before, sourceFingerprint: change.sourceFingerprint ?? null, productionConfigurationChanged: false });
       return { state, value: publicSportpaleisWebsiteSync(state) };
+    });
+    return result.value;
+  }
+
+  async createProductionAssetSource(token, csrfToken, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    if (!this.uploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    const bytes = Buffer.from(requiredText(payload.dataBase64, "Bronbestand", 12 * 1024 * 1024), "base64");
+    const filename = requiredText(payload.filename, "Bestandsnaam", 180);
+    const mimeType = allowedValue(payload.mimeType, ["application/pdf", "application/illustrator", "application/octet-stream"], "Bestandstype");
+    const inspected = await inspectProductionAssetSource({ bytes, filename, mimeType });
+    const result = await this.store.mutate(async (state) => {
+      state.productionAssetSources ??= [];
+      const existing = state.productionAssetSources.find(({ original }) => original.sha256 === inspected.source.sha256);
+      if (existing) return { state, value: publicProductionAssetSource(existing), changed: false };
+      const source = {
+        id: `production-source-${inspected.source.sha256.slice(0, 16).toLowerCase()}`,
+        version: `1-${inspected.source.sha256.slice(0, 12)}`,
+        original: { ...inspected.source, dataBase64: bytes.toString("base64") },
+        provenance: requiredText(payload.provenance, "Herkomst", 500),
+        uploadedAt: iso(),
+        uploadedBy: { userId: user.id, name: user.name },
+        inspection: inspected.inspection,
+        documentPreviewSvg: inspected.documentPreviewSvg,
+        candidates: inspected.candidates,
+      };
+      state.productionAssetSources.push(source);
+      audit(state, user.id, "Vectorbron geïnspecteerd", source.id, { version: source.version, sha256: source.original.sha256, candidates: source.candidates.length, filename: source.original.filename });
+      return { state, value: publicProductionAssetSource(source) };
+    });
+    return result.value;
+  }
+
+  async productionAssetCandidatePreview(token, sourceId, candidateId) {
+    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const state = await this.store.read();
+    const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+    const candidate = source?.candidates.find(({ id }) => id === candidateId);
+    if (!candidate?.previewSvg) throw Object.assign(new Error("Vectorvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
+    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(candidate.previewSvg, "utf8"), filename: `${candidate.id}.svg`, sha256: candidate.geometryHash, cacheControl: "private, max-age=300" };
+  }
+
+  async productionAssetDocumentPreview(token, sourceId) {
+    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const state = await this.store.read();
+    const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+    if (!source?.documentPreviewSvg) throw Object.assign(new Error("Documentvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
+    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(source.documentPreviewSvg, "utf8"), filename: `${source.id}.svg`, sha256: source.original.sha256, cacheControl: "private, max-age=300" };
+  }
+
+  async promoteProductionAsset(token, csrfToken, sourceId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    if (payload.proofAuthority !== "HUMAN_ACCEPTANCE") throw Object.assign(new Error("Productievrijgave vereist expliciete Human Acceptance."), { statusCode: 403, code: "PRODUCTION_PROOF_AUTHORITY_REQUIRED" });
+    const result = await this.store.mutate(async (state) => {
+      const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+      if (!source) throw Object.assign(new Error("Vectorbron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+      const candidateIds = [...new Set(Array.isArray(payload.candidateIds) ? payload.candidateIds.map(String) : [])];
+      const candidates = candidateIds.map((id) => source.candidates.find((candidate) => candidate.id === id));
+      if (!candidateIds.length || candidates.some((candidate) => !candidate)) throw Object.assign(new Error("Kies één of meer geldige vectorvormen."), { statusCode: 400, code: "PRODUCTION_ASSET_SELECTION_INVALID" });
+      if (candidates.some(({ warnings }) => warnings.includes("STROKE_REQUIRES_REVIEW")) && payload.strokeReviewAccepted !== true) throw Object.assign(new Error("Deze bron bevat lijncontouren. Bevestig eerst dat de gecontroleerde vorm productierijp is."), { statusCode: 409, code: "PRODUCTION_ASSET_STROKE_REVIEW_REQUIRED" });
+      const absoluteContours = candidates.flatMap((candidate) => candidate.controlledVector.contours.map((contour) => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x + Number(candidate.controlledVector.sourceOriginMm?.x ?? 0), y: y + Number(candidate.controlledVector.sourceOriginMm?.y ?? 0) })) })));
+      const allPoints = absoluteContours.flatMap(({ points }) => points);
+      const minX = Math.min(...allPoints.map(({ x }) => x)); const minY = Math.min(...allPoints.map(({ y }) => y));
+      const contours = absoluteContours.map((contour, index) => ({ id: `contour-${index + 1}`, closed: true, points: contour.points.map(({ x, y }) => ({ x: Math.round((x - minX) * 100000) / 100000, y: Math.round((y - minY) * 100000) / 100000 })) }));
+      const geometryHash = sha256(JSON.stringify(contours)).toUpperCase();
+      let widthMm = Number(payload.widthMm); let heightMm = Number(payload.heightMm);
+      const applications = Array.isArray(payload.applications) ? payload.applications.slice(0, 20).map((application) => ({ kind: allowedValue(application.kind, ["LOGO", "SPONSOR", "NUMBER_SET", "ARTWORK"], "Toepassing"), placement: optional(application.placement, 160) || null })) : [{ kind: "ARTWORK", placement: null }];
+      const selectedWidth = Math.max(...contours.flatMap(({ points }) => points.map(({ x }) => x)));
+      const selectedHeight = Math.max(...contours.flatMap(({ points }) => points.map(({ y }) => y)));
+      if (!(selectedWidth > 0) || !(selectedHeight > 0)) throw Object.assign(new Error("De geselecteerde vector heeft geen geldige fysieke begrenzing."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+      if (applications.some(({ kind }) => kind === "NUMBER_SET")) {
+        if (!(heightMm > 0)) throw Object.assign(new Error("Leg voor een nummerbron de exacte fysieke cijferhoogte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+        if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;
+      } else {
+        if (!(widthMm > 0) && !(heightMm > 0)) throw Object.assign(new Error("Leg een fysieke breedte of hoogte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+        if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;
+        if (!(heightMm > 0)) heightMm = widthMm * selectedHeight / selectedWidth;
+        if (Math.abs((widthMm / heightMm) - (selectedWidth / selectedHeight)) > 0.002) {
+          throw Object.assign(new Error("De fysieke maat moet de vaste verhouding van de geselecteerde vector behouden."), { statusCode: 400, code: "PRODUCTION_ASSET_ASPECT_RATIO_MISMATCH" });
+        }
+      }
+      let numberGlyphs;
+      if (applications.some(({ kind }) => kind === "NUMBER_SET")) {
+        const glyphEntries = Object.entries(payload.glyphMap ?? {}).filter(([, candidateId]) => String(candidateId).trim());
+        if (glyphEntries.length !== 10 || new Set(glyphEntries.map(([digit]) => digit)).size !== 10 || glyphEntries.some(([digit]) => !/^\d$/u.test(digit))) throw Object.assign(new Error("Koppel voor een nummerbron exact de cijfers 0 tot en met 9."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MAP_INCOMPLETE" });
+        numberGlyphs = Object.fromEntries(glyphEntries.map(([digit, candidateId]) => {
+          const candidate = source.candidates.find(({ id }) => id === candidateId && candidateIds.includes(id));
+          if (!candidate) throw Object.assign(new Error(`De vectorvorm voor cijfer ${digit} is niet geselecteerd.`), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MAP_INVALID" });
+          return [digit, { candidateId: candidate.id, geometryHash: candidate.geometryHash, widthUnits: candidate.boundsMm.width, heightUnits: candidate.boundsMm.height, contours: structuredClone(candidate.controlledVector.contours) }];
+        }));
+      }
+      const element = {
+        id: `production-asset-${randomBytes(8).toString("hex")}`,
+        name: requiredText(payload.name, "Naam", 160),
+        ownerType: allowedValue(payload.ownerType, ["ASSOCIATION", "CUSTOMER", "SPONSOR", "OWN_BRAND"], "Eigenaartype"),
+        ownerName: requiredText(payload.ownerName, "Vereniging/klant/sponsor", 160),
+        sourceAsset: `${source.original.filename} · ${source.original.sha256}`,
+        sourceStatus: "AVAILABLE",
+        sourceId: source.id,
+        version: `1-${geometryHash.slice(0, 12)}`,
+        lifecycleStatus: "PRODUCTION_READY",
+        productionMethod: allowedValue(payload.productionMethod, ["SELF_PRODUCED", "PHYSICAL_TRANSFER"], "Productiemethode"),
+        contexts: Array.isArray(payload.contexts) ? payload.contexts.slice(0, 100).map((context) => ({ type: allowedValue(context.type, ["ASSOCIATION", "TEAM", "ARTICLE", "ORDER", "GENERIC"], "Contexttype"), id: requiredText(context.id, "Context-ID", 160), label: requiredText(context.label, "Context", 160) })) : [],
+        applications,
+        sourceSelection: { candidateIds, selectionRef: candidates.map(({ selectionRef }) => selectionRef).join("+"), geometryHash },
+        controlledVector: { format: "WBD_CONTOURS_V1", geometryHash, contourCount: contours.length, pointCount: contours.reduce((sum, contour) => sum + contour.points.length, 0), contours },
+        ...(numberGlyphs ? { numberGlyphs } : {}),
+        sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash }, physicallyProvenContour: null },
+        revision: 1,
+        variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: payload.productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
+      };
+      state.productionElements.push(element);
+      audit(state, user.id, "Productieasset vrijgegeven", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, rawToken: undefined });
+      return { state, value: publicProductionElement(element) };
+    });
+    return result.value;
+  }
+
+  async setProductionAssetLifecycle(token, csrfToken, elementId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    const status = allowedValue(payload.lifecycleStatus, ["PRODUCTION_READY", "ARCHIVED"], "Assetstatus");
+    const result = await this.store.mutate(async (state) => {
+      const element = state.productionElements.find(({ id, sourceId }) => id === elementId && sourceId);
+      if (!element) throw Object.assign(new Error("Managed productieasset niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_NOT_FOUND" });
+      if (Number(payload.expectedRevision) !== element.revision) throw Object.assign(new Error("De productieasset is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: element.revision });
+      if (status === "ARCHIVED") {
+        const activeReference = state.orders.find(({ stage, productionLines }) => stage !== "DONE" && productionLines?.some(({ source }) => source?.kind === "PRODUCTION_ELEMENT" && source.id === element.id));
+        if (activeReference) throw Object.assign(new Error(`Deze asset wordt nog gebruikt door open order ${activeReference.id}. Rond die eerst af.`), { statusCode: 409, code: "PRODUCTION_ASSET_IN_ACTIVE_USE" });
+      }
+      element.lifecycleStatus = status;
+      element.revision += 1;
+      audit(state, user.id, status === "ARCHIVED" ? "Productieasset gearchiveerd" : "Productieasset opnieuw productieklaar gemaakt", element.id, { lifecycleStatus: status, sourceId: element.sourceId, version: element.version });
+      return { state, value: publicProductionElement(element) };
     });
     return result.value;
   }
@@ -3136,9 +3284,27 @@ function resolveBackNumberProductionContext(association, profile, sizeClass, gar
 }
 
 function productionElementProof(element) {
+  if (element?.lifecycleStatus === "PRODUCTION_READY" && element?.controlledVector?.geometryHash === element?.sourceSelection?.geometryHash) return "GEOMETRY_VALIDATED";
   if (element?.sourceLayers?.physicallyProvenContour) return "PHYSICALLY_VALIDATED";
   if (element?.sourceLayers?.validatedCutContour) return "GEOMETRY_VALIDATED";
   return element?.sourceLayers?.vectorSource ? "CONFIGURED" : "DATA_GAP";
+}
+
+function publicProductionAssetSource(source) {
+  return structuredClone({
+    ...(({ documentPreviewSvg: _documentPreviewSvg, ...metadata }) => metadata)(source),
+    original: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(source.original),
+    candidates: source.candidates.map((candidate) => (({ previewSvg: _previewSvg, controlledVector: _controlledVector, ...metadata }) => metadata)(candidate)),
+  });
+}
+
+function publicProductionElement(element) {
+  return structuredClone({
+    ...element,
+    controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined,
+    numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined,
+    sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined,
+  });
 }
 
 function configuredManagedFont(state, profile) {
@@ -3153,7 +3319,7 @@ function validateProductionLines(value, state, user, orderKind) {
   if (!Array.isArray(value) || value.length > 100) throw Object.assign(new Error("Gebruik maximaal 100 productieregels."), { statusCode: 400, code: "PRODUCTION_LINES_INVALID" });
   const validated = value.map((line, index) => {
     const type = allowedValue(line.type, [...PRODUCTION_LINE_TYPES], "Productieregeltype");
-    if (user.role === "store" && ["LOGO", "PRODUCTION_ELEMENT"].includes(type)) throw Object.assign(new Error("Logo's en beeldmerken zijn alleen beschikbaar in Teamorder/Productie."), { statusCode: 403, code: "STORE_LOGO_FORBIDDEN" });
+    if (user.role === "store" && orderKind !== "TEAM" && ["LOGO", "PRODUCTION_ELEMENT"].includes(type)) throw Object.assign(new Error("Logo's en beeldmerken zijn alleen beschikbaar in Teamorder/Productie."), { statusCode: 403, code: "STORE_LOGO_FORBIDDEN" });
     const content = normalizeProductionContent(type, requiredText(line.content, "Inhoud", 160), line.placementRole);
     if (type === "NUMBER" && !/^\d{1,4}$/u.test(content)) throw Object.assign(new Error("Een nummerregel bevat alleen 1 tot 4 cijfers."), { statusCode: 400, code: "PRODUCTION_NUMBER_INVALID" });
     if (type === "INITIALS" && content.length > 12) throw Object.assign(new Error("Initialen bevatten maximaal 12 tekens."), { statusCode: 400, code: "PRODUCTION_INITIALS_INVALID" });
@@ -3162,9 +3328,17 @@ function validateProductionLines(value, state, user, orderKind) {
     if ((!initialsInfix && (!(widthMm >= 1 && widthMm <= 1000) || !(heightMm >= 1 && heightMm <= 1000))) || (initialsInfix && (!(widthMm >= 0 && widthMm <= 1000) || !(heightMm >= 0 && heightMm <= 1000))) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Afmetingen moeten geldig zijn en aantal 1â€“999."), { statusCode: 400, code: "PRODUCTION_LINE_DIMENSIONS_INVALID" });
     let source; let proofStatus = "CONFIGURED"; let validation = { status: "VALID", reason: null };
     if (["TEXT", "INITIALS", "NUMBER"].includes(type)) {
+      const numberAsset = type === "NUMBER" ? state.productionElements.find(({ id, lifecycleStatus, productionMethod, applications }) => id === line.sourceId && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED" && applications?.some(({ kind }) => kind === "NUMBER_SET")) : null;
+      if (numberAsset) {
+        const variant = numberAsset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
+        if (!variant || Array.from(content).some((digit) => !numberAsset.numberGlyphs?.[digit])) throw Object.assign(new Error("De nummerbron bevat niet alle gevraagde cijfers."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MISSING" });
+        source = { kind: "PRODUCTION_ELEMENT", id: numberAsset.id, version: numberAsset.version ?? String(numberAsset.revision), variantId: variant.id };
+        proofStatus = productionElementProof(numberAsset);
+      }
       const font = state.productionFonts.find(({ id }) => id === line.sourceId);
       const profile = state.productionProfiles.find(({ id }) => id === line.sourceId);
-      if (font?.status === "TECHNICALLY_VALID" && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
+      if (source) { /* Nummerbron is al exact resolveerbaar. */ }
+      else if (font?.status === "TECHNICALLY_VALID" && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
       else if (user.role !== "store" && profile) {
         const configuredFont = configuredManagedFont(state, profile);
         source = configuredFont ? { kind: "FONT", id: configuredFont.id, version: configuredFont.version, sha256: configuredFont.sha256 } : { kind: "PROFILE", id: profile.id, version: String(profile.revision ?? 1) };
@@ -3174,10 +3348,11 @@ function validateProductionLines(value, state, user, orderKind) {
       const element = state.productionElements.find(({ id }) => id === line.sourceId || line.elementId === id);
       if (!element) throw Object.assign(new Error("Kies een bestaand productie-element."), { statusCode: 400, code: "PRODUCTION_ELEMENT_NOT_FOUND" });
       const dimensionalVariant = element.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
-      if (dimensionalVariant && Math.abs((widthMm / heightMm) - (dimensionalVariant.widthMm / dimensionalVariant.heightMm)) > 0.002) throw Object.assign(new Error("De verhouding van een logo-/beeldmerkbron blijft vergrendeld."), { statusCode: 400, code: "LOGO_ASPECT_RATIO_INVALID" });
+      if (dimensionalVariant && !element.applications?.some(({ kind }) => kind === "NUMBER_SET") && Math.abs((widthMm / heightMm) - (dimensionalVariant.widthMm / dimensionalVariant.heightMm)) > 0.002) throw Object.assign(new Error("De verhouding van een logo-/beeldmerkbron blijft vergrendeld."), { statusCode: 400, code: "LOGO_ASPECT_RATIO_INVALID" });
       proofStatus = productionElementProof(element);
-      source = { kind: "PRODUCTION_ELEMENT", id: element.id, version: String(element.revision) };
-      if (!["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(proofStatus)) validation = { status: "BLOCKED", reason: "Een visuele of vectorbron is niet automatisch een gevalideerde snijcontour." };
+      source = { kind: "PRODUCTION_ELEMENT", id: element.id, version: element.version ?? String(element.revision), variantId: dimensionalVariant?.id ?? null };
+      if (element.productionMethod === "PHYSICAL_TRANSFER") validation = { status: "BLOCKED", reason: "Dit beeldmerk wordt als fysieke transfer geleverd en hoort niet in een eigen plotbestand." };
+      else if (!["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(proofStatus)) validation = { status: "BLOCKED", reason: "Een visuele of vectorbron is niet automatisch een gevalideerde snijcontour." };
     }
     let placementRule;
     if (initialsInfix) {
@@ -3571,7 +3746,7 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
 }
 
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot) {
-  if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
+  if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT", "PRODUCTION_ELEMENT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
   const resolved = productionLines.map((line) => {
     if (line.source.kind === "PRODUCTION_SOURCE") {
       const source = productionSourceByIdentity(line.source.id, line.source.version);
@@ -3587,6 +3762,21 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
             label: `${line.preview?.label ?? line.type} · ${line.content}`,
             product: orders.flatMap(({ items }) => items).find(({ id }) => id === line.itemId)?.product,
           });
+        },
+      };
+    }
+    if (line.source.kind === "PRODUCTION_ELEMENT") {
+      const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
+      const variant = asset?.variants.find(({ id }) => id === line.source.variantId) ?? asset?.variants.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0);
+      if (!asset || !variant) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
+      const source = { id: asset.id, version: asset.version, sourceProofStatus: productionElementProof(asset), outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
+      return {
+        line,
+        source,
+        piece(copy) {
+          const order = orders.find(({ id }) => id === line.orderId) ?? orders[0];
+          const piece = productionAssetPiece({ asset, variant, line, order, foilColor: order.items.find(({ id }) => id === line.itemId)?.foilColor ?? state.settings.productionDefaults.defaultFoilColor });
+          return { ...piece, id: `${piece.id}-${copy}` };
         },
       };
     }
@@ -4097,6 +4287,30 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/production-elements" && method === "POST") {
         json(response, 201, await service.upsertProductionElement(token, csrf, await readJson(request)));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/production-asset-sources" && method === "POST") {
+        json(response, 201, await service.createProductionAssetSource(token, csrf, await readJson(request)));
+        return true;
+      }
+      const productionAssetPromoteMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/promote$/);
+      if (productionAssetPromoteMatch && method === "POST") {
+        json(response, 201, await service.promoteProductionAsset(token, csrf, decodeURIComponent(productionAssetPromoteMatch[1]), await readJson(request)));
+        return true;
+      }
+      const productionAssetPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/candidates\/([^/]+)\/preview\.svg$/);
+      if (productionAssetPreviewMatch && method === "GET") {
+        binary(response, 200, await service.productionAssetCandidatePreview(token, decodeURIComponent(productionAssetPreviewMatch[1]), decodeURIComponent(productionAssetPreviewMatch[2])));
+        return true;
+      }
+      const productionAssetDocumentPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/preview\.svg$/);
+      if (productionAssetDocumentPreviewMatch && method === "GET") {
+        binary(response, 200, await service.productionAssetDocumentPreview(token, decodeURIComponent(productionAssetDocumentPreviewMatch[1])));
+        return true;
+      }
+      const productionAssetLifecycleMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/lifecycle$/);
+      if (productionAssetLifecycleMatch && method === "POST") {
+        json(response, 200, await service.setProductionAssetLifecycle(token, csrf, decodeURIComponent(productionAssetLifecycleMatch[1]), await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/production-fonts" && method === "POST") {

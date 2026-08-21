@@ -41,6 +41,7 @@ export interface SportpaleisProductionLine {
     geometryAdapterVersion?: string;
     outputWriterId?: string;
     outputWriterVersion?: string;
+    variantId?: string | null;
   };
   widthMm: number;
   heightMm: number;
@@ -416,6 +417,16 @@ export interface SportpaleisProductionElement {
   ownerName: string;
   sourceAsset: string;
   sourceStatus: "AVAILABLE" | "REFERENCE_ONLY" | "DATA_GAP";
+  /** Production Assets V1: one immutable source can yield many managed assets. */
+  sourceId?: string;
+  version?: string;
+  lifecycleStatus?: "CANDIDATE" | "REVIEW" | "PRODUCTION_READY" | "ARCHIVED";
+  productionMethod?: "SELF_PRODUCED" | "PHYSICAL_TRANSFER";
+  contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[];
+  applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[];
+  sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
+  controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
+  numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;
   sourceLayers?: {
     visualSource: { filename: string; mimeType: string; sha256: string } | null;
     vectorSource: { filename: string; mimeType: string; sha256: string } | null;
@@ -432,6 +443,36 @@ export interface SportpaleisProductionElement {
     currentStock: number | null;
     minimumStock: number | null;
     targetStock: number | null;
+  }[];
+}
+
+export interface SportpaleisProductionAssetSource {
+  id: string;
+  version: string;
+  original: { filename: string; mimeType: string; format: "PDF" | "ILLUSTRATOR_PDF"; sha256: string; sizeBytes: number; immutable: true; documentMetadata?: { pdfVersion: string | null; creator: string | null; producer: string | null; illustratorVersion: string | null; embeddedPdfCompatible: true } };
+  provenance: string;
+  uploadedAt: string;
+  uploadedBy: { userId: string; name: string };
+  inspection: {
+    engine: "WBD_PRODUCTION_ASSET_INTAKE_V1";
+    engineVersion: "1";
+    candidateCount: number;
+    requiresHumanSelection: true;
+    geometryNeverAiGenerated: true;
+  };
+  candidates: {
+    id: string;
+    suggestedName: string;
+    selectionMode: "VISUAL_REGION" | "OBJECT_GROUP" | "VECTOR_COMPONENT";
+    page: number;
+    selectionRef: string;
+    geometryHash: string;
+    status: "REVIEW";
+    boundsMm: { width: number; height: number };
+    aspectRatio: number;
+    contourCount: number;
+    pointCount: number;
+    warnings: string[];
   }[];
 }
 
@@ -618,6 +659,7 @@ export interface SportpaleisWorkspaceState {
   websiteSync?: SportpaleisWebsiteSyncState;
   webshopIntake?: SportpaleisWebshopIntakeState;
   productionElements: SportpaleisProductionElement[];
+  productionAssetSources?: SportpaleisProductionAssetSource[];
   productionFonts: SportpaleisProductionFont[];
   productionElementRequirements: SportpaleisProductionElementRequirement[];
   productionJobs: ProductionJob[];
@@ -729,6 +771,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
     extraUserRequests: [],
     mailbatches: [],
     productionElements: [],
+    productionAssetSources: [],
     productionElementRequirements: [],
     productionJobs: [],
     preferences: Object.fromEntries(users.map(({ id }) => [id, structuredClone(DEFAULT_PREFERENCE)])),
