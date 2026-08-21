@@ -130,6 +130,21 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   assert.ok(persisted.productionElements.find(({ id }) => id === asset.id).controlledVector.contours.length);
 });
 
+test("broninname legt operator, tijd en veilige Workspace-provenance automatisch vast", async (context) => {
+  const { service, operator } = await fixture(context);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, {
+    filename: "sanitized-automatic-intake.svg",
+    mimeType: "image/svg+xml",
+    dataBase64: vectorSvg([{ x: 20, y: 20, width: 100, height: 50 }]).toString("base64"),
+    intakeKind: "ARTWORK",
+    conversionMethod: "HUMAN_VERIFIED_SVG",
+  });
+  assert.equal(source.uploadedBy.userId, operator.user.id);
+  assert.equal(source.uploadedBy.name, operator.user.name);
+  assert.match(source.uploadedAt, /^\d{4}-\d{2}-\d{2}T/u);
+  assert.equal(source.provenance, `Toegevoegd via Sportpaleis Workspace door ${operator.user.name}`);
+});
+
 test("artwork kan zonder maat veilig in de bibliotheek blijven en wordt pas na maatvrijgave productieklaar", async (context) => {
   const { service, admin, operator, store } = await fixture(context);
   const bytes = vectorSvg([{ x: 40, y: 80, width: 160, height: 80 }]);
@@ -268,7 +283,14 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
   assert.match(source, /Artwork of nummerset toevoegen/u);
-  assert.match(source, /Bevat het werkblad meerdere logo's/u);
+  assert.match(source, /De bron, bestandsnaam, datum en uw account worden automatisch vastgelegd/u);
+  assert.match(source, /Van wie ontvangen\?/u);
+  assert.match(source, /inferredProductionAssetKind/u);
+  assert.match(source, /Mijn productie \/ Wachtrij/u);
+  assert.match(source, /Productie-instellingen/u);
+  assert.match(source, /Productiebron voor \$\{esc\(association\.name\)\} toevoegen/u);
+  assert.doesNotMatch(source, /name="provenance" required maxlength="500" placeholder="Aangeleverd/u);
+  assert.match(server, /Toegevoegd via Sportpaleis Workspace door \$\{user\.name\}/u);
   assert.match(source, /data-production-asset-lifecycle-form/u);
   assert.match(source, /Logo\/opdruk toevoegen/u);
   assert.match(source, /exacte vectornummerbron/u);

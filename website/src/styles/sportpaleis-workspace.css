@@ -1020,6 +1020,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sp-operational-facts dt { color:#666; font-size:11px; }
 .sp-operational-facts dd { margin:5px 0 0; font-weight:800; }
 .sp-context-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:16px; }
+.sp-production-context-nav { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 18px; }
+.sp-production-context-nav > div { display:flex; flex-wrap:wrap; gap:8px; }
+.sp-production-context-nav .is-active { border-color:var(--sp-ink); background:var(--sp-ink); color:#fff; }
+.sp-production-context-nav details { position:relative; }
+.sp-production-context-nav summary { cursor:pointer; font-weight:800; padding:10px 12px; }
+.sp-production-context-nav details > div { display:grid; gap:8px; min-width:210px; padding:12px; background:#fff; border:1px solid var(--sp-border,#d8dee7); border-radius:12px; box-shadow:0 12px 30px rgba(16,32,48,.12); }
+.sp-production-context-nav details a { color:var(--sp-ink); font-weight:750; text-decoration:none; }
+.sp-asset-intake form { display:grid; gap:14px; }
+.sp-asset-dropzone { display:grid; gap:8px; padding:22px; border:2px dashed var(--sp-border,#d8dee7); border-radius:14px; background:var(--sp-surface-soft,#f7f8fa); font-weight:800; }
+.sp-asset-dropzone span { font-size:.9rem; font-weight:500; color:var(--sp-muted,#5f6875); }
 .sp-activation-handoff { display:grid; gap:10px; padding:14px; border:1px solid #c9d8d1; border-radius:10px; background:#f4f8f6; }
 .sp-activation-handoff label { display:grid; gap:6px; font-weight:800; }
 .sp-activation-handoff input { width:100%; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
@@ -1042,6 +1052,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sp-user-detail fieldset input { width:auto; min-height:0; }
 
 @media (max-width:760px) {
+  .sp-production-context-nav { display:grid; }
+  .sp-production-context-nav > div { display:grid; grid-template-columns:1fr; }
   .sp-user-menu { min-width:0; border:0; }
   .sp-user-menu > summary { padding:0 4px; }
   .sp-user-menu > summary > span:last-child { display:none; }

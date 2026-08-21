@@ -2151,7 +2151,7 @@ export class SportpaleisPilotService {
         fidelity: canonicalSvg
           ? { status: "MATCHED", comparisonMethod: "CANONICAL_SVG_PREVIEW", referenceSha256: inspected.source.sha256, checkedAt: iso(), checkedBy: { userId: user.id, name: user.name }, note: "Preview en productie gebruiken dezelfde gevalideerde SVG-geometrie." }
           : { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: referenceSource?.original.sha256 ?? inspected.source.sha256, checkedAt: null, checkedBy: null, note: null },
-        provenance: requiredText(payload.provenance, "Herkomst", 500),
+        provenance: optional(payload.provenance, 500) || `Toegevoegd via Sportpaleis Workspace door ${user.name}`,
         uploadedAt: iso(),
         uploadedBy: { userId: user.id, name: user.name },
         inspection: inspected.inspection,
