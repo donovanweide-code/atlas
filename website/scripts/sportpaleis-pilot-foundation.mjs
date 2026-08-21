@@ -25,6 +25,7 @@ import {
 } from "../src/sportpaleis/managed-font-production.mjs";
 import {
   inspectProductionAssetSource,
+  productionAssetPreviewSvg,
   productionAssetPiece,
 } from "../src/sportpaleis/production-assets.mjs";
 import { sequentialStepState } from "../src/workspace-sequence.ts";
@@ -1670,7 +1671,10 @@ export class SportpaleisPilotService {
           operationalFacts: {},
           eventHistory: [{ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "button" }],
           totalPieces: items.reduce((sum, item) => sum + item.quantity, 0),
-          foilStates: [...new Set(items.map(({ foilColor }) => foilColor))].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
+          foilStates: [...new Set([
+            ...items.map(({ foilColor }) => foilColor),
+            ...productionLines.map(({ foilColor }) => foilColor).filter(Boolean),
+          ])].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
           items,
           productionLines,
         };
@@ -2124,6 +2128,27 @@ export class SportpaleisPilotService {
     return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(source.documentPreviewSvg, "utf8"), filename: `${source.id}.svg`, sha256: source.original.sha256, cacheControl: "private, max-age=300" };
   }
 
+  async productionAssetPreview(token, elementId) {
+    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
+    const state = await this.store.read();
+    const asset = state.productionElements.find(({ id, sourceId }) => id === elementId && sourceId);
+    if (!asset) throw Object.assign(new Error("Productieassetvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
+    const svg = productionAssetPreviewSvg(asset);
+    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}.svg`, sha256: asset.controlledVector.geometryHash, cacheControl: "private, max-age=300" };
+  }
+
+  async productionAssetNumberPreview(token, elementId, value) {
+    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
+    const state = await this.store.read();
+    const asset = state.productionElements.find(({ id, sourceId, applications }) => id === elementId && sourceId && applications?.some(({ kind }) => kind === "NUMBER_SET"));
+    const digits = String(value ?? "");
+    if (!asset || !/^\d{1,3}$/u.test(digits)) throw Object.assign(new Error("Nummervoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
+    const variant = asset.variants.find(({ heightMm }) => Number(heightMm) > 0);
+    const piece = productionAssetPiece({ asset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
+    const svg = productionAssetPreviewSvg({ controlledVector: { contours: piece.contours } });
+    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}-${digits}.svg`, sha256: sha256(svg).toUpperCase(), cacheControl: "private, max-age=300" };
+  }
+
   async promoteProductionAsset(token, csrfToken, sourceId, payload) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
     if (payload.proofAuthority !== "HUMAN_ACCEPTANCE") throw Object.assign(new Error("Productievrijgave vereist expliciete Human Acceptance."), { statusCode: 403, code: "PRODUCTION_PROOF_AUTHORITY_REQUIRED" });
@@ -2155,6 +2180,16 @@ export class SportpaleisPilotService {
           throw Object.assign(new Error("De fysieke maat moet de vaste verhouding van de geselecteerde vector behouden."), { statusCode: 400, code: "PRODUCTION_ASSET_ASPECT_RATIO_MISMATCH" });
         }
       }
+      const requestedSizePolicy = applications.some(({ kind }) => kind === "NUMBER_SET")
+        ? "FIXED"
+        : allowedValue(payload.sizePolicyMode ?? "FIXED", ["FIXED", "DEFAULT_WITH_LIMITS", "PROPORTIONAL_FREE"], "Maatbeleid");
+      let minWidthMm = payload.minWidthMm === "" || payload.minWidthMm === undefined ? null : Number(payload.minWidthMm);
+      let maxWidthMm = payload.maxWidthMm === "" || payload.maxWidthMm === undefined ? null : Number(payload.maxWidthMm);
+      if (requestedSizePolicy === "FIXED") { minWidthMm = widthMm; maxWidthMm = widthMm; }
+      if (requestedSizePolicy === "DEFAULT_WITH_LIMITS" && (!(minWidthMm > 0) || !(maxWidthMm >= minWidthMm) || widthMm < minWidthMm || widthMm > maxWidthMm)) {
+        throw Object.assign(new Error("Leg voor schaalbaar artwork een veilige minimum- en maximumbreedte rond de standaardmaat vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_POLICY_INVALID" });
+      }
+      if (requestedSizePolicy === "PROPORTIONAL_FREE") { minWidthMm = null; maxWidthMm = null; }
       let numberGlyphs;
       if (applications.some(({ kind }) => kind === "NUMBER_SET")) {
         const glyphEntries = Object.entries(payload.glyphMap ?? {}).filter(([, candidateId]) => String(candidateId).trim());
@@ -2178,15 +2213,18 @@ export class SportpaleisPilotService {
         productionMethod: allowedValue(payload.productionMethod, ["SELF_PRODUCED", "PHYSICAL_TRANSFER"], "Productiemethode"),
         contexts: Array.isArray(payload.contexts) ? payload.contexts.slice(0, 100).map((context) => ({ type: allowedValue(context.type, ["ASSOCIATION", "TEAM", "ARTICLE", "ORDER", "GENERIC"], "Contexttype"), id: requiredText(context.id, "Context-ID", 160), label: requiredText(context.label, "Context", 160) })) : [],
         applications,
-        sourceSelection: { candidateIds, selectionRef: candidates.map(({ selectionRef }) => selectionRef).join("+"), geometryHash },
+        sourceSelection: { candidateIds, selectionRef: candidates.flatMap(({ equivalentSelectionRefs, selectionRef }) => equivalentSelectionRefs?.length ? equivalentSelectionRefs : [selectionRef]).join("+"), geometryHash },
         controlledVector: { format: "WBD_CONTOURS_V1", geometryHash, contourCount: contours.length, pointCount: contours.reduce((sum, contour) => sum + contour.points.length, 0), contours },
+        sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm },
+        defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
+        ...(payload.productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
         ...(numberGlyphs ? { numberGlyphs } : {}),
         sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash }, physicallyProvenContour: null },
         revision: 1,
         variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: payload.productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
       };
       state.productionElements.push(element);
-      audit(state, user.id, "Productieasset vrijgegeven", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, rawToken: undefined });
+      audit(state, user.id, "Productieasset vrijgegeven", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, rawToken: undefined });
       return { state, value: publicProductionElement(element) };
     });
     return result.value;
@@ -3347,8 +3385,12 @@ function validateProductionLines(value, state, user, orderKind) {
     } else {
       const element = state.productionElements.find(({ id }) => id === line.sourceId || line.elementId === id);
       if (!element) throw Object.assign(new Error("Kies een bestaand productie-element."), { statusCode: 400, code: "PRODUCTION_ELEMENT_NOT_FOUND" });
+      if (element.sourceId && element.lifecycleStatus !== "PRODUCTION_READY") throw Object.assign(new Error("Deze productiebron is nog niet menselijk goedgekeurd voor productie."), { statusCode: 409, code: "PRODUCTION_ELEMENT_NOT_READY" });
       const dimensionalVariant = element.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
       if (dimensionalVariant && !element.applications?.some(({ kind }) => kind === "NUMBER_SET") && Math.abs((widthMm / heightMm) - (dimensionalVariant.widthMm / dimensionalVariant.heightMm)) > 0.002) throw Object.assign(new Error("De verhouding van een logo-/beeldmerkbron blijft vergrendeld."), { statusCode: 400, code: "LOGO_ASPECT_RATIO_INVALID" });
+      const sizePolicy = element.sizePolicy;
+      if (sizePolicy?.mode === "FIXED" && Math.abs(widthMm - sizePolicy.defaultWidthMm) > 0.01) throw Object.assign(new Error("Deze productiebron heeft een vaste productiemaat."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_FIXED" });
+      if (sizePolicy?.mode === "DEFAULT_WITH_LIMITS" && (widthMm < Number(sizePolicy.minWidthMm) || widthMm > Number(sizePolicy.maxWidthMm))) throw Object.assign(new Error(`Kies een breedte tussen ${sizePolicy.minWidthMm} en ${sizePolicy.maxWidthMm} mm.`), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_OUT_OF_RANGE" });
       proofStatus = productionElementProof(element);
       source = { kind: "PRODUCTION_ELEMENT", id: element.id, version: element.version ?? String(element.revision), variantId: dimensionalVariant?.id ?? null };
       if (element.productionMethod === "PHYSICAL_TRANSFER") validation = { status: "BLOCKED", reason: "Dit beeldmerk wordt als fysieke transfer geleverd en hoort niet in een eigen plotbestand." };
@@ -3370,6 +3412,9 @@ function validateProductionLines(value, state, user, orderKind) {
     const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
     const maximumObjectWidthMm = defaults.workingWidthMm - (2 * defaults.edgeMarginMm);
     if (widthMm > maximumObjectWidthMm) validation = { status: "BLOCKED", reason: `De gevraagde breedte past niet binnen ${defaults.workingWidthMm} mm veilige werkbreedte met ${defaults.edgeMarginMm} mm randafstand.` };
+    const requestedFoilColor = String(line.foilColor ?? "").trim();
+    const canonicalFoilColor = requestedFoilColor ? managedFoilColor(state, requestedFoilColor) : null;
+    if (requestedFoilColor && !canonicalFoilColor) throw Object.assign(new Error("Kies een actieve beheerde foliekleur."), { statusCode: 400, code: "PRODUCTION_LINE_FOIL_COLOR_INVALID" });
     return {
       id: String(line.id ?? "").trim() || `production-line-${index + 1}-${randomBytes(5).toString("hex")}`,
       type,
@@ -3378,6 +3423,7 @@ function validateProductionLines(value, state, user, orderKind) {
       widthMm: Math.round(widthMm * 1000) / 1000,
       heightMm: Math.round(heightMm * 1000) / 1000,
       quantity,
+      ...(canonicalFoilColor ? { foilColor: canonicalFoilColor } : {}),
       preview: { kind: source.kind === "FONT" ? "LIVE_FONT" : "ASSET_REFERENCE", label: optional(line.previewLabel, 160) || content, aspectRatioLocked: ["LOGO", "PRODUCTION_ELEMENT"].includes(type) },
       provenance: optional(line.provenance, 500) || `${orderKind} · handmatig vastgelegd in Workspace`,
       proofStatus,
@@ -3606,6 +3652,7 @@ function stableProductionTypeSort(entries) {
 }
 
 function productionLineFoilColor(state, order, line) {
+  if (String(line.foilColor ?? "").trim()) return String(line.foilColor).trim();
   const item = order.items.find(({ id }) => id === line.itemId)
     ?? order.items.find(({ personalizationValues }) => personalizationValues && Object.values(personalizationValues).includes(line.content))
     ?? (order.items.length === 1 ? order.items[0] : null);
@@ -3678,6 +3725,11 @@ function productionLineWriterIdentity(state, line) {
     const source = productionSourceByIdentity(line.source.id, line.source.version);
     if (!source || source.content !== line.content || source.lineType !== line.type || source.sourceSetId !== line.source.sourceSetId || source.outputWriterId !== line.source.outputWriterId || source.outputWriterVersion !== line.source.outputWriterVersion) throw Object.assign(new Error(`Productiebron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_SOURCE_IDENTITY_MISMATCH" });
     return { id: source.outputWriterId, version: source.outputWriterVersion };
+  }
+  if (line.source?.kind === "PRODUCTION_ELEMENT") {
+    const asset = state.productionElements.find(({ id, version, revision, lifecycleStatus, productionMethod }) => id === line.source.id && (version ?? String(revision)) === line.source.version && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED");
+    if (!asset || !["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} is niet meer exact uitvoerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
+    return { id: CUTJOB_SVG_WRITER.id, version: CUTJOB_SVG_WRITER.version };
   }
   throw Object.assign(new Error("Een productieregel heeft nog geen exact uitvoerbare bron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
 }
@@ -3775,7 +3827,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
         source,
         piece(copy) {
           const order = orders.find(({ id }) => id === line.orderId) ?? orders[0];
-          const piece = productionAssetPiece({ asset, variant, line, order, foilColor: order.items.find(({ id }) => id === line.itemId)?.foilColor ?? state.settings.productionDefaults.defaultFoilColor });
+          const piece = productionAssetPiece({ asset, variant, line, order, foilColor: productionLineFoilColor(state, order, line) });
           return { ...piece, id: `${piece.id}-${copy}` };
         },
       };
@@ -3801,7 +3853,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
           sourceOrderId: order.id,
           product: item?.product ?? "Productiefont",
           association: item?.association ?? order.association,
-          foilColor: item?.foilColor ?? state.settings.productionDefaults.defaultFoilColor,
+          foilColor: productionLineFoilColor(state, order, line),
           requestedHeightAxis: managedFontPhysicalOrientation(line),
         });
       },
@@ -3896,7 +3948,7 @@ function productionProposalBlockReason(order, state = undefined) {
   if (order.deletion?.status === "DELETED") return "order is verwijderd";
   if (!["ORDER", "CONTROL"].includes(order.stage)) return "status is niet Klaar voor productie";
   if (!order.productionLines?.length) return "geen gevalideerde productieregels beschikbaar";
-  if (state && order.items.some(({ foilColor }) => !managedFoilColor(state, foilColor))) return "een actieve beheerde foliekleur ontbreekt";
+  if (state && (order.items.some(({ foilColor }) => !managedFoilColor(state, foilColor)) || order.productionLines.some(({ foilColor }) => foilColor && !managedFoilColor(state, foilColor)))) return "een actieve beheerde foliekleur ontbreekt";
   const blockedLine = order.productionLines?.find(({ validation }) => validation.status !== "VALID");
   if (blockedLine) return blockedLine.validation.reason || "een productieregel is geblokkeerd";
   const blockedItem = order.items.find((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
@@ -4306,6 +4358,16 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const productionAssetDocumentPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/preview\.svg$/);
       if (productionAssetDocumentPreviewMatch && method === "GET") {
         binary(response, 200, await service.productionAssetDocumentPreview(token, decodeURIComponent(productionAssetDocumentPreviewMatch[1])));
+        return true;
+      }
+      const productionAssetManagedPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/preview\.svg$/);
+      if (productionAssetManagedPreviewMatch && method === "GET") {
+        binary(response, 200, await service.productionAssetPreview(token, decodeURIComponent(productionAssetManagedPreviewMatch[1])));
+        return true;
+      }
+      const productionAssetNumberPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/numbers\/(\d{1,3})\.svg$/);
+      if (productionAssetNumberPreviewMatch && method === "GET") {
+        binary(response, 200, await service.productionAssetNumberPreview(token, decodeURIComponent(productionAssetNumberPreviewMatch[1]), productionAssetNumberPreviewMatch[2]));
         return true;
       }
       const productionAssetLifecycleMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/lifecycle$/);

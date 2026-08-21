@@ -45,6 +45,8 @@ export interface SportpaleisProductionLine {
   };
   widthMm: number;
   heightMm: number;
+  /** The physical foil color belongs to this production element, not only to the order. */
+  foilColor?: string;
   quantity: number;
   preview: { kind: "LIVE_FONT" | "PROFILE_REFERENCE" | "ASSET_REFERENCE"; label: string; aspectRatioLocked: boolean };
   provenance: string;
@@ -422,6 +424,16 @@ export interface SportpaleisProductionElement {
   version?: string;
   lifecycleStatus?: "CANDIDATE" | "REVIEW" | "PRODUCTION_READY" | "ARCHIVED";
   productionMethod?: "SELF_PRODUCED" | "PHYSICAL_TRANSFER";
+  sizePolicy?: {
+    mode: "FIXED" | "DEFAULT_WITH_LIMITS" | "PROPORTIONAL_FREE";
+    aspectRatioLocked: true;
+    defaultWidthMm: number;
+    defaultHeightMm: number;
+    minWidthMm: number | null;
+    maxWidthMm: number | null;
+  };
+  defaultFoilColor?: string | null;
+  physicalTransfer?: { supplier: string | null; location: string | null; stock: number | null; reserved: number | null };
   contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[];
   applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[];
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
@@ -457,6 +469,10 @@ export interface SportpaleisProductionAssetSource {
     engine: "WBD_PRODUCTION_ASSET_INTAKE_V1";
     engineVersion: "1";
     candidateCount: number;
+    rawCandidateCount?: number;
+    equivalentComponentCount?: number;
+    glyphReviewCandidateCount?: number;
+    normalReviewCandidateCount?: number;
     requiresHumanSelection: true;
     geometryNeverAiGenerated: true;
   };
@@ -473,6 +489,11 @@ export interface SportpaleisProductionAssetSource {
     contourCount: number;
     pointCount: number;
     warnings: string[];
+    equivalentSelectionRefs?: string[];
+    equivalentCandidateIds?: string[];
+    reviewCategory?: "NUMBER_GLYPH";
+    normalReviewRepresentative?: boolean;
+    normalReviewAlternativeCount?: number;
   }[];
 }
 

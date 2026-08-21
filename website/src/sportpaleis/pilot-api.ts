@@ -254,7 +254,7 @@ export class SportpaleisPilotApi {
     provenance?: string;
     deliveryMode?: "PICKUP" | "DELIVERY";
     deliveryAddress?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" };
-    productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; quantity: number; previewLabel?: string; provenance?: string; placementRole?: string; placementRule?: Pick<NonNullable<SportpaleisProductionLine["placementRule"]>, "compositionId" | "compositeText" | "segmentIndex" | "segmentCount" | "alignment"> }[];
+    productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; foilColor?: string; quantity: number; previewLabel?: string; provenance?: string; placementRole?: string; placementRule?: Pick<NonNullable<SportpaleisProductionLine["placementRule"]>, "compositionId" | "compositeText" | "segmentIndex" | "segmentCount" | "alignment"> }[];
   }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders`, {
       method: "POST",
@@ -408,7 +408,7 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async promoteProductionAsset(sourceId: string, input: { candidateIds: string[]; name: string; ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND"; ownerName: string; productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER"; widthMm: number; heightMm: number; variantLabel?: string; contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[]; applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[]; glyphMap?: Record<string, string>; proofAuthority: "HUMAN_ACCEPTANCE"; strokeReviewAccepted?: boolean }): Promise<SportpaleisProductionElement> {
+  async promoteProductionAsset(sourceId: string, input: { candidateIds: string[]; name: string; ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND"; ownerName: string; productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER"; widthMm: number; heightMm: number; sizePolicyMode?: "FIXED" | "DEFAULT_WITH_LIMITS" | "PROPORTIONAL_FREE"; minWidthMm?: number; maxWidthMm?: number; defaultFoilColor?: string; variantLabel?: string; contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[]; applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[]; glyphMap?: Record<string, string>; proofAuthority: "HUMAN_ACCEPTANCE"; strokeReviewAccepted?: boolean }): Promise<SportpaleisProductionElement> {
     return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources/${encodeURIComponent(sourceId)}/promote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

@@ -262,6 +262,12 @@ function previewSvg(contours) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(contourBounds.minX - padding).toFixed(3)} ${(contourBounds.minY - padding).toFixed(3)} ${(contourBounds.width + padding * 2).toFixed(3)} ${(contourBounds.height + padding * 2).toFixed(3)}"><path d="${path}" fill="#101828" fill-rule="evenodd"/></svg>`;
 }
 
+export function productionAssetPreviewSvg(asset) {
+  const contours = asset?.controlledVector?.contours;
+  if (!Array.isArray(contours) || !contours.length) throw assetError("Voor deze productieasset is geen gecontroleerde vectorpreview beschikbaar.", "PRODUCTION_ASSET_PREVIEW_NOT_FOUND", 404);
+  return previewSvg(contours);
+}
+
 function documentPreviewSvg(candidates) {
   const contours = candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION").flatMap(({ controlledVector }) => controlledVector.contours.map((contour) => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x + Number(controlledVector.sourceOriginMm?.x ?? 0), y: y + Number(controlledVector.sourceOriginMm?.y ?? 0) })) })));
   return contours.length ? previewSvg(contours) : null;
@@ -290,6 +296,64 @@ function sourceCandidate(contours, index, page, warnings = [], selectionMode = "
     controlledVector: { format: "WBD_CONTOURS_V1", sourceOriginMm: { x: rawBounds.minX, y: rawBounds.minY }, contours: normalized },
     previewSvg: previewSvg(normalized),
   };
+}
+
+function visuallyEquivalentGeometryHash(candidate) {
+  const resolution = 40;
+  const candidateBounds = bounds(candidate.controlledVector.contours);
+  const inside = (point, polygon) => {
+    let result = false;
+    for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+      const a = polygon[current]; const b = polygon[previous];
+      if (((a.y > point.y) !== (b.y > point.y)) && point.x < ((b.x - a.x) * (point.y - a.y) / ((b.y - a.y) || Number.EPSILON)) + a.x) result = !result;
+    }
+    return result;
+  };
+  const raster = [];
+  for (let row = 0; row < resolution; row += 1) {
+    for (let column = 0; column < resolution; column += 1) {
+      const point = { x: candidateBounds.minX + ((column + .5) / resolution) * candidateBounds.width, y: candidateBounds.minY + ((row + .5) / resolution) * candidateBounds.height };
+      const filled = candidate.controlledVector.contours.reduce((value, contour) => inside(point, contour.points) ? !value : value, false);
+      raster.push(filled ? "1" : "0");
+    }
+  }
+  const aspectBucket = Math.round(candidate.aspectRatio / .025) * .025;
+  return sha256(Buffer.from(`${aspectBucket.toFixed(3)}|${raster.join("")}`));
+}
+
+function collapseEquivalentVectorComponents(candidates) {
+  const representatives = [];
+  const byGeometry = new Map();
+  for (const candidate of candidates) {
+    if (candidate.selectionMode !== "VECTOR_COMPONENT") {
+      representatives.push(candidate);
+      continue;
+    }
+    const visualGeometryHash = visuallyEquivalentGeometryHash(candidate);
+    const existing = byGeometry.get(visualGeometryHash);
+    if (existing) {
+      existing.equivalentSelectionRefs.push(candidate.selectionRef);
+      existing.equivalentCandidateIds.push(candidate.id);
+      continue;
+    }
+    candidate.equivalentSelectionRefs = [candidate.selectionRef];
+    candidate.equivalentCandidateIds = [candidate.id];
+    byGeometry.set(visualGeometryHash, candidate);
+    representatives.push(candidate);
+  }
+  const components = representatives.filter(({ selectionMode }) => selectionMode === "VECTOR_COMPONENT");
+  const maximumHeight = Math.max(0, ...components.map(({ boundsMm }) => boundsMm.height));
+  const glyphCandidates = representatives.filter(({ boundsMm }) => maximumHeight > 0 && boundsMm.height >= maximumHeight * 0.97 && boundsMm.width <= maximumHeight * 1.5);
+  const glyphRepresentatives = [...new Map(glyphCandidates.map((candidate) => [visuallyEquivalentGeometryHash(candidate), candidate])).values()];
+  if (glyphRepresentatives.length >= 10) for (const candidate of glyphRepresentatives) candidate.reviewCategory = "NUMBER_GLYPH";
+  const normalReviewClusters = new Map();
+  for (const candidate of representatives) {
+    const key = visuallyEquivalentGeometryHash(candidate); const existing = normalReviewClusters.get(key);
+    candidate.normalReviewRepresentative = !existing;
+    if (existing) existing.normalReviewAlternativeCount += 1;
+    else { candidate.normalReviewAlternativeCount = 1; normalReviewClusters.set(key, candidate); }
+  }
+  return { candidates: representatives, rawCandidateCount: candidates.length, equivalentComponentCount: candidates.filter(({ selectionMode }) => selectionMode === "VECTOR_COMPONENT").length - components.length, glyphReviewCandidateCount: glyphRepresentatives.length >= 10 ? glyphRepresentatives.length : 0, normalReviewCandidateCount: normalReviewClusters.size };
 }
 
 async function inspectPdf(bytes) {
@@ -467,6 +531,8 @@ export async function inspectProductionAssetSource({ bytes, filename, mimeType =
     privateEvidence = { available: true, used: true, pathCount: privateVectors.contours.length, strokePaint: privateVectors.hasStrokePaint };
   }
   if (!candidates.length) throw assetError("In deze bron zijn geen veilig selecteerbare gesloten vectorvormen gevonden.", "PRODUCTION_ASSET_NO_VECTOR_CANDIDATES");
+  const collapsed = collapseEquivalentVectorComponents(candidates);
+  candidates = collapsed.candidates;
   return {
     source: {
       filename: String(filename).slice(0, 180),
@@ -483,6 +549,10 @@ export async function inspectProductionAssetSource({ bytes, filename, mimeType =
       publicPdf: publicInspection.evidence,
       illustratorPrivate: privateEvidence,
       candidateCount: candidates.length,
+      rawCandidateCount: collapsed.rawCandidateCount,
+      equivalentComponentCount: collapsed.equivalentComponentCount,
+      glyphReviewCandidateCount: collapsed.glyphReviewCandidateCount,
+      normalReviewCandidateCount: collapsed.normalReviewCandidateCount,
       requiresHumanSelection: true,
       geometryNeverAiGenerated: true,
     },

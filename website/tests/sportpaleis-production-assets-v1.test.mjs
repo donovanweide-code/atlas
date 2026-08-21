@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { inspectProductionAssetSource, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
+import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
 import { buildWorkspaceSearchIndex } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
@@ -69,6 +70,9 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   let asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Gesanitiseerd sponsorbeeld", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm: physicalWidthMm, heightMm: physicalHeightMm, contexts: [{ type: "GENERIC", id: "all", label: "Alle teams" }], applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   assert.equal(asset.lifecycleStatus, "PRODUCTION_READY");
   assert.equal(asset.controlledVector.contours, undefined);
+  const managedPreview = await service.productionAssetPreview(operator.token, asset.id);
+  assert.equal((managedPreview.bytes.toString("utf8").match(/M /gu) ?? []).length, candidate.contourCount);
+  assert.equal(managedPreview.sha256, asset.sourceSelection.geometryHash);
   await assert.rejects(service.setProductionAssetLifecycle(operator.token, operator.csrfToken, asset.id, { lifecycleStatus: "ARCHIVED", expectedRevision: asset.revision }), (error) => error.code === "FORBIDDEN");
   asset = await service.setProductionAssetLifecycle(admin.token, admin.csrfToken, asset.id, { lifecycleStatus: "ARCHIVED", expectedRevision: asset.revision });
   assert.equal(asset.lifecycleStatus, "ARCHIVED");
@@ -87,6 +91,7 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   assert.equal(job.snapshot.artifact.format, "SVG");
   assert.equal(job.snapshot.layout.objectCount, 2);
   assert.equal(job.snapshot.scale, 1);
+  assert.equal(job.snapshot.orientation.preMirrored, true);
   assert.equal(job.snapshot.hardwareSendPerformedByWorkspace, false);
   const svg = await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8");
   assert.match(svg, /data-production-data-sha256/u);
@@ -108,6 +113,74 @@ test("Beheerde nummerbron zet willekeurige combinaties zonder fontsubstitutie en
   assert.ok(piece.requestedPhysicalSizeMm.widthMm > 70);
 });
 
+test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyphgeometrie", async (context) => {
+  const { service, admin, operator } = await fixture(context);
+  const bytes = vectorPdf(Array.from({ length: 10 }, (_, index) => ({ x: 20, y: 20 + index * 70, width: 20 + index, height: 40 })));
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-hockey-numbers.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde glyphreview" });
+  const candidates = source.candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION").slice(0, 10);
+  assert.equal(candidates.length, 10);
+  const glyphMap = Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id]));
+  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers gedeeld", ownerType: "OWN_BRAND", ownerName: "Alle hockeyverenigingen", productionMethod: "SELF_PRODUCED", heightMm: 75, applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  for (const value of ["12", "34", "77"]) {
+    const preview = await service.productionAssetNumberPreview(operator.token, asset.id, value);
+    assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, value.length);
+  }
+});
+
+test("mixed Teamorder met logo, geschaalde sponsor en hockeynummer spiegelt iedere SELF_PRODUCED batch", () => {
+  const rectangle = [{ id: "shape", closed: true, points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 1 }, { x: 0, y: 0 }] }];
+  const asset = { id: "visual-asset", version: "1", name: "Sponsorbeeld", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceSelection: { geometryHash: "A".repeat(64) }, controlledVector: { geometryHash: "A".repeat(64), contours: rectangle } };
+  const order = { id: "SP-MIRROR", association: "Fictief team", items: [] };
+  const logo = productionAssetPiece({ asset, variant: { widthMm: 80, heightMm: 40 }, line: { id: "logo", content: "Clublogo", widthMm: 80, heightMm: 40, preview: { label: "Clublogo" } }, order, foilColor: "Wit" });
+  const scaledSponsor = productionAssetPiece({ asset, variant: { widthMm: 80, heightMm: 40 }, line: { id: "sponsor", content: "Sponsor", widthMm: 120, heightMm: 60, preview: { label: "Sponsor" } }, order, foilColor: "Zwart" });
+  const glyph = (digit) => ({ candidateId: `candidate-${digit}`, geometryHash: digit.repeat(64), widthUnits: 9, heightUnits: 20, contours: [{ id: `glyph-${digit}`, closed: true, points: [{ x: 0, y: 0 }, { x: 9, y: 0 }, { x: 9, y: 20 }, { x: 0, y: 20 }, { x: 0, y: 0 }] }] });
+  const numberAsset = { id: "hockey-numbers", version: "1", name: "Hockeynummers", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", applications: [{ kind: "NUMBER_SET" }], sourceSelection: { geometryHash: "B".repeat(64) }, numberGlyphs: Object.fromEntries(Array.from({ length: 10 }, (_, digit) => [String(digit), glyph(String(digit))])) };
+  const number = productionAssetPiece({ asset: numberAsset, variant: { heightMm: 75 }, line: { id: "number", content: "34", widthMm: 80, heightMm: 75, preview: { label: "Hockeynummer 34" } }, order, foilColor: "Wit" });
+  assert.equal(logo.productionRule.mirror, true);
+  assert.equal(scaledSponsor.productionRule.mirror, true);
+  assert.equal(number.productionRule.mirror, true);
+  assert.equal(scaledSponsor.requestedPhysicalSizeMm.widthMm, 120);
+  const batch = createCutJobBatch({ organizationId: "sportpaleis", orderId: order.id, revision: 1, attemptIdPrefix: "assets-mirror", createdAt: "2026-08-21T00:00:00.000Z", pieces: [logo, scaledSponsor, number], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } });
+  assert.equal(batch.jobs.length, 2);
+  assert.ok(batch.jobs.every((job) => job.productionGeometry.groups.every(({ mirrorApplied }) => mirrorApplied)));
+  const finalSvgs = batch.jobs.map((job) => createProductionPreview(job).svg);
+  assert.equal(finalSvgs.reduce((sum, svg) => sum + (svg.match(/<path /gu) ?? []).length, 0), batch.jobs.reduce((sum, job) => sum + job.productionGeometry.contours.length, 0));
+  assert.ok([logo, scaledSponsor, number].every(({ sourceOrderId }) => sourceOrderId === order.id));
+  assert.ok(batch.jobs.every(({ readyForPrinting }) => readyForPrinting));
+});
+
+test("meerdere visuele assets houden eigen veilige maat en foliekleur en groeperen server-side", async (context) => {
+  const { service, admin, operator } = await fixture(context);
+  const bytes = vectorPdf([{ x: 20, y: 20, width: 100, height: 50 }, { x: 300, y: 300, width: 40, height: 80 }]);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-two-sponsors.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde multi-asset regressie" });
+  const firstHeight = 80 * source.candidates[0].boundsMm.height / source.candidates[0].boundsMm.width;
+  const secondHeight = 40 * source.candidates[1].boundsMm.height / source.candidates[1].boundsMm.width;
+  const first = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [source.candidates[0].id], name: "Sponsor wit", ownerType: "SPONSOR", ownerName: "Sponsor A", productionMethod: "SELF_PRODUCED", widthMm: 80, heightMm: firstHeight, sizePolicyMode: "FIXED", defaultFoilColor: "Wit", applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const second = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [source.candidates[1].id], name: "Sponsor zwart", ownerType: "SPONSOR", ownerName: "Sponsor B", productionMethod: "SELF_PRODUCED", widthMm: 40, heightMm: secondHeight, sizePolicyMode: "DEFAULT_WITH_LIMITS", minWidthMm: 20, maxWidthMm: 60, defaultFoilColor: "Zwart", applications: [{ kind: "SPONSOR", placement: "Rug" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  await assert.rejects(service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Maatgrens", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: "", size: "", quantity: 1, personalization: "Sponsor", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ type: "LOGO", content: second.name, sourceId: second.id, widthMm: 70, heightMm: 70 * secondHeight / 40, foilColor: "Zwart", quantity: 1, provenance: "test" }] }, "assets-size-invalid"), (error) => error.code === "PRODUCTION_ASSET_SIZE_OUT_OF_RANGE");
+  const created = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Twee sponsors", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: "", size: "", quantity: 3, personalization: "Twee sponsors", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ id: "white", type: "LOGO", content: first.name, sourceId: first.id, widthMm: 80, heightMm: firstHeight, foilColor: "Wit", quantity: 2, provenance: "test" }, { id: "black", type: "LOGO", content: second.name, sourceId: second.id, widthMm: 30, heightMm: 30 * secondHeight / 40, foilColor: "Zwart", quantity: 1, provenance: "test" }] }, "assets-two-color-order")).value;
+  assert.deepEqual(created.productionLines.map(({ foilColor }) => foilColor), ["Wit", "Zwart"]);
+  const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "assets-two-color-control")).value;
+  const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "assets-two-color-proposal")).value;
+  assert.deepEqual(proposal.groups.map(({ foilColor }) => foilColor).sort(), ["Wit", "Zwart"]);
+  assert.deepEqual(proposal.groups.map(({ productionLineRefs }) => productionLineRefs.length), [1, 1]);
+});
+
+test("PHYSICAL_TRANSFER blijft beheersbaar maar gaat nooit door de SELF_PRODUCED plotroute", async (context) => {
+  const { service, admin, operator } = await fixture(context);
+  const bytes = vectorPdf([{ x: 20, y: 20, width: 100, height: 50 }]);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-transfer.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde transfer-regressie" });
+  const candidate = source.candidates[0]; const widthMm = 80; const heightMm = widthMm * candidate.boundsMm.height / candidate.boundsMm.width;
+  const transfer = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Extern clublogo", ownerType: "ASSOCIATION", ownerName: "Fictieve club", productionMethod: "PHYSICAL_TRANSFER", widthMm, heightMm, sizePolicyMode: "FIXED", applications: [{ kind: "LOGO", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  assert.equal(transfer.productionMethod, "PHYSICAL_TRANSFER");
+  assert.deepEqual(transfer.physicalTransfer, { supplier: null, location: null, stock: null, reserved: null });
+  const order = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Transfer", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: "", size: "", quantity: 1, personalization: "Extern logo", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ type: "LOGO", content: transfer.name, sourceId: transfer.id, widthMm, heightMm, foilColor: "Wit", quantity: 1, provenance: "test" }] }, "assets-transfer-order")).value;
+  assert.equal(order.productionLines[0].validation.status, "BLOCKED");
+  assert.match(order.productionLines[0].validation.reason, /fysieke transfer/u);
+  const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, order.id, order.revision, "assets-transfer-control")).value;
+  await assert.rejects(service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "assets-transfer-proposal"), (error) => error.code === "ORDER_NOT_READY" && /fysieke transfer/u.test(error.message));
+});
+
 test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten bootstrap", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
@@ -115,15 +188,26 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /Visuele productiebibliotheek/u);
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
-  assert.match(source, /Volledig document/u);
+  assert.match(source, /Volledig bronoverzicht/u);
   assert.match(source, /Precies vectoronderdeel kiezen/u);
   assert.match(source, /data-production-asset-lifecycle-form/u);
-  assert.match(source, /Beeldmerk uit bibliotheek/u);
+  assert.match(source, /Logo\/opdruk toevoegen/u);
   assert.match(source, /exacte vectornummerbron/u);
-  assert.match(source, /Human Acceptance/u);
+  assert.match(source, /Dit is exact wat wij straks willen produceren/u);
+  assert.match(source, /\+ Technische details/u);
+  assert.match(source, /Unieke cijfervorm/u);
+  assert.match(source, /teamAssetDrafts/u);
+  assert.match(source, /freeAssetDrafts/u);
+  assert.match(source, /data-asset-draft-field="foilColor"/u);
+  assert.match(source, /data-asset-draft-field="widthMm"/u);
+  assert.match(source, /lowerFilename\.endsWith\("\.ai"\) \? "application\/illustrator"/u);
+  assert.doesNotMatch(source, /\$\{source\.candidates\.length\} vectorvorm/u);
   assert.match(assetModule, /geometryNeverAiGenerated:\s*true/u);
+  assert.match(assetModule, /collapseEquivalentVectorComponents/u);
   assert.match(server, /dataBase64: _dataBase64/u);
   assert.match(server, /PRODUCTION_ASSET_IDENTITY_MISMATCH/u);
+  assert.match(server, /PRODUCTION_ASSET_SIZE_OUT_OF_RANGE/u);
+  assert.match(server, /PRODUCTION_LINE_FOIL_COLOR_INVALID/u);
 });
 
 test("Productieasset-search is visual-first en zoekt op gedeelde context", () => {
