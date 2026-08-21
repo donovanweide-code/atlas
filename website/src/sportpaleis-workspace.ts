@@ -228,7 +228,7 @@ function workspaceSearchResults(items: readonly WorkspaceSearchItem[], query: st
   if (!items.length) return `<div class="sp-empty sp-empty--compact"><h2>Niets gevonden</h2><p>Controleer het nummer of probeer een deel van de naam.</p></div>`;
   const groups = new Map<string, WorkspaceSearchItem[]>();
   for (const item of items) groups.set(item.group, [...(groups.get(item.group) ?? []), item]);
-  return [...groups].map(([group, results]) => `<section class="sp-search-group"><h2>${esc(group)}</h2>${results.map((item) => `<a data-link href="${esc(item.href)}"><span><strong>${esc(item.title)}</strong><small>${esc(item.context)}</small></span><b>Openen ›</b></a>`).join("")}</section>`).join("");
+  return [...groups].map(([group, results]) => `<section class="sp-search-group"><h2>${esc(group)}</h2>${results.map((item) => `<a data-link href="${esc(item.href)}"${item.previewSrc ? ` class="sp-search-result--visual"` : ""}>${item.previewSrc ? `<img loading="lazy" src="${esc(item.previewSrc)}" alt="">` : ""}<span><strong>${esc(item.title)}</strong><small>${esc(item.context)}</small></span><b>Openen ›</b></a>`).join("")}</section>`).join("");
 }
 
 function webshop(state: PilotBootstrap): string {

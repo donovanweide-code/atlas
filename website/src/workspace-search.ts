@@ -1,6 +1,6 @@
 import type { PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 
-export type WorkspaceSearchKind = "ORDER" | "ARTICLE" | "ASSOCIATION" | "EMPLOYEE" | "PRODUCTION_JOB";
+export type WorkspaceSearchKind = "ORDER" | "ARTICLE" | "ASSOCIATION" | "EMPLOYEE" | "PRODUCTION_JOB" | "PRODUCTION_ASSET";
 
 export interface WorkspaceSearchItem {
   id: string;
@@ -10,6 +10,7 @@ export interface WorkspaceSearchItem {
   context: string;
   href: string;
   terms: string;
+  previewSrc?: string;
 }
 
 function normalized(value: unknown): string {
@@ -67,6 +68,16 @@ export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/worksp
     href: `${base}/productie/historie/${encodeURIComponent(job.id)}`,
     terms: normalized([job.jobNumber, job.snapshot.association, job.initiatedBy.name, ...job.snapshot.orderIds, ...job.snapshot.elements.map(({ value }) => value)].join(" ")),
   });
+  if (state.capabilities.operator || state.capabilities.admin) for (const asset of (state.productionElements ?? []).filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
+    const candidateId = asset.sourceSelection?.candidateIds[0];
+    items.push({
+      id: asset.id, kind: "PRODUCTION_ASSET", group: "Productieassets", title: asset.name,
+      context: [asset.ownerName, ...(asset.contexts ?? []).map(({ label }) => label), ...(asset.applications ?? []).map(({ kind }) => kind)].filter(Boolean).join(" · "),
+      href: `${base}/productie/elementen#${encodeURIComponent(asset.id)}`,
+      terms: normalized([asset.name, asset.ownerName, ...(asset.contexts ?? []).map(({ label }) => label), ...(asset.applications ?? []).map(({ kind, placement }) => `${kind} ${placement ?? ""}`)].join(" ")),
+      ...(asset.sourceId && candidateId ? { previewSrc: `${base.replace(/\/workspace\/sportpaleis$/u, "")}/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(asset.sourceId)}/candidates/${encodeURIComponent(candidateId)}/preview.svg` } : {}),
+    });
+  }
   return items;
 }
 

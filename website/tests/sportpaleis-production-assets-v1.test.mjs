@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { inspectProductionAssetSource, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
+import { buildWorkspaceSearchIndex } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
 const passwords = { kevin: "Assets-Kevin-2026!", patrick: "Assets-Patrick-2026!", collega: "Assets-Store-2026!", "donovan-support": "Assets-Support-2026!" };
@@ -123,4 +124,15 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(assetModule, /geometryNeverAiGenerated:\s*true/u);
   assert.match(server, /dataBase64: _dataBase64/u);
   assert.match(server, /PRODUCTION_ASSET_IDENTITY_MISMATCH/u);
+});
+
+test("Productieasset-search is visual-first en zoekt op gedeelde context", () => {
+  const [item] = buildWorkspaceSearchIndex({
+    orders: [], articles: [], associations: [], employees: [], productionJobs: [],
+    capabilities: { admin: true, operator: true },
+    productionElements: [{ id: "asset-yanmar", name: "Yanmar", ownerName: "Yanmar", lifecycleStatus: "PRODUCTION_READY", sourceId: "source-city", sourceSelection: { candidateIds: ["candidate-yanmar"] }, contexts: [{ type: "ASSOCIATION", id: "almere-city", label: "Almere City" }], applications: [{ kind: "SPONSOR", placement: "Borst" }] }],
+  }, "/workspace/sportpaleis");
+  assert.equal(item.kind, "PRODUCTION_ASSET");
+  assert.match(item.terms, /almere city/u);
+  assert.equal(item.previewSrc, "/api/sportpaleis/v1/production-asset-sources/source-city/candidates/candidate-yanmar/preview.svg");
 });
