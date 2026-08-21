@@ -858,6 +858,9 @@ export function validateSportpaleisPilotState(input) {
       const reference = state.productionAssetSources.find(({ id }) => id === source.conversion.derivedFromSourceId);
       if (!reference || reference.original.sha256 !== source.conversion.derivedFromSha256 || source.fidelity?.referenceSha256 !== reference.original.sha256) throw new Error("Afgeleide productiebron mist immutable herleidbaarheid naar het origineel.");
     }
+    if (source.reviewDraft) {
+      if (!Number.isInteger(source.reviewDraft.revision) || source.reviewDraft.revision < 1 || source.reviewDraft.selectedCandidateIds.some((id) => !source.candidates.some((candidate) => candidate.id === id))) throw new Error("Ongeldig concept voor productiebronreview.");
+    }
   }
   for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
     if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
@@ -2110,7 +2113,27 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       state.productionAssetSources ??= [];
       const existing = state.productionAssetSources.find(({ original }) => original.sha256 === inspected.source.sha256);
-      if (existing) return { state, value: publicProductionAssetSource(existing), changed: false };
+      if (existing) {
+        if (existing.inspection?.engine === inspected.inspection.engine && existing.inspection?.engineVersion !== inspected.inspection.engineVersion) {
+          const previousCandidates = new Map(existing.candidates.map((candidate) => [candidate.id, candidate]));
+          const candidateIdByHash = new Map(inspected.candidates.map((candidate) => [candidate.geometryHash, candidate.id]));
+          if (existing.reviewDraft) {
+            const remap = (id) => candidateIdByHash.get(previousCandidates.get(id)?.geometryHash) ?? null;
+            existing.reviewDraft.selectedCandidateIds = existing.reviewDraft.selectedCandidateIds.map(remap).filter(Boolean);
+            existing.reviewDraft.glyphAssignments = Object.fromEntries(Object.entries(existing.reviewDraft.glyphAssignments).map(([id, value]) => [remap(id), value]).filter(([id]) => id));
+            existing.reviewDraft.revision += 1;
+            existing.reviewDraft.updatedAt = iso();
+            existing.reviewDraft.updatedBy = { userId: user.id, name: user.name };
+          }
+          existing.inspection = inspected.inspection;
+          existing.documentPreviewSvg = inspected.documentPreviewSvg;
+          existing.candidates = inspected.candidates;
+          existing.revision = Number(existing.revision ?? 1) + 1;
+          audit(state, user.id, "Productiebron opnieuw visueel ingedeeld", existing.id, { sourceSha256: existing.original.sha256, engineVersion: inspected.inspection.engineVersion, candidateCount: inspected.candidates.length, originalUnchanged: true });
+          return { state, value: publicProductionAssetSource(existing) };
+        }
+        return { state, value: publicProductionAssetSource(existing), changed: false };
+      }
       const derivedFromSourceId = optional(payload.derivedFromSourceId, 180) || null;
       const canonicalSvg = inspected.source.format === "SVG";
       const conversionMethod = allowedValue(payload.conversionMethod ?? (canonicalSvg ? "HUMAN_VERIFIED_SVG" : "ORIGINAL_PDF_INTERPRETATION"), ["HUMAN_VERIFIED_SVG", "ORIGINAL_PDF_INTERPRETATION", "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT"], "Conversiemethode");
@@ -2164,6 +2187,41 @@ export class SportpaleisPilotService {
       source.fidelity = { status, comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.fidelity?.referenceSha256 ?? source.original.sha256, checkedAt: iso(), checkedBy: { userId: user.id, name: user.name }, note };
       source.revision = Number(source.revision ?? 1) + 1;
       audit(state, user.id, status === "MATCHED" ? "Productiebron fidelity bevestigd" : "Productiebron fidelity afgekeurd", source.id, { status, sourceSha256: source.original.sha256, referenceSha256: source.fidelity.referenceSha256, conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION", note });
+      return { state, value: publicProductionAssetSource(source) };
+    });
+    return result.value;
+  }
+
+  async saveProductionAssetReviewDraft(token, csrfToken, sourceId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    const result = await this.store.mutate(async (state) => {
+      const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+      if (!source) throw Object.assign(new Error("Productiebron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+      const currentRevision = Number(source.reviewDraft?.revision ?? 0);
+      if (Number(payload.revision ?? 0) !== currentRevision) throw Object.assign(new Error("De controle is intussen op een andere werkplek gewijzigd. De nieuwste keuzes blijven bewaard."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision });
+      const selectedCandidateIds = [...new Set((Array.isArray(payload.selectedCandidateIds) ? payload.selectedCandidateIds : []).map(String))];
+      if (selectedCandidateIds.some((id) => !source.candidates.some((candidate) => candidate.id === id))) throw Object.assign(new Error("Een gekozen voorbeeld hoort niet bij deze bron."), { statusCode: 400, code: "PRODUCTION_ASSET_SELECTION_INVALID" });
+      const glyphAssignments = Object.fromEntries(Object.entries(payload.glyphAssignments ?? {}).filter(([candidateId, value]) => source.candidates.some(({ id }) => id === candidateId) && (value === "" || value === "NOT_USED" || /^\d$/u.test(String(value)))).map(([candidateId, value]) => [candidateId, String(value)]));
+      const text = (value, max = 160) => String(value ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").slice(0, max);
+      source.reviewDraft = {
+        revision: currentRevision + 1,
+        updatedAt: iso(),
+        updatedBy: { userId: user.id, name: user.name },
+        selectedCandidateIds,
+        glyphAssignments,
+        name: text(payload.name),
+        primaryContextKey: text(payload.primaryContextKey, 260),
+        additionalContextKeys: [...new Set((Array.isArray(payload.additionalContextKeys) ? payload.additionalContextKeys : []).map((value) => text(value, 260)).filter(Boolean))].slice(0, 20),
+        applicationKind: allowedValue(payload.applicationKind ?? "ARTWORK", ["LOGO", "SPONSOR", "NUMBER_SET", "ARTWORK"], "Gebruik"),
+        productionMethod: allowedValue(payload.productionMethod ?? "SELF_PRODUCED", ["SELF_PRODUCED", "PHYSICAL_TRANSFER"], "Productiewijze"),
+        widthMm: text(payload.widthMm, 20),
+        heightMm: text(payload.heightMm, 20),
+        sizePolicyMode: allowedValue(payload.sizePolicyMode ?? "FIXED", ["FIXED", "DEFAULT_WITH_LIMITS", "PROPORTIONAL_FREE"], "Maatbeleid"),
+        minWidthMm: text(payload.minWidthMm, 20),
+        maxWidthMm: text(payload.maxWidthMm, 20),
+        defaultFoilColor: text(payload.defaultFoilColor, 40),
+        strokeReviewAccepted: payload.strokeReviewAccepted === true,
+      };
       return { state, value: publicProductionAssetSource(source) };
     });
     return result.value;
@@ -2231,20 +2289,24 @@ export class SportpaleisPilotService {
       const selectedWidth = Math.max(...contours.flatMap(({ points }) => points.map(({ x }) => x)));
       const selectedHeight = Math.max(...contours.flatMap(({ points }) => points.map(({ y }) => y)));
       if (!(selectedWidth > 0) || !(selectedHeight > 0)) throw Object.assign(new Error("De geselecteerde vector heeft geen geldige fysieke begrenzing."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
-      if (applications.some(({ kind }) => kind === "NUMBER_SET")) {
+      const isNumberSet = applications.some(({ kind }) => kind === "NUMBER_SET");
+      let hasProductionSize = widthMm > 0 || heightMm > 0;
+      if (isNumberSet) {
         if (!(heightMm > 0)) throw Object.assign(new Error("Leg voor een nummerbron de exacte fysieke cijferhoogte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
         if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;
-      } else {
-        if (!(widthMm > 0) && !(heightMm > 0)) throw Object.assign(new Error("Leg een fysieke breedte of hoogte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+        hasProductionSize = true;
+      } else if (hasProductionSize) {
         if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;
         if (!(heightMm > 0)) heightMm = widthMm * selectedHeight / selectedWidth;
         if (Math.abs((widthMm / heightMm) - (selectedWidth / selectedHeight)) > 0.002) {
           throw Object.assign(new Error("De fysieke maat moet de vaste verhouding van de geselecteerde vector behouden."), { statusCode: 400, code: "PRODUCTION_ASSET_ASPECT_RATIO_MISMATCH" });
         }
+      } else {
+        widthMm = null; heightMm = null;
       }
-      const requestedSizePolicy = applications.some(({ kind }) => kind === "NUMBER_SET")
+      const requestedSizePolicy = isNumberSet
         ? "FIXED"
-        : allowedValue(payload.sizePolicyMode ?? "FIXED", ["FIXED", "DEFAULT_WITH_LIMITS", "PROPORTIONAL_FREE"], "Maatbeleid");
+        : hasProductionSize ? allowedValue(payload.sizePolicyMode ?? "FIXED", ["FIXED", "DEFAULT_WITH_LIMITS", "PROPORTIONAL_FREE"], "Maatbeleid") : null;
       let minWidthMm = payload.minWidthMm === "" || payload.minWidthMm === undefined ? null : Number(payload.minWidthMm);
       let maxWidthMm = payload.maxWidthMm === "" || payload.maxWidthMm === undefined ? null : Number(payload.maxWidthMm);
       if (requestedSizePolicy === "FIXED") { minWidthMm = widthMm; maxWidthMm = widthMm; }
@@ -2253,7 +2315,7 @@ export class SportpaleisPilotService {
       }
       if (requestedSizePolicy === "PROPORTIONAL_FREE") { minWidthMm = null; maxWidthMm = null; }
       let numberGlyphs;
-      if (applications.some(({ kind }) => kind === "NUMBER_SET")) {
+      if (isNumberSet) {
         const glyphEntries = Object.entries(payload.glyphMap ?? {}).filter(([, candidateId]) => String(candidateId).trim());
         if (glyphEntries.length !== 10 || new Set(glyphEntries.map(([digit]) => digit)).size !== 10 || glyphEntries.some(([digit]) => !/^\d$/u.test(digit))) throw Object.assign(new Error("Koppel voor een nummerbron exact de cijfers 0 tot en met 9."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MAP_INCOMPLETE" });
         numberGlyphs = Object.fromEntries(glyphEntries.map(([digit, candidateId]) => {
@@ -2261,6 +2323,11 @@ export class SportpaleisPilotService {
           if (!candidate) throw Object.assign(new Error(`De vectorvorm voor cijfer ${digit} is niet geselecteerd.`), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MAP_INVALID" });
           return [digit, { candidateId: candidate.id, geometryHash: candidate.geometryHash, widthUnits: candidate.boundsMm.width, heightUnits: candidate.boundsMm.height, contours: structuredClone(candidate.controlledVector.contours) }];
         }));
+      }
+      const contexts = Array.isArray(payload.contexts) ? payload.contexts.slice(0, 100).map((context) => ({ type: allowedValue(context.type, ["ASSOCIATION", "SPONSOR", "ORGANIZATION", "TEAM", "ARTICLE", "ORDER", "GENERIC"], "Contexttype"), id: requiredText(context.id, "Context-ID", 160), label: requiredText(context.label, "Context", 160) })) : [];
+      for (const context of contexts.filter(({ type }) => type === "ASSOCIATION")) {
+        const association = state.associations.find(({ id, name }) => id === context.id || name === context.label);
+        if (!association || association.name !== context.label) throw Object.assign(new Error("Kies een bestaande vereniging uit Workspace."), { statusCode: 400, code: "PRODUCTION_ASSET_ASSOCIATION_CONTEXT_INVALID" });
       }
       const element = {
         id: `production-asset-${randomBytes(8).toString("hex")}`,
@@ -2271,13 +2338,13 @@ export class SportpaleisPilotService {
         sourceStatus: "AVAILABLE",
         sourceId: source.id,
         version: `1-${geometryHash.slice(0, 12)}`,
-        lifecycleStatus: "PRODUCTION_READY",
+        lifecycleStatus: hasProductionSize ? "PRODUCTION_READY" : "REVIEW",
         productionMethod,
-        contexts: Array.isArray(payload.contexts) ? payload.contexts.slice(0, 100).map((context) => ({ type: allowedValue(context.type, ["ASSOCIATION", "TEAM", "ARTICLE", "ORDER", "GENERIC"], "Contexttype"), id: requiredText(context.id, "Context-ID", 160), label: requiredText(context.label, "Context", 160) })) : [],
+        contexts,
         applications,
         sourceSelection: { candidateIds, selectionRef: candidates.flatMap(({ equivalentSelectionRefs, selectionRef }) => equivalentSelectionRefs?.length ? equivalentSelectionRefs : [selectionRef]).join("+"), geometryHash },
         controlledVector: { format: "WBD_CONTOURS_V1", geometryHash, contourCount: contours.length, pointCount: contours.reduce((sum, contour) => sum + contour.points.length, 0), contours },
-        sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm },
+        ...(hasProductionSize ? { sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm } } : {}),
         defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
         ...(productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
         ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
@@ -2286,7 +2353,8 @@ export class SportpaleisPilotService {
         variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
       };
       state.productionElements.push(element);
-      audit(state, user.id, "Productieasset vrijgegeven", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, rawToken: undefined });
+      delete source.reviewDraft;
+      audit(state, user.id, hasProductionSize ? "Productieasset vrijgegeven" : "Productieasset veilig bewaard", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, rawToken: undefined });
       return { state, value: publicProductionElement(element) };
     });
     return result.value;
@@ -2303,9 +2371,22 @@ export class SportpaleisPilotService {
         const activeReference = state.orders.find(({ stage, productionLines }) => stage !== "DONE" && productionLines?.some(({ source }) => source?.kind === "PRODUCTION_ELEMENT" && source.id === element.id));
         if (activeReference) throw Object.assign(new Error(`Deze asset wordt nog gebruikt door open order ${activeReference.id}. Rond die eerst af.`), { statusCode: 409, code: "PRODUCTION_ASSET_IN_ACTIVE_USE" });
       }
+      if (status === "PRODUCTION_READY" && element.lifecycleStatus === "REVIEW") {
+        const widthMm = Number(payload.widthMm);
+        if (!(widthMm > 0) || widthMm > 1000) throw Object.assign(new Error("Leg eerst een betrouwbare fysieke breedte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+        const points = element.controlledVector?.contours?.flatMap(({ points }) => points) ?? [];
+        const minX = Math.min(...points.map(({ x }) => x)); const maxX = Math.max(...points.map(({ x }) => x));
+        const minY = Math.min(...points.map(({ y }) => y)); const maxY = Math.max(...points.map(({ y }) => y));
+        const sourceWidth = maxX - minX; const sourceHeight = maxY - minY;
+        if (!(sourceWidth > 0) || !(sourceHeight > 0)) throw Object.assign(new Error("De bewaarde vector heeft geen geldige fysieke begrenzing."), { statusCode: 409, code: "PRODUCTION_ASSET_SIZE_MISSING" });
+        const heightMm = Math.round((widthMm * sourceHeight / sourceWidth) * 1000) / 1000;
+        element.sizePolicy = { mode: "FIXED", aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm: widthMm, maxWidthMm: widthMm };
+        element.variants[0].widthMm = widthMm;
+        element.variants[0].heightMm = heightMm;
+      }
       element.lifecycleStatus = status;
       element.revision += 1;
-      audit(state, user.id, status === "ARCHIVED" ? "Productieasset gearchiveerd" : "Productieasset opnieuw productieklaar gemaakt", element.id, { lifecycleStatus: status, sourceId: element.sourceId, version: element.version });
+      audit(state, user.id, status === "ARCHIVED" ? "Productieasset gearchiveerd" : "Productieasset productieklaar gemaakt", element.id, { lifecycleStatus: status, sourceId: element.sourceId, version: element.version, physicalSize: element.sizePolicy ? { widthMm: element.sizePolicy.defaultWidthMm, heightMm: element.sizePolicy.defaultHeightMm } : null });
       return { state, value: publicProductionElement(element) };
     });
     return result.value;
@@ -4415,6 +4496,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const productionAssetFidelityMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/fidelity$/);
       if (productionAssetFidelityMatch && method === "POST") {
         json(response, 200, await service.reviewProductionAssetSourceFidelity(token, csrf, decodeURIComponent(productionAssetFidelityMatch[1]), await readJson(request)));
+        return true;
+      }
+      const productionAssetReviewDraftMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/review-draft$/);
+      if (productionAssetReviewDraftMatch && method === "POST") {
+        json(response, 200, await service.saveProductionAssetReviewDraft(token, csrf, decodeURIComponent(productionAssetReviewDraftMatch[1]), await readJson(request)));
         return true;
       }
       const productionAssetPromoteMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/promote$/);

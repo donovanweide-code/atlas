@@ -434,7 +434,7 @@ export interface SportpaleisProductionElement {
   };
   defaultFoilColor?: string | null;
   physicalTransfer?: { supplier: string | null; location: string | null; stock: number | null; reserved: number | null };
-  contexts?: { type: "ASSOCIATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[];
+  contexts?: { type: "ASSOCIATION" | "SPONSOR" | "ORGANIZATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[];
   applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[];
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
   controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
@@ -482,9 +482,28 @@ export interface SportpaleisProductionAssetSource {
   provenance: string;
   uploadedAt: string;
   uploadedBy: { userId: string; name: string };
+  reviewDraft?: {
+    revision: number;
+    updatedAt: string;
+    updatedBy: { userId: string; name: string };
+    selectedCandidateIds: string[];
+    glyphAssignments: Record<string, string>;
+    name: string;
+    primaryContextKey: string;
+    additionalContextKeys: string[];
+    applicationKind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK";
+    productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER";
+    widthMm: string;
+    heightMm: string;
+    sizePolicyMode: "FIXED" | "DEFAULT_WITH_LIMITS" | "PROPORTIONAL_FREE";
+    minWidthMm: string;
+    maxWidthMm: string;
+    defaultFoilColor: string;
+    strokeReviewAccepted: boolean;
+  };
   inspection: {
     engine: "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1" | "WBD_PRODUCTION_ASSET_INTAKE_V1";
-    engineVersion: "1";
+    engineVersion: "1" | "2";
     candidateCount: number;
     rawCandidateCount?: number;
     equivalentComponentCount?: number;
@@ -508,7 +527,7 @@ export interface SportpaleisProductionAssetSource {
     warnings: string[];
     equivalentSelectionRefs?: string[];
     equivalentCandidateIds?: string[];
-    reviewCategory?: "NUMBER_GLYPH";
+    reviewCategory?: "NUMBER_GLYPH" | "ARTWORK_CANDIDATE";
     normalReviewRepresentative?: boolean;
     normalReviewAlternativeCount?: number;
   }[];

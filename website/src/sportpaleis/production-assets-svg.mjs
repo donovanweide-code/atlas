@@ -270,12 +270,51 @@ function numberGlyphCandidates(contours, sourceGroups, warnings) {
   return [...unique.values()].map((group, index) => ({ ...candidate(group, index, "VECTOR_COMPONENT", warnings), reviewCategory: "NUMBER_GLYPH", normalReviewRepresentative: true, normalReviewAlternativeCount: 1 }));
 }
 
+function artworkGroupCandidates(contours, sourceGroups, warnings) {
+  const fullBounds = contourBounds(contours);
+  const usableGroups = sourceGroups
+    .map((group) => ({ ...group, bounds: contourBounds(group.contours) }))
+    .filter(({ bounds }) => bounds?.width >= 1 && bounds?.height >= 1)
+    .filter(({ bounds }) => bounds.width * bounds.height >= fullBounds.width * fullBounds.height * 0.0025);
+  const byId = new Map(usableGroups.map((group) => [group.id, group]));
+  const roots = usableGroups.filter(({ parentGroupId }) => !parentGroupId || !byId.has(parentGroupId));
+  const distinctChildren = (group) => {
+    const seen = new Set();
+    return usableGroups.filter(({ parentGroupId }) => parentGroupId === group.id).filter((child) => {
+      const normalized = normalizeContours(child.contours);
+      const hash = normalized.length ? sha256(Buffer.from(JSON.stringify(normalized))) : null;
+      if (!hash || seen.has(hash)) return false;
+      seen.add(hash);
+      return true;
+    });
+  };
+  let frontier = roots;
+  // Illustrator commonly wraps a sheet once or twice before the actual logo
+  // groups. Descend only through a single wrapper; stop at the first genuine
+  // branch so nested letters/paths are never surfaced individually.
+  while (frontier.length === 1) {
+    const children = distinctChildren(frontier[0]);
+    if (!children.length) break;
+    frontier = children;
+    if (frontier.length > 1) break;
+  }
+  if (frontier.length < 2 || frontier.length > 24) return [];
+  return frontier.map((group, index) => ({
+    ...candidate(group.contours, index + 1, "OBJECT_GROUP", warnings),
+    suggestedName: `Mogelijke opdruk ${index + 1}`,
+    reviewCategory: "ARTWORK_CANDIDATE",
+    normalReviewRepresentative: true,
+    normalReviewAlternativeCount: 1,
+  })).filter(Boolean);
+}
+
 function parseSvg(source, intakeKind) {
   if (/<!ENTITY\b/iu.test(source) || /<!DOCTYPE[^>]*\[/iu.test(source)) throw svgError("De SVG bevat niet-toegestane XML-entiteiten.", "PRODUCTION_ASSET_SVG_ENTITY_UNSAFE");
   if (/<(?:script|foreignObject|iframe|object|embed|image|text|tspan|style|use|symbol|filter|mask|pattern)\b/iu.test(source)) throw svgError("De SVG bevat tekst, raster of niet-toegestane actieve/indirecte inhoud.", "PRODUCTION_ASSET_SVG_CONTENT_UNSAFE");
   if (/\son[a-z]+\s*=/iu.test(source) || /(?:href|xlink:href)\s*=/iu.test(source) || /url\s*\(/iu.test(source)) throw svgError("De SVG bevat een externe of actieve verwijzing.", "PRODUCTION_ASSET_SVG_REFERENCE_UNSAFE");
   const clean = source.replace(/<\?xml[^>]*>/giu, "").replace(/<!DOCTYPE[^>]*>/giu, "").replace(/<!--[\s\S]*?-->/gu, "");
-  const stack = [{ tag: "root", matrix: [1, 0, 0, 1, 0, 0], hidden: false, contours: null }]; const contours = []; const sourceGroups = [];
+  const stack = [{ tag: "root", matrix: [1, 0, 0, 1, 0, 0], hidden: false, contours: null, groupId: null }]; const contours = []; const sourceGroups = [];
+  let nextGroupId = 1;
   let strokeCount = 0; let pathCount = 0; let transformCount = 0;
   for (const match of clean.matchAll(/<\s*(\/?)\s*([a-zA-Z][\w:.-]*)([^>]*)>/gu)) {
     const closing = Boolean(match[1]); const tag = match[2].toLowerCase(); const raw = match[3] ?? ""; const selfClosing = /\/\s*$/u.test(raw);
@@ -283,7 +322,7 @@ function parseSvg(source, intakeKind) {
     if (closing) {
       if (stack.length <= 1 || stack.at(-1).tag !== tag) throw svgError("De SVG-structuur is niet geldig gesloten.", "PRODUCTION_ASSET_SVG_XML_INVALID");
       const closed = stack.pop();
-      if (closed.tag === "g" && closed.contours?.length) sourceGroups.push(closed.contours);
+      if (closed.tag === "g" && closed.contours?.length) sourceGroups.push({ id: closed.groupId, parentGroupId: closed.parentGroupId, contours: closed.contours });
       continue;
     }
     const attrs = attributes(raw); if (attrs.style) throw svgError("Inline SVG-stijlen worden niet als productiecontract geaccepteerd.", "PRODUCTION_ASSET_SVG_STYLE_UNSUPPORTED");
@@ -297,7 +336,11 @@ function parseSvg(source, intakeKind) {
       const parsed = primitiveContours(tag, attrs, matrix, fillVisible); pathCount += 1; contours.push(...parsed);
       for (const entry of stack) if (entry.tag === "g") entry.contours.push(...parsed);
     }
-    if (!selfClosing && !GEOMETRY_TAGS.has(tag) && !["title", "desc", "metadata"].includes(tag)) stack.push({ tag, matrix, hidden, contours: tag === "g" ? [] : null });
+    if (!selfClosing && !GEOMETRY_TAGS.has(tag) && !["title", "desc", "metadata"].includes(tag)) {
+      const parentGroup = [...stack].reverse().find((entry) => entry.tag === "g");
+      const groupId = tag === "g" ? `group-${nextGroupId++}` : null;
+      stack.push({ tag, matrix, hidden, contours: tag === "g" ? [] : null, groupId, parentGroupId: tag === "g" ? parentGroup?.groupId ?? null : null });
+    }
   }
   if (stack.length !== 1) throw svgError("De SVG-structuur is niet volledig gesloten.", "PRODUCTION_ASSET_SVG_XML_INVALID");
   const value = contourBounds(contours); const pointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
@@ -305,7 +348,8 @@ function parseSvg(source, intakeKind) {
   const warnings = strokeCount ? ["STROKE_REQUIRES_REVIEW"] : [];
   const full = candidate(contours, 0, "FULL_ARTWORK", warnings);
   const glyphs = intakeKind === "NUMBER_SET" ? numberGlyphCandidates(contours, sourceGroups, warnings) : [];
-  return { contours, full, glyphs, evidence: { pathCount, contourCount: contours.length, pointCount, strokeCount, transformCount, textCount: 0, rasterCount: 0, scriptCount: 0, externalReferenceCount: 0, boundsMm: { width: value.width, height: value.height } } };
+  const artworks = intakeKind === "ARTWORK" ? artworkGroupCandidates(contours, sourceGroups, warnings) : [];
+  return { contours, full, glyphs, artworks, evidence: { pathCount, contourCount: contours.length, pointCount, strokeCount, transformCount, sourceGroupCount: sourceGroups.length, artworkCandidateCount: artworks.length, textCount: 0, rasterCount: 0, scriptCount: 0, externalReferenceCount: 0, boundsMm: { width: value.width, height: value.height } } };
 }
 
 export function inspectProductionAssetSvg({ bytes, filename, mimeType = "image/svg+xml", intakeKind = "ARTWORK" }) {
@@ -314,12 +358,12 @@ export function inspectProductionAssetSvg({ bytes, filename, mimeType = "image/s
   const source = sourceBytes.toString("utf8");
   if (!/<svg\b/iu.test(source)) throw svgError("Het bestand bevat geen geldige SVG-root.", "PRODUCTION_ASSET_SVG_ROOT_MISSING");
   const kind = ["ARTWORK", "NUMBER_SET"].includes(intakeKind) ? intakeKind : "ARTWORK";
-  const parsed = parseSvg(source, kind); const candidates = kind === "NUMBER_SET" ? parsed.glyphs : [parsed.full];
+  const parsed = parseSvg(source, kind); const candidates = kind === "NUMBER_SET" ? parsed.glyphs : parsed.artworks.length ? parsed.artworks : [parsed.full];
   if (!candidates.length) throw svgError("De nummerset bevat geen eenduidig bruikbare complete cijferglyphs.", "PRODUCTION_ASSET_SVG_GLYPHS_MISSING");
   const sourceHash = sha256(sourceBytes);
   return {
     source: { filename: String(filename).slice(0, 180), mimeType, format: "SVG", sha256: sourceHash, sizeBytes: sourceBytes.length, immutable: true, documentMetadata: { svgVersion: source.match(/<svg\b[^>]*\bversion=["']([^"']+)/iu)?.[1] ?? null, generator: source.match(/Generator:\s*([^<\r\n]+)/iu)?.[1]?.trim() ?? null } },
-    inspection: { engine: "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1", engineVersion: "1", intakeKind: kind, candidateCount: candidates.length, rawCandidateCount: parsed.evidence.contourCount, glyphReviewCandidateCount: kind === "NUMBER_SET" ? candidates.length : 0, normalReviewCandidateCount: kind === "NUMBER_SET" ? candidates.length : 1, requiresHumanSelection: kind === "NUMBER_SET", geometryNeverAiGenerated: true, svg: parsed.evidence },
+    inspection: { engine: "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1", engineVersion: "2", intakeKind: kind, candidateCount: candidates.length, rawCandidateCount: parsed.evidence.contourCount, glyphReviewCandidateCount: kind === "NUMBER_SET" ? candidates.length : 0, normalReviewCandidateCount: candidates.length, requiresHumanSelection: kind === "NUMBER_SET" || candidates.length > 1, geometryNeverAiGenerated: true, svg: parsed.evidence },
     documentPreviewSvg: previewSvg(normalizeContours(parsed.contours)),
     candidates,
   };
