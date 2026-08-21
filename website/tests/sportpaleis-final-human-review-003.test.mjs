@@ -93,7 +93,7 @@ test("tussenvoegsel blijft een apart handmatig initialenelement met overname en 
   assert.ok(article, "een actief initialenartikel is vereist voor deze acceptatietest");
   const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
   assert.ok(profile?.initialsInfixRule);
-  assert.deepEqual(profile.initialsInfixRule, { active: true, heightMm: null, horizontalSpacingMm: null, baselineOffsetMm: null, alignment: "CENTER", status: "DATA_GAP", revision: 1 });
+  assert.deepEqual(profile.initialsInfixRule, { active: true, heightMm: 20, horizontalSpacingMm: null, baselineOffsetMm: null, alignment: "CENTER", status: "DATA_GAP", revision: 1 });
 
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
     orderKind: "INDIVIDUAL", customer: "Initialencontrole", customerEmail: "initialen@example.nl", customerPhone: "0612345678", salesNumber: "45",

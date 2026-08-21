@@ -439,6 +439,7 @@ export interface SportpaleisProductionElement {
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
   controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
   numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;
+  numberComposition?: { freeContourSpacingMm: 30; measurement: "CONTOUR_TO_CONTOUR" };
   sourceLayers?: {
     visualSource: { filename: string; mimeType: string; sha256: string } | null;
     vectorSource: { filename: string; mimeType: string; sha256: string } | null;
@@ -461,7 +462,22 @@ export interface SportpaleisProductionElement {
 export interface SportpaleisProductionAssetSource {
   id: string;
   version: string;
+  revision?: number;
   original: { filename: string; mimeType: string; format: "PDF" | "ILLUSTRATOR_PDF"; sha256: string; sizeBytes: number; immutable: true; documentMetadata?: { pdfVersion: string | null; creator: string | null; producer: string | null; illustratorVersion: string | null; embeddedPdfCompatible: true } };
+  conversion?: {
+    method: "ORIGINAL_PDF_INTERPRETATION" | "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT";
+    methodVersion: string;
+    derivedFromSourceId: string | null;
+    derivedFromSha256: string | null;
+  };
+  fidelity?: {
+    status: "REFERENCE_REQUIRED" | "MATCHED" | "MISMATCH";
+    comparisonMethod: "HUMAN_SIDE_BY_SIDE";
+    referenceSha256: string;
+    checkedAt: string | null;
+    checkedBy: { userId: string; name: string } | null;
+    note: string | null;
+  };
   provenance: string;
   uploadedAt: string;
   uploadedBy: { userId: string; name: string };
@@ -479,7 +495,7 @@ export interface SportpaleisProductionAssetSource {
   candidates: {
     id: string;
     suggestedName: string;
-    selectionMode: "VISUAL_REGION" | "OBJECT_GROUP" | "VECTOR_COMPONENT";
+    selectionMode: "FULL_ARTWORK" | "VISUAL_REGION" | "OBJECT_GROUP" | "VECTOR_COMPONENT";
     page: number;
     selectionRef: string;
     geometryHash: string;

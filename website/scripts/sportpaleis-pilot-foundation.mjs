@@ -514,7 +514,9 @@ export function migrateSportpaleisPilotState(input) {
       const existing = profile.initialsInfixRule;
       profile.initialsInfixRule = {
         active: existing?.active !== false,
-        heightMm: existing?.heightMm ?? null,
+        // Canonical Sportpaleis default. Spacing and baseline remain fail-closed
+        // until an explicit production profile has physically confirmed them.
+        heightMm: existing?.heightMm ?? 20,
         horizontalSpacingMm: existing?.horizontalSpacingMm ?? null,
         baselineOffsetMm: existing?.baselineOffsetMm ?? null,
         alignment: "CENTER",
@@ -648,6 +650,11 @@ export function migrateSportpaleisPilotState(input) {
   state.webshopIntake = { ...createSportpaleisWebshopIntakeState(), ...(state.webshopIntake ?? {}) };
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
+  for (const source of state.productionAssetSources) {
+    source.revision ??= 1;
+    source.conversion ??= { method: "ORIGINAL_PDF_INTERPRETATION", methodVersion: "1", derivedFromSourceId: null, derivedFromSha256: null };
+    source.fidelity ??= { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.original.sha256, checkedAt: null, checkedBy: null, note: null };
+  }
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
   state.productionElementRequirements ??= [];
@@ -841,6 +848,11 @@ export function validateSportpaleisPilotState(input) {
   for (const source of state.productionAssetSources ?? []) {
     if (!source.original?.immutable || sha256(Buffer.from(source.original.dataBase64, "base64")).toUpperCase() !== source.original.sha256) throw new Error("Immutable productieassetbron ontbreekt of is gewijzigd.");
     if (!source.candidates?.length || source.candidates.some(({ geometryHash, controlledVector }) => sha256(JSON.stringify(controlledVector.contours)).toUpperCase() !== geometryHash)) throw new Error("Productieassetkandidaten zijn gewijzigd of onvolledig.");
+    if (!Number.isInteger(Number(source.revision ?? 1)) || Number(source.revision ?? 1) < 1 || !["REFERENCE_REQUIRED", "MATCHED", "MISMATCH"].includes(source.fidelity?.status ?? "REFERENCE_REQUIRED")) throw new Error("Ongeldige bronfidelitystatus.");
+    if (source.conversion?.method === "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT") {
+      const reference = state.productionAssetSources.find(({ id }) => id === source.conversion.derivedFromSourceId);
+      if (!reference || reference.original.sha256 !== source.conversion.derivedFromSha256 || source.fidelity?.referenceSha256 !== reference.original.sha256) throw new Error("Afgeleide productiebron mist immutable herleidbaarheid naar het origineel.");
+    }
   }
   for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
     if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
@@ -2093,10 +2105,18 @@ export class SportpaleisPilotService {
       state.productionAssetSources ??= [];
       const existing = state.productionAssetSources.find(({ original }) => original.sha256 === inspected.source.sha256);
       if (existing) return { state, value: publicProductionAssetSource(existing), changed: false };
+      const derivedFromSourceId = optional(payload.derivedFromSourceId, 180) || null;
+      const conversionMethod = allowedValue(payload.conversionMethod ?? "ORIGINAL_PDF_INTERPRETATION", ["ORIGINAL_PDF_INTERPRETATION", "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT"], "Conversiemethode");
+      const referenceSource = derivedFromSourceId ? state.productionAssetSources.find(({ id }) => id === derivedFromSourceId) : null;
+      if (derivedFromSourceId && !referenceSource) throw Object.assign(new Error("De oorspronkelijke productiebron voor deze export bestaat niet."), { statusCode: 404, code: "PRODUCTION_ASSET_REFERENCE_SOURCE_NOT_FOUND" });
+      if (Boolean(derivedFromSourceId) !== (conversionMethod === "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT")) throw Object.assign(new Error("Een Illustrator-export moet expliciet aan de immutable oorspronkelijke bron gekoppeld zijn."), { statusCode: 400, code: "PRODUCTION_ASSET_CONVERSION_LINK_INVALID" });
       const source = {
         id: `production-source-${inspected.source.sha256.slice(0, 16).toLowerCase()}`,
         version: `1-${inspected.source.sha256.slice(0, 12)}`,
+        revision: 1,
         original: { ...inspected.source, dataBase64: bytes.toString("base64") },
+        conversion: { method: conversionMethod, methodVersion: "1", derivedFromSourceId, derivedFromSha256: referenceSource?.original.sha256 ?? null },
+        fidelity: { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: referenceSource?.original.sha256 ?? inspected.source.sha256, checkedAt: null, checkedBy: null, note: null },
         provenance: requiredText(payload.provenance, "Herkomst", 500),
         uploadedAt: iso(),
         uploadedBy: { userId: user.id, name: user.name },
@@ -2105,7 +2125,33 @@ export class SportpaleisPilotService {
         candidates: inspected.candidates,
       };
       state.productionAssetSources.push(source);
-      audit(state, user.id, "Vectorbron geïnspecteerd", source.id, { version: source.version, sha256: source.original.sha256, candidates: source.candidates.length, filename: source.original.filename });
+      audit(state, user.id, "Vectorbron geïnspecteerd", source.id, { version: source.version, sha256: source.original.sha256, candidates: source.candidates.length, filename: source.original.filename, conversionMethod, derivedFromSourceId });
+      return { state, value: publicProductionAssetSource(source) };
+    });
+    return result.value;
+  }
+
+  async productionAssetOriginal(token, sourceId) {
+    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const state = await this.store.read();
+    const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+    if (!source?.original?.dataBase64) throw Object.assign(new Error("Oorspronkelijke productiebron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+    return { mimeType: "application/pdf", bytes: Buffer.from(source.original.dataBase64, "base64"), filename: source.original.filename, sha256: source.original.sha256, cacheControl: "private, no-store", allowSameOriginFrame: true };
+  }
+
+  async reviewProductionAssetSourceFidelity(token, csrfToken, sourceId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    if (payload.proofAuthority !== "HUMAN_SOURCE_COMPARISON") throw Object.assign(new Error("Bronfidelity vereist een menselijke vergelijking met de bewezen bronweergave."), { statusCode: 403, code: "PRODUCTION_ASSET_FIDELITY_AUTHORITY_REQUIRED" });
+    const status = allowedValue(payload.status, ["MATCHED", "MISMATCH"], "Bronvergelijking");
+    const result = await this.store.mutate(async (state) => {
+      const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
+      if (!source) throw Object.assign(new Error("Vectorbron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
+      if (Number(payload.expectedRevision) !== Number(source.revision ?? 1)) throw Object.assign(new Error("De bronreview is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: Number(source.revision ?? 1) });
+      const note = optional(payload.note, 500) || null;
+      if (status === "MISMATCH" && !note) throw Object.assign(new Error("Beschrijf kort welke zichtbare afwijking is gevonden."), { statusCode: 400, code: "PRODUCTION_ASSET_FIDELITY_NOTE_REQUIRED" });
+      source.fidelity = { status, comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.fidelity?.referenceSha256 ?? source.original.sha256, checkedAt: iso(), checkedBy: { userId: user.id, name: user.name }, note };
+      source.revision = Number(source.revision ?? 1) + 1;
+      audit(state, user.id, status === "MATCHED" ? "Productiebron fidelity bevestigd" : "Productiebron fidelity afgekeurd", source.id, { status, sourceSha256: source.original.sha256, referenceSha256: source.fidelity.referenceSha256, conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION", note });
       return { state, value: publicProductionAssetSource(source) };
     });
     return result.value;
@@ -2166,6 +2212,9 @@ export class SportpaleisPilotService {
       const geometryHash = sha256(JSON.stringify(contours)).toUpperCase();
       let widthMm = Number(payload.widthMm); let heightMm = Number(payload.heightMm);
       const applications = Array.isArray(payload.applications) ? payload.applications.slice(0, 20).map((application) => ({ kind: allowedValue(application.kind, ["LOGO", "SPONSOR", "NUMBER_SET", "ARTWORK"], "Toepassing"), placement: optional(application.placement, 160) || null })) : [{ kind: "ARTWORK", placement: null }];
+      const productionMethod = allowedValue(payload.productionMethod, ["SELF_PRODUCED", "PHYSICAL_TRANSFER"], "Productiemethode");
+      const requiresArtworkFidelity = productionMethod === "SELF_PRODUCED" && applications.some(({ kind }) => ["LOGO", "SPONSOR", "ARTWORK"].includes(kind));
+      if (requiresArtworkFidelity && source.fidelity?.status !== "MATCHED") throw Object.assign(new Error(source.fidelity?.status === "MISMATCH" ? "De Workspace-preview wijkt af van de bewezen bron. Gebruik eerst een gecontroleerde vector-export en vergelijk opnieuw." : "Vergelijk bron en Workspace-productiepreview eerst visueel naast elkaar."), { statusCode: 409, code: "PRODUCTION_ASSET_SOURCE_FIDELITY_REQUIRED", fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED" });
       const selectedWidth = Math.max(...contours.flatMap(({ points }) => points.map(({ x }) => x)));
       const selectedHeight = Math.max(...contours.flatMap(({ points }) => points.map(({ y }) => y)));
       if (!(selectedWidth > 0) || !(selectedHeight > 0)) throw Object.assign(new Error("De geselecteerde vector heeft geen geldige fysieke begrenzing."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
@@ -2210,18 +2259,18 @@ export class SportpaleisPilotService {
         sourceId: source.id,
         version: `1-${geometryHash.slice(0, 12)}`,
         lifecycleStatus: "PRODUCTION_READY",
-        productionMethod: allowedValue(payload.productionMethod, ["SELF_PRODUCED", "PHYSICAL_TRANSFER"], "Productiemethode"),
+        productionMethod,
         contexts: Array.isArray(payload.contexts) ? payload.contexts.slice(0, 100).map((context) => ({ type: allowedValue(context.type, ["ASSOCIATION", "TEAM", "ARTICLE", "ORDER", "GENERIC"], "Contexttype"), id: requiredText(context.id, "Context-ID", 160), label: requiredText(context.label, "Context", 160) })) : [],
         applications,
         sourceSelection: { candidateIds, selectionRef: candidates.flatMap(({ equivalentSelectionRefs, selectionRef }) => equivalentSelectionRefs?.length ? equivalentSelectionRefs : [selectionRef]).join("+"), geometryHash },
         controlledVector: { format: "WBD_CONTOURS_V1", geometryHash, contourCount: contours.length, pointCount: contours.reduce((sum, contour) => sum + contour.points.length, 0), contours },
         sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm },
         defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
-        ...(payload.productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
-        ...(numberGlyphs ? { numberGlyphs } : {}),
-        sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash }, physicallyProvenContour: null },
+        ...(productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
+        ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
+        sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED", conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION" }, physicallyProvenContour: null },
         revision: 1,
-        variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: payload.productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
+        variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
       };
       state.productionElements.push(element);
       audit(state, user.id, "Productieasset vrijgegeven", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, rawToken: undefined });
@@ -4204,7 +4253,7 @@ function json(response, statusCode, payload) {
 }
 
 function binary(response, statusCode, payload) {
-  securityHeaders(response); response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `${payload.disposition === "attachment" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); response.end(payload.bytes);
+  securityHeaders(response); if (payload.allowSameOriginFrame === true) { response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'"); response.setHeader("X-Frame-Options", "SAMEORIGIN"); } response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `${payload.disposition === "attachment" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); response.end(payload.bytes);
 }
 
 function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
@@ -4343,6 +4392,16 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/production-asset-sources" && method === "POST") {
         json(response, 201, await service.createProductionAssetSource(token, csrf, await readJson(request)));
+        return true;
+      }
+      const productionAssetOriginalMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/original\.pdf$/);
+      if (productionAssetOriginalMatch && method === "GET") {
+        binary(response, 200, await service.productionAssetOriginal(token, decodeURIComponent(productionAssetOriginalMatch[1])));
+        return true;
+      }
+      const productionAssetFidelityMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/fidelity$/);
+      if (productionAssetFidelityMatch && method === "POST") {
+        json(response, 200, await service.reviewProductionAssetSourceFidelity(token, csrf, decodeURIComponent(productionAssetFidelityMatch[1]), await readJson(request)));
         return true;
       }
       const productionAssetPromoteMatch = route.match(/^\/api\/sportpaleis\/v1\/production-asset-sources\/([^/]+)\/promote$/);

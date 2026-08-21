@@ -4,6 +4,7 @@ import { inflateSync } from "node:zlib";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const POINT_TO_MM = 25.4 / 72;
+export const NUMBER_GLYPH_SPACING_MM = 30;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
 const MAX_POINTS = 250_000;
@@ -269,7 +270,9 @@ export function productionAssetPreviewSvg(asset) {
 }
 
 function documentPreviewSvg(candidates) {
-  const contours = candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION").flatMap(({ controlledVector }) => controlledVector.contours.map((contour) => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x + Number(controlledVector.sourceOriginMm?.x ?? 0), y: y + Number(controlledVector.sourceOriginMm?.y ?? 0) })) })));
+  const completeArtwork = candidates.filter(({ selectionMode }) => selectionMode === "FULL_ARTWORK");
+  const previewCandidates = completeArtwork.length ? completeArtwork : candidates.filter(({ selectionMode }) => selectionMode === "VISUAL_REGION");
+  const contours = previewCandidates.flatMap(({ controlledVector }) => controlledVector.contours.map((contour) => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x + Number(controlledVector.sourceOriginMm?.x ?? 0), y: y + Number(controlledVector.sourceOriginMm?.y ?? 0) })) })));
   return contours.length ? previewSvg(contours) : null;
 }
 
@@ -282,7 +285,7 @@ function sourceCandidate(contours, index, page, warnings = [], selectionMode = "
   const geometryHash = sha256(Buffer.from(JSON.stringify(normalized)));
   return {
     id: `candidate-${String(index + 1).padStart(3, "0")}-${geometryHash.slice(0, 10).toLowerCase()}`,
-    suggestedName: `${selectionMode === "VECTOR_COMPONENT" ? "Vectoronderdeel" : selectionMode === "OBJECT_GROUP" ? "Objectgroep" : "Vectorvorm"} ${index + 1}`,
+    suggestedName: `${selectionMode === "FULL_ARTWORK" ? "Volledige compositie" : selectionMode === "VECTOR_COMPONENT" ? "Vectoronderdeel" : selectionMode === "OBJECT_GROUP" ? "Objectgroep" : "Vectorvorm"} ${index + 1}`,
     selectionMode,
     page,
     selectionRef: `page:${page};candidate:${index + 1};geometry:${geometryHash}`,
@@ -343,9 +346,16 @@ function collapseEquivalentVectorComponents(candidates) {
   }
   const components = representatives.filter(({ selectionMode }) => selectionMode === "VECTOR_COMPONENT");
   const maximumHeight = Math.max(0, ...components.map(({ boundsMm }) => boundsMm.height));
-  const glyphCandidates = representatives.filter(({ boundsMm }) => maximumHeight > 0 && boundsMm.height >= maximumHeight * 0.97 && boundsMm.width <= maximumHeight * 1.5);
+  // A number glyph is always one isolated vector component. Complete visual
+  // regions and object groups can contain combinations such as 87 or 18 + 2;
+  // surfacing those as glyphs was the source of the noisy Human Review.
+  const glyphCandidates = components.filter(({ boundsMm }) => maximumHeight > 0 && boundsMm.height >= maximumHeight * 0.97 && boundsMm.width <= maximumHeight * 0.75);
   const glyphRepresentatives = [...new Map(glyphCandidates.map((candidate) => [visuallyEquivalentGeometryHash(candidate), candidate])).values()];
-  if (glyphRepresentatives.length >= 10) for (const candidate of glyphRepresentatives) candidate.reviewCategory = "NUMBER_GLYPH";
+  // A source with nine recognizable digits is still a number source, but it
+  // remains fail-closed at promotion until 0–9 are complete. This lets Human
+  // Review show the exact missing source glyph instead of falling back to a
+  // misleading artwork-selection flow.
+  if (glyphRepresentatives.length >= 9) for (const candidate of glyphRepresentatives) candidate.reviewCategory = "NUMBER_GLYPH";
   const normalReviewClusters = new Map();
   for (const candidate of representatives) {
     const key = visuallyEquivalentGeometryHash(candidate); const existing = normalReviewClusters.get(key);
@@ -353,7 +363,7 @@ function collapseEquivalentVectorComponents(candidates) {
     if (existing) existing.normalReviewAlternativeCount += 1;
     else { candidate.normalReviewAlternativeCount = 1; normalReviewClusters.set(key, candidate); }
   }
-  return { candidates: representatives, rawCandidateCount: candidates.length, equivalentComponentCount: candidates.filter(({ selectionMode }) => selectionMode === "VECTOR_COMPONENT").length - components.length, glyphReviewCandidateCount: glyphRepresentatives.length >= 10 ? glyphRepresentatives.length : 0, normalReviewCandidateCount: normalReviewClusters.size };
+  return { candidates: representatives, rawCandidateCount: candidates.length, equivalentComponentCount: candidates.filter(({ selectionMode }) => selectionMode === "VECTOR_COMPONENT").length - components.length, glyphReviewCandidateCount: glyphRepresentatives.length >= 9 ? glyphRepresentatives.length : 0, normalReviewCandidateCount: normalReviewClusters.size };
 }
 
 async function inspectPdf(bytes) {
@@ -394,6 +404,8 @@ async function inspectPdf(bytes) {
     const objectGroups = clusterContours(pageContours, pageBounds);
     const componentGroups = selectableVectorComponents(pageContours, pageBounds);
     const warnings = strokeCount ? ["STROKE_REQUIRES_REVIEW"] : [];
+    const completeArtwork = sourceCandidate(pageContours, candidates.length, pageNumber, warnings, "FULL_ARTWORK");
+    if (completeArtwork) candidates.push(completeArtwork);
     for (const group of groups) {
       const candidate = sourceCandidate(group, candidates.length, pageNumber, warnings, "VISUAL_REGION");
       if (candidate) candidates.push(candidate);
@@ -520,14 +532,15 @@ export async function inspectProductionAssetSource({ bytes, filename, mimeType =
     const objectGroups = sourceBounds ? clusterContours(privateVectors.contours, sourceBounds) : [];
     const componentGroups = sourceBounds ? selectableVectorComponents(privateVectors.contours, sourceBounds) : [];
     const warnings = privateVectors.hasStrokePaint ? ["STROKE_REQUIRES_REVIEW"] : [];
-    const visualCandidates = visualGroups.map((group, index) => sourceCandidate(group, index, 1, warnings, "VISUAL_REGION")).filter(Boolean);
-    const knownGeometry = new Set(visualCandidates.map(({ geometryHash }) => geometryHash));
+    const completeArtwork = sourceCandidate(privateVectors.contours, 0, 1, warnings, "FULL_ARTWORK");
+    const visualCandidates = visualGroups.map((group, index) => sourceCandidate(group, index + (completeArtwork ? 1 : 0), 1, warnings, "VISUAL_REGION")).filter(Boolean);
+    const knownGeometry = new Set([...(completeArtwork ? [completeArtwork.geometryHash] : []), ...visualCandidates.map(({ geometryHash }) => geometryHash)]);
     const objectCandidates = objectGroups.map((group, index) => sourceCandidate(group, visualCandidates.length + index, 1, warnings, "OBJECT_GROUP")).filter((candidate) => {
       if (!candidate || knownGeometry.has(candidate.geometryHash)) return false;
       knownGeometry.add(candidate.geometryHash); return true;
     });
     const componentCandidates = componentGroups.map((group, index) => sourceCandidate(group, visualCandidates.length + objectCandidates.length + index, 1, warnings, "VECTOR_COMPONENT")).filter((candidate) => candidate && !knownGeometry.has(candidate.geometryHash));
-    candidates = [...visualCandidates, ...objectCandidates, ...componentCandidates].slice(0, 500);
+    candidates = [...(completeArtwork ? [completeArtwork] : []), ...visualCandidates, ...objectCandidates, ...componentCandidates].slice(0, 500);
     privateEvidence = { available: true, used: true, pathCount: privateVectors.contours.length, strokePaint: privateVectors.hasStrokePaint };
   }
   if (!candidates.length) throw assetError("In deze bron zijn geen veilig selecteerbare gesloten vectorvormen gevonden.", "PRODUCTION_ASSET_NO_VECTOR_CANDIDATES");
@@ -569,14 +582,18 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
     const requestedHeight = Number(line.heightMm || variant.heightMm);
     if (!(requestedHeight > 0)) throw assetError("Een nummerbron vereist een fysieke hoogte.", "PRODUCTION_ASSET_SIZE_MISSING", 409);
     let offsetX = 0;
-    const spacing = requestedHeight * 0.08;
     const contours = [];
     for (const digit of Array.from(line.content)) {
       const glyph = asset.numberGlyphs[digit];
       if (!glyph?.contours?.length || !(glyph.heightUnits > 0)) throw assetError(`Cijfer ${digit} ontbreekt in de beheerde nummerbron.`, "PRODUCTION_ASSET_GLYPH_MISSING", 409);
       const scale = requestedHeight / glyph.heightUnits;
-      contours.push(...glyph.contours.map((contour) => ({ ...contour, id: `${digit}-${contour.id}-${contours.length + 1}`, points: contour.points.map(({ x, y }) => ({ x: offsetX + x * scale, y: y * scale })) })));
-      offsetX += glyph.widthUnits * scale + spacing;
+      const glyphBounds = bounds(glyph.contours);
+      const translateX = offsetX - glyphBounds.minX * scale;
+      contours.push(...glyph.contours.map((contour) => ({ ...contour, id: `${digit}-${contour.id}-${contours.length + 1}`, points: contour.points.map(({ x, y }) => ({ x: translateX + x * scale, y: y * scale })) })));
+      // The business rule is a physical free contour gap, not typographic
+      // advance/kerning. Position the next contour exactly 30 mm after this
+      // glyph's right-most production contour.
+      offsetX += glyphBounds.width * scale + NUMBER_GLYPH_SPACING_MM;
     }
     const producedBounds = bounds(contours);
     return {
