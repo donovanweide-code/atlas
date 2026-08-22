@@ -23,6 +23,11 @@ on:
         description: Expected immutable manifest SHA-256
         required: true
         type: string
+      existing_deployplan_sha256:
+        description: Optional checksum of an already prepared immutable plan
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -44,12 +49,14 @@ jobs:
           EXPECTED_CURRENT: ${{ inputs.expected_current }}
           ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
           MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          EXISTING_PLAN_SHA256: ${{ inputs.existing_deployplan_sha256 }}
         run: |
           set -Eeuo pipefail
           [[ "$RELEASE_ID" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
           [[ "$EXPECTED_CURRENT" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
           [[ "$ARTIFACT_SHA256" =~ ^[a-f0-9]{64}$ ]]
           [[ "$MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          [[ -z "$EXISTING_PLAN_SHA256" || "$EXISTING_PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
 
       - name: Install scoped prepare credential and pinned host key
         shell: bash
@@ -86,6 +93,7 @@ jobs:
           EXPECTED_CURRENT: ${{ inputs.expected_current }}
           ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
           MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          EXISTING_PLAN_SHA256: ${{ inputs.existing_deployplan_sha256 }}
         run: |
           set -Eeuo pipefail
           dir="$RUNNER_TEMP/wbd-release"
@@ -101,11 +109,21 @@ jobs:
           ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
             "upload-manifest $RELEASE_ID $MANIFEST_SHA256 $manifest_size" < "$manifest"
           ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 backup
-          ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
-            "prepare $RELEASE_ID $EXPECTED_CURRENT $ARTIFACT_SHA256 $MANIFEST_SHA256" | tee "$RUNNER_TEMP/prepare.out"
+          if [[ -n "$EXISTING_PLAN_SHA256" ]]; then
+            ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
+              "verify $RELEASE_ID $EXISTING_PLAN_SHA256" | tee "$RUNNER_TEMP/prepare.out"
+          else
+            ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
+              "prepare $RELEASE_ID $EXPECTED_CURRENT $ARTIFACT_SHA256 $MANIFEST_SHA256" | tee "$RUNNER_TEMP/prepare.out"
+          fi
           grep -Fxq 'PREPARE=PASS' "$RUNNER_TEMP/prepare.out"
-          grep -Fxq 'HUMAN_GO_REQUIRED=YES' "$RUNNER_TEMP/prepare.out"
-          grep -F 'PLAN_SHA256=' "$RUNNER_TEMP/prepare.out" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "$EXISTING_PLAN_SHA256" ]]; then
+            grep -Fxq 'HUMAN_GO_REQUIRED=YES' "$RUNNER_TEMP/prepare.out"
+            grep -F 'PLAN_SHA256=' "$RUNNER_TEMP/prepare.out" >> "$GITHUB_STEP_SUMMARY"
+          else
+            grep -Fxq "DEPLOYPLAN_SHA256=$EXISTING_PLAN_SHA256" "$RUNNER_TEMP/prepare.out"
+            printf 'DEPLOYPLAN_SHA256=%s\n' "$EXISTING_PLAN_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          fi
           printf 'Production activation was not performed.\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove runner credential
