@@ -1495,6 +1495,73 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async prepareCurrentProductionGroup(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const selections = Array.isArray(payload.orders) ? payload.orders : [];
+    if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
+    const requestedFoilColor = requiredText(payload.foilColor, "Foliekleur", 80);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", () => {
+        const orders = selections.map(({ id, expectedRevision }) => {
+          const order = state.orders.find((candidate) => candidate.id === id);
+          if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+          const blocker = productionProposalBlockReason(order, state);
+          if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });
+          return order;
+        });
+        const createdAt = iso();
+        const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+        const groups = buildProductionProposalGroups(state, orders);
+        const proposal = {
+          id: `production-proposal-${randomBytes(10).toString("hex")}`,
+          proposalNumber: `PV-${new Date(createdAt).getUTCFullYear()}-${String(highest + 1).padStart(4, "0")}`,
+          createdAt,
+          initiatedBy: { userId: user.id, name: user.name, role: user.role },
+          orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })),
+          groups,
+          status: "OPEN",
+          productionJobId: null,
+          productionJobIds: [],
+        };
+        const currentGroup = groups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
+        if (!currentGroup) throw Object.assign(new Error("Er is geen veilige huidige fysieke productiestap bepaald."), { statusCode: 409, code: "PRODUCTION_CURRENT_GROUP_MISSING" });
+        if (currentGroup.foilColor.toLocaleLowerCase("nl-NL") !== requestedFoilColor.toLocaleLowerCase("nl-NL")) throw Object.assign(new Error(`Begin met ${currentGroup.foilColor}; ${requestedFoilColor} komt daarna. Er is niets opgeslagen.`), { statusCode: 409, code: "PRODUCTION_GROUP_OUT_OF_SEQUENCE" });
+        if (!managedFoilColor(state, currentGroup.foilColor)) throw Object.assign(new Error("De huidige productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
+        const currentOrders = currentGroup.orders.map(({ id, expectedRevision }) => {
+          const order = state.orders.find((candidate) => candidate.id === id);
+          if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+          if (!["ORDER", "CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
+          if (order.productionLines?.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
+          return order;
+        });
+        const sequence = state.nextProductionJobSequence;
+        const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
+        const snapshot = buildProductionJobSnapshot(state, currentOrders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { lineRefs: currentGroup.productionLineRefs, foilColor: currentGroup.foilColor, sourceChannel: currentGroup.sourceChannel, groupId: currentGroup.id, groupLabel: currentGroup.label });
+        if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
+        const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
+        state.nextProductionJobSequence += 1;
+        state.productionProposals.unshift(proposal);
+        state.productionJobs.unshift(job);
+        currentGroup.status = "CONVERTED";
+        currentGroup.productionJobId = job.id;
+        proposal.productionJobIds.push(job.id);
+        if (proposal.groups.every(({ status }) => status === "CONVERTED")) { proposal.status = "CONVERTED"; proposal.productionJobId = job.id; }
+        for (const order of currentOrders) {
+          order.stage = "PRINT"; order.revision += 1; order.updatedAt = createdAt; order.eventHistory ??= [];
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { productionJobId: job.id, jobNumber, productionGroupId: currentGroup.id, foilColor: currentGroup.foilColor, productionLineRefs: currentGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id) } });
+          syncOpenProposalOrderRevisions(state, order);
+        }
+        audit(state, user.id, "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), hardwareSendPerformed: false });
+        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
+        return { proposal, job };
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
   async createProductionJob(token, csrfToken, payload, idempotencyKey) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
@@ -4569,6 +4636,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/production-proposals" && method === "POST") {
         json(response, 201, await service.createProductionProposal(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/production-proposals/current-job" && method === "POST") {
+        json(response, 201, await service.prepareCurrentProductionGroup(token, csrf, await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const mailPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/mail\/preview$/);

@@ -283,7 +283,8 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
   assert.match(source, /Artwork of nummerset toevoegen/u);
-  assert.match(source, /De bron, bestandsnaam, datum en uw account worden automatisch vastgelegd/u);
+  assert.match(source, /Er wordt nog niets opgeslagen wanneer u een bestand kiest/u);
+  assert.match(source, /Deze zichtbare SVG opslaan voor controle/u);
   assert.match(source, /Van wie ontvangen\?/u);
   assert.match(source, /inferredProductionAssetKind/u);
   assert.match(source, /Mijn productie \/ Wachtrij/u);

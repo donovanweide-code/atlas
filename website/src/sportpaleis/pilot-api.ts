@@ -464,6 +464,14 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async prepareCurrentProductionGroup(orders: readonly WorkspaceOrder[], foilColor: string): Promise<{ duplicate: boolean; value: { proposal: ProductionProposal; job: ProductionJob } }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-proposals/current-job`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-current-group") },
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor }),
+    }));
+  }
+
   async updateArticle(articleId: string, input: {
     expectedRevision: number;
     active?: boolean;
