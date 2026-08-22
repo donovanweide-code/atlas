@@ -357,17 +357,77 @@ service_restart() {
   systemctl restart "$SERVICE"
 }
 
+readiness_probe() {
+  local expected_release="$1"
+  if [[ "$TEST_MODE" == "1" && -n "${SPW_TEST_READINESS_SEQUENCE_DIR:-}" ]]; then
+    local sequence_file="$SPW_TEST_READINESS_SEQUENCE_DIR/$expected_release" token
+    [[ -f "$sequence_file" ]] || return 10
+    IFS= read -r token < "$sequence_file" || return 10
+    tail -n +2 "$sequence_file" > "${sequence_file}.tmp"
+    mv "${sequence_file}.tmp" "$sequence_file"
+    case "$token" in
+      CONNECT_ERROR) return 10;;
+      502|503) printf '%s|\n' "$token";;
+      READY) printf '200|{"status":"ready","releaseId":"%s"}\n' "$expected_release";;
+      READY:*) printf '200|{"status":"ready","releaseId":"%s"}\n' "${token#READY:}";;
+      *) printf '%s|\n' "$token";;
+    esac
+    return
+  fi
+
+  local response body status
+  response="$(curl -sS --connect-timeout 1 --max-time 2 --resolve "$READY_RESOLVE" \
+    -w $'\n%{http_code}' "$READY_URL")" || return 10
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  printf '%s|%s\n' "$status" "$body"
+}
+
+verify_readiness_with_retry() {
+  local expected_release="$1" window_seconds="$2" backoff_seconds="$3" max_attempts="${4:-0}"
+  local deadline=$((SECONDS + window_seconds)) attempts=0 probe probe_status http_status response
+  while :; do
+    attempts=$((attempts + 1))
+    if probe="$(readiness_probe "$expected_release")"; then
+      probe_status=0
+    else
+      probe_status=$?
+    fi
+
+    if [[ "$probe_status" -eq 0 ]]; then
+      http_status="${probe%%|*}"
+      response="${probe#*|}"
+      if [[ "$http_status" == "200" ]]; then
+        if node -e 'const value=JSON.parse(process.argv[1]); if(value.status!=="ready"||value.releaseId!==process.argv[2]) process.exit(1)' \
+          "$response" "$expected_release"; then
+          return
+        fi
+        return 1
+      fi
+      [[ "$http_status" == "502" || "$http_status" == "503" ]] || return 1
+    elif [[ "$probe_status" -ne 10 ]]; then
+      return 1
+    fi
+
+    if (( max_attempts > 0 && attempts >= max_attempts )); then return 1; fi
+    if (( SECONDS >= deadline )); then return 1; fi
+    sleep "$backoff_seconds"
+  done
+}
+
 verify_readiness() {
   local expected_release="$1"
-  if [[ "$TEST_MODE" == "1" ]]; then
+  if [[ "$TEST_MODE" == "1" && -z "${SPW_TEST_READINESS_SEQUENCE_DIR:-}" ]]; then
     [[ "${SPW_TEST_FAIL_RELEASE:-}" != "$expected_release" ]] || return 1
     [[ "${SPW_TEST_READINESS_STATUS:-PASS}" == "PASS" ]] || return 1
     [[ -z "${SPW_TEST_READY_RELEASE:-}" || "$SPW_TEST_READY_RELEASE" == "$expected_release" ]] || return 1
     return
   fi
-  local response
-  response="$(curl -fsS --max-time 12 --resolve "$READY_RESOLVE" "$READY_URL")" || return 1
-  node -e 'const value=JSON.parse(process.argv[1]); if(value.status!=="ready"||value.releaseId!==process.argv[2]) process.exit(1)' "$response" "$expected_release"
+  if [[ "$TEST_MODE" == "1" ]]; then
+    verify_readiness_with_retry "$expected_release" 30 0 "${SPW_TEST_READINESS_MAX_ATTEMPTS:-10}"
+  else
+    verify_readiness_with_retry "$expected_release" 30 1
+  fi
 }
 
 verify_redirect_contract() {

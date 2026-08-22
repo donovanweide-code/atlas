@@ -167,6 +167,48 @@ set -e
 grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
 grep -q 'result=ROLLED_BACK' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
 
+# Dezelfde bounded readiness wordt voor kandidaat en rollback gebruikt. Een
+# tijdelijke 502/503 of connectiefout mag binnen het venster herstellen; een
+# blijvende fout rolt fail-closed terug, waarbij ook een vertraagde rollbackstart
+# binnen hetzelfde contract gezond kan worden.
+readiness_sequences="$root/readiness-sequences"
+mkdir -p "$readiness_sequences"
+export SPW_TEST_READINESS_SEQUENCE_DIR="$readiness_sequences"
+export SPW_TEST_READINESS_MAX_ATTEMPTS=6
+
+printf '502\nREADY\n' > "$readiness_sequences/$second_id"
+verify_output="$(bash -c 'source "$1"; verify_readiness "$2" && printf PASS' _ "$deploy_script" "$second_id")"
+[[ "$verify_output" == "PASS" ]]
+
+printf 'CONNECT_ERROR\n502\n503\nREADY\n' > "$readiness_sequences/$second_id"
+verify_output="$(bash -c 'source "$1"; verify_readiness "$2" && printf PASS' _ "$deploy_script" "$second_id")"
+[[ "$verify_output" == "PASS" ]]
+
+printf '502\nCONNECT_ERROR\nREADY\n' > "$readiness_sequences/$candidate_id"
+verify_output="$(bash -c 'source "$1"; verify_readiness "$2" && printf PASS' _ "$deploy_script" "$candidate_id")"
+[[ "$verify_output" == "PASS" ]]
+
+printf 'READY:WRONG-RELEASE\nREADY\n' > "$readiness_sequences/$second_id"
+set +e
+bash -c 'source "$1"; verify_readiness "$2"' _ "$deploy_script" "$second_id" >/dev/null 2>&1
+status=$?
+set -e
+[[ "$status" -ne 0 ]]
+[[ "$(head -n 1 "$readiness_sequences/$second_id")" == "READY" ]]
+
+printf '502\n503\n502\n' > "$readiness_sequences/$second_id"
+printf '502\nCONNECT_ERROR\nREADY\n' > "$readiness_sequences/$candidate_id"
+export SPW_TEST_READINESS_MAX_ATTEMPTS=3
+set +e
+$deploy_script switch --plan "$second_plan" --human-go "$second_id" >/dev/null 2>&1
+status=$?
+set -e
+[[ "$status" -ne 0 ]]
+[[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$candidate_id" ]]
+grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
+grep -q 'result=ROLLED_BACK' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
+unset SPW_TEST_READINESS_SEQUENCE_DIR SPW_TEST_READINESS_MAX_ATTEMPTS
+
 # Ook een rode post-switch smoke rolt automatisch terug, nadat readiness zelf
 # al groen was. De kandidaat mag niet actief achterblijven.
 unset SPW_TEST_FAIL_RELEASE
@@ -203,6 +245,11 @@ printf 'IMMUTABLE_RELEASE_FOUNDATION_TESTS=PASS\n'
 printf 'PREPARE_WITHOUT_SWITCH=PASS\n'
 printf 'ATOMIC_SWITCH=PASS\n'
 printf 'AUTOMATIC_APPLICATION_ROLLBACK=PASS\n'
+printf 'TRANSIENT_502_THEN_READY=PASS\n'
+printf 'DELAYED_CANDIDATE_READINESS=PASS\n'
+printf 'DELAYED_ROLLBACK_READINESS=PASS\n'
+printf 'PERMANENT_READINESS_FAILURE_ROLLBACK=PASS\n'
+printf 'WRONG_RELEASE_ID_FAIL_CLOSED=PASS\n'
 printf 'EXACT_CANONICAL_REDIRECT_SMOKE=PASS\n'
 printf 'POST_SWITCH_SMOKE_ROLLBACK=PASS\n'
 printf 'INTERMEDIATE_SWITCH_FAILURE_ROLLBACK=PASS\n'
