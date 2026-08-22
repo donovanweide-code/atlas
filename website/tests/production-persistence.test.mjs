@@ -226,6 +226,20 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
   assert.ok([...packaged].every((archive) => !archive.includes("/tests/") && !archive.includes(".codex-tmp")));
 });
 
+test("production package installeert de gelockte PDF-runtime dependency", async () => {
+  const productionPackage = JSON.parse(await readFile(new URL("../package.production.json", import.meta.url), "utf8"));
+  const developmentPackage = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const packageLock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const productionAssets = await readFile(new URL("../src/sportpaleis/production-assets.mjs", import.meta.url), "utf8");
+
+  assert.match(productionAssets, /from "pdfjs-dist\/legacy\/build\/pdf\.mjs"/u);
+  assert.equal(productionPackage.dependencies["pdfjs-dist"], "6.2.108");
+  assert.equal(productionPackage.dependencies["pdfjs-dist"], developmentPackage.dependencies["pdfjs-dist"]);
+  assert.equal(productionPackage.dependencies["pdfjs-dist"], packageLock.packages[""].dependencies["pdfjs-dist"]);
+  assert.ok(packageLock.packages["node_modules/pdfjs-dist"]);
+  assert.notEqual(packageLock.packages["node_modules/pdfjs-dist"].dev, true);
+});
+
 test("productiebootstrap bevat alleen goedgekeurde referentieconfiguratie en nul accounts/orders", () => {
   const state = createSportpaleisProductionBootstrap(new Date("2026-08-10T16:30:00.000Z"));
   assert.equal(state.organizationId, "sport-2000-sportpaleis-bv");
