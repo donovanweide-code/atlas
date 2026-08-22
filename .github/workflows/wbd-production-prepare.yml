@@ -1,0 +1,114 @@
+name: WBD production prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Immutable SPW release ID
+        required: true
+        type: string
+      release_tag:
+        description: Central GitHub release tag containing the immutable assets
+        required: true
+        type: string
+      expected_current:
+        description: Release ID that must still be live
+        required: true
+        type: string
+      artifact_sha256:
+        description: Expected immutable artifact SHA-256
+        required: true
+        type: string
+      manifest_sha256:
+        description: Expected immutable manifest SHA-256
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wbd-production-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    environment: sportpaleis-production-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate immutable inputs
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_CURRENT: ${{ inputs.expected_current }}
+          ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$RELEASE_ID" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$EXPECTED_CURRENT" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$ARTIFACT_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]]
+
+      - name: Install scoped prepare credential and pinned host key
+        shell: bash
+        env:
+          PREPARE_KEY: ${{ secrets.WBD_PREPARE_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          key="$RUNNER_TEMP/wbdprepare-ed25519"
+          known="$RUNNER_TEMP/wbd-known-hosts"
+          printf '%s\n' "$PREPARE_KEY" > "$key"
+          printf '%s\n' '149.210.228.199 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFDCdK1ZFLcppvfE0q0qo3HELi2lhV3lxLG1SluWMyLs' > "$known"
+          ssh-keygen -y -f "$key" >/dev/null
+          printf 'WBD_PREPARE_KEY=%s\nWBD_KNOWN_HOSTS=%s\n' "$key" "$known" >> "$GITHUB_ENV"
+
+      - name: Download centrally recoverable immutable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -Eeuo pipefail
+          mkdir "$RUNNER_TEMP/wbd-release"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/wbd-release" \
+            --pattern "$RELEASE_ID.tar.gz" \
+            --pattern "$RELEASE_ID.manifest.json"
+
+      - name: Verify, upload, back up and prepare
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_CURRENT: ${{ inputs.expected_current }}
+          ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          dir="$RUNNER_TEMP/wbd-release"
+          artifact="$dir/$RELEASE_ID.tar.gz"
+          manifest="$dir/$RELEASE_ID.manifest.json"
+          printf '%s  %s\n' "$ARTIFACT_SHA256" "$artifact" | sha256sum -c -
+          printf '%s  %s\n' "$MANIFEST_SHA256" "$manifest" | sha256sum -c -
+          ssh_base=(-i "$WBD_PREPARE_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WBD_KNOWN_HOSTS")
+          artifact_size="$(stat -c %s "$artifact")"
+          manifest_size="$(stat -c %s "$manifest")"
+          ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
+            "upload-artifact $RELEASE_ID $ARTIFACT_SHA256 $artifact_size" < "$artifact"
+          ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
+            "upload-manifest $RELEASE_ID $MANIFEST_SHA256 $manifest_size" < "$manifest"
+          ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 backup
+          ssh "${ssh_base[@]}" wbdprepare@149.210.228.199 \
+            "prepare $RELEASE_ID $EXPECTED_CURRENT $ARTIFACT_SHA256 $MANIFEST_SHA256" | tee "$RUNNER_TEMP/prepare.out"
+          grep -Fxq 'PREPARE=PASS' "$RUNNER_TEMP/prepare.out"
+          grep -Fxq 'HUMAN_GO_REQUIRED=YES' "$RUNNER_TEMP/prepare.out"
+          grep -F 'PLAN_SHA256=' "$RUNNER_TEMP/prepare.out" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Production activation was not performed.\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove runner credential
+        if: always()
+        shell: bash
+        run: rm -f -- "$RUNNER_TEMP/wbdprepare-ed25519" "$RUNNER_TEMP/wbd-known-hosts"

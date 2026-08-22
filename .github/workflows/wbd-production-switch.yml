@@ -1,0 +1,89 @@
+name: WBD production switch
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Prepared immutable release ID
+        required: true
+        type: string
+      expected_current:
+        description: Release ID that must still be live
+        required: true
+        type: string
+      deployplan_sha256:
+        description: Checksum-locked deployplan SHA-256
+        required: true
+        type: string
+      human_go:
+        description: Must exactly equal release_id; environment approval is also required
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wbd-production-switch
+  cancel-in-progress: false
+
+jobs:
+  switch:
+    # This environment owns the switch secret and requires Donovan's approval.
+    # GitHub does not expose environment secrets before the approval gate passes.
+    environment: sportpaleis-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate Human GO and immutable inputs
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_CURRENT: ${{ inputs.expected_current }}
+          PLAN_SHA256: ${{ inputs.deployplan_sha256 }}
+          HUMAN_GO: ${{ inputs.human_go }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$RELEASE_ID" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$EXPECTED_CURRENT" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$HUMAN_GO" == "$RELEASE_ID" ]]
+
+      - name: Install Human-GO-gated switch credential and pinned host key
+        shell: bash
+        env:
+          SWITCH_KEY: ${{ secrets.WBD_SWITCH_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          key="$RUNNER_TEMP/wbdswitch-ed25519"
+          known="$RUNNER_TEMP/wbd-known-hosts"
+          printf '%s\n' "$SWITCH_KEY" > "$key"
+          printf '%s\n' '149.210.228.199 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFDCdK1ZFLcppvfE0q0qo3HELi2lhV3lxLG1SluWMyLs' > "$known"
+          ssh-keygen -y -f "$key" >/dev/null
+          printf 'WBD_SWITCH_KEY=%s\nWBD_KNOWN_HOSTS=%s\n' "$key" "$known" >> "$GITHUB_ENV"
+
+      - name: Checksum-locked preflight and controlled switch
+        shell: bash
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          EXPECTED_CURRENT: ${{ inputs.expected_current }}
+          PLAN_SHA256: ${{ inputs.deployplan_sha256 }}
+          HUMAN_GO: ${{ inputs.human_go }}
+        run: |
+          set -Eeuo pipefail
+          ssh_base=(-i "$WBD_SWITCH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WBD_KNOWN_HOSTS")
+          target=wbdswitch@149.210.228.199
+          ssh "${ssh_base[@]}" "$target" \
+            "preflight $RELEASE_ID $PLAN_SHA256 $EXPECTED_CURRENT $GITHUB_RUN_ID"
+          ssh "${ssh_base[@]}" "$target" \
+            "switch $RELEASE_ID $PLAN_SHA256 $GITHUB_RUN_ID $HUMAN_GO" | tee "$RUNNER_TEMP/switch.out"
+          grep -Fxq 'LIVE_SWITCH=PASS' "$RUNNER_TEMP/switch.out"
+          grep -Fxq "ACTIVE_RELEASE=$RELEASE_ID" "$RUNNER_TEMP/switch.out"
+          ssh "${ssh_base[@]}" "$target" "evidence $RELEASE_ID" | tee "$RUNNER_TEMP/evidence.out"
+          cat "$RUNNER_TEMP/switch.out" "$RUNNER_TEMP/evidence.out" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove runner credential
+        if: always()
+        shell: bash
+        run: rm -f -- "$RUNNER_TEMP/wbdswitch-ed25519" "$RUNNER_TEMP/wbd-known-hosts"

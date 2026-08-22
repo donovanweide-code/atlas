@@ -1,0 +1,2 @@
+wbdprepare ALL=(root) NOPASSWD: /usr/local/libexec/wbd-deployment/wbd-deploy-prepare-root
+wbdswitch ALL=(root) NOPASSWD: /usr/local/libexec/wbd-deployment/wbd-deploy-switch-root
