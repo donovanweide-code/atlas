@@ -38,6 +38,10 @@ plan="$WBD_ROOT/shared/deploy-plans/$release_id.json"
 [[ -f "$plan" && -f "${plan}.sha256" ]]
 [[ -d "$WBD_ROOT/releases/$release_id" ]]
 [[ -f "$WBD_ROOT/shared/deploy-rollbacks/$release_id-prechange.tar.gz" ]]
+[[ -f "$WBD_ROOT/releases/$release_id/website/scripts/workspace-runtime.mjs" ]]
+[[ -f "$WBD_ROOT/releases/$release_id/website/package.json" ]]
+[[ -f "$WBD_ROOT/releases/$release_id/website/dist-workspace/workspace.html" ]]
+[[ ! -e "$WBD_ROOT/releases/$release_id/app" ]]
 
 printf '%s\n' "$output"
 printf 'REAL_CANDIDATE_DRY_RUN=PASS\n'

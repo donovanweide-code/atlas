@@ -23,8 +23,10 @@ productieswitch.
 `ops/production/spw-immutable-release.sh` heeft drie commando's:
 
 1. `inspect` — valideert current/RELEASE_ID en backupfreshness/checksum.
-2. `prepare` — valideert en staged het artifact, installeert uitsluitend de
-   gelockte productie-dependencies, maakt een actuele rollbacktar plus een
+2. `prepare` — valideert het raw artifactcontract, normaliseert uitsluitend de
+   top-level `app/` naar de bewezen `<release>/website/`-layout, valideert de
+   runtime/build/servicepaden opnieuw, installeert uitsluitend de gelockte
+   productie-dependencies, maakt een actuele rollbacktar plus een
    exacte kopie van het productie-envbestand en schrijft een checksum-locked
    deployplan. De actieve release, `RELEASE_ID` en service blijven ongewijzigd.
 3. `switch` — vereist het deployplan én een expliciet overeenkomende
@@ -34,6 +36,12 @@ productieswitch.
 
 De tool accepteert in productie geen afwijkende roots, service of readiness-
 route. Testoverrides werken alleen met `SPW_DEPLOY_TEST_MODE=1`.
+
+De layoutpreflight vereist vóór staging onder andere
+`app/scripts/workspace-runtime.mjs`, `app/package.json`, `app/package-lock.json`,
+de Workspace-build en de gepackagede service-unit. Na normalisatie vereist hij
+dezelfde bestanden onder `website/`, weigert hij een achtergebleven `app/` en
+controleert hij dat de service-unit exact `/srv/wbd/current/website` gebruikt.
 
 ## Lokale release- en provenancegate
 

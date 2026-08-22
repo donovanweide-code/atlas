@@ -163,29 +163,57 @@ verify_external_artifact() {
   validate_tar_entries "$artifact"
 }
 
+verify_artifact_layout_contract() {
+  local artifact="$1" listing
+  listing="$(tar -tzf "$artifact")"
+  for required in \
+    app/package.json \
+    app/package-lock.json \
+    app/scripts/workspace-runtime.mjs \
+    app/scripts/production-migrate.mjs \
+    app/dist-workspace/workspace.html \
+    app/dist-workspace/sportpaleis.html \
+    deployment/wbd-workspace.service \
+    RELEASE-MANIFEST.json; do
+    grep -Fxq "$required" <<<"$listing" || fail "vereist artifactpad ontbreekt: $required"
+  done
+  grep -q '^app/dist-workspace/assets/' <<<"$listing" || fail "gebouwde Workspace-assets ontbreken in artifact."
+  ! grep -q '^website/' <<<"$listing" || fail "artifact bevat onverwacht reeds een website/-layout."
+}
+
+normalize_production_layout() {
+  local stage="$1"
+  [[ -d "$stage/app" ]] || fail "artifact-root app/ ontbreekt vóór layoutnormalisatie."
+  [[ ! -e "$stage/website" ]] || fail "website/ bestaat al vóór layoutnormalisatie."
+  mv "$stage/app" "$stage/website"
+}
+
 verify_release_tree() {
-  local release_path="$1" expected_id="$2" expected_commit="$3" expected_tag="$4"
-  node - "$release_path/RELEASE-MANIFEST.json" "$release_path" "$expected_id" "$expected_commit" "$expected_tag" <<'NODE'
+  local release_path="$1" expected_id="$2" expected_commit="$3" expected_tag="$4" layout="${5:-artifact}"
+  node - "$release_path/RELEASE-MANIFEST.json" "$release_path" "$expected_id" "$expected_commit" "$expected_tag" "$layout" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const [manifestPath, root, releaseId, commit, tag] = process.argv.slice(2);
+const [manifestPath, root, releaseId, commit, tag, layout] = process.argv.slice(2);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 if (manifest.releaseId !== releaseId || manifest.commit !== commit || manifest.tag !== tag) {
   throw new Error("embedded manifest wijkt af van externe provenance");
 }
+const productionPath = (sourcePath) => layout === "production" && sourcePath.startsWith("app/")
+  ? `website/${sourcePath.slice(4)}`
+  : sourcePath;
 for (const file of manifest.files ?? []) {
   if (!file.path || path.isAbsolute(file.path) || file.path.split("/").includes("..")) throw new Error(`onveilig manifestpad: ${file.path}`);
-  const absolute = path.join(root, file.path);
+  const absolute = path.join(root, productionPath(file.path));
   const bytes = fs.readFileSync(absolute);
   const actual = crypto.createHash("sha256").update(bytes).digest("hex");
   if (actual !== String(file.sha256).toLowerCase()) throw new Error(`releasebestand wijkt af: ${file.path}`);
 }
-const expected = new Set(["RELEASE-MANIFEST.json", ...(manifest.files ?? []).map((file) => file.path.replaceAll("\\", "/"))]);
+const expected = new Set(["RELEASE-MANIFEST.json", ...(manifest.files ?? []).map((file) => productionPath(file.path.replaceAll("\\", "/")))]);
 function walk(directory, prefix = "") {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (relative === "app/node_modules" || relative.startsWith("app/node_modules/")) continue;
+    if (relative === "website/node_modules" || relative.startsWith("website/node_modules/")) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) walk(absolute, relative);
     else if (entry.isFile() && !expected.has(relative)) throw new Error(`onverwacht releasebestand: ${relative}`);
@@ -193,6 +221,27 @@ function walk(directory, prefix = "") {
   }
 }
 walk(root);
+if (layout === "production") {
+  const required = [
+    "website/scripts/workspace-runtime.mjs",
+    "website/scripts/production-migrate.mjs",
+    "website/package.json",
+    "website/package-lock.json",
+    "website/dist-workspace/workspace.html",
+    "website/dist-workspace/sportpaleis.html",
+    "deployment/wbd-workspace.service",
+  ];
+  for (const relative of required) {
+    if (!fs.statSync(path.join(root, relative)).isFile()) throw new Error(`vereiste productielayout ontbreekt: ${relative}`);
+  }
+  if (!fs.readdirSync(path.join(root, "website/dist-workspace/assets")).length) throw new Error("gebouwde Workspace-assets ontbreken");
+  if (fs.existsSync(path.join(root, "app"))) throw new Error("raw app/-root bleef achter na normalisatie");
+  const unit = fs.readFileSync(path.join(root, "deployment/wbd-workspace.service"), "utf8");
+  if (!unit.includes("WorkingDirectory=/srv/wbd/current/website")
+    || !unit.match(/ExecStart=.*\/srv\/wbd\/current\/website\/scripts\/workspace-runtime\.mjs/u)) {
+    throw new Error("gepackagede service-unit wijkt af van canonical website/-layout");
+  }
+}
 NODE
 }
 
@@ -375,6 +424,7 @@ command_prepare() {
   verify_current_consistency
   [[ "$(current_release_id)" == "$expected_current" ]] || fail "actuele release wijkt af van preflightverwachting."
   verify_external_artifact "$artifact" "$manifest"
+  verify_artifact_layout_contract "$artifact"
 
   local release_id commit tag artifact_hash candidate_path stage previous_path previous_id
   local backup_info rollback_info plan current_manifest_hash env_hash
@@ -399,9 +449,11 @@ command_prepare() {
   mkdir "$stage"
   trap 'remove_stage "$stage"' ERR
   tar -xzf "$artifact" -C "$stage"
-  verify_release_tree "$stage" "$release_id" "$commit" "$tag"
-  install_locked_dependencies "$stage/app"
-  verify_release_tree "$stage" "$release_id" "$commit" "$tag"
+  verify_release_tree "$stage" "$release_id" "$commit" "$tag" artifact
+  normalize_production_layout "$stage"
+  verify_release_tree "$stage" "$release_id" "$commit" "$tag" production
+  install_locked_dependencies "$stage/website"
+  verify_release_tree "$stage" "$release_id" "$commit" "$tag" production
   normalize_release_permissions "$stage"
   mv "$stage" "$candidate_path"
   trap - ERR

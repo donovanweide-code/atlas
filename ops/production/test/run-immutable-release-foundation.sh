@@ -24,8 +24,9 @@ fixture="$root/fixture"
 artifact="$root/$candidate_id.tar.gz"
 external_manifest="$root/$candidate_id.manifest.json"
 
-mkdir -p "$WBD_ROOT/releases/$old_id/app" "$WBD_ROOT/shared" "$WBD_BACKUP_DIR" "$fixture/app"
-printf 'old\n' > "$WBD_ROOT/releases/$old_id/app/version.txt"
+mkdir -p "$WBD_ROOT/releases/$old_id/website" "$WBD_ROOT/shared" "$WBD_BACKUP_DIR" \
+  "$fixture/app/scripts" "$fixture/app/dist-workspace/assets" "$fixture/deployment"
+printf 'old\n' > "$WBD_ROOT/releases/$old_id/website/version.txt"
 cat > "$WBD_ROOT/releases/$old_id/RELEASE-MANIFEST.json" <<EOF
 {"schemaVersion":2,"releaseId":"$old_id","commit":"0000000000000000000000000000000000000000","tag":"$old_id","files":[]}
 EOF
@@ -38,22 +39,59 @@ printf 'backup\n' > "$WBD_BACKUP_DIR/wbd-mariadb-20260821T000000Z.sql.enc"
 printf '{"name":"fixture","private":true,"version":"1.0.0","lockfileVersion":3,"packages":{}}\n' > "$fixture/app/package-lock.json"
 printf '{"name":"fixture","private":true,"version":"1.0.0"}\n' > "$fixture/app/package.json"
 printf 'candidate\n' > "$fixture/app/version.txt"
+printf 'export {};\n' > "$fixture/app/scripts/workspace-runtime.mjs"
+printf 'export {};\n' > "$fixture/app/scripts/production-migrate.mjs"
+printf '<!doctype html>workspace\n' > "$fixture/app/dist-workspace/workspace.html"
+printf '<!doctype html>sportpaleis\n' > "$fixture/app/dist-workspace/sportpaleis.html"
+printf 'asset\n' > "$fixture/app/dist-workspace/assets/app.js"
+cat > "$fixture/deployment/wbd-workspace.service" <<'EOF'
+[Service]
+WorkingDirectory=/srv/wbd/current/website
+ExecStart=/usr/bin/node /srv/wbd/current/website/scripts/workspace-runtime.mjs
+EOF
 node - "$fixture" "$candidate_id" "$commit" "$tag" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const [root, releaseId, commit, tag] = process.argv.slice(2);
-const files = ["app/package-lock.json", "app/package.json", "app/version.txt"].map((name) => {
+const files = [
+  "app/package-lock.json", "app/package.json", "app/version.txt",
+  "app/scripts/workspace-runtime.mjs", "app/scripts/production-migrate.mjs",
+  "app/dist-workspace/workspace.html", "app/dist-workspace/sportpaleis.html",
+  "app/dist-workspace/assets/app.js", "deployment/wbd-workspace.service",
+].map((name) => {
   const bytes = fs.readFileSync(path.join(root, name));
   return { path: name, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
 });
 fs.writeFileSync(path.join(root, "RELEASE-MANIFEST.json"), JSON.stringify({ schemaVersion: 2, releaseId, commit, tag, files }, null, 2));
 NODE
-tar -C "$fixture" -czf "$artifact" app RELEASE-MANIFEST.json
+tar -C "$fixture" -czf "$artifact" app deployment RELEASE-MANIFEST.json
 artifact_hash="$(sha256sum "$artifact" | awk '{print $1}')"
 cat > "$external_manifest" <<EOF
 {"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$artifact")","artifactSha256":"$artifact_hash"}
 EOF
+
+# Een structureel incompleet raw artifact moet vóór staging, rollbackmateriaal en
+# deployplan fail-closed stoppen. De actieve release blijft daarbij onaangeraakt.
+bad_layout_fixture="$root/fixture-bad-layout"
+bad_layout_artifact="$root/$candidate_id.bad-layout.tar.gz"
+bad_layout_manifest="$root/$candidate_id.bad-layout.manifest.json"
+cp -a "$fixture" "$bad_layout_fixture"
+rm -f "$bad_layout_fixture/app/scripts/workspace-runtime.mjs"
+tar -C "$bad_layout_fixture" -czf "$bad_layout_artifact" app deployment RELEASE-MANIFEST.json
+bad_layout_hash="$(sha256sum "$bad_layout_artifact" | awk '{print $1}')"
+cat > "$bad_layout_manifest" <<EOF
+{"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$bad_layout_artifact")","artifactSha256":"$bad_layout_hash"}
+EOF
+if $deploy_script prepare --artifact "$bad_layout_artifact" --manifest "$bad_layout_manifest" --expected-current "$old_id" >"$root/bad-layout.out" 2>&1; then
+  printf 'incompleet raw artifact werd ten onrechte geaccepteerd\n' >&2
+  exit 1
+fi
+grep -q 'vereist artifactpad ontbreekt: app/scripts/workspace-runtime.mjs' "$root/bad-layout.out"
+[[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$old_id" ]]
+[[ ! -e "$WBD_ROOT/releases/$candidate_id" ]]
+[[ ! -e "$WBD_ROOT/shared/deploy-plans/$candidate_id.json" ]]
+[[ ! -e "$WBD_ROOT/shared/deploy-rollbacks/$candidate_id-prechange.tar.gz" ]]
 
 output="$($deploy_script prepare --artifact "$artifact" --manifest "$external_manifest" --expected-current "$old_id")"
 grep -q 'PREPARE=PASS' <<<"$output"
@@ -63,6 +101,9 @@ grep -q "RELEASE_ID=$old_id" "$WBD_ENV_FILE"
 plan="$WBD_ROOT/shared/deploy-plans/$candidate_id.json"
 [[ -f "$plan" && -f "${plan}.sha256" ]]
 [[ -f "$WBD_ROOT/shared/deploy-rollbacks/$candidate_id-prechange.tar.gz" ]]
+[[ -f "$WBD_ROOT/releases/$candidate_id/website/scripts/workspace-runtime.mjs" ]]
+[[ -f "$WBD_ROOT/releases/$candidate_id/website/package.json" ]]
+[[ ! -e "$WBD_ROOT/releases/$candidate_id/app" ]]
 
 export SPW_TEST_READINESS_STATUS=PASS
 $deploy_script switch --plan "$plan" --human-go "$candidate_id" >/dev/null
@@ -85,7 +126,7 @@ value.releaseId = releaseId;
 value.tag = releaseId;
 fs.writeFileSync(file, JSON.stringify(value, null, 2));
 NODE
-tar -C "$second_fixture" -czf "$second_artifact" app RELEASE-MANIFEST.json
+tar -C "$second_fixture" -czf "$second_artifact" app deployment RELEASE-MANIFEST.json
 second_hash="$(sha256sum "$second_artifact" | awk '{print $1}')"
 cat > "$second_manifest" <<EOF
 {"releaseId":"$second_id","commit":"$commit","tag":"$second_id","artifact":"$(basename "$second_artifact")","artifactSha256":"$second_hash"}
