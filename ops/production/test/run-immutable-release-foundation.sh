@@ -6,6 +6,18 @@ deploy_script="$(cd "$script_dir/.." && pwd)/spw-immutable-release.sh"
 root="$(mktemp -d .deploy-foundation-test.XXXXXX)"
 trap 'rm -rf -- "$root"' EXIT
 
+# Alleen exact de bewezen 308 plus het canonieke doel is geldig. Geen generieke
+# 3xx-acceptatie en geen redirect naar een ander doel.
+bash -c 'source "$1"; verify_redirect_contract 308 /productie /productie' _ "$deploy_script"
+if bash -c 'source "$1"; verify_redirect_contract 302 /productie /productie' _ "$deploy_script"; then
+  printf '302 werd ten onrechte als canonieke redirect geaccepteerd\n' >&2
+  exit 1
+fi
+if bash -c 'source "$1"; verify_redirect_contract 308 /verkeerd /productie' _ "$deploy_script"; then
+  printf 'verkeerd redirectdoel werd ten onrechte geaccepteerd\n' >&2
+  exit 1
+fi
+
 export SPW_DEPLOY_TEST_MODE=1
 export SPW_SKIP_DEPENDENCY_INSTALL=1
 export WBD_ROOT="$root/srv/wbd"
@@ -155,8 +167,21 @@ set -e
 grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
 grep -q 'result=ROLLED_BACK' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
 
-# Ook een fout tussen env-update en symlink-update herstelt de oude env/state.
+# Ook een rode post-switch smoke rolt automatisch terug, nadat readiness zelf
+# al groen was. De kandidaat mag niet actief achterblijven.
 unset SPW_TEST_FAIL_RELEASE
+export SPW_TEST_POST_SWITCH_SMOKE_STATUS=FAIL
+set +e
+$deploy_script switch --plan "$second_plan" --human-go "$second_id" >/dev/null 2>&1
+status=$?
+set -e
+[[ "$status" -ne 0 ]]
+[[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$candidate_id" ]]
+grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
+grep -q 'result=ROLLED_BACK' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
+unset SPW_TEST_POST_SWITCH_SMOKE_STATUS
+
+# Ook een fout tussen env-update en symlink-update herstelt de oude env/state.
 export SPW_TEST_FAIL_ATOMIC_RELEASE="$second_id"
 set +e
 $deploy_script switch --plan "$second_plan" --human-go "$second_id" >/dev/null 2>&1
@@ -178,5 +203,7 @@ printf 'IMMUTABLE_RELEASE_FOUNDATION_TESTS=PASS\n'
 printf 'PREPARE_WITHOUT_SWITCH=PASS\n'
 printf 'ATOMIC_SWITCH=PASS\n'
 printf 'AUTOMATIC_APPLICATION_ROLLBACK=PASS\n'
+printf 'EXACT_CANONICAL_REDIRECT_SMOKE=PASS\n'
+printf 'POST_SWITCH_SMOKE_ROLLBACK=PASS\n'
 printf 'INTERMEDIATE_SWITCH_FAILURE_ROLLBACK=PASS\n'
 printf 'STALE_AND_HUMAN_GO_GUARDS=PASS\n'

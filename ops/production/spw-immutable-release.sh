@@ -370,6 +370,50 @@ verify_readiness() {
   node -e 'const value=JSON.parse(process.argv[1]); if(value.status!=="ready"||value.releaseId!==process.argv[2]) process.exit(1)' "$response" "$expected_release"
 }
 
+verify_redirect_contract() {
+  local status="$1" location="$2" expected_location="$3"
+  [[ "$status" == "308" ]] || return 1
+  [[ "$location" == "$expected_location" ]] || return 1
+}
+
+verify_exact_canonical_redirect() {
+  local source_path="$1" expected_location="$2" headers status location
+  headers="$(mktemp)"
+  status="$(curl -sS --max-time 12 --resolve "$READY_RESOLVE" -D "$headers" -o /dev/null -w '%{http_code}' "https://workspace.sportpaleis.nl$source_path")" || {
+    rm -f -- "$headers"
+    return 1
+  }
+  location="$(awk 'BEGIN { IGNORECASE=1 } /^Location:/ { sub(/\r$/, ""); sub(/^[^:]+:[[:space:]]*/, ""); value=$0 } END { print value }' "$headers")"
+  rm -f -- "$headers"
+  verify_redirect_contract "$status" "$location" "$expected_location"
+}
+
+verify_http_200() {
+  local path="$1" status
+  status="$(curl -sS --max-time 12 --resolve "$READY_RESOLVE" -o /dev/null -w '%{http_code}' "https://workspace.sportpaleis.nl$path")" || return 1
+  [[ "$status" == "200" ]]
+}
+
+verify_post_switch_smoke() {
+  if [[ "$TEST_MODE" == "1" ]]; then
+    [[ "${SPW_TEST_POST_SWITCH_SMOKE_STATUS:-PASS}" == "PASS" ]]
+    return
+  fi
+
+  verify_http_200 "/healthz"
+  verify_http_200 "/sportpaleis-sw.js"
+  while IFS='|' read -r source_path canonical_path; do
+    verify_exact_canonical_redirect "$source_path" "$canonical_path"
+    verify_http_200 "$canonical_path"
+  done <<'ROUTES'
+/workspace/sportpaleis/overzicht|/overzicht
+/workspace/sportpaleis/productie|/productie
+/workspace/sportpaleis/productie/elementen|/productie/elementen
+/workspace/sportpaleis/orders/team|/orders/team
+/workspace/sportpaleis/productie/historie|/productie/historie
+ROUTES
+}
+
 write_evidence() {
   local release_id="$1" plan="$2" result="$3" directory="$EVIDENCE_DIR/$release_id"
   mkdir -p "$directory"
@@ -516,6 +560,7 @@ command_switch() {
   if [[ "$switch_status" -eq 0 ]]; then atomic_link "$candidate_path"; switch_status=$?; fi
   if [[ "$switch_status" -eq 0 ]]; then service_restart; switch_status=$?; fi
   if [[ "$switch_status" -eq 0 ]]; then verify_readiness "$release_id"; switch_status=$?; fi
+  if [[ "$switch_status" -eq 0 ]]; then verify_post_switch_smoke; switch_status=$?; fi
   if [[ "$switch_status" -eq 0 ]]; then write_evidence "$release_id" "$plan" PASS; switch_status=$?; fi
   set -e
   if [[ "$switch_status" -eq 0 ]]; then
@@ -523,10 +568,10 @@ command_switch() {
     log "ACTIVE_RELEASE=$release_id"
     return
   fi
-  log "SWITCH_OR_READINESS=FAIL; AUTOMATIC_APPLICATION_ROLLBACK=STARTED" >&2
+  log "SWITCH_READINESS_OR_SMOKE=FAIL; AUTOMATIC_APPLICATION_ROLLBACK=STARTED" >&2
   rollback_application "$plan"
   write_evidence "$release_id" "$plan" ROLLED_BACK
-  fail "kandidaatswitch/readiness faalde; vorige applicatierelease is automatisch hersteld."
+  fail "kandidaatswitch/readiness/smoke faalde; vorige applicatierelease is automatisch hersteld."
 }
 
 main() {
@@ -546,4 +591,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -111,7 +111,14 @@ Na de switch moet host-routed `/readyz` JSON teruggeven met:
 {"status":"ready","releaseId":"SPW-FINAL-PRODUCTION-UX-20260821"}
 ```
 
-Bij restart- of readiness-failure herstelt de tool automatisch:
+De automatische post-switch smoke valideert bekende Sportpaleis-routes in
+twee stappen. De legacy Workspace-URL moet exact HTTP `308` geven met het
+verwachte relatieve canonieke doel (bijvoorbeeld
+`/workspace/sportpaleis/productie` → `/productie`); vervolgens moet uitsluitend
+dat doel HTTP `200` geven. Andere 3xx-statussen en afwijkende `Location`-waarden
+zijn fail-closed en activeren dezelfde applicatierollback.
+
+Bij restart-, readiness- of smoke-failure herstelt de tool automatisch:
 
 1. het prechange-productie-envbestand;
 2. `/srv/wbd/current` naar de vorige immutable release;
