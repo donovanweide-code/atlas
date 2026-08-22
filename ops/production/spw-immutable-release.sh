@@ -25,8 +25,16 @@ PLAN_DIR="$SHARED_DIR/deploy-plans"
 EVIDENCE_DIR="$SHARED_DIR/deploy-evidence"
 LOCK_FILE="$SHARED_DIR/.spw-release-deploy.lock"
 
+LAST_FAILURE_REASON=""
+SWITCH_PREACTIVATION=0
+SWITCH_EVIDENCE_RELEASE=""
+SWITCH_EVIDENCE_PLAN=""
+SWITCH_STEP="UNSET"
+SWITCH_GATE="UNSET"
+SWITCH_GATE_REASON="Pre-activation gate faalde."
+
 log() { printf '%s\n' "$*"; }
-fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+fail() { LAST_FAILURE_REASON="$*"; printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
@@ -475,16 +483,42 @@ ROUTES
 }
 
 write_evidence() {
-  local release_id="$1" plan="$2" result="$3" directory="$EVIDENCE_DIR/$release_id"
+  local release_id="$1" plan="$2" result="$3" step="${4:-}" failed_gate="${5:-}" reason="${6:-}" remote_exit_code="${7:-}"
+  local directory="$EVIDENCE_DIR/$release_id" plan_hash="UNAVAILABLE"
+  [[ -f "$plan" ]] && plan_hash="$(sha256_file "$plan")"
   mkdir -p "$directory"
   {
     printf 'release=%s\n' "$release_id"
-    printf 'plan_sha256=%s\n' "$(sha256_file "$plan")"
+    printf 'plan_sha256=%s\n' "$plan_hash"
     printf 'result=%s\n' "$result"
+    [[ -n "$step" ]] && printf 'step=%s\n' "$step"
+    [[ -n "$failed_gate" ]] && printf 'failed_gate=%s\n' "$failed_gate"
+    [[ -n "$reason" ]] && printf 'reason=%s\n' "$reason"
+    [[ -n "$remote_exit_code" ]] && printf 'remote_exit_code=%s\n' "$remote_exit_code"
     printf 'recorded_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$directory/deployment.txt.tmp"
   mv "$directory/deployment.txt.tmp" "$directory/deployment.txt"
   chmod 0640 "$directory/deployment.txt"
+}
+
+set_switch_gate() {
+  SWITCH_STEP="$1"
+  SWITCH_GATE="$2"
+  SWITCH_GATE_REASON="$3"
+  printf 'STEP=%s\nGATE=%s\n' "$SWITCH_STEP" "$SWITCH_GATE"
+}
+
+switch_exit_evidence() {
+  local exit_code=$?
+  trap - EXIT
+  if [[ "$exit_code" -ne 0 && "$SWITCH_PREACTIVATION" == "1" ]]; then
+    local reason="${LAST_FAILURE_REASON:-$SWITCH_GATE_REASON}"
+    write_evidence "$SWITCH_EVIDENCE_RELEASE" "$SWITCH_EVIDENCE_PLAN" PRECHECK_FAILED \
+      "$SWITCH_STEP" "$SWITCH_GATE" "$reason" "$exit_code" || true
+    printf 'STEP=%s\nFAILED_GATE=%s\nREASON=%s\nREMOTE_EXIT_CODE=%s\n' \
+      "$SWITCH_STEP" "$SWITCH_GATE" "$reason" "$exit_code" >&2
+  fi
+  exit "$exit_code"
 }
 
 rollback_application() {
@@ -588,12 +622,21 @@ command_switch() {
   done
   [[ -n "$plan" && -n "$human_go" ]] || fail "switch vereist --plan en --human-go."
   validate_release_id "$human_go"
+  set_switch_gate CORE_PREFLIGHT PLAN_CHECKSUM "Deployplan of checksum is ongeldig."
   verify_plan "$plan"
   local release_id candidate_path previous_path previous_id expected_env_hash expected_manifest_hash
   local rollback rollback_hash env_snapshot env_snapshot_hash
   release_id="$(manifest_field "$plan" releaseId)"
+  validate_release_id "$release_id"
+  SWITCH_EVIDENCE_RELEASE="$release_id"
+  SWITCH_EVIDENCE_PLAN="$plan"
+  SWITCH_PREACTIVATION=1
+  trap switch_exit_evidence EXIT
+  set_switch_gate CORE_PREFLIGHT HUMAN_GO_MATCH "Human GO komt niet overeen met het checksum-locked deployplan."
   [[ "$human_go" == "$release_id" ]] || fail "Human GO komt niet overeen met deployplan."
+  set_switch_gate CORE_PREFLIGHT CANDIDATE_PATH "Kandidaatpad uit het deployplan is ongeldig."
   candidate_path="$(normalize_plan_path "$(manifest_field "$plan" candidatePath)")"
+  set_switch_gate CORE_PREFLIGHT PREVIOUS_PATH "Vorige releasepad uit het deployplan is ongeldig."
   previous_path="$(normalize_plan_path "$(manifest_field "$plan" previous.path)")"
   previous_id="$(manifest_field "$plan" previous.releaseId)"
   expected_env_hash="$(manifest_field "$plan" productionEnvSha256)"
@@ -603,16 +646,26 @@ command_switch() {
   env_snapshot="$(normalize_plan_path "$(manifest_field "$plan" rollback.environmentSnapshot)")"
   env_snapshot_hash="$(manifest_field "$plan" rollback.environmentSnapshotSha256)"
   local actual_current
+  set_switch_gate CORE_PREFLIGHT CURRENT_RELEASE "Actieve release wijkt af van het deployplan."
   actual_current="$(current_release_path)"
   [[ "$actual_current" == "$previous_path" ]] || fail "stale plan: current is gewijzigd (actueel=$actual_current, verwacht=$previous_path)."
+  set_switch_gate CORE_PREFLIGHT CURRENT_MANIFEST "Manifest van de actieve release wijkt af van het deployplan."
   [[ "$(sha256_file "$previous_path/RELEASE-MANIFEST.json")" == "$expected_manifest_hash" ]] || fail "stale plan: huidig manifest is gewijzigd."
+  set_switch_gate CORE_PREFLIGHT PRODUCTION_ENV "Productie-environment wijkt af van het deployplan."
   [[ "$(sha256_file "$ENV_FILE")" == "$expected_env_hash" ]] || fail "stale plan: productie-env is gewijzigd."
+  set_switch_gate CORE_PREFLIGHT ROLLBACK_ARTIFACT "Rollbackartifact wijkt af van het deployplan."
   [[ "$(sha256_file "$rollback")" == "$rollback_hash" ]] || fail "rollbackartifact is gewijzigd."
+  set_switch_gate CORE_PREFLIGHT ENVIRONMENT_SNAPSHOT "Rollback-environmentsnapshot wijkt af van het deployplan."
   [[ "$(sha256_file "$env_snapshot")" == "$env_snapshot_hash" ]] || fail "rollback-envsnapshot is gewijzigd."
+  set_switch_gate CORE_PREFLIGHT BACKUP_FRESHNESS "Actuele backup of backupchecksum voldoet niet."
   verify_backup >/dev/null
+  set_switch_gate CORE_PREFLIGHT CURRENT_CONSISTENCY "Actieve symlink en RELEASE_ID zijn niet consistent."
   verify_current_consistency
 
+  set_switch_gate CORE_PREFLIGHT DEPLOYMENT_LOCK "Een andere deployment houdt de lock vast."
   acquire_lock
+  SWITCH_PREACTIVATION=0
+  set_switch_gate ACTIVATION ATOMIC_SWITCH "Kandidaatactivering is gestart."
   local switch_status=0
   set +e
   replace_release_id "$release_id" "$ENV_FILE" "$ENV_FILE"
@@ -624,6 +677,7 @@ command_switch() {
   if [[ "$switch_status" -eq 0 ]]; then write_evidence "$release_id" "$plan" PASS; switch_status=$?; fi
   set -e
   if [[ "$switch_status" -eq 0 ]]; then
+    trap - EXIT
     log "SWITCH=PASS"
     log "ACTIVE_RELEASE=$release_id"
     return
@@ -631,6 +685,7 @@ command_switch() {
   log "SWITCH_READINESS_OR_SMOKE=FAIL; AUTOMATIC_APPLICATION_ROLLBACK=STARTED" >&2
   rollback_application "$plan"
   write_evidence "$release_id" "$plan" ROLLED_BACK
+  trap - EXIT
   fail "kandidaatswitch/readiness/smoke faalde; vorige applicatierelease is automatisch hersteld."
 }
 

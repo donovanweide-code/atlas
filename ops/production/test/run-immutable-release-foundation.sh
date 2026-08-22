@@ -155,6 +155,14 @@ status=$?
 set -e
 [[ "$status" -ne 0 ]]
 [[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$candidate_id" ]]
+grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
+precheck_evidence="$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
+[[ -f "$precheck_evidence" ]]
+grep -q '^result=PRECHECK_FAILED$' "$precheck_evidence"
+grep -q '^step=CORE_PREFLIGHT$' "$precheck_evidence"
+grep -q '^failed_gate=PRODUCTION_ENV$' "$precheck_evidence"
+grep -q '^reason=stale plan: productie-env is gewijzigd\.$' "$precheck_evidence"
+grep -q '^remote_exit_code=1$' "$precheck_evidence"
 cp "$root/production.env.before-stale" "$WBD_ENV_FILE"
 
 export SPW_TEST_FAIL_RELEASE="$second_id"
@@ -254,3 +262,5 @@ printf 'EXACT_CANONICAL_REDIRECT_SMOKE=PASS\n'
 printf 'POST_SWITCH_SMOKE_ROLLBACK=PASS\n'
 printf 'INTERMEDIATE_SWITCH_FAILURE_ROLLBACK=PASS\n'
 printf 'STALE_AND_HUMAN_GO_GUARDS=PASS\n'
+printf 'PRECHECK_FAILED_EVIDENCE=PASS\n'
+printf 'PRECHECK_FAILURE_ACTIVE_UNCHANGED=PASS\n'
