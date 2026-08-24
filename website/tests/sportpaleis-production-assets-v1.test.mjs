@@ -294,7 +294,7 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   const assetModule = await readFile(new URL("../src/sportpaleis/production-assets.mjs", import.meta.url), "utf8");
   assert.match(source, /"Bibliotheek"/u);
-  assert.match(source, /card\(`\$\{BASE\}\/productie\/elementen`, "Productie-assets"/u);
+  assert.match(source, /card\(`\$\{BASE\}\/productie\/elementen`, "Bibliotheek"/u);
   assert.doesNotMatch(source, /<div class="sp-panel"><p class="sp-eyebrow">ÉÉN BRON<\/p><h3>Productie-assets<\/h3>/u);
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
@@ -441,7 +441,10 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
 
 test("City logo's jeugd 2026 biedt vier visuele brononderdelen, separate centrale save en individuele order reuse", async (context) => {
   const { service, admin, operator, store } = await fixture(context);
-  const fixtureBytes = await readFile(new URL("./fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg", import.meta.url));
+  // Git may expose this text fixture with CRLF in a Windows worktree. Restore the
+  // authoritative LF bytes before asserting the upload hash and SVG structure.
+  const checkedOutFixture = await readFile(new URL("./fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg", import.meta.url));
+  const fixtureBytes = Buffer.from(checkedOutFixture.toString("utf8").replaceAll("\r\n", "\n"), "utf8");
   const artwork = fixtureBytes.subarray(0, fixtureBytes.length - 2);
   assert.equal(fixtureBytes.subarray(-2).toString("hex"), "0a0a", "alleen twee door de tekstpatch vereiste afsluitende LF-bytes staan buiten de authoritative uploadbytes");
   const inspected = await inspectProductionAssetSource({ bytes: artwork, filename: "City logo's jeugd 2026.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
