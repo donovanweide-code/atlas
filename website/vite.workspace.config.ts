@@ -21,6 +21,11 @@ export default defineConfig({
         fileName: "assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png",
         source: readFileSync(new URL("./public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png", import.meta.url)),
       });
+      this.emitFile({
+        type: "asset",
+        fileName: "assets/organizations/we-build-and-design/logo-candidate-004c1/wbd-logo-light-candidate.svg",
+        source: readFileSync(new URL("./public/assets/organizations/we-build-and-design/logo-candidate-004c1/wbd-logo-light-candidate.svg", import.meta.url)),
+      });
       for (const fileName of readdirSync(new URL("./public/assets/organizations/sportpaleis/association-logos/", import.meta.url)).filter((name) => name.endsWith(".png")).sort()) {
         this.emitFile({
           type: "asset",

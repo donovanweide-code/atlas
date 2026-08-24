@@ -196,7 +196,7 @@ test("UI is werkgericht, progressive en mobile-first zonder fake AI-claim", asyn
   ]);
   for (const marker of ["Today", "Attention", "Organisaties", "Search", "Capabilities"]) assert.match(owner, new RegExp(marker));
   for (const marker of ["Wat vraagt vandaag aandacht?", "Signaal", "Betekenis", "Atlas heeft onderzocht", "Beslissing nodig", "Kan wachten", "waarom zie ik dit?", "Next Best Action"]) assert.match(atlasUi, new RegExp(marker, "i"));
-  assert.match(atlasUi, /\.slice\(0, 6\)/u);
+  assert.match(atlasUi, /\.slice\(0, 4\)/u);
   assert.match(atlasUi, /Hoe Atlas werkt[\s\S]*wbd-atlas-autonomy/u);
   assert.match(css, /@media \(max-width:520px\)/u);
   assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/u);

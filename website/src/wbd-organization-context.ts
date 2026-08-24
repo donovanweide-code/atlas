@@ -77,7 +77,7 @@ function organizationSummary(control: ControlView, organization: ControlOrganiza
   const activeCommitments = context.commitments.filter(({ status }) => status === "ACTIVE").length;
   const attention = openActions ? `${openActions} bevestigde ${openActions === 1 ? "actie" : "acties"}` : "Geen bevestigde actie";
   return `<a class="wbd-directory-card" href="${organizationsPath}/${encodeURIComponent(organization.id)}" data-organization-entry data-search="${esc(`${organization.name} ${organization.relationshipType} ${organization.status}`.toLocaleLowerCase("nl-NL"))}" data-relationship="${esc(organization.relationshipType)}" data-status="${esc(organization.status)}">
-    <header><div class="wbd-directory-identity"><span class="wbd-directory-logo"><img src="/wbd-owner-icon.svg" alt=""></span><div><span>${esc(human(organization.relationshipType))}</span><h2>${esc(organization.name)}</h2></div></div><span class="wbd-context-chip" data-status="${esc(organization.status)}">${esc(human(organization.status))}</span></header>
+    <header><div class="wbd-directory-identity"><span class="wbd-directory-logo wbd-directory-logo--wbd"><img src="/assets/organizations/we-build-and-design/logo-candidate-004c1/wbd-logo-light-candidate.svg" alt=""></span><div><span>${esc(human(organization.relationshipType))}</span><h2>${esc(organization.name)}</h2></div></div><span class="wbd-context-chip" data-status="${esc(organization.status)}">${esc(human(organization.status))}</span></header>
     <p>${esc(attention)}</p><dl><div><dt>Kansen</dt><dd>${openOpportunities}</dd></div><div><dt>Afspraken</dt><dd>${activeCommitments}</dd></div><div><dt>Acties</dt><dd>${openActions}</dd></div></dl><strong>Open context →</strong>
   </a>`;
 }
