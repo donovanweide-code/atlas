@@ -138,7 +138,7 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
     const serviceSource = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
-    assert.match(source, /SPW-007B-20260807/); assert.match(source, /placeholder="Zoek order"/);
+    assert.match(source, /SPW-007B-20260807/); assert.match(source, /data-order-search/);
     assert.match(source, /Deze pagina hoort niet bij de winkelrol/); assert.doesNotMatch(source, /Keyboard-wedge datamodel voorbereid/);
     assert.match(source, /Winkelmedewerker/); assert.match(source, /Patrick · Productie/); assert.match(source, /Kevin · Beheer/);
   assert.match(source, /WBD & commercieel/);

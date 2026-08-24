@@ -108,7 +108,7 @@ test("008A - Winkelmedewerker simplification", async (context) => {
   await context.test("UI-bron borgt herstelde storevolgorde, exemplaren, prijsgrens en focus", async () => {
     const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
     const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
-    assert.match(source, /"Mijn werk"/);
+    assert.match(source, /"Vandaag"/);
     for (const label of ["In behandeling", "Klaar", "Klant geïnformeerd", "Opgehaald", "Klaar voor productie"]) assert.match(source, new RegExp(label));
     assert.ok(source.indexOf("<h2>Vereniging</h2>") < source.indexOf("<h2>Kies de artikelen</h2>"));
     assert.ok(source.indexOf("<h2>Kies de artikelen</h2>") < source.indexOf("<h2>Wat moet erop?</h2>"));
