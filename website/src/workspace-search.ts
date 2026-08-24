@@ -32,6 +32,10 @@ export function isOperationalOrder(order: PilotBootstrap["orders"][number]): boo
   return !order.deletion && !isConfirmedPilotTestOrder(order);
 }
 
+export function isOperationalProductionOrder(order: PilotBootstrap["orders"][number]): boolean {
+  return isOperationalOrder(order) && order.productionArchive?.status !== "ARCHIVED";
+}
+
 export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/workspace/sportpaleis"): WorkspaceSearchItem[] {
   const items: WorkspaceSearchItem[] = [];
   for (const order of state.orders.filter(isOperationalOrder)) {

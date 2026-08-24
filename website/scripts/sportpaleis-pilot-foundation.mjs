@@ -11,7 +11,7 @@ import {
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
-import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
+import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects } from "../src/sportpaleis/direct-print/index.ts";
 import {
   CUTJOB_SVG_WRITER,
   PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID,
@@ -53,6 +53,7 @@ import {
   publicQuickProductionIntake,
   quickIntakeOrderPayload,
 } from "../src/sportpaleis/quick-production-intake.mjs";
+import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -67,7 +68,7 @@ const PILOT_SCHEMA_VERSION = 12;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
-const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "shortsNumber"];
+const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "chestNumber", "shortsNumber"];
 const NON_WINKEL_ORDER_MAIL_TEMPLATES = new Set(["ORDER_QUESTION"]);
 const PRODUCTION_PROOF_STATUSES = new Set(["CONFIGURED", "GEOMETRY_VALIDATED", "WINPLOT_VALIDATED", "PHYSICALLY_VALIDATED", "DATA_GAP"]);
 const PRODUCTION_LINE_TYPES = new Set(["TEXT", "INITIALS", "NUMBER", "LOGO", "PRODUCTION_ELEMENT"]);
@@ -124,6 +125,7 @@ const sourceProfileFields = [
   ["initials", "Initialen", "initialsShirt"],
   ["name", "Naam", "nameHeight"],
   ["backNumber", "Rugnummer", "backNumberSenior"],
+  ["chestNumber", "Borstnummer", "chestNumber"],
   ["shortsNumber", "Shortnummer", "shortsNumber"],
 ];
 for (const association of SPORTPALEIS_ASSOCIATIONS) {
@@ -532,7 +534,7 @@ export function migrateSportpaleisPilotState(input) {
       };
   }
   for (const order of state.orders ?? []) {
-    order.standardPersonalization ??= { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
+    order.standardPersonalization ??= { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
     order.standardPersonalization.initialsInfix ??= "";
     for (const item of order.items ?? []) for (const variant of item.variants ?? []) if (variant.personalizationValues) variant.personalizationValues.initialsInfix ??= "";
     order.standardPersonalization.backNumberSizeClass ??= "";
@@ -822,6 +824,12 @@ export function validateSportpaleisPilotState(input) {
       for (const field of PERSONALIZATION_FIELDS) if (existing.priceConfiguration.personalizationUnitPricesEur[field] == null && article.priceConfiguration?.personalizationUnitPricesEur?.[field] != null) existing.priceConfiguration.personalizationUnitPricesEur[field] = article.priceConfiguration.personalizationUnitPricesEur[field];
       if ((!existing.priceConfiguration.sourceLabel || existing.priceConfiguration.sourceLabel.startsWith("DATA_GAP")) && article.priceConfiguration?.sourceLabel) existing.priceConfiguration.sourceLabel = article.priceConfiguration.sourceLabel;
       existing.displayOrder ??= ARTICLE_CATALOG.findIndex(({ id }) => id === article.id) + 1;
+      if (article.articleNumber === "140298") {
+        existing.supports = structuredClone(article.supports);
+        existing.personalizationPolicy = structuredClone(article.personalizationPolicy);
+        existing.commercialPrintOptions = structuredClone(article.commercialPrintOptions);
+        existing.printRelevance = structuredClone(article.printRelevance);
+      }
     }
   }
   state.productionProfiles ??= structuredClone(PRODUCTION_PROFILES);
@@ -1190,7 +1198,7 @@ function assertRole(user, allowed) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -1200,6 +1208,7 @@ export class SportpaleisPilotService {
     this.sessionTtlMs = sessionTtlMs;
     this.demoMode = demoMode === true;
     this.uploadsEnabled = uploadsEnabled === true;
+    this.productionAssetUploadsEnabled = productionAssetUploadsEnabled === true;
     this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
     this.artifactRoot = path.resolve(artifactRoot);
@@ -1412,7 +1421,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -2094,6 +2103,50 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async archiveProductionWork(token, csrfToken, orderId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const order = state.orders.find(({ id }) => id === orderId);
+      if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+      if (order.productionArchive?.status === "ARCHIVED") return { state, value: order };
+      const jobs = state.productionJobs.filter((job) => job.snapshot.orderIds.includes(order.id));
+      if (jobs.some(({ status }) => status === "AWAITING_HUMAN_CHECK")) throw Object.assign(new Error("Rond de actieve fysieke productiestap eerst af; archiveren is nu geblokkeerd."), { statusCode: 409, code: "PRODUCTION_WORK_ACTIVE" });
+      const sharedOpenGroup = (state.productionProposals ?? []).flatMap(({ groups }) => groups ?? []).find((group) => group.status === "OPEN" && group.orders.some(({ id }) => id === order.id) && group.orders.some(({ id }) => id !== order.id && !state.orders.find((candidate) => candidate.id === id)?.productionArchive));
+      if (sharedOpenGroup) throw Object.assign(new Error("Deze order deelt een open productiebatch met andere orders. Splits of rond die batch eerst af."), { statusCode: 409, code: "PRODUCTION_WORK_SHARED_GROUP" });
+      const at = iso();
+      order.productionArchive = { status: "ARCHIVED", at, byUserId: user.id, byUserName: user.name, reason: optional(payload.reason, 300) || null, preservedProductionJobIds: jobs.map(({ id }) => id) };
+      order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
+      order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_WORK_ARCHIVED", at, userId: user.id, userName: user.name, source: "button", details: { reason: order.productionArchive.reason, preservedProductionJobIds: order.productionArchive.preservedProductionJobIds } });
+      audit(state, user.id, "Productie uit werkvoorraad gehaald", order.id, { reason: order.productionArchive.reason, productionHistoryPreserved: true, preservedProductionJobIds: order.productionArchive.preservedProductionJobIds });
+      return { state, value: order };
+    });
+    return result.value;
+  }
+
+  async preliveCleanupPlan(token) {
+    const { user, state } = await this.authenticate(token); assertRole(user, ["admin"]);
+    const inventory = preliveCleanupInventory(state);
+    const evidence = cleanupEvidenceManifest(state, inventory, { releaseId: this.releaseId, actor: user.id });
+    return { inventory, evidence: { sha256: evidence.sha256, recordCounts: { orders: evidence.orders.length, proposals: evidence.productionProposals.length, productionJobs: evidence.productionJobs.length, audit: evidence.audit.length }, exclusions: evidence.exclusions }, deletionExecuted: false, cleanupGoRequired: true };
+  }
+
+  async restoreProductionWork(token, csrfToken, orderId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const order = state.orders.find(({ id }) => id === orderId);
+      if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+      if (!order.productionArchive) return { state, value: order };
+      const archived = structuredClone(order.productionArchive); const at = iso(); delete order.productionArchive;
+      order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
+      order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_WORK_RESTORED", at, userId: user.id, userName: user.name, source: "button", details: { archivedAt: archived.at, preservedProductionJobIds: archived.preservedProductionJobIds } });
+      audit(state, user.id, "Productie teruggezet naar werkvoorraad", order.id, { archivedAt: archived.at, productionHistoryPreserved: true });
+      return { state, value: order };
+    });
+    return result.value;
+  }
+
   async addOrderNote(token, csrfToken, orderId, payload, idempotencyKey) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
     const result = await this.store.mutate(async (state) => {
@@ -2250,7 +2303,7 @@ export class SportpaleisPilotService {
 
   async createProductionAssetSource(token, csrfToken, payload) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
-    if (!this.uploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    if (!this.productionAssetUploadsEnabled) throw Object.assign(new Error("Productiebronuploads zijn uitgeschakeld."), { statusCode: 403, code: "PRODUCTION_ASSET_UPLOADS_DISABLED" });
     const bytes = Buffer.from(requiredText(payload.dataBase64, "Bronbestand", 12 * 1024 * 1024), "base64");
     const filename = requiredText(payload.filename, "Bestandsnaam", 180);
     const mimeType = allowedValue(payload.mimeType, ["image/svg+xml", "application/pdf", "application/illustrator", "application/octet-stream"], "Bestandstype");
@@ -3210,7 +3263,10 @@ export class SportpaleisPilotService {
       const next = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), defaultFoilColor: association.defaultFoilColor ?? association.foilColors[0] ?? "Onbekend", dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote, workspaceLogoSha256: association.workspaceLogo?.sha256 ?? null };
       association.validationHistory.unshift({ at: association.updatedAt, userId: user.id, field: "association", previous, next, source: association.juniorValidationNote || "Admin bevestiging in Workspace" });
       const profileInputsChanged = previous.fontProfile !== next.fontProfile || JSON.stringify(previous.dimensionsCm) !== JSON.stringify(next.dimensionsCm) || previous.juniorValidationStatus !== next.juniorValidationStatus || previous.juniorPhysicalHeightMm !== next.juniorPhysicalHeightMm || JSON.stringify(previous.juniorGarmentSizes) !== JSON.stringify(next.juniorGarmentSizes) || previous.juniorValidationNote !== next.juniorValidationNote;
-      const linkedProfileIds = profileInputsChanged ? new Set(state.articles.filter((article) => article.association === association.name).map(({ profileId }) => profileId)) : new Set();
+      const linkedProfileIds = profileInputsChanged ? new Set([
+        ...state.articles.filter((article) => article.association === association.name).map(({ profileId }) => profileId),
+        ...state.productionProfiles.filter(({ id }) => id.startsWith(`profile-source-${profileSlug(association.name)}-`)).map(({ id }) => id),
+      ]) : new Set();
       for (const profile of state.productionProfiles.filter(({ id }) => linkedProfileIds.has(id))) {
         const previousProfile = structuredClone(profile);
         profile.fontProfile = association.fontProfile;
@@ -3561,6 +3617,7 @@ function validatePersonalization(value, { requireBackNumberSizeClass = false } =
     initialsSemantic: null,
     name: optional(value.name, 40),
     backNumber,
+    chestNumber: optional(value.chestNumber, 4),
     backNumberSizeClass,
     shortsNumber: optional(value.shortsNumber, 4),
   };
@@ -3589,6 +3646,7 @@ function associationProfileSizeLabel(association, profile) {
     if (dimensions.backNumberSenior) labels.push(`Rug Senior ${dimensions.backNumberSenior} cm`);
     if (association.juniorValidationStatus === "VALIDATED") labels.push(`Rug Junior ${association.juniorPhysicalHeightMm} mm (${(association.juniorGarmentSizes ?? []).join("–")})`);
   }
+  if (profile.supports?.includes("chestNumber") && dimensions.chestNumber) labels.push(`Borst ${dimensions.chestNumber} cm`);
   if (profile.supports?.includes("shortsNumber") && dimensions.shortsNumber) labels.push(`Short ${dimensions.shortsNumber} cm`);
   return labels.join(" · ") || profile.sizeLabel;
 }
@@ -3749,7 +3807,7 @@ function validateProductionLines(value, state, user, orderKind) {
 function deriveCatalogProductionLines(state, orderId, items) {
   const raw = [];
   for (const item of items) {
-    const profile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
+    const baseProfile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
     for (const variant of item.variants ?? []) {
       const values = variant.personalizationValues ?? {};
       const initials = normalizeProductionContent("INITIALS", values.initials);
@@ -3757,14 +3815,14 @@ function deriveCatalogProductionLines(state, orderId, items) {
       if (initialsInfix) {
         const characters = Array.from(initials);
         if (characters.length !== 2) throw new Error("Samengestelde initialen vereisen exact twee initialen.");
-        const rule = profile?.initialsInfixRule;
+        const rule = baseProfile?.initialsInfixRule;
         const compositeText = `${characters[0]}${initialsInfix}${characters[1]}`;
         const compositionId = `${orderId}:${item.id}:${variant.id}:initials-composite`;
         const ruleComplete = rule?.active && Number(rule.heightMm) > 0 && rule.horizontalSpacingMm !== null && rule.baselineOffsetMm !== null && rule.status !== "DATA_GAP";
         const reason = ruleComplete
-          ? `De bevestigde contour- of fontbron voor samengestelde initialen in ${profile?.name ?? "dit profiel"} is nog niet gekoppeld.`
+          ? `De bevestigde contour- of fontbron voor samengestelde initialen in ${baseProfile?.name ?? "dit profiel"} is nog niet gekoppeld.`
           : "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd.";
-        const placementSnapshot = { compositionId, compositeText, segmentCount: 3, alignment: "CENTER", horizontalSpacingMm: rule?.horizontalSpacingMm ?? null, baselineOffsetMm: rule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: rule?.revision ?? 1 };
+        const placementSnapshot = { compositionId, compositeText, segmentCount: 3, alignment: "CENTER", horizontalSpacingMm: rule?.horizontalSpacingMm ?? null, baselineOffsetMm: rule?.baselineOffsetMm ?? null, profileRevision: baseProfile?.revision ?? 1, ruleRevision: rule?.revision ?? 1 };
         const segments = [
           { role: "INITIALS_FIRST", content: characters[0], type: "INITIALS", segmentIndex: 0, heightMm: 0 },
           { role: "INITIALS_INFIX", content: initialsInfix, type: "TEXT", segmentIndex: 1, heightMm: ruleComplete ? Number(rule.heightMm) : 0 },
@@ -3775,12 +3833,12 @@ function deriveCatalogProductionLines(state, orderId, items) {
           orderId, itemId: item.id, variantId: variant.id,
           type: segment.type,
           content: segment.content,
-          source: { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) },
+          source: { kind: "PROFILE", id: baseProfile?.id ?? "profile-data-gap", version: String(baseProfile?.revision ?? 1) },
           widthMm: 0,
           heightMm: segment.heightMm,
           quantity: variant.quantity,
           preview: { kind: "PROFILE_REFERENCE", label: `Samengestelde initialen ${compositeText} · ${segment.segmentIndex + 1}/3`, aspectRatioLocked: false },
-          provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id} · samengestelde initialen`,
+          provenance: `${item.sourceProvenance} · ${baseProfile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id} · samengestelde initialen`,
           proofStatus: "DATA_GAP",
           validation: { status: "BLOCKED", reason },
           placementRole: segment.role,
@@ -3788,8 +3846,13 @@ function deriveCatalogProductionLines(state, orderId, items) {
         });
       }
       for (const field of [...PERSONALIZATION_FIELDS, "initialsInfix"]) {
+        const canonicalField = field === "initialsInfix" ? "initials" : field;
+        const fieldProfileId = `profile-source-${profileSlug(item.association)}-${canonicalField}`;
+        const profile = baseProfile?.supports?.includes(canonicalField)
+          ? baseProfile
+          : state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(canonicalField)) ?? baseProfile;
         if (initialsInfix && (field === "initials" || field === "initialsInfix")) continue;
-        const isNumber = field === "backNumber" || field === "shortsNumber";
+        const isNumber = field === "backNumber" || field === "chestNumber" || field === "shortsNumber";
         const lineType = isNumber ? "NUMBER" : field === "initials" ? "INITIALS" : "TEXT";
         const content = normalizeProductionContent(lineType, values[field], field === "initialsInfix" ? "INITIALS_INFIX" : null);
         if (!content) continue;
@@ -3800,8 +3863,9 @@ function deriveCatalogProductionLines(state, orderId, items) {
           ? Number(variant.backNumberProduction?.physicalHeightMm)
           : Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
         const linkedNumberSet = isNumber ? associationNumberSet(state, item.association) : { association: null, asset: null, ambiguous: false };
-        const associatedNumberHeight = field === "shortsNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.shortsNumber) * 10 : 0;
-        const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" ? 0 : 30;
+        const associatedNumberHeight = field === "shortsNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.shortsNumber) * 10 : field === "chestNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.chestNumber) * 10 : 0;
+        const configuredNumberHeightMissing = field === "chestNumber" && !(associatedNumberHeight > 0) && !(configuredHeight > 0);
+        const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: profile?.productionSourceSetId,
           outputWriterId: profile?.outputWriterId,
@@ -3814,6 +3878,8 @@ function deriveCatalogProductionLines(state, orderId, items) {
         const widthMm = versionedSource?.widthMm ?? (field === "initialsInfix" && !configuredHeight ? 0 : Math.round(Math.max(20, heightMm * Math.max(.5, content.length * .48)) * 1000) / 1000);
         const reason = linkedNumberSet.ambiguous
           ? `Meerdere productierijpe SVG-nummersets zijn aan ${item.association} gekoppeld; kies eerst één authoritative versie.`
+          : configuredNumberHeightMissing
+          ? `Borstnummer is toegestaan, maar de fysieke borstnummermaat ontbreekt nog in het bestaande profiel voor ${item.association}.`
           : field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.horizontalSpacingMm === null || infixRule.baselineOffsetMm === null || infixRule.status === "DATA_GAP")
           ? "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd."
           : linkedNumberSet.asset || versionedSource || managedFont
@@ -3839,10 +3905,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
           widthMm: Math.round(widthMm * 1000) / 1000,
           heightMm: Math.round(heightMm * 1000) / 1000,
           quantity: variant.quantity,
-          preview: { kind: linkedNumberSet.asset || versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(linkedNumberSet.asset || versionedSource) },
+          preview: { kind: linkedNumberSet.asset || versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "chestNumber" ? "Borstnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(linkedNumberSet.asset || versionedSource) },
           provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}${linkedNumberSet.asset ? ` · gekoppelde SVG-nummerset ${linkedNumberSet.asset.id}@${linkedNumberSet.asset.version}` : ""}`,
           proofStatus: linkedNumberSet.asset ? productionElementProof(linkedNumberSet.asset) : versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
-          validation: { status: !linkedNumberSet.ambiguous && (linkedNumberSet.asset || versionedSource || managedFont || field === "initialsInfix" && !reason) ? "VALID" : "BLOCKED", reason },
+          validation: { status: !linkedNumberSet.ambiguous && !configuredNumberHeightMissing && (linkedNumberSet.asset || versionedSource || managedFont || field === "initialsInfix" && !reason) ? "VALID" : "BLOCKED", reason },
           ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "CENTER", horizontalSpacingMm: infixRule?.horizontalSpacingMm ?? null, baselineOffsetMm: infixRule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
         });
       }
@@ -4214,8 +4280,9 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   if (writerIdentities.size !== 1) throw Object.assign(new Error("Eén productiegroep kan alleen productiebronnen voor dezelfde versioned outputwriter bevatten."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const [first] = resolved;
   if (!first || first.source.outputWriterId !== CUTJOB_SVG_WRITER.id || first.source.outputWriterVersion !== CUTJOB_SVG_WRITER.version) throw Object.assign(new Error(`Outputwriter ${[...writerIdentities][0] ?? "onbekend"} is niet geïnstalleerd.`), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
-  const pieces = resolved.flatMap(({ line, piece, pieces: resolvePieces }) => Array.from({ length: line.quantity }, (_, copy) =>
+  const rawPieces = resolved.flatMap(({ line, piece, pieces: resolvePieces }) => Array.from({ length: line.quantity }, (_, copy) =>
     resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).flat());
+  const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm);
   const cutJobBatch = createCutJobBatch({
     organizationId: state.organizationId,
     orderId: orders.map(({ id }) => id).join("+"),
@@ -4287,7 +4354,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
     productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm },
-    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
+    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance, physicalMembers }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), physicalMembers: structuredClone(physicalMembers ?? []), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
     scale: 1,
     artifact: productionArtifact?.artifact ?? { filename: `${jobNumber}-production-manifest.json`, format: "MANIFEST", version: PILOT_RELEASE_ID, sha256: manifestHash, path: `immutable://sportpaleis/plotjobs/${jobNumber}/production-manifest.json`, manifest },
@@ -4399,7 +4466,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       if (item.association && item.association !== article.association) throw Object.assign(new Error("Het artikel hoort niet bij de gekozen vereniging."), { statusCode: 400, code: "ARTICLE_ASSOCIATION_MISMATCH" });
       const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
       if (!profile) throw Object.assign(new Error("Artikel mist een productieprofiel."), { statusCode: 400, code: "PROFILE_MISSING" });
-      const labels = { initials: "Initialen", name: "Naam", backNumber: "Rug", shortsNumber: "Short" };
+      const labels = { initials: "Initialen", name: "Naam", backNumber: "Rug", chestNumber: "Borst", shortsNumber: "Short" };
       const variants = requestedVariants.map((variant) => {
         const variantQuantity = Number(variant.quantity);
         if (!Number.isInteger(variantQuantity) || variantQuantity < 1 || variantQuantity > 99) throw Object.assign(new Error("Ongeldig aantal in artikelvariant."), { statusCode: 400, code: "VALIDATION_ERROR" });
@@ -4407,7 +4474,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         const size = enteredSize || "Niet opgegeven";
         if (enteredSize && article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(enteredSize)) throw Object.assign(new Error(`${enteredSize} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
         const deviation = Boolean(variant.deviation);
-        const overrides = deviation ? validatePersonalization(variant.overrides ?? {}, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
+        const overrides = deviation ? validatePersonalization(variant.overrides ?? {}, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
         const forbiddenOverrides = PERSONALIZATION_FIELDS.filter((field) => !article.supports.includes(field) && Boolean(overrides[field]));
         if (forbiddenOverrides.length) throw Object.assign(new Error(`${article.name} staat deze bedrukking niet toe.`), { statusCode: 400, code: "ARTICLE_PERSONALIZATION_NOT_ALLOWED" });
         const appliedFields = Object.fromEntries(article.supports.map((key) => [key, deviation && Object.hasOwn(overrides, key) ? overrides[key] : standardPersonalization[key] ?? ""]));
@@ -4667,6 +4734,17 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
           : await service.restoreOrder(token, csrf, decodeURIComponent(orderDeletionMatch[1]), payload);
         json(response, 200, value);
         return true;
+      }
+      if (route === "/api/sportpaleis/v1/admin/prelive-cleanup-plan" && method === "GET") {
+        json(response, 200, await service.preliveCleanupPlan(token)); return true;
+      }
+      const productionArchiveMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/production-work\/(archive|restore)$/);
+      if (productionArchiveMatch && method === "POST") {
+        const payload = await readJson(request);
+        const value = productionArchiveMatch[2] === "archive"
+          ? await service.archiveProductionWork(token, csrf, decodeURIComponent(productionArchiveMatch[1]), payload)
+          : await service.restoreProductionWork(token, csrf, decodeURIComponent(productionArchiveMatch[1]), payload);
+        json(response, 200, value); return true;
       }
       const orderNotesMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/notes$/);
       if (orderNotesMatch && method === "POST") {

@@ -119,6 +119,7 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   assert.equal(config.productionDatabases.atlas.name, "wbd_atlas");
   assert.deepEqual(config.productionPolicy, {
     uploadsEnabled: false,
+    productionAssetUploadsEnabled: true,
     fontUploadsEnabled: true,
     mailMode: "capture",
     hardwareOutputEnabled: false,
@@ -132,6 +133,7 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_MAIL_MODE: "smtp" }), /exact capture/);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_SUMMA_ENABLED: "true" }), /exact false/);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_FONT_UPLOADS_ENABLED: "false" }), /exact true/);
+  assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_PRODUCTION_ASSET_UPLOADS_ENABLED: "false" }), /exact true/);
 });
 
 test("production startup controleert Atlas en Workspace vóór luisteren en valt niet terug op files", async () => {
@@ -217,7 +219,6 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
     "app/scripts/organization-brand-foundation.mjs",
     "app/scripts/sportpaleis-production-mail.mjs",
     "app/scripts/sportpaleis-pilot-foundation.mjs",
-    "app/src/workspace-sequence.ts",
     "app/src/sportpaleis/production-sources.ts",
     "app/src/sportpaleis/direct-print/index.ts",
     "app/src/sportpaleis/direct-print/cut-job.ts",

@@ -360,6 +360,21 @@ function optimizeNesting(
 function buildGroup(placed: PlacedObject, request: CutJobRequest): ProductionGroup {
   const input = placed.prepared.input;
   const rotations = allowedNestingRotations(input);
+  const physicalMembers = input.semanticGroup?.physicalMembers?.map((member) => {
+    const memberContours = placed.contours.filter(({ id }) => member.contourIds.includes(id));
+    const memberBounds = boundsForContours(memberContours);
+    return {
+      sourceObjectId: member.sourceObjectId,
+      digit: member.digit,
+      digitIndex: member.digitIndex,
+      ...(member.assetIdentity ? { assetIdentity: member.assetIdentity } : {}),
+      mirrorApplied: input.productionRule.mirror,
+      rotationApplied: totalRotation(input.productionRule.rotation, placed.orientation.nestingRotation),
+      placementMm: { x: memberBounds.minX, y: memberBounds.minY },
+      boundsMm: memberBounds,
+      contourIds: member.contourIds,
+    };
+  });
   return {
     id: `group-${input.id}`,
     label: input.label,
@@ -387,6 +402,7 @@ function buildGroup(placed: PlacedObject, request: CutJobRequest): ProductionGro
     sourceBoundsMm: placed.prepared.sourceBoundsMm,
     boundsMm: placed.boundsMm,
     contours: placed.contours,
+    ...(physicalMembers?.length ? { physicalMembers } : {}),
   };
 }
 

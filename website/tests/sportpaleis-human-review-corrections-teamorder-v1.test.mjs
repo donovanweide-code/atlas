@@ -37,15 +37,15 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.deepEqual(proposal.groups[0].productionLineRefs.map(({ lineId }) => lineId), ["mixed-initials-dw", "mixed-back-10"]);
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "human-review-mixed-job")).value;
   assert.deepEqual(job.snapshot.productionLines.map(({ id, quantity }) => [id, quantity]), [["mixed-initials-dw", 2], ["mixed-back-10", 2]]);
-  assert.equal(job.snapshot.layout.objectCount, 6, "twee semantische rugnummers 10 worden vier fysieke digits naast twee initialen");
+  assert.equal(job.snapshot.layout.objectCount, 4, "twee semantische rugnummers 10 blijven twee herkenbare sets naast twee initialen");
   assert.equal(job.snapshot.scale, 1);
   assert.ok(job.snapshot.layout.usedWidthMm <= 440);
   assert.equal(job.snapshot.layout.edgeMarginMm, 5);
   assert.equal(job.snapshot.layout.minimumGapMm, 6.4);
-  assert.equal(job.snapshot.layout.placements.length, 6);
+  assert.equal(job.snapshot.layout.placements.length, 4);
   const backPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-back-10"));
-  assert.equal(backPlacements.length, 4);
-  assert.deepEqual(backPlacements.map(({ semanticGroup }) => semanticGroup.digit).sort(), ["0", "0", "1", "1"]);
+  assert.equal(backPlacements.length, 2);
+  assert.ok(backPlacements.every(({ physicalMembers }) => physicalMembers.map(({ digit }) => digit).join("") === "10"));
   assert.deepEqual([...new Set(backPlacements.map(({ semanticGroup }) => semanticGroup.copyIndex))].sort(), [1, 2]);
   assert.ok(backPlacements.every(({ sourceWidthMm, sourceHeightMm, widthMm, heightMm }) => {
     const sourceSides = [sourceWidthMm, sourceHeightMm].sort((a, b) => a - b);

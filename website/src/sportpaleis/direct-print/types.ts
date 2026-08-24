@@ -84,6 +84,18 @@ export interface SemanticProductionGroup {
   copyIndex?: number;
   copyCount?: number;
   garmentCompositionSpacingMm: number;
+  /** De herkenbare cijfers waaruit dit fysieke rugnummerexemplaar bestaat. */
+  physicalMembers?: readonly SemanticPhysicalMember[];
+}
+
+export interface SemanticPhysicalMember {
+  sourceObjectId: string;
+  digit: string;
+  digitIndex: number;
+  contourIds: readonly string[];
+  relativePlacementMm: PointMm;
+  sourceBoundsMm: BoundsMm;
+  assetIdentity?: VersionedAssetIdentity;
 }
 
 export interface VersionedAssetIdentity {
@@ -143,6 +155,20 @@ export interface ProductionGroup {
   sourceBoundsMm: BoundsMm;
   boundsMm: BoundsMm;
   contours: readonly VectorContour[];
+  /** Exacte fysieke digituitvoering binnen een herkenbare multi-digit groep. */
+  physicalMembers?: readonly ProductionPhysicalMember[];
+}
+
+export interface ProductionPhysicalMember {
+  sourceObjectId: string;
+  digit: string;
+  digitIndex: number;
+  assetIdentity?: VersionedAssetIdentity;
+  mirrorApplied: boolean;
+  rotationApplied: RotationDegrees;
+  placementMm: PointMm;
+  boundsMm: BoundsMm;
+  contourIds: readonly string[];
 }
 
 export interface ProductionGeometry {

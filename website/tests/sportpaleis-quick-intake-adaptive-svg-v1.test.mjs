@@ -164,11 +164,11 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).version, asset.version);
   assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).sourceId, source.id);
   assert.ok(job.snapshot.layout.productionGeometry?.groups.length > 0);
-  assert.equal(job.snapshot.layout.objectCount, 2, "semantisch rugnummer 18 wordt fysiek als twee digits genest");
+  assert.equal(job.snapshot.layout.objectCount, 1, "semantisch rugnummer 18 blijft één herkenbare fysieke set");
   assert.equal(job.snapshot.productionLines[0].content, "18", "de semantische orderbetekenis blijft ongewijzigd");
-  assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.value), ["18", "18"]);
-  assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.digit).sort(), ["1", "8"]);
-  assert.ok(job.snapshot.layout.placements.every(({ semanticGroup, assetIdentity }) => semanticGroup.garmentCompositionSpacingMm === 30 && semanticGroup.productionProfileId === "profile-source-buitenhout-mhc-backNumber" && assetIdentity.assetId === asset.id && assetIdentity.assetVersion === asset.version));
+  assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.value), ["18"]);
+  assert.deepEqual(job.snapshot.layout.placements[0].physicalMembers.map(({ digit }) => digit), ["1", "8"]);
+  assert.ok(job.snapshot.layout.placements.every(({ semanticGroup, physicalMembers }) => semanticGroup.garmentCompositionSpacingMm === 30 && semanticGroup.productionProfileId === "profile-source-buitenhout-mhc-backNumber" && physicalMembers.every(({ assetIdentity }) => assetIdentity.assetId === asset.id && assetIdentity.assetVersion === asset.version)));
   assert.ok(job.snapshot.layout.placements.every(({ rotationApplied, mirrorApplied, vectorProfile }) => [0, 90, 180, 270].includes(rotationApplied) && mirrorApplied === true && vectorProfile?.includes(`@${asset.version}#`)));
   assert.equal(typeof job.snapshot.artifact.sha256, "string");
   assert.equal(typeof job.snapshot.artifact.productionDataHash, "string");

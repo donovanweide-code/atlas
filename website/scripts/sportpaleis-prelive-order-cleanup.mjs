@@ -1,9 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-import { SportpaleisMariaDbStore } from "./sportpaleis-mariadb-store.mjs";
-import { productionDatabaseCredentialsFromEnvironment } from "./workspace-runtime-config.mjs";
-
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -24,14 +21,19 @@ export function preliveCleanupInventory(state) {
   const active = (state.orders ?? []).filter(({ deletion }) => !deletion);
   const rows = active.map((order) => {
     const signals = confirmedPilotSignals(order);
-    const productionJobs = (state.productionJobs ?? []).filter((job) => job.snapshot?.orderIds?.includes(order.id)).length;
+    const jobs = (state.productionJobs ?? []).filter((job) => job.snapshot?.orderIds?.includes(order.id));
+    const proposals = (state.productionProposals ?? []).filter((proposal) => proposal.orders?.some(({ id }) => id === order.id));
+    const groups = proposals.flatMap(({ id: proposalId, groups }) => (groups ?? []).filter((group) => group.orders.some(({ id }) => id === order.id)).map((group) => ({ proposalId, id: group.id, foilColor: group.foilColor, status: group.status, productionJobId: group.productionJobId ?? null })));
     return {
       id: order.id,
       revision: order.revision,
       stage: order.stage,
       customer: order.customer,
       emailDomain: String(order.customerEmail ?? "").split("@")[1]?.toLocaleLowerCase("nl-NL") ?? "",
-      productionJobs,
+      productionJobs: jobs.length,
+      productionJobIds: jobs.map(({ id }) => id),
+      proposalIds: proposals.map(({ id }) => id),
+      productionGroups: groups,
       classification: signals.length ? "CONFIRMED_TEST" : "UNVERIFIED",
       signals,
     };
@@ -44,8 +46,35 @@ export function preliveCleanupInventory(state) {
     confirmedTestOrders: confirmed.length,
     unverifiedOrders: rows.length - confirmed.length,
     confirmedFingerprint: fingerprint,
+    affectedRecords: {
+      orders: confirmed.length,
+      proposals: new Set(confirmed.flatMap(({ proposalIds }) => proposalIds)).size,
+      productionGroups: confirmed.reduce((count, row) => count + row.productionGroups.length, 0),
+      openProductionGroups: confirmed.reduce((count, row) => count + row.productionGroups.filter(({ status }) => status === "OPEN").length, 0),
+      productionJobs: new Set(confirmed.flatMap(({ productionJobIds }) => productionJobIds)).size,
+    },
+    expectedPostCleanup: { activePilotOrders: 0, activePilotProposals: 0, openPilotProductionGroups: 0 },
     rows,
   };
+}
+
+export function cleanupEvidenceManifest(state, inventory, { releaseId = "UNKNOWN", preparedAt = new Date().toISOString(), actor = "system:cleanup-prepare" } = {}) {
+  const confirmedIds = new Set(inventory.rows.filter(({ classification }) => classification === "CONFIRMED_TEST").map(({ id }) => id));
+  const evidence = {
+    schemaVersion: 1,
+    purpose: "SPORTPALEIS_BOUNDED_PILOT_ARCHIVE",
+    releaseId,
+    preparedAt,
+    actor,
+    datastoreRevision: state.revision,
+    confirmedFingerprint: inventory.confirmedFingerprint,
+    orders: (state.orders ?? []).filter(({ id }) => confirmedIds.has(id)).map((order) => structuredClone(order)),
+    productionProposals: (state.productionProposals ?? []).filter((proposal) => proposal.orders?.some(({ id }) => confirmedIds.has(id))).map((proposal) => structuredClone(proposal)),
+    productionJobs: (state.productionJobs ?? []).filter((job) => job.snapshot?.orderIds?.some((id) => confirmedIds.has(id))).map((job) => structuredClone(job)),
+    audit: (state.audit ?? []).filter(({ subject, details }) => confirmedIds.has(subject) || confirmedIds.has(details?.orderId)).map((entry) => structuredClone(entry)),
+    exclusions: { productionAssets: true, associations: true, productionProfiles: true, usersAndRoles: true, configuration: true, deploymentEvidence: true },
+  };
+  return { ...evidence, sha256: sha256(JSON.stringify(evidence)) };
 }
 
 export function archiveConfirmedPilotOrders(state, { expectedRevision, confirmedFingerprint, at = new Date().toISOString() }) {
@@ -90,6 +119,10 @@ export function archiveConfirmedPilotOrders(state, { expectedRevision, confirmed
 }
 
 async function main() {
+  const [{ SportpaleisMariaDbStore }, { productionDatabaseCredentialsFromEnvironment }] = await Promise.all([
+    import("./sportpaleis-mariadb-store.mjs"),
+    import("./workspace-runtime-config.mjs"),
+  ]);
   const apply = process.argv.includes("--apply");
   const expectedRevision = process.argv.find((argument) => argument.startsWith("--expected-revision="))?.split("=")[1];
   const confirmedFingerprint = process.argv.find((argument) => argument.startsWith("--confirmed-fingerprint="))?.split("=")[1];
@@ -99,7 +132,8 @@ async function main() {
     const state = await store.read();
     const inventory = preliveCleanupInventory(state);
     if (!apply) {
-      process.stdout.write(`${JSON.stringify({ status: "DRY_RUN", ...inventory }, null, 2)}\n`);
+      const evidence = cleanupEvidenceManifest(state, inventory, { releaseId: process.env.RELEASE_ID });
+      process.stdout.write(`${JSON.stringify({ status: "DRY_RUN", ...inventory, evidence: { sha256: evidence.sha256, recordCounts: { orders: evidence.orders.length, proposals: evidence.productionProposals.length, productionJobs: evidence.productionJobs.length, audit: evidence.audit.length } } }, null, 2)}\n`);
       return;
     }
     if (!expectedRevision || !confirmedFingerprint) throw Object.assign(new Error("Apply vereist expected revision en confirmed fingerprint uit dezelfde dry-run."), { code: "CLEANUP_CONFIRMATION_REQUIRED" });

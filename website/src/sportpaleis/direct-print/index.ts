@@ -1,5 +1,6 @@
 export * from "./bridge.ts";
 export * from "./cut-job.ts";
+export * from "./semantic-groups.ts";
 export * from "./dmpl.ts";
 export * from "./geometry.ts";
 export * from "./lifecycle.ts";

@@ -441,12 +441,14 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
 
 test("City logo's jeugd 2026 biedt vier visuele brononderdelen, separate centrale save en individuele order reuse", async (context) => {
   const { service, admin, operator, store } = await fixture(context);
-  const artwork = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500"><g>${[
-    [20, 20, 240, 70], [300, 20, 180, 90], [20, 180, 260, 80], [340, 190, 220, 65],
-  ].map(([x, y, width, height]) => `<g><path d="M${x} ${y}H${x + width}V${y + height}H${x}Z"/><path d="M${x + 12} ${y + 12}H${x + width - 12}V${y + height - 12}H${x + 12}Z"/></g>`).join("")}</g></svg>`);
+  const fixtureBytes = await readFile(new URL("./fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg", import.meta.url));
+  const artwork = fixtureBytes.subarray(0, fixtureBytes.length - 2);
+  assert.equal(fixtureBytes.subarray(-2).toString("hex"), "0a0a", "alleen twee door de tekstpatch vereiste afsluitende LF-bytes staan buiten de authoritative uploadbytes");
   const inspected = await inspectProductionAssetSource({ bytes: artwork, filename: "City logo's jeugd 2026.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
   assert.equal(inspected.candidates.length, 4);
-  assert.ok(inspected.candidates.every(({ selectionMode, reviewCategory, contourCount }) => selectionMode === "OBJECT_GROUP" && reviewCategory === "ARTWORK_CANDIDATE" && contourCount === 2));
+  assert.equal(inspected.source.sha256, "35C5949B0CDCA38696F9DAF557DC8962D4C112CB294896C6EDAB434E2924A037");
+  assert.deepEqual(inspected.candidates.map(({ contourCount }) => contourCount), [26, 37, 19, 12]);
+  assert.ok(inspected.candidates.every(({ selectionMode, reviewCategory, warnings }) => selectionMode === "OBJECT_GROUP" && reviewCategory === "ARTWORK_CANDIDATE" && warnings.length === 0));
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "City logo's jeugd 2026.svg", mimeType: "image/svg+xml", dataBase64: artwork.toString("base64"), provenance: "Production-shaped City multi-asset acceptance", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const previews = await Promise.all(source.candidates.map(({ id }) => service.productionAssetCandidatePreview(operator.token, source.id, id)));
   assert.equal(previews.length, 4);

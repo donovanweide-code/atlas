@@ -81,7 +81,9 @@ test("dagelijkse productie houdt proposal-only werk vindbaar en toont feedback i
   assert.match(source, /data-production-action-feedback/u);
   assert.match(source, /role="status" aria-live="polite"/u);
   assert.match(source, /aria-busy="true"/u);
-  assert.match(source, /nu produceren\$\{productionProposalBusy \? " · Productievoorstel maken…"/u);
+  assert.match(source, /productionProposalBusyKey === busyKey/u);
+  assert.match(source, /selectedBusy \? `[^`]*Productievoorstel maken…` : waiting \? `[^`]*Wacht op huidige fysieke stap`/u);
+  assert.match(source, /disabled\$\{selectedBusy \? ' aria-busy="true"' : ""\}/u);
   assert.match(styles, /\.sp-button\[aria-busy="true"\]::before/u);
   assert.match(styles, /@keyframes sp-busy-spin/u);
 });

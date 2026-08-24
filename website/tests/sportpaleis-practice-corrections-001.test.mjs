@@ -103,7 +103,7 @@ test("managed-font behoudt brongeometrie en kiest 90° alleen wanneer adaptive n
   assert.ok((await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8")).includes("data-contour-id"));
 });
 
-test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest fysiek als acht losse digits", async (context) => {
+test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest als vier herkenbare fysieke sets", async (context) => {
   const { service, admin } = await fixture(context);
   const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const order = (await service.createOrder(admin.token, admin.csrfToken, {
@@ -123,37 +123,37 @@ test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest f
   const placements = job.snapshot.layout.placements;
   assert.equal(controlled.productionLines[0].content, "26", "de semantische orderbedrukking blijft rugnummer 26");
   assert.equal(controlled.productionLines[0].quantity, 4, "de semantische quantity blijft vier");
-  assert.equal(placements.length, 8, "de fysieke job bevat 2,6,2,6,2,6,2,6");
-  assert.deepEqual(placements.map(({ semanticGroup }) => semanticGroup.digit).sort(), ["2", "2", "2", "2", "6", "6", "6", "6"]);
+  assert.equal(placements.length, 4, "de fysieke job bevat vier herkenbare 26-sets");
   assert.deepEqual([...new Set(placements.map(({ semanticGroup }) => semanticGroup.copyIndex))].sort(), [1, 2, 3, 4]);
   for (const copyIndex of [1, 2, 3, 4]) {
     const copy = placements.filter(({ semanticGroup }) => semanticGroup.copyIndex === copyIndex);
-    assert.deepEqual(copy.map(({ semanticGroup }) => semanticGroup.digit), ["2", "6"]);
-    assert.ok(copy.every(({ semanticGroup }) => semanticGroup.value === "26" && semanticGroup.copyCount === 4 && semanticGroup.garmentCompositionSpacingMm === 30));
+    assert.equal(copy.length, 1);
+    assert.equal(copy[0].semanticGroup.value, "26");
+    assert.equal(copy[0].semanticGroup.copyCount, 4);
+    assert.equal(copy[0].semanticGroup.garmentCompositionSpacingMm, 30);
+    assert.deepEqual(copy[0].physicalMembers.map(({ digit }) => digit), ["2", "6"]);
+    assert.deepEqual(copy[0].physicalMembers.map(({ digitIndex }) => digitIndex), [0, 1]);
   }
   assert.ok(placements.every(({ nestingRotationApplied }) => [0, 90].includes(nestingRotationApplied)));
   assert.ok(placements.every(({ mirrorApplied }) => mirrorApplied));
-  assert.ok(placements.every(({ assetIdentity }) => assetIdentity?.sourceKind === "MANAGED_FONT" && assetIdentity.assetId === font.id && assetIdentity.assetVersion === font.version && assetIdentity.geometryHash === font.sha256));
+  assert.ok(placements.flatMap(({ physicalMembers }) => physicalMembers).every(({ assetIdentity }) => assetIdentity?.sourceKind === "MANAGED_FONT" && assetIdentity.assetId === font.id && assetIdentity.assetVersion === font.version && assetIdentity.geometryHash === font.sha256));
   for (const digit of ["2", "6"]) {
-    const instances = placements.filter(({ semanticGroup }) => semanticGroup.digit === digit);
-    const sourceDimensions = new Set(instances.map(({ sourceWidthMm, sourceHeightMm }) => `${sourceWidthMm.toFixed(6)}x${sourceHeightMm.toFixed(6)}`));
+    const instances = placements.flatMap(({ physicalMembers }) => physicalMembers).filter((member) => member.digit === digit);
+    const sourceDimensions = new Set(instances.map(({ boundsMm }) => `${boundsMm.width.toFixed(6)}x${boundsMm.height.toFixed(6)}`));
     assert.equal(sourceDimensions.size, 1, `alle ${digit}-instanties gebruiken exact dezelfde versioned brongeometrie`);
-    for (const placement of instances) {
-      const sourceSides = [placement.sourceWidthMm, placement.sourceHeightMm].sort((a, b) => a - b);
-      const placedSides = [placement.widthMm, placement.heightMm].sort((a, b) => a - b);
-      assert.ok(sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001), "nesting gebruikt uitsluitend een rigide 0°/90°-transformatie");
-    }
+    assert.ok(instances.every(({ mirrorApplied, rotationApplied }) => mirrorApplied && [0, 90].includes(rotationApplied)));
   }
 
   const before = { widthMm: 248, lengthMm: 909.2 };
   const after = { widthMm: job.snapshot.layout.usedWidthMm, lengthMm: job.snapshot.layout.usedLengthMm };
   const savingMm = Number((before.lengthMm - after.lengthMm).toFixed(2));
   const savingPercent = Number(((savingMm / before.lengthMm) * 100).toFixed(2));
-  assert.ok(after.lengthMm < before.lengthMm, "de acht zelfstandig nestbare digits gebruiken aantoonbaar minder baanlengte dan vier vaste 26-blokken");
-  assert.ok(savingMm > 0 && savingPercent > 0);
+  context.diagnostic(`4×26 candidate groups: ${placements.map(({ widthMm, heightMm, nestingRotationApplied }) => `${widthMm}×${heightMm} r${nestingRotationApplied}`).join(" | ")}; used=${after.widthMm}×${after.lengthMm}`);
+  assert.ok(after.lengthMm <= before.lengthMm, `herkenbare 26-sets mogen de production-shaped live baanlengte niet verslechteren (${after.lengthMm} <= ${before.lengthMm})`);
+  assert.ok(savingMm >= 0 && savingPercent >= 0);
 
   const history = (await service.bootstrap(admin.token)).productionJobs.find(({ id }) => id === job.id);
-  assert.deepEqual(history.snapshot.layout.placements, job.snapshot.layout.placements, "Historie bewaart alle acht fysieke posities en rotaties immutable");
+  assert.deepEqual(history.snapshot.layout.placements, job.snapshot.layout.placements, "Historie bewaart alle vier sets en acht fysieke digitposities/rotaties immutable");
   assert.equal(history.snapshot.productionLines[0].content, "26");
   assert.equal(history.snapshot.productionLines[0].quantity, 4);
   const replot = (await service.replotProductionJob(admin.token, admin.csrfToken, job.id, { reason: "Exacte production-shaped 4×26 reprintregressie" }, "plot-2026-0058-production-shaped-replot")).value;
@@ -162,8 +162,8 @@ test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest f
   assert.deepEqual(replot.snapshot.layout, job.snapshot.layout, "reprint hergebruikt exact de oorspronkelijke fysieke layout");
   assert.equal(replot.snapshot.artifact.sha256, job.snapshot.artifact.sha256);
 
-  context.diagnostic(`PLOT-2026-0058 / SP-2026-0081 · before=${before.widthMm}×${before.lengthMm}mm; after=${after.widthMm}×${after.lengthMm}mm; saved=${savingMm}mm (${savingPercent}%); digits=${placements.map(({ semanticGroup }) => semanticGroup.digit).join(",")}; rotations=${placements.map(({ nestingRotationApplied }) => nestingRotationApplied).join(",")}`);
-  context.diagnostic(`PLOT-2026-0058 physical placements: ${placements.map(({ semanticGroup, xMm, yMm, widthMm, heightMm, nestingRotationApplied }) => `${semanticGroup.copyIndex}:${semanticGroup.digit}@${xMm},${yMm} ${widthMm}×${heightMm} r${nestingRotationApplied}`).join(" | ")}`);
+  context.diagnostic(`PLOT-2026-0058 / SP-2026-0081 · before=${before.widthMm}×${before.lengthMm}mm; after=${after.widthMm}×${after.lengthMm}mm; saved=${savingMm}mm (${savingPercent}%); sets=${placements.length}; digits=${placements.flatMap(({ physicalMembers }) => physicalMembers.map(({ digit }) => digit)).join(",")}; rotations=${placements.map(({ nestingRotationApplied }) => nestingRotationApplied).join(",")}`);
+  context.diagnostic(`PLOT-2026-0058 physical groups: ${placements.map(({ semanticGroup, xMm, yMm, widthMm, heightMm, nestingRotationApplied, physicalMembers }) => `${semanticGroup.copyIndex}:${semanticGroup.value}@${xMm},${yMm} ${widthMm}×${heightMm} r${nestingRotationApplied} [${physicalMembers.map(({ digit }) => digit).join("")}]`).join(" | ")}`);
 });
 
 async function controlledCustomOrder(service, actor, fontId, source, key) {
@@ -215,6 +215,6 @@ test("productie-UX toont één huidige stap, daarna-context en geen Webshop-Wink
   assert.match(css, /@media\(max-width:760px\)/u);
   assert.match(css, /\.sp-proposal-groups\{grid-template-columns:1fr\}/u);
   assert.match(workspace, /Rugnummer \$\{placement\.semanticGroup\.value\}/u);
-  assert.match(workspace, /exemplaar \$\{placement\.semanticGroup\.copyIndex/u);
-  assert.match(workspace, /cijfer \$\{placement\.semanticGroup\.digit\}/u);
+  assert.match(workspace, /herkenbare set \$\{placement\.semanticGroup\.copyIndex/u);
+  assert.match(workspace, /placement\.physicalMembers\.map/u);
 });

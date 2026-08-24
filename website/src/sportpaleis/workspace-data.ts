@@ -177,6 +177,8 @@ export interface OrderPersonalization {
   initialsInfix?: string;
   name: string;
   backNumber: string;
+  /** Artikel-specifieke aanvullende optie; afwezig bij bestaande orders. */
+  chestNumber?: string;
   backNumberSizeClass: BackNumberSizeClass | "";
   shortsNumber: string;
   /** Legacy read-only field; new input uses initialsInfix without name parsing. */
@@ -396,6 +398,14 @@ export interface WorkspaceOrder {
     byUserName: string;
     reason: string | null;
     restorable: boolean;
+  };
+  productionArchive?: {
+    status: "ARCHIVED";
+    at: string;
+    byUserId: string;
+    byUserName: string;
+    reason: string | null;
+    preservedProductionJobIds: string[];
   };
 }
 
@@ -621,7 +631,21 @@ export interface ProductionJobSnapshot {
       semanticGroup?: {
         id: string; kind: "MULTI_DIGIT_NUMBER"; sourceLineId: string; itemId?: string; productionProfileId?: string;
         value: string; digit: string; digitIndex: number; digitCount: number; copyIndex?: number; copyCount?: number; garmentCompositionSpacingMm: number;
+        physicalMembers?: readonly {
+          sourceObjectId: string; digit: string; digitIndex: number; contourIds: readonly string[];
+          relativePlacementMm: { x: number; y: number };
+          sourceBoundsMm: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+          assetIdentity?: { assetId: string; assetVersion: string; geometryHash: string; variantId?: string; sourceKind?: "PRODUCTION_ASSET" | "MANAGED_FONT" };
+        }[];
       } | null;
+      physicalMembers?: readonly {
+        sourceObjectId: string; digit: string; digitIndex: number;
+        assetIdentity?: { assetId: string; assetVersion: string; geometryHash: string; variantId?: string; sourceKind?: "PRODUCTION_ASSET" | "MANAGED_FONT" };
+        mirrorApplied: boolean; rotationApplied: 0 | 90 | 180 | 270;
+        placementMm: { x: number; y: number };
+        boundsMm: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+        contourIds: readonly string[];
+      }[];
       assetIdentity?: { assetId: string; assetVersion: string; geometryHash: string; variantId?: string; sourceKind?: "PRODUCTION_ASSET" | "MANAGED_FONT" } | null;
     }[];
     productionGeometry?: {

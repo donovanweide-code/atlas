@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { archiveConfirmedPilotOrders, preliveCleanupInventory } from "../scripts/sportpaleis-prelive-order-cleanup.mjs";
+import { archiveConfirmedPilotOrders, cleanupEvidenceManifest, preliveCleanupInventory } from "../scripts/sportpaleis-prelive-order-cleanup.mjs";
 import { buildWorkspaceSearchIndex, isOperationalOrder } from "../src/workspace-search.ts";
 
 function order(id, customer, customerEmail, revision = 3) {
@@ -18,6 +18,10 @@ test("pre-live cleanup archiveert alleen expliciet bevestigde testorders en bewa
   const productionJob = { id: "job-1", snapshot: { orderIds: [testOrder.id] }, immutableEvidence: "blijft exact staan" };
   const state = { revision: 800, orders: [testOrder, uncertainOrder], productionJobs: [productionJob], audit: [] };
   const inventory = preliveCleanupInventory(state);
+  const evidence = cleanupEvidenceManifest(state, inventory, { releaseId: "SPW-R8-TEST", preparedAt: "2026-08-24T00:00:00.000Z", actor: "test" });
+  assert.equal(evidence.orders.length, 1);
+  assert.ok(evidence.sha256);
+  assert.deepEqual(evidence.exclusions, { productionAssets: true, associations: true, productionProfiles: true, usersAndRoles: true, configuration: true, deploymentEvidence: true });
   assert.deepEqual({ active: inventory.activeOrders, confirmed: inventory.confirmedTestOrders, uncertain: inventory.unverifiedOrders }, { active: 2, confirmed: 1, uncertain: 1 });
   const beforeJob = structuredClone(productionJob);
   const result = archiveConfirmedPilotOrders(state, { expectedRevision: 800, confirmedFingerprint: inventory.confirmedFingerprint, at: "2026-08-21T01:00:00.000Z" });
@@ -47,7 +51,7 @@ test("testdata telt niet mee in Today, Search of primaire Productie", async () =
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /const operationalOrders = state\.orders\.filter\(isOperationalOrder\)/u);
   assert.match(source, /const events = operationalOrders\.flatMap/u);
-  assert.match(source, /const activeOrders = state\.orders\.filter\(isOperationalOrder\)/u);
+  assert.match(source, /const operationalOrders = state\.orders\.filter\(isOperationalProductionOrder\)/u);
 });
 
 test("Productie is batch-first en technische prepared PlotJobs staan alleen in historie", async () => {

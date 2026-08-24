@@ -269,6 +269,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           allowedOrigin: new URL(config.workspaceBaseUrl).origin,
           demoMode: config.appEnv === "local" && config.nodeEnv !== "production" && process.env.SPORTPALEIS_REVIEW_DEMO === "true",
           uploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.uploadsEnabled : true,
+          productionAssetUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.productionAssetUploadsEnabled : true,
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,

@@ -1,8 +1,8 @@
 import type { CatalogArticle } from "./workspace-data.ts";
 
-export type CatalogPrintField = "initials" | "name" | "backNumber" | "shortsNumber";
+export type CatalogPrintField = "initials" | "name" | "backNumber" | "chestNumber" | "shortsNumber";
 
-const PRINT_FIELDS = new Set<CatalogPrintField>(["initials", "name", "backNumber", "shortsNumber"]);
+const PRINT_FIELDS = new Set<CatalogPrintField>(["initials", "name", "backNumber", "chestNumber", "shortsNumber"]);
 
 export function articlePersonalizationFields(article: CatalogArticle): CatalogPrintField[] {
   return Object.keys(article.personalizationPolicy?.fields ?? {})

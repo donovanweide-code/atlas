@@ -10261,7 +10261,9 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
     "supports": [
-      "initials"
+      "initials",
+      "backNumber",
+      "chestNumber"
     ],
     "active": true,
     "revision": 1,
@@ -10284,6 +10286,18 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
         "canonicalField": "initials",
         "priceEur": 4,
         "status": "VALIDATED"
+      },
+      {
+        "sourceLabel": "Rugnummer",
+        "canonicalField": "backNumber",
+        "priceEur": null,
+        "status": "VALIDATED"
+      },
+      {
+        "sourceLabel": "Borstnummer",
+        "canonicalField": "chestNumber",
+        "priceEur": null,
+        "status": "VALIDATED"
       }
     ],
     "priceConfiguration": {
@@ -10300,7 +10314,9 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
         "XXL": 21.95
       },
       "personalizationUnitPricesEur": {
-        "initials": 4
+        "initials": 4,
+        "backNumber": null,
+        "chestNumber": null
       },
       "sourceLabel": "Sportpaleis.nl live · zichtbare prijs per beschikbare maat en zichtbare bedrukoptie · gecontroleerd 2026-08-12 · https://www.sportpaleis.nl/sc-buitenboys-training-shirt_94823.html"
     },
@@ -10312,7 +10328,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     },
     "printRelevance": {
       "status": "CONFIRMED_VISIBLE_PERSONALIZATION",
-      "sourceLabel": "Initialen",
+      "sourceLabel": "Initialen · aanvullende praktijkbevestiging 2026-08-24: rugnummer en borstnummer",
       "checkedAt": "2026-08-12"
     },
     "productionDataGaps": [
@@ -10321,9 +10337,11 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
       "Rotatie en spiegeling volgen uitsluitend een aantoonbaar gevalideerde productieroute."
     ],
     "personalizationPolicy": {
-      "mode": "optional",
+      "mode": "combination",
       "fields": {
-        "initials": "optional"
+        "initials": "optional",
+        "backNumber": "optional",
+        "chestNumber": "optional"
       }
     },
     "validation": {

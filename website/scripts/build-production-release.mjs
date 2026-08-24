@@ -205,6 +205,7 @@ async function main() {
       wbdOwnerTenantModel: "single-owner-single-organization",
       productionOrders: 0,
       uploads: false,
+      productionAssetUploads: "operator-admin-svg-source-only",
       fontUploads: "admin-only",
       mail: "capture-only",
       hardwareOutput: false,

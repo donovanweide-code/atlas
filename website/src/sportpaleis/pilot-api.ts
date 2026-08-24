@@ -62,6 +62,7 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     demo: boolean;
     demoEnabled: boolean;
     uploadsEnabled: boolean;
+    productionAssetUploadsEnabled: boolean;
     fontUploadsEnabled: boolean;
     mailMode: "capture";
     hardwareSendEnabled: false;
@@ -310,6 +311,14 @@ export class SportpaleisPilotApi {
 
   async restoreOrder(order: WorkspaceOrder): Promise<WorkspaceOrder> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision }) }));
+  }
+
+  async archiveProductionWork(order: WorkspaceOrder, reason: string): Promise<WorkspaceOrder> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/production-work/archive`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision, reason }) }));
+  }
+
+  async restoreProductionWork(order: WorkspaceOrder): Promise<WorkspaceOrder> {
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/production-work/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: order.revision }) }));
   }
 
   async updateOrder(order: WorkspaceOrder, input: { customer?: string; customerEmail?: string; customerPhone?: string; deliveryMode?: "PICKUP" | "DELIVERY"; deliveryAddress?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" }; standardPersonalization?: OrderPersonalization; items?: readonly EditableOrderItemInput[]; correctionReason?: string }): Promise<WorkspaceOrder> {

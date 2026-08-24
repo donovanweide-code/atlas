@@ -5,3 +5,4 @@ website/sportpaleis-server/production-migrations/atlas/001-runtime-boundary.sql 
 ops/production/spw-immutable-release.sh text eol=lf
 ops/production/test/run-immutable-release-foundation.sh text eol=lf
 ops/production/test/verify-immutable-candidate-dry-run.sh text eol=lf
+website/tests/fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg -whitespace
