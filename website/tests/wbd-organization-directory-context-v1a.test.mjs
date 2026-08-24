@@ -57,6 +57,23 @@ test("directory gebruikt uitsluitend centrale Organizations en biedt zoeken en f
   assert.doesNotMatch(html, /F00248|pilot live|WooCommerce|AquaFlask\.nl/u);
 });
 
+test("directory onderscheidt bewezen klantcontext van live Organization-status", () => {
+  const atlas = {
+    revision: 8,
+    capabilityRegistry: [
+      { id: "orders", name: "Orderworkflow", maturity: "PROVEN", organizationsWhereProven: ["Sportpaleis"], lastVerified: "2026-08-20" },
+      { id: "commerce", name: "Commerce-diagnose", maturity: "REUSABLE", organizationsWhereProven: ["Bij Cees", "AquaFlask"], lastVerified: "2026-07-24" },
+      { id: "hypothesis", name: "Onbewezen dienst", maturity: "BUILT", organizationsWhereProven: ["Bij Cees/AquaFlask hypothese"], lastVerified: "2026-08-15" },
+    ],
+  };
+  const html = renderOrganizationDirectory("<header>owner</header>", controlFixture(), atlas);
+  for (const name of ["Sportpaleis", "Bij Cees", "AquaFlask"]) assert.match(html, new RegExp(name));
+  assert.match(html, /sportpaleis-logo-mail-safe\.png/u);
+  assert.match(html, /Niet hetzelfde als live klantstatus/u);
+  assert.match(html, /Capability Registry · revisie 8/u);
+  assert.doesNotMatch(html, /Onbewezen dienst|gezondheidsscore|actuele omzet/u);
+});
+
 test("Organization Context verbindt alleen bestaande canonieke kernrecords", () => {
   const control = controlFixture();
   const bijCees = organizationContext(control, "bij-cees");
@@ -109,7 +126,9 @@ test("Owner-navigatie houdt Today dominant en plaatst secundaire werkgebieden on
   const runtime = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
   assert.match(owner, /Primaire WBD-navigatie[\s\S]*Today[\s\S]*Mail[\s\S]*Search/u);
   assert.match(owner, /Primaire mobiele WBD-navigatie[\s\S]*Today[\s\S]*Attention[\s\S]*Search[\s\S]*Meer/u);
-  assert.match(owner, /Mail<small>later<\/small>/u);
+  assert.match(owner, /Mail<small>foundation<\/small>/u);
+  assert.match(owner, /Growth<small>niet live<\/small>/u);
+  assert.match(owner, /Klanten/u);
   assert.doesNotMatch(owner, /href="\/workspace\/wbd\/mail"/u);
   assert.match(owner, /capabilitiesPath[\s\S]*opportunitiesPath[\s\S]*\/workspace\/experience[\s\S]*workContextPath/u);
   assert.doesNotMatch(owner + context, /localStorage|indexedDB|wbd-dossier-store|wbd-invoices|\/api\/wbd\/v1\/organization-context/u);
