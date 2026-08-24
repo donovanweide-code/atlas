@@ -25,6 +25,7 @@ import {
 } from "../src/sportpaleis/managed-font-production.mjs";
 import {
   inspectProductionAssetSource,
+  NUMBER_GLYPH_SPACING_MM,
   productionAssetPreviewSvg,
   productionAssetPiece,
   productionAssetPieces,
@@ -4026,6 +4027,52 @@ function managedFontPhysicalOrientation() {
   return "SOURCE";
 }
 
+function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
+  const digits = line.type === "NUMBER" && /^\d{2,4}$/u.test(line.content) ? Array.from(line.content) : null;
+  const baseId = `${order.id}-${line.itemId ?? line.id}-${line.content}-${copy}`;
+  const piece = (content, id = baseId) => createManagedFontProductionPiece({
+    fontRecord: font,
+    bytes,
+    content,
+    widthMm: line.widthMm,
+    heightMm: line.heightMm,
+    id,
+    sourceOrderId: order.id,
+    product: item?.product ?? "Productiefont",
+    association: item?.association ?? order.association,
+    foilColor,
+    requestedHeightAxis: managedFontPhysicalOrientation(line),
+  });
+  if (!digits || digits.length < 2) return [piece(line.content)];
+
+  const semanticId = `${order.id}:${line.id}:number:${line.content}:copy-${copy}`;
+  return digits.map((digit, digitIndex) => ({
+    ...piece(digit, `${baseId}-digit-${digitIndex + 1}-${digit}`),
+    label: `${line.preview?.label ?? `Rugnummer ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length}) · exemplaar ${copy}/${line.quantity}`,
+    printType: "Beheerde vectornummerbron · afzonderlijk cijfer",
+    semanticGroup: {
+      id: semanticId,
+      kind: "MULTI_DIGIT_NUMBER",
+      sourceLineId: line.id,
+      ...(line.itemId ? { itemId: line.itemId } : {}),
+      ...(item?.productionProfileId ? { productionProfileId: item.productionProfileId } : {}),
+      value: line.content,
+      digit,
+      digitIndex,
+      digitCount: digits.length,
+      copyIndex: copy,
+      copyCount: line.quantity,
+      garmentCompositionSpacingMm: NUMBER_GLYPH_SPACING_MM,
+    },
+    assetIdentity: {
+      assetId: font.id,
+      assetVersion: font.version,
+      geometryHash: font.sha256,
+      sourceKind: "MANAGED_FONT",
+    },
+  }));
+}
+
 function productionLineWriterIdentity(state, line) {
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
@@ -4139,7 +4186,12 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
         pieces(copy) {
           const order = orders.find(({ id }) => id === line.orderId) ?? orders[0];
           return productionAssetPieces({ asset, variant, line, order, foilColor: productionLineFoilColor(state, order, line) })
-            .map((piece) => ({ ...piece, id: `${piece.id}-copy-${copy}` }));
+            .map((piece) => ({
+              ...piece,
+              id: `${piece.id}-copy-${copy}`,
+              ...(piece.semanticGroup ? { semanticGroup: { ...piece.semanticGroup, id: `${piece.semanticGroup.id}:copy-${copy}`, copyIndex: copy, copyCount: line.quantity } } : {}),
+              ...(piece.assetIdentity ? { assetIdentity: { ...piece.assetIdentity, sourceKind: "PRODUCTION_ASSET" } } : {}),
+            }));
         },
       };
     }
@@ -4151,22 +4203,10 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     return {
       line,
       source,
-      piece(copy) {
+      pieces(copy) {
         const order = orders.find(({ id }) => id === line.orderId) ?? orders[0];
         const item = order.items.find(({ id }) => id === line.itemId) ?? order.items[0];
-        return createManagedFontProductionPiece({
-          fontRecord: font,
-          bytes,
-          content: line.content,
-          widthMm: line.widthMm,
-          heightMm: line.heightMm,
-          id: `${order.id}-${line.itemId ?? line.id}-${line.content}-${copy}`,
-          sourceOrderId: order.id,
-          product: item?.product ?? "Productiefont",
-          association: item?.association ?? order.association,
-          foilColor: productionLineFoilColor(state, order, line),
-          requestedHeightAxis: managedFontPhysicalOrientation(line),
-        });
+        return managedFontProductionPieces({ font, bytes, line, order, item, foilColor: productionLineFoilColor(state, order, line), copy });
       },
     };
   });

@@ -80,6 +80,9 @@ export interface SemanticProductionGroup {
   digit: string;
   digitIndex: number;
   digitCount: number;
+  /** 1-based exemplaar binnen de quantity van dezelfde semantische productieregel. */
+  copyIndex?: number;
+  copyCount?: number;
   garmentCompositionSpacingMm: number;
 }
 
@@ -88,6 +91,7 @@ export interface VersionedAssetIdentity {
   assetVersion: string;
   geometryHash: string;
   variantId?: string;
+  sourceKind?: "PRODUCTION_ASSET" | "MANAGED_FONT";
 }
 
 /** Eén zelfstandig te produceren orderonderdeel. */

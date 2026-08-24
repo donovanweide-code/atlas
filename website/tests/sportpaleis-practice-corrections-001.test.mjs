@@ -103,6 +103,69 @@ test("managed-font behoudt brongeometrie en kiest 90° alleen wanneer adaptive n
   assert.ok((await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8")).includes("data-contour-id"));
 });
 
+test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest fysiek als acht losse digits", async (context) => {
+  const { service, admin } = await fixture(context);
+  const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
+  const order = (await service.createOrder(admin.token, admin.csrfToken, {
+    orderKind: "CUSTOM",
+    customer: "A.S.C. Waterwijk · production-shaped PLOT-2026-0058",
+    customerEmail: "",
+    customerPhone: "",
+    association: "A.S.C. Waterwijk",
+    standardPersonalization: empty,
+    items: [{ product: "4 × rugnummer 26", size: "", quantity: 4, personalization: "Rugnummer 26", foilColor: "Zwart", deviation: true, overrides: empty }],
+    productionLines: [{ id: "plot-2026-0058-rugnummer-26", type: "NUMBER", content: "26", previewLabel: "Rugnummer 26", widthMm: 211.2, heightMm: 220, quantity: 4, sourceId: font.id, provenance: "Production-shaped regressie van PLOT-2026-0058 / SP-2026-0081" }],
+  }, "plot-2026-0058-production-shaped-order")).value;
+  const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, order.id, order.revision, "plot-2026-0058-production-shaped-control")).value;
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "plot-2026-0058-production-shaped-proposal")).value;
+  const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "plot-2026-0058-production-shaped-job")).value;
+
+  const placements = job.snapshot.layout.placements;
+  assert.equal(controlled.productionLines[0].content, "26", "de semantische orderbedrukking blijft rugnummer 26");
+  assert.equal(controlled.productionLines[0].quantity, 4, "de semantische quantity blijft vier");
+  assert.equal(placements.length, 8, "de fysieke job bevat 2,6,2,6,2,6,2,6");
+  assert.deepEqual(placements.map(({ semanticGroup }) => semanticGroup.digit).sort(), ["2", "2", "2", "2", "6", "6", "6", "6"]);
+  assert.deepEqual([...new Set(placements.map(({ semanticGroup }) => semanticGroup.copyIndex))].sort(), [1, 2, 3, 4]);
+  for (const copyIndex of [1, 2, 3, 4]) {
+    const copy = placements.filter(({ semanticGroup }) => semanticGroup.copyIndex === copyIndex);
+    assert.deepEqual(copy.map(({ semanticGroup }) => semanticGroup.digit), ["2", "6"]);
+    assert.ok(copy.every(({ semanticGroup }) => semanticGroup.value === "26" && semanticGroup.copyCount === 4 && semanticGroup.garmentCompositionSpacingMm === 30));
+  }
+  assert.ok(placements.every(({ nestingRotationApplied }) => [0, 90].includes(nestingRotationApplied)));
+  assert.ok(placements.every(({ mirrorApplied }) => mirrorApplied));
+  assert.ok(placements.every(({ assetIdentity }) => assetIdentity?.sourceKind === "MANAGED_FONT" && assetIdentity.assetId === font.id && assetIdentity.assetVersion === font.version && assetIdentity.geometryHash === font.sha256));
+  for (const digit of ["2", "6"]) {
+    const instances = placements.filter(({ semanticGroup }) => semanticGroup.digit === digit);
+    const sourceDimensions = new Set(instances.map(({ sourceWidthMm, sourceHeightMm }) => `${sourceWidthMm.toFixed(6)}x${sourceHeightMm.toFixed(6)}`));
+    assert.equal(sourceDimensions.size, 1, `alle ${digit}-instanties gebruiken exact dezelfde versioned brongeometrie`);
+    for (const placement of instances) {
+      const sourceSides = [placement.sourceWidthMm, placement.sourceHeightMm].sort((a, b) => a - b);
+      const placedSides = [placement.widthMm, placement.heightMm].sort((a, b) => a - b);
+      assert.ok(sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001), "nesting gebruikt uitsluitend een rigide 0°/90°-transformatie");
+    }
+  }
+
+  const before = { widthMm: 248, lengthMm: 909.2 };
+  const after = { widthMm: job.snapshot.layout.usedWidthMm, lengthMm: job.snapshot.layout.usedLengthMm };
+  const savingMm = Number((before.lengthMm - after.lengthMm).toFixed(2));
+  const savingPercent = Number(((savingMm / before.lengthMm) * 100).toFixed(2));
+  assert.ok(after.lengthMm < before.lengthMm, "de acht zelfstandig nestbare digits gebruiken aantoonbaar minder baanlengte dan vier vaste 26-blokken");
+  assert.ok(savingMm > 0 && savingPercent > 0);
+
+  const history = (await service.bootstrap(admin.token)).productionJobs.find(({ id }) => id === job.id);
+  assert.deepEqual(history.snapshot.layout.placements, job.snapshot.layout.placements, "Historie bewaart alle acht fysieke posities en rotaties immutable");
+  assert.equal(history.snapshot.productionLines[0].content, "26");
+  assert.equal(history.snapshot.productionLines[0].quantity, 4);
+  const replot = (await service.replotProductionJob(admin.token, admin.csrfToken, job.id, { reason: "Exacte production-shaped 4×26 reprintregressie" }, "plot-2026-0058-production-shaped-replot")).value;
+  assert.equal(replot.originJobId, job.id);
+  assert.equal(replot.snapshotHash, job.snapshotHash);
+  assert.deepEqual(replot.snapshot.layout, job.snapshot.layout, "reprint hergebruikt exact de oorspronkelijke fysieke layout");
+  assert.equal(replot.snapshot.artifact.sha256, job.snapshot.artifact.sha256);
+
+  context.diagnostic(`PLOT-2026-0058 / SP-2026-0081 · before=${before.widthMm}×${before.lengthMm}mm; after=${after.widthMm}×${after.lengthMm}mm; saved=${savingMm}mm (${savingPercent}%); digits=${placements.map(({ semanticGroup }) => semanticGroup.digit).join(",")}; rotations=${placements.map(({ nestingRotationApplied }) => nestingRotationApplied).join(",")}`);
+  context.diagnostic(`PLOT-2026-0058 physical placements: ${placements.map(({ semanticGroup, xMm, yMm, widthMm, heightMm, nestingRotationApplied }) => `${semanticGroup.copyIndex}:${semanticGroup.digit}@${xMm},${yMm} ${widthMm}×${heightMm} r${nestingRotationApplied}`).join(" | ")}`);
+});
+
 async function controlledCustomOrder(service, actor, fontId, source, key) {
   const created = (await service.createOrder(actor.token, actor.csrfToken, {
     orderKind: "CUSTOM", source, ...(source === "STORE" ? {} : { externalReference: `${source}-${key}`, provenance: `${source} productiefixture` }),
@@ -151,4 +214,7 @@ test("productie-UX toont één huidige stap, daarna-context en geen Webshop-Wink
   assert.doesNotMatch(workspace, /REQUESTED_HEIGHT_AXIS_HORIZONTAL/u, "de fysieke implementatieterm lekt niet naar medewerker-UX");
   assert.match(css, /@media\(max-width:760px\)/u);
   assert.match(css, /\.sp-proposal-groups\{grid-template-columns:1fr\}/u);
+  assert.match(workspace, /Rugnummer \$\{placement\.semanticGroup\.value\}/u);
+  assert.match(workspace, /exemplaar \$\{placement\.semanticGroup\.copyIndex/u);
+  assert.match(workspace, /cijfer \$\{placement\.semanticGroup\.digit\}/u);
 });

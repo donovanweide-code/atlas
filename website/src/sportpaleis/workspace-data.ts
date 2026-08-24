@@ -613,7 +613,17 @@ export interface ProductionJobSnapshot {
     usedLengthMm: number;
     edgeMarginMm: number | null;
     minimumGapMm: number | null;
-    placements?: { lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number; sourceWidthMm?: number; sourceHeightMm?: number; mirrorApplied?: boolean; baseRotationApplied?: 0 | 90 | 180 | 270; nestingRotationApplied?: 0 | 90 | 180 | 270; rotationApplied?: 0 | 90 | 180 | 270; vectorProfile?: string | null; sourceOrderId?: string }[];
+    placements?: {
+      lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number;
+      sourceWidthMm?: number; sourceHeightMm?: number; mirrorApplied?: boolean;
+      baseRotationApplied?: 0 | 90 | 180 | 270; nestingRotationApplied?: 0 | 90 | 180 | 270; rotationApplied?: 0 | 90 | 180 | 270;
+      vectorProfile?: string | null; sourceOrderId?: string;
+      semanticGroup?: {
+        id: string; kind: "MULTI_DIGIT_NUMBER"; sourceLineId: string; itemId?: string; productionProfileId?: string;
+        value: string; digit: string; digitIndex: number; digitCount: number; copyIndex?: number; copyCount?: number; garmentCompositionSpacingMm: number;
+      } | null;
+      assetIdentity?: { assetId: string; assetVersion: string; geometryHash: string; variantId?: string; sourceKind?: "PRODUCTION_ASSET" | "MANAGED_FONT" } | null;
+    }[];
     productionGeometry?: {
       groups: readonly {
         sourcePieceId: string;
