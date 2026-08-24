@@ -54,7 +54,8 @@ test("Productie is batch-first en technische prepared PlotJobs staan alleen in h
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const primary = source.slice(source.indexOf("function productionExecution"), source.indexOf("function proofLabel"));
   assert.doesNotMatch(primary, /const currentJobCards/u);
-  assert.match(primary, /HUIDIGE FYSIEKE STAP/u);
+  assert.match(primary, /VOLGENDE FYSIEKE STAP/u);
+  assert.match(primary, /Welke foliekleur wil je nu produceren/u);
   assert.match(primary, /\+ Bekijk wat meegaat/u);
   assert.match(primary, /data-direct-production-order-select/u);
   assert.match(primary, /Alles is veilig voorgeselecteerd/u);

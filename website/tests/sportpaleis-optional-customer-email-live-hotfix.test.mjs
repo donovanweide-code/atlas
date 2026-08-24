@@ -33,11 +33,11 @@ async function fixture(context) {
   };
 }
 
-const individualPayload = (customerEmail = "") => ({
+const individualPayload = (customerEmail = "", customerPhone = "06 12345678") => ({
   orderKind: "INDIVIDUAL",
   customer: "Klant zonder e-mail",
   customerEmail,
-  customerPhone: "06 12345678",
+  customerPhone,
   standardPersonalization: { initials: "KE", name: "KLANT", backNumber: "34", backNumberSizeClass: "SENIOR", shortsNumber: "34" },
   items: [{ articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: {} }],
 });
@@ -56,10 +56,18 @@ test("Bedrukken bewaart en verwerkt een order zonder e-mailadres", async (contex
   );
 });
 
+test("nieuwe winkelorder accepteert een leeg telefoonnummer zonder dummywaarde", async (context) => {
+  const { service, storeUser } = await fixture(context);
+  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload("", ""), "optional-phone-individual-0001")).value;
+  assert.equal(created.customerPhone, "");
+  assert.equal(created.stage, "ORDER");
+  assert.doesNotMatch(JSON.stringify(created), /niet vastgelegd \(006\)|dummy/iu);
+});
+
 test("bestaande orders kunnen hun e-mailadres leeg bewaren en blijven bruikbaar", async (context) => {
   const { service, storeUser, operator } = await fixture(context);
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload("bestaand@example.nl"), "optional-email-existing-0001")).value;
-  const updated = await service.updateOrder(storeUser.token, storeUser.csrfToken, created.id, { customerEmail: "" }, created.revision);
+  const updated = await service.updateOrder(storeUser.token, storeUser.csrfToken, created.id, { customerEmail: "", customerPhone: "" }, created.revision);
   assert.equal(updated.customerEmail, "");
   assert.equal(updated.customerPhone, "06 12345678");
   assert.equal(updated.customer, "Klant zonder e-mail");
@@ -83,11 +91,11 @@ test("Teamorder houdt alle contactvelden optioneel", async (context) => {
   assert.match(created.customer, /^Teamorder/u);
 });
 
-test("een order zonder e-mail kan Klaar worden zonder communicatie- of referentiedatamutatie", async (context) => {
+test("een order zonder e-mail of telefoon kan door de normale productieflow zonder referentiedatamutatie", async (context) => {
   const { service, store, storeUser, operator } = await fixture(context);
   const before = await store.read();
   const font = (await service.bootstrap(operator.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
-  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { ...individualPayload(), productionLines: [{ id: "optional-email-back", type: "NUMBER", content: "10", previewLabel: "Rugnummer 10", widthMm: 100, heightMm: 200, quantity: 1, sourceId: font.id }] }, "optional-email-ready-order-0001")).value;
+  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { ...individualPayload("", ""), productionLines: [{ id: "optional-email-back", type: "NUMBER", content: "10", previewLabel: "Rugnummer 10", widthMm: 100, heightMm: 200, quantity: 1, sourceId: font.id }] }, "optional-email-ready-order-0001")).value;
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "optional-email-control-0001")).value;
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "optional-email-proposal-0001")).value;
   const group = proposal.groups[0];
@@ -96,6 +104,7 @@ test("een order zonder e-mail kan Klaar worden zonder communicatie- of referenti
   const printable = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
   const ready = (await service.completeProductionOrders(operator.token, operator.csrfToken, { orders: [{ id: printable.id, expectedRevision: printable.revision }] }, "optional-email-done-0001")).value.completed[0];
   assert.equal(ready.stage, "DONE");
+  assert.equal(ready.customerPhone, "");
   assert.equal(ready.communication.receipt.status, "NOT_SENT");
   assert.equal(ready.communication.ready.status, "NOT_SENT");
   const after = await store.read();
@@ -115,6 +124,8 @@ test("relevante beheerformulieren markeren klant-e-mail als optioneel", async ()
   for (const form of [bedrukken, teamorder, custom, free, orderDetail]) {
     assert.match(form, /E-mail \(optioneel\)/u);
     assert.doesNotMatch(form, /name="customerEmail"[^>]*\brequired\b/u);
+    assert.match(form, /Telefoon \(optioneel\)/u);
+    assert.doesNotMatch(form, /name="customerPhone"[^>]*\brequired\b/u);
   }
   assert.match(source, /if \(!edited && value\.customerEmail\)/u);
 });

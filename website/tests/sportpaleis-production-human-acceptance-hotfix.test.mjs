@@ -19,7 +19,7 @@ async function fixture(context) {
   return { service, admin };
 }
 
-test("niet-canonieke vervolggroep faalt vóór voorstel, job, revision en auditmutatie", async (context) => {
+test("niet-beschikbare foliekleur faalt vóór voorstel, job, revision en auditmutatie", async (context) => {
   const { service, admin } = await fixture(context);
   let state = await service.bootstrap(admin.token);
   const pioneers = state.associations.find(({ name }) => name === "Almerer Pioneers");
@@ -40,7 +40,7 @@ test("niet-canonieke vervolggroep faalt vóór voorstel, job, revision en auditm
   assert.deepEqual(controlled.items.map(({ foilColor }) => foilColor), ["Zwart", "Wit"]);
 
   const before = await service.bootstrap(admin.token);
-  await assert.rejects(service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }], foilColor: "Wit" }, "hotfix-white-too-early"), (error) => error.code === "PRODUCTION_GROUP_OUT_OF_SEQUENCE" && /niets opgeslagen/iu.test(error.message));
+  await assert.rejects(service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }], foilColor: "Rood" }, "hotfix-red-unavailable"), (error) => error.code === "PRODUCTION_GROUP_NOT_AVAILABLE" && /niets opgeslagen/iu.test(error.message));
   const after = await service.bootstrap(admin.token);
   assert.equal(after.productionProposals.length, before.productionProposals.length);
   assert.equal(after.productionJobs.length, before.productionJobs.length);
@@ -81,7 +81,7 @@ test("dagelijkse productie houdt proposal-only werk vindbaar en toont feedback i
   assert.match(source, /data-production-action-feedback/u);
   assert.match(source, /role="status" aria-live="polite"/u);
   assert.match(source, /aria-busy="true"/u);
-  assert.match(source, /Productiebestand maken\$\{productionProposalBusy \? " · Productievoorstel maken…"/u);
+  assert.match(source, /nu produceren\$\{productionProposalBusy \? " · Productievoorstel maken…"/u);
   assert.match(styles, /\.sp-button\[aria-busy="true"\]::before/u);
   assert.match(styles, /@keyframes sp-busy-spin/u);
 });

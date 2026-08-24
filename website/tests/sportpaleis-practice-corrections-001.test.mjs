@@ -119,7 +119,7 @@ async function controlledCustomOrder(service, actor, fontId, source, key) {
   return (await service.advanceOrder(actor.token, actor.csrfToken, created.id, created.revision, `sequence-${key}-control`)).value;
 }
 
-test("Winkel en Webshop blijven aparte groepen en precies één volgende stap is server-side uitvoerbaar", async (context) => {
+test("Winkel en Webshop blijven aparte groepen; de medewerker kiest en daarna blijft precies één stap actief", async (context) => {
   const { service, admin, operator } = await fixture(context);
   const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const winkel = await controlledCustomOrder(service, admin, font.id, "STORE", "winkel");
@@ -130,10 +130,9 @@ test("Winkel en Webshop blijven aparte groepen en precies één volgende stap is
   assert.ok(proposal.groups.every(({ productionLineRefs }) => productionLineRefs.length === 1));
 
   const [current, later] = proposal.groups;
-  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: later.id, orders: later.orders }, "sequence-later-too-early"), (error) => error.code === "PRODUCTION_GROUP_OUT_OF_SEQUENCE");
   const firstJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: current.id, orders: current.orders }, "sequence-current-job")).value;
   assert.equal(firstJob.humanAcceptance.status, "PENDING");
-  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: later.id, orders: later.orders }, "sequence-later-while-human-go-pending"), (error) => error.code === "PRODUCTION_GROUP_OUT_OF_SEQUENCE");
+  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: later.id, orders: later.orders }, "sequence-later-while-human-go-pending"), (error) => error.code === "PRODUCTION_PHYSICAL_STEP_CONFLICT");
   await service.completeProductionJob(admin.token, admin.csrfToken, firstJob.id, "sequence-current-complete");
 
   const shared = await service.bootstrap(operator.token);
@@ -153,7 +152,7 @@ test("productie-UX toont één huidige stap, daarna-context en geen Webshop-Wink
   assert.match(workspace, /Nu produceren:/u);
   assert.match(workspace, /Daarna:/u);
   assert.match(workspace, />Start huidige stap</u);
-  assert.match(workspace, /proposalGroupSequenceState\(state, groups, id\) === "CURRENT"/u);
+  assert.match(workspace, /activeGroup\.id === group\.id \? "CURRENT" : "LATER"/u);
   assert.match(workspace, /Webshopcommunicatie blijft gescheiden/u);
   assert.doesNotMatch(workspace, /REQUESTED_HEIGHT_AXIS_HORIZONTAL/u, "de fysieke implementatieterm lekt niet naar medewerker-UX");
   assert.match(css, /@media\(max-width:760px\)/u);

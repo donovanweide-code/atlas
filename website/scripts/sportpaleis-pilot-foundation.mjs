@@ -28,7 +28,6 @@ import {
   productionAssetPreviewSvg,
   productionAssetPiece,
 } from "../src/sportpaleis/production-assets.mjs";
-import { sequentialStepState } from "../src/workspace-sequence.ts";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -1539,9 +1538,9 @@ export class SportpaleisPilotService {
           productionJobId: null,
           productionJobIds: [],
         };
-        const currentGroup = groups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
-        if (!currentGroup) throw Object.assign(new Error("Er is geen veilige huidige fysieke productiestap bepaald."), { statusCode: 409, code: "PRODUCTION_CURRENT_GROUP_MISSING" });
-        if (currentGroup.foilColor.toLocaleLowerCase("nl-NL") !== requestedFoilColor.toLocaleLowerCase("nl-NL")) throw Object.assign(new Error(`Begin met ${currentGroup.foilColor}; ${requestedFoilColor} komt daarna. Er is niets opgeslagen.`), { statusCode: 409, code: "PRODUCTION_GROUP_OUT_OF_SEQUENCE" });
+        const requestedGroups = groups.filter(({ foilColor }) => foilColor.toLocaleLowerCase("nl-NL") === requestedFoilColor.toLocaleLowerCase("nl-NL"));
+        const currentGroup = requestedGroups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
+        if (!currentGroup) throw Object.assign(new Error(requestedGroups.length ? "Er is al een andere fysieke kleurstap actief. Rond die eerst af; er is niets opgeslagen." : `${requestedFoilColor} is geen beschikbare OPEN foliekleur; er is niets opgeslagen.`), { statusCode: 409, code: requestedGroups.length ? "PRODUCTION_PHYSICAL_STEP_CONFLICT" : "PRODUCTION_GROUP_NOT_AVAILABLE" });
         if (!managedFoilColor(state, currentGroup.foilColor)) throw Object.assign(new Error("De huidige productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         const currentOrders = currentGroup.orders.map(({ id, expectedRevision }) => {
           const order = state.orders.find((candidate) => candidate.id === id);
@@ -1569,7 +1568,7 @@ export class SportpaleisPilotService {
           syncOpenProposalOrderRevisions(state, order);
         }
         audit(state, user.id, "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), hardwareSendPerformed: false });
-        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
+        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, foilColor: currentGroup.foilColor, physicalStepSelectedBy: user.name, snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
         return { proposal, job };
       });
       return { state, value: outcome };
@@ -1589,7 +1588,7 @@ export class SportpaleisPilotService {
           ? proposal.groups.find(({ id }) => id === payload.proposalGroupId) ?? (proposal.groups.length === 1 && !payload.proposalGroupId ? proposal.groups[0] : null)
           : null;
         if (proposal?.groups?.length && (!proposalGroup || proposalGroup.status !== "OPEN")) throw Object.assign(new Error("De productiegroep is niet meer open."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_OPEN" });
-        if (proposalGroup && productionGroupSequenceState(state, proposal, proposalGroup.id) !== "CURRENT") throw Object.assign(new Error("Rond eerst de huidige productiestap af; deze foliekleur komt daarna."), { statusCode: 409, code: "PRODUCTION_GROUP_OUT_OF_SEQUENCE" });
+        if (proposalGroup && productionGroupSequenceState(state, proposal, proposalGroup.id) !== "CURRENT") throw Object.assign(new Error("Er is al een andere fysieke kleurstap actief of een expliciete productieafhankelijkheid is nog niet afgerond."), { statusCode: 409, code: "PRODUCTION_PHYSICAL_STEP_CONFLICT" });
         if (proposalGroup && !managedFoilColor(state, proposalGroup.foilColor)) throw Object.assign(new Error("De productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         const expectedSelections = proposalGroup?.orders ?? selections;
         if (proposalGroup) {
@@ -1632,7 +1631,7 @@ export class SportpaleisPilotService {
           order.stage = "PRINT"; order.revision += 1; order.updatedAt = createdAt; order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { productionJobId: job.id, jobNumber, ...(proposalGroup ? { productionGroupId: proposalGroup.id, foilColor: proposalGroup.foilColor, productionLineRefs: proposalGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id) } : {}) } });
           syncOpenProposalOrderRevisions(state, order);
         }
-        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: orders.map(({ id }) => id), ...(proposalGroup ? { productionGroupId: proposalGroup.id, productionGroupLabel: proposalGroup.label } : {}), snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
+        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: orders.map(({ id }) => id), ...(proposalGroup ? { productionGroupId: proposalGroup.id, productionGroupLabel: proposalGroup.label, foilColor: proposalGroup.foilColor, physicalStepSelectedBy: user.name } : {}), snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
         return job;
       });
       return { state, value: outcome };
@@ -1712,7 +1711,6 @@ export class SportpaleisPilotService {
         const sequence = state.nextOrderSequence;
         state.nextOrderSequence += 1;
         const id = `SP-${new Date().getFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const legacy006Payload = payload.customerEmail === undefined && payload.association && payload.items?.every((item) => !item.articleId);
         const orderKind = ["INDIVIDUAL", "TEAM", "CUSTOM"].includes(payload.orderKind) ? payload.orderKind : "LEGACY";
         const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
         let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind);
@@ -1748,7 +1746,7 @@ export class SportpaleisPilotService {
           revision: 1,
           customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : orderKind === "CUSTOM" ? String(payload.customer ?? "").trim().slice(0, 120) || "Vrije productieopdracht" : requiredText(payload.customer, "Klant", 120),
           customerEmail: optionalEmail(payload.customerEmail),
-          customerPhone: ["TEAM", "CUSTOM"].includes(orderKind) ? String(payload.customerPhone ?? "").trim().slice(0, 40) : requiredText(legacy006Payload ? "Niet vastgelegd (006)" : payload.customerPhone, "Telefoonnummer", 40),
+          customerPhone: String(payload.customerPhone ?? "").trim().slice(0, 40),
           association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
           associations,
           standardPersonalization,
@@ -2003,7 +2001,10 @@ export class SportpaleisPilotService {
       if (contentChanged && (payload.standardPersonalization === undefined || payload.items === undefined)) throw Object.assign(new Error("Stuur standaardbedrukking en artikelen samen voor een veilige correctie."), { statusCode: 400, code: "ORDER_CONTENT_INCOMPLETE" });
       if (payload.customer !== undefined) order.customer = requiredText(payload.customer, "Klant", 120);
       if (payload.customerEmail !== undefined) order.customerEmail = optionalEmail(payload.customerEmail);
-      if (payload.customerPhone !== undefined) order.customerPhone = requiredText(payload.customerPhone, "Telefoonnummer", 40);
+      if (payload.customerPhone !== undefined) {
+        const submittedPhone = String(payload.customerPhone ?? "").trim().slice(0, 40);
+        if (submittedPhone || !order.customerPhone) order.customerPhone = submittedPhone;
+      }
       if (payload.deliveryMode !== undefined) {
         if (order.sourceContext?.transactionalAuthority === "ACA_XPRT") throw Object.assign(new Error("Wijzig de bezorgwijze van deze webshoporder in ACA XPRT."), { statusCode: 409, code: "XPRT_TRANSACTIONAL_AUTHORITY" });
         const mode = allowedValue(payload.deliveryMode, ["PICKUP", "DELIVERY"], "Bezorgwijze");
@@ -3919,10 +3920,16 @@ function syncOpenProposalOrderRevisions(state, order) {
 }
 
 function productionGroupSequenceState(state, proposal, groupId) {
-  return sequentialStepState(proposal?.groups ?? [], groupId, (group) => {
-    if (!group.productionJobId) return false;
-    return state.productionJobs.find(({ id }) => id === group.productionJobId)?.status === "COMPLETED";
-  });
+  const groups = proposal?.groups ?? [];
+  const group = groups.find(({ id }) => id === groupId);
+  if (!group) return "UNKNOWN";
+  const jobStatus = (candidate) => candidate.productionJobId ? state.productionJobs.find(({ id }) => id === candidate.productionJobId)?.status : null;
+  if (jobStatus(group) === "COMPLETED") return "COMPLETED";
+  const activeGroup = groups.find((candidate) => jobStatus(candidate) === "AWAITING_HUMAN_CHECK");
+  if (activeGroup) return activeGroup.id === group.id ? "CURRENT" : "LATER";
+  const dependencies = Array.isArray(group.dependsOnGroupIds) ? group.dependsOnGroupIds : [];
+  if (dependencies.some((dependencyId) => jobStatus(groups.find(({ id }) => id === dependencyId) ?? {}) !== "COMPLETED")) return "LATER";
+  return group.status === "OPEN" ? "CURRENT" : "UNKNOWN";
 }
 
 function productionProgressForOrder(state, order) {

@@ -122,7 +122,7 @@ test("workspace-contract zet directe kleur-CTA boven de lijst en Teamorder faalt
   const primary = source.slice(primaryStart, source.indexOf("const attentionPanel", primaryStart));
   assert.ok(primary.indexOf("sp-production-proposal-actions") >= 0);
   assert.equal((primary.match(/data-action="prepare-and-print-production-color"/gu) ?? []).length, 1);
-  assert.match(primary, /Alles selecteren[^]*Productiebestand maken/u);
+  assert.match(primary, /Alles selecteren[^]*nu produceren/u);
   assert.match(source, /name="teamDefaultClass"/u);
   assert.match(source, /data-team-row-field="backNumberSizeClass"/u);
   assert.match(source, /kledingmaat onafhankelijk/u);

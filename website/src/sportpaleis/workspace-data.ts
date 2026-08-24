@@ -648,6 +648,7 @@ export interface ProductionProposal {
     outputWriter: { id: string; version: string };
     orders: { id: string; expectedRevision: number }[];
     productionLineRefs: { orderId: string; lineId: string }[];
+    dependsOnGroupIds?: string[];
     status: "OPEN" | "CONVERTED";
     productionJobId: string | null;
   }[];

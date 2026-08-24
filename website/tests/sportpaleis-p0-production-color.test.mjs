@@ -110,8 +110,6 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   assert.deepEqual(new Set(whiteGroup.orders.map(({ id }) => id)), new Set([mixed.id, whiteOnly.id]));
   assert.deepEqual(blueGroup.orders.map(({ id }) => id), [mixed.id]);
 
-  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: blueGroup.id, orders: blueGroup.orders }, "p0-blue-too-early"), (error) => error.code === "PRODUCTION_GROUP_OUT_OF_SEQUENCE");
-
   const whiteJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: whiteGroup.id, orders: whiteGroup.orders }, "p0-white-job")).value;
   assert.equal(whiteJob.snapshot.productionGroup.foilColor, "Wit");
   assert.ok(whiteJob.snapshot.productionLines.every((line) => whiteGroup.productionLineRefs.some(({ orderId, lineId }) => orderId === line.orderId && lineId === line.id)));
