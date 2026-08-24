@@ -427,7 +427,7 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
   assert.match(source, /data-context-picker/u);
   assert.match(source, /create-inline-production-association/u);
   assert.match(source, /sp-asset-preparation-form/u);
-  assert.match(source, /Welke onderdelen wilt u bewaren\?/u);
+  assert.match(source, /Onderdelen in dit bestand · Welke wilt u bewaren\?/u);
   assert.match(source, /data-asset-split-card/u);
   assert.match(source, /assetName:\$\{esc\(candidate\.id\)\}/u);
   assert.match(source, /Geselecteerde onderdelen bewaren/u);
@@ -439,32 +439,38 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
   assert.match(server, /ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT/u);
 });
 
-test("multi-artwork SVG biedt alleen complete bron-eigen groepen en kan meerdere assets uit één immutable bron bewaren", async (context) => {
+test("City logo's jeugd 2026 biedt vier visuele brononderdelen, separate centrale save en individuele order reuse", async (context) => {
   const { service, admin, operator, store } = await fixture(context);
   const artwork = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500"><g>${[
     [20, 20, 240, 70], [300, 20, 180, 90], [20, 180, 260, 80], [340, 190, 220, 65],
   ].map(([x, y, width, height]) => `<g><path d="M${x} ${y}H${x + width}V${y + height}H${x}Z"/><path d="M${x + 12} ${y + 12}H${x + width - 12}V${y + height - 12}H${x + 12}Z"/></g>`).join("")}</g></svg>`);
-  const inspected = await inspectProductionAssetSource({ bytes: artwork, filename: "sanitized-four-artworks.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
+  const inspected = await inspectProductionAssetSource({ bytes: artwork, filename: "City logo's jeugd 2026.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
   assert.equal(inspected.candidates.length, 4);
   assert.ok(inspected.candidates.every(({ selectionMode, reviewCategory, contourCount }) => selectionMode === "OBJECT_GROUP" && reviewCategory === "ARTWORK_CANDIDATE" && contourCount === 2));
-  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-four-artworks.svg", mimeType: "image/svg+xml", dataBase64: artwork.toString("base64"), provenance: "Gesanitiseerde multi-artwork fixture", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "City logo's jeugd 2026.svg", mimeType: "image/svg+xml", dataBase64: artwork.toString("base64"), provenance: "Production-shaped City multi-asset acceptance", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const previews = await Promise.all(source.candidates.map(({ id }) => service.productionAssetCandidatePreview(operator.token, source.id, id)));
   assert.equal(previews.length, 4);
   assert.ok(previews.every(({ bytes }) => bytes.toString("utf8").includes("<svg")));
   const association = (await store.read()).associations[0];
   const create = async (candidate, name) => service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name, ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 100, heightMm: 100 * candidate.boundsMm.height / candidate.boundsMm.width, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "LOGO", placement: null }], proofAuthority: "HUMAN_ACCEPTANCE" });
-  const first = await create(source.candidates[0], "Gesanitiseerd logo A");
-  const second = await create(source.candidates[1], "Gesanitiseerd logo B");
-  assert.notEqual(first.sourceSelection.geometryHash, second.sourceSelection.geometryHash);
+  const names = ["Almere City", "KROONENBERG GROEP", "ruitenheer", "YANMAR"];
+  const assets = await Promise.all(source.candidates.map((candidate, index) => create(candidate, names[index])));
+  assert.equal(new Set(assets.map(({ sourceSelection }) => sourceSelection.geometryHash)).size, 4);
   const persisted = await store.read();
   const separateAssets = persisted.productionElements.filter(({ sourceId }) => sourceId === source.id);
-  assert.equal(separateAssets.length, 2);
-  assert.deepEqual(separateAssets.map(({ sourceSelection }) => sourceSelection.candidateIds), [[source.candidates[0].id], [source.candidates[1].id]]);
-  assert.equal(persisted.productionAssetSources[0].original.dataBase64, artwork.toString("base64"));
+  assert.equal(separateAssets.length, 4);
+  assert.deepEqual(separateAssets.map(({ name }) => name).sort(), [...names].sort());
+  assert.deepEqual(separateAssets.map(({ sourceSelection }) => sourceSelection.candidateIds[0]).sort(), source.candidates.map(({ id }) => id).sort());
+  const retainedSource = persisted.productionAssetSources.find(({ id }) => id === source.id);
+  assert.equal(retainedSource.original.dataBase64, artwork.toString("base64"));
+  assert.equal(retainedSource.original.filename, "City logo's jeugd 2026.svg");
   const library = await service.bootstrap(admin.token);
-  assert.ok([first.id, second.id].every((id) => library.productionElements.some((asset) => asset.id === id && asset.sourceId === source.id)));
-  const reused = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Losse multi-assets", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: association.name, size: "M", quantity: 2, personalization: "Twee losse sponsorassets", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [first, second].map((asset, index) => ({ id: `multi-asset-${index + 1}`, type: "LOGO", content: asset.name, sourceId: asset.id, widthMm: asset.variants[0].widthMm, heightMm: asset.variants[0].heightMm, foilColor: "Wit", quantity: 1, provenance: "Multi-asset hergebruikregressie" })) }, "assets-multi-individual-order-reuse")).value;
-  assert.deepEqual(reused.productionLines.map(({ source }) => source.id), [first.id, second.id]);
+  assert.ok(assets.every(({ id }) => library.productionElements.some((asset) => asset.id === id && asset.sourceId === source.id)));
+  assert.ok(assets.every(({ contexts }) => contexts.some(({ type, id }) => type === "ASSOCIATION" && id === association.id)));
+  const profile = persisted.productionProfiles.find(({ id }) => id !== "profile-none");
+  const reused = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "City losse multi-assets", customer: "A.S.C. Waterwijk", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: association.name, productionProfileId: profile.id, size: "M", quantity: 4, personalization: "Vier losse City-assets", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: assets.map((asset, index) => ({ id: `city-multi-asset-${index + 1}`, type: "LOGO", content: asset.name, sourceId: asset.id, widthMm: asset.variants[0].widthMm, heightMm: asset.variants[0].heightMm, foilColor: "Wit", quantity: 1, provenance: "City individuele order reuse" })) }, "city-assets-individual-order-reuse")).value;
+  assert.deepEqual(reused.productionLines.map(({ source }) => source.id), assets.map(({ id }) => id));
+  assert.equal(reused.items[0].productionProfileId, profile.id);
 });
 
 test("Human Review bewaart iedere cijferkeuze als resumable serverconcept en valideert alleen wat ontbreekt", async (context) => {

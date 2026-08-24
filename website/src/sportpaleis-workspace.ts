@@ -723,7 +723,7 @@ function productionElementsLegacy(state: PilotBootstrap): string {
     const reviewCandidates = glyphCandidates.length ? glyphCandidates : fidelityStatus === "MATCHED" ? visualCandidates.filter(({ id }) => !registeredCandidateIds.has(id)) : [];
     if (registered.length && source.intakeKind === "NUMBER_SET") return `<section class="sp-panel sp-asset-source sp-asset-source--complete" id="${sourceReviewAnchor(source)}"><div class="sp-panel__head"><div><p class="sp-eyebrow">VASTGELEGDE PRODUCTIEBRON</p><h2>${esc(source.original.filename)}</h2><span>${registered.map(({ name }) => esc(name)).join(" · ")}</span></div><span class="sp-stage sp-stage--done">Productieklaar ✓</span></div><p>De cijfers zijn gecontroleerd en blijven bewaard. U hoeft ze niet opnieuw te koppelen.</p><details class="sp-technical-details"><summary>+ Technische details</summary><code>${esc(source.original.sha256)}</code></details></section>`;
     const glyphReview = glyphCandidates.length > 0;
-    const reviewHeading = glyphReview ? "Zijn dit de juiste cijfers?" : "Welke onderdelen wilt u bewaren?";
+    const reviewHeading = glyphReview ? "Zijn dit de juiste cijfers?" : "Onderdelen in dit bestand · Welke wilt u bewaren?";
     const reviewHelp = glyphReview
       ? "Koppel alleen herkenbare cijfers. Kies Niet gebruiken voor een vorm die niet in deze nummerset hoort."
       : reviewCandidates.length > 1 ? "Workspace toont de afzonderlijke SVG-groepen. Selecteer alleen herkenbare onderdelen en geef ieder onderdeel een eigen naam en type." : "Controleer het herkende onderdeel en geef het een eigen naam en type.";
