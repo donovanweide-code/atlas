@@ -46,6 +46,12 @@ import {
 import {
   createSportpaleisWebshopIntakeState,
 } from "./sportpaleis-divide-import.mjs";
+import {
+  createQuickProductionIntakeRecord,
+  inspectQuickProductionSource,
+  publicQuickProductionIntake,
+  quickIntakeOrderPayload,
+} from "../src/sportpaleis/quick-production-intake.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -459,6 +465,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     productionElementRequirements: [],
     productionJobs: createGoldenProductionJobs(iso(now)),
     productionProposals: [],
+    quickProductionIntakes: [],
     preferences: {},
     audit: [{
       id: "audit-production-bootstrap",
@@ -664,6 +671,7 @@ export function migrateSportpaleisPilotState(input) {
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
+  state.quickProductionIntakes ??= [];
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
   const highestJobSequence = state.productionJobs.reduce((highest, { jobNumber }) => Math.max(highest, Number(String(jobNumber ?? "").match(/(\d+)$/u)?.[1] ?? 0)), 0);
@@ -796,6 +804,7 @@ export function validateSportpaleisPilotState(input) {
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
+  state.quickProductionIntakes ??= [];
   state.nextProductionJobSequence ??= 1;
   for (const article of ARTICLE_CATALOG) {
     const existing = state.articles.find(({ id }) => id === article.id);
@@ -867,6 +876,11 @@ export function validateSportpaleisPilotState(input) {
   }
   if (new Set(state.productionJobs.map(({ id }) => id)).size !== state.productionJobs.length || new Set(state.productionJobs.map(({ jobNumber }) => jobNumber)).size !== state.productionJobs.length) throw new Error("Dubbele productiejob.");
   if (new Set(state.productionProposals.map(({ id }) => id)).size !== state.productionProposals.length || new Set(state.productionProposals.map(({ proposalNumber }) => proposalNumber)).size !== state.productionProposals.length) throw new Error("Dubbel productievoorstel.");
+  if (new Set(state.quickProductionIntakes.map(({ id }) => id)).size !== state.quickProductionIntakes.length) throw new Error("Dubbele Quick Production Intake.");
+  for (const intake of state.quickProductionIntakes) {
+    if (!intake.source?.immutable || sha256(Buffer.from(intake.source.dataBase64, "base64")) !== intake.source.sha256 || !["HUMAN_CHECK", "ACCEPTED"].includes(intake.status)) throw new Error("Quick Production Intake-bron is gewijzigd of onvolledig.");
+    if (intake.status === "ACCEPTED" && (!intake.orderId || !state.orders.some(({ id }) => id === intake.orderId))) throw new Error("Verwerkte Quick Production Intake mist de canonieke order.");
+  }
   for (const user of state.users) {
     if (!ROLE.has(user.role) || (user.status !== "Uitgenodigd" && !user.password?.hash)) throw new Error("Ongeldige gebruiker in datastore.");
   }
@@ -1373,6 +1387,7 @@ export class SportpaleisPilotService {
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
       productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
       associations: structuredClone(state.associations),
@@ -1776,6 +1791,68 @@ export class SportpaleisPilotService {
       return { state, value: outcome };
     });
     return result.value;
+  }
+
+  async createQuickProductionIntake(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const inspected = await inspectQuickProductionSource(payload);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_QUICK_PRODUCTION_INTAKE", () => {
+        const duplicate = state.quickProductionIntakes.find(({ source }) => source.sha256 === inspected.source.sha256);
+        if (duplicate) return publicQuickProductionIntake(duplicate);
+        const intake = createQuickProductionIntakeRecord(inspected, user);
+        state.quickProductionIntakes.unshift(intake);
+        audit(state, user.id, "Quick Production Intake-bron opgeslagen", intake.id, { filename: intake.source.filename, sourceKind: intake.source.sourceKind, sha256: intake.source.sha256, extractionEngine: intake.extraction.engine });
+        return publicQuickProductionIntake(intake);
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async quickProductionIntakeSource(token, intakeId) {
+    const { state, user } = await this.authenticate(token);
+    assertRole(user, ["admin", "operator"]);
+    const intake = state.quickProductionIntakes.find(({ id }) => id === intakeId);
+    if (!intake) throw Object.assign(new Error("Quick Production Intake niet gevonden."), { statusCode: 404, code: "QUICK_INTAKE_NOT_FOUND" });
+    return { bytes: Buffer.from(intake.source.dataBase64, "base64"), mimeType: intake.source.mimeType, filename: intake.source.filename, sha256: intake.source.sha256, disposition: "inline", allowSameOriginFrame: true };
+  }
+
+  async acceptQuickProductionIntake(token, csrfToken, intakeId, payload) {
+    const { state, user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const intake = state.quickProductionIntakes.find(({ id }) => id === intakeId);
+    if (!intake) throw Object.assign(new Error("Quick Production Intake niet gevonden."), { statusCode: 404, code: "QUICK_INTAKE_NOT_FOUND" });
+    if (intake.status === "ACCEPTED") {
+      const order = state.orders.find(({ id }) => id === intake.orderId);
+      if (!order) throw Object.assign(new Error("De gekoppelde order ontbreekt; automatische correctie is geblokkeerd."), { statusCode: 409, code: "QUICK_INTAKE_ORDER_MISSING" });
+      return { duplicate: true, value: { intake: publicQuickProductionIntake(intake), order: { ...order, ...productionStatusForOrder(state, order) } } };
+    }
+    const prepared = quickIntakeOrderPayload(intake, payload, state);
+    const created = await this.createOrder(token, csrfToken, prepared.payload, `quick-intake-order:${intake.id}`);
+    const result = await this.store.mutate(async (next) => {
+      const current = next.quickProductionIntakes.find(({ id }) => id === intake.id);
+      const order = next.orders.find(({ id }) => id === created.value.id);
+      if (!current || !order) throw Object.assign(new Error("Intake of canonieke order ontbreekt."), { statusCode: 409, code: "QUICK_INTAKE_LINK_FAILED" });
+      if (current.status === "HUMAN_CHECK") {
+        current.status = "ACCEPTED";
+        current.revision += 1;
+        current.humanCorrections = prepared.corrections;
+        current.acceptedAt = iso();
+        current.acceptedBy = { userId: user.id, name: user.name };
+        current.orderId = order.id;
+        order.sourceContext.quickIntake = { id: current.id, sourceKind: current.source.sourceKind, filename: current.source.filename, sha256: current.source.sha256, version: current.version };
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "QUICK_INTAKE_ACCEPTED", at: current.acceptedAt, userId: user.id, userName: user.name, source: "explicit-human-agreement", details: { intakeId: current.id, sourceSha256: current.source.sha256, corrections: prepared.corrections } });
+        order.revision += 1;
+        order.updatedAt = current.acceptedAt;
+        audit(next, user.id, "Quick Production Intake akkoord", current.id, { orderId: order.id, sourceSha256: current.source.sha256, corrections: prepared.corrections.length });
+      }
+      return { state: next, value: { intake: publicQuickProductionIntake(current), order: { ...order, ...productionStatusForOrder(next, order) } } };
+    });
+    return { duplicate: created.duplicate || result.value.intake.status !== "ACCEPTED", value: result.value };
   }
 
   async advanceOrder(token, csrfToken, orderId, expectedRevision, idempotencyKey) {
@@ -3565,6 +3642,18 @@ function configuredManagedFont(state, profile) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function associationNumberSet(state, associationName) {
+  const association = state.associations.find(({ id, name }) => id === associationName || name === associationName);
+  if (!association) return { association: null, asset: null, ambiguous: false };
+  const matches = state.productionElements.filter((element) => element.lifecycleStatus === "PRODUCTION_READY"
+    && element.productionMethod === "SELF_PRODUCED"
+    && element.applications?.some(({ kind }) => kind === "NUMBER_SET")
+    && Object.keys(element.numberGlyphs ?? {}).length === 10
+    && Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => element.numberGlyphs?.[digit])
+    && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name)));
+  return { association, asset: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
+}
+
 function validateProductionLines(value, state, user, orderKind) {
   if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) return [];
   if (!Array.isArray(value) || value.length > 100) throw Object.assign(new Error("Gebruik maximaal 100 productieregels."), { statusCode: 400, code: "PRODUCTION_LINES_INVALID" });
@@ -3708,20 +3797,24 @@ function deriveCatalogProductionLines(state, orderId, items) {
           : field === "backNumber"
           ? Number(variant.backNumberProduction?.physicalHeightMm)
           : Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
-        const requestedHeightMm = configuredHeight > 0 ? configuredHeight : field === "initialsInfix" ? 0 : 30;
-        const versionedSource = resolveProductionSource({
+        const linkedNumberSet = isNumber ? associationNumberSet(state, item.association) : { association: null, asset: null, ambiguous: false };
+        const associatedNumberHeight = field === "shortsNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.shortsNumber) * 10 : 0;
+        const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" ? 0 : 30;
+        const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: profile?.productionSourceSetId,
           outputWriterId: profile?.outputWriterId,
           lineType,
           content,
           physicalHeightMm: requestedHeightMm,
         });
-        const managedFont = versionedSource ? null : configuredManagedFont(state, profile);
+        const managedFont = versionedSource || linkedNumberSet.asset ? null : configuredManagedFont(state, profile);
         const heightMm = versionedSource?.heightMm ?? requestedHeightMm;
         const widthMm = versionedSource?.widthMm ?? (field === "initialsInfix" && !configuredHeight ? 0 : Math.round(Math.max(20, heightMm * Math.max(.5, content.length * .48)) * 1000) / 1000);
-        const reason = field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.horizontalSpacingMm === null || infixRule.baselineOffsetMm === null || infixRule.status === "DATA_GAP")
+        const reason = linkedNumberSet.ambiguous
+          ? `Meerdere productierijpe SVG-nummersets zijn aan ${item.association} gekoppeld; kies eerst één authoritative versie.`
+          : field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.horizontalSpacingMm === null || infixRule.baselineOffsetMm === null || infixRule.status === "DATA_GAP")
           ? "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd."
-          : versionedSource || managedFont
+          : linkedNumberSet.asset || versionedSource || managedFont
           ? null
           : profile?.productionSourceSetId
             ? `In productiebronset ${profile.productionSourceSetId} bestaat geen gevalideerde ${lineType.toLowerCase()}bron voor “${content}” op ${requestedHeightMm} mm.`
@@ -3731,7 +3824,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
           orderId, itemId: item.id, variantId: variant.id,
           type: lineType,
           content,
-          source: versionedSource ? {
+          source: linkedNumberSet.asset ? { kind: "PRODUCTION_ELEMENT", id: linkedNumberSet.asset.id, version: linkedNumberSet.asset.version ?? String(linkedNumberSet.asset.revision), variantId: linkedNumberSet.asset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0)?.id ?? null } : versionedSource ? {
             kind: "PRODUCTION_SOURCE",
             id: versionedSource.id,
             version: versionedSource.version,
@@ -3744,10 +3837,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
           widthMm: Math.round(widthMm * 1000) / 1000,
           heightMm: Math.round(heightMm * 1000) / 1000,
           quantity: variant.quantity,
-          preview: { kind: versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(versionedSource) },
-          provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}`,
-          proofStatus: versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
-          validation: { status: versionedSource || managedFont || field === "initialsInfix" && !reason ? "VALID" : "BLOCKED", reason },
+          preview: { kind: linkedNumberSet.asset || versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(linkedNumberSet.asset || versionedSource) },
+          provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}${linkedNumberSet.asset ? ` · gekoppelde SVG-nummerset ${linkedNumberSet.asset.id}@${linkedNumberSet.asset.version}` : ""}`,
+          proofStatus: linkedNumberSet.asset ? productionElementProof(linkedNumberSet.asset) : versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
+          validation: { status: !linkedNumberSet.ambiguous && (linkedNumberSet.asset || versionedSource || managedFont || field === "initialsInfix" && !reason) ? "VALID" : "BLOCKED", reason },
           ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "CENTER", horizontalSpacingMm: infixRule?.horizontalSpacingMm ?? null, baselineOffsetMm: infixRule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
         });
       }
@@ -4486,6 +4579,20 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/orders" && method === "POST") {
         json(response, 201, await service.createOrder(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/quick-production-intakes" && method === "POST") {
+        json(response, 201, await service.createQuickProductionIntake(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const quickIntakeSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/quick-production-intakes\/([^/]+)\/source$/);
+      if (quickIntakeSourceMatch && method === "GET") {
+        binary(response, 200, await service.quickProductionIntakeSource(token, decodeURIComponent(quickIntakeSourceMatch[1])));
+        return true;
+      }
+      const quickIntakeAcceptMatch = route.match(/^\/api\/sportpaleis\/v1\/quick-production-intakes\/([^/]+)\/accept$/);
+      if (quickIntakeAcceptMatch && method === "POST") {
+        json(response, 201, await service.acceptQuickProductionIntake(token, csrf, decodeURIComponent(quickIntakeAcceptMatch[1]), await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/orders/bulk-advance" && method === "POST") {

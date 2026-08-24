@@ -201,6 +201,11 @@ export interface CutBatch {
   foilColor: string;
   materialCodes: readonly string[];
   objectIds: readonly string[];
+  strategy: {
+    classification: "SMALL" | "LARGE";
+    heuristic: "OBJECT_COUNT_GTE_8";
+    objective: "MINIMIZE_FOIL_LENGTH" | "COMBINED_PERSONALISATION_BATCH";
+  };
   jobs: readonly CutJob[];
   efficiency: MaterialEfficiencyMetrics;
   readyForPrinting: boolean;

@@ -18,6 +18,16 @@
   font-synthesis: none;
 }
 
+.sp-quick-intake-entry { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.sp-quick-intake-upload .sp-button-row { display:flex; flex-wrap:wrap; gap:.75rem; margin:1rem 0; }
+.sp-quick-intake-upload figure, .sp-quick-intake-source { margin:1rem 0; }
+.sp-quick-intake-upload figure img, .sp-quick-intake-source img { display:block; max-width:100%; max-height:32rem; object-fit:contain; border-radius:.75rem; background:#f4f6f6; }
+.sp-quick-intake-field { position:relative; }
+.sp-quick-intake-field > span { float:right; font-size:.68rem; letter-spacing:.04em; }
+.sp-quick-intake-field[data-confidence="RELIABLE"] > span { color:#19734a; }
+.sp-quick-intake-field[data-confidence="CHECK_REQUIRED"], .sp-quick-intake-field[data-confidence="MISSING"] { padding:.65rem; border:2px solid #c77922; border-radius:.65rem; }
+@media (max-width: 700px) { .sp-quick-intake-entry { align-items:stretch; flex-direction:column; } .sp-quick-intake-entry .sp-button { width:100%; } }
+
 /* Production Assets V1: visual selection is primary; source detail stays secondary. */
 .sp-asset-sources { display: grid; gap: 1rem; margin: 1rem 0; }
 .sp-asset-candidate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: .75rem; margin: 1rem 0; }

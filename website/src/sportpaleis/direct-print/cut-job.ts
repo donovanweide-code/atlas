@@ -165,12 +165,20 @@ function placementCandidates(
 ): readonly { x: number; y: number }[] {
   const edge = configuration.edgeMarginMm;
   const gap = configuration.minimumCutGapMm;
+  // Bound contour-aware search for predictable daily performance. Larger or
+  // highly detailed batches keep the proven envelope heuristic.
+  const sourceContourAnchors = sheet.flatMap(({ contours }) => contours.flatMap(({ points }) => points));
+  const contourAnchors = sheet.length < 8 && sourceContourAnchors.length <= 64 ? sourceContourAnchors : [];
   const xValues = uniqueSorted([
     edge,
     ...sheet.flatMap(({ boundsMm }) => [
       boundsMm.minX,
       boundsMm.maxX + gap,
       boundsMm.minX - orientation.widthMm - gap,
+    ]),
+    ...contourAnchors.flatMap(({ x }) => [
+      x + gap,
+      x - orientation.widthMm - gap,
     ]),
   ]).filter((x) => x >= edge && x + orientation.widthMm + edge <= configuredWidthMm + 0.000_001);
   const yValues = uniqueSorted([
@@ -179,6 +187,10 @@ function placementCandidates(
       boundsMm.minY,
       boundsMm.maxY + gap,
       boundsMm.minY - orientation.heightMm - gap,
+    ]),
+    ...contourAnchors.flatMap(({ y }) => [
+      y + gap,
+      y - orientation.heightMm - gap,
     ]),
   ]).filter((y) => y >= edge);
 
@@ -204,14 +216,11 @@ function tryPlace(
       const jobLength = boundsMm.maxY + configuration.edgeMarginMm;
       if (configuration.maxJobLengthMm !== undefined
         && jobLength > configuration.maxJobLengthMm + 0.000_001) continue;
-      // Production text is placed by its immutable physical envelope. This
-      // conservative fast path avoids expensive contour interlocking while
-      // preserving the configured gap and the final contour-level validation.
-      if (sheet.some((placed) => placementEnvelopesConflict(
-        boundsMm,
-        placed.boundsMm,
-        configuration.minimumCutGapMm,
-      ))) continue;
+      // Only evaluate contour distance when physical envelopes meet. This
+      // allows safe use of obvious empty contour regions without scaling,
+      // rotating, or introducing a separate optimizer.
+      if (sheet.some((placed) => placementEnvelopesConflict(boundsMm, placed.boundsMm, configuration.minimumCutGapMm)
+        && contourSetsConflict(contours, placed.contours, configuration.minimumCutGapMm))) continue;
 
       const resultingLength = Math.max(currentLength, boundsMm.maxY);
       const resultingWidth = Math.max(
@@ -584,6 +593,9 @@ function createColorBatch(
     foilColor,
     materialCodes: [...new Set(objects.map(({ material }) => material.code))].sort(),
     objectIds: objects.map(({ id }) => id),
+    strategy: objects.length >= 8
+      ? { classification: "LARGE", heuristic: "OBJECT_COUNT_GTE_8", objective: "COMBINED_PERSONALISATION_BATCH" }
+      : { classification: "SMALL", heuristic: "OBJECT_COUNT_GTE_8", objective: "MINIMIZE_FOIL_LENGTH" },
     jobs,
     efficiency: combinedEfficiency(jobs, savedLength),
     readyForPrinting: jobs.every(({ readyForPrinting }) => readyForPrinting),

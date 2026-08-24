@@ -373,7 +373,7 @@ export interface WorkspaceOrder {
   owner: string;
   acceptedBy?: OrderAcceptedBy;
   salesAttribution?: { employeeId?: string | null; salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
-  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL" };
+  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string } };
   totalPieces: number;
   attention?: string;
   productionReference?: "SNIJTEST-001";
@@ -531,6 +531,27 @@ export interface SportpaleisProductionAssetSource {
     normalReviewRepresentative?: boolean;
     normalReviewAlternativeCount?: number;
   }[];
+}
+
+export interface SportpaleisQuickProductionIntake {
+  id: string;
+  version: "1";
+  revision: number;
+  createdAt: string;
+  createdBy: { userId: string; name: string };
+  status: "HUMAN_CHECK" | "ACCEPTED";
+  source: { filename: string; mimeType: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; sizeBytes: number; sha256: string; immutable: true };
+  extraction: {
+    engine: "NO_OCR_HUMAN_CHECK_V1" | "EMBEDDED_TEXT_EXACT_LABELS_V1";
+    fields: Record<string, { value: string; status: "RELIABLE" | "CHECK_REQUIRED" | "MISSING"; evidence: string }>;
+    confidencePolicy: "NO_SILENT_GUESSING";
+    status: "HUMAN_CHECK_REQUIRED" | "REVIEW_REQUIRED";
+    uncertainties: string[];
+  };
+  humanCorrections: { field: string; previous: string; next: string }[];
+  acceptedAt: string | null;
+  acceptedBy: { userId: string; name: string } | null;
+  orderId: string | null;
 }
 
 export interface SportpaleisProductionElementRequirement {
@@ -717,6 +738,7 @@ export interface SportpaleisWorkspaceState {
   webshopIntake?: SportpaleisWebshopIntakeState;
   productionElements: SportpaleisProductionElement[];
   productionAssetSources?: SportpaleisProductionAssetSource[];
+  quickProductionIntakes?: SportpaleisQuickProductionIntake[];
   productionFonts: SportpaleisProductionFont[];
   productionElementRequirements: SportpaleisProductionElementRequirement[];
   productionJobs: ProductionJob[];

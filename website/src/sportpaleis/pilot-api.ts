@@ -21,6 +21,7 @@ import type {
   SportpaleisProductionLine,
   SportpaleisEmployee,
   SportpaleisProductionAssetSource,
+  SportpaleisQuickProductionIntake,
 } from "./workspace-data.ts";
 import { createNonCriticalReadonlyCache, type ReadonlyCacheObservation } from "../workspace-readonly-cache.ts";
 
@@ -260,6 +261,22 @@ export class SportpaleisPilotApi {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("order") },
       body: JSON.stringify({ orderKind: input.orderKind ?? "INDIVIDUAL", ...input }),
+    }));
+  }
+
+  async createQuickProductionIntake(input: { filename: string; mimeType: string; dataBase64: string }): Promise<{ duplicate: boolean; value: SportpaleisQuickProductionIntake }> {
+    return responseBody(await this.#mutatingFetch(`${API}/quick-production-intakes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("quick-intake") },
+      body: JSON.stringify(input),
+    }));
+  }
+
+  async acceptQuickProductionIntake(intakeId: string, input: { explicitAgreement: true; customer: string; customerEmail: string; customerPhone: string; association?: string; backNumberSizeClass?: "JUNIOR" | "SENIOR"; fields: Record<string, string> }): Promise<{ duplicate: boolean; value: { intake: SportpaleisQuickProductionIntake; order: WorkspaceOrder } }> {
+    return responseBody(await this.#mutatingFetch(`${API}/quick-production-intakes/${encodeURIComponent(intakeId)}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`quick-intake-accept-${intakeId}`) },
+      body: JSON.stringify(input),
     }));
   }
 
