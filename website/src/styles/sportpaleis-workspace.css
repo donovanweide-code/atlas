@@ -1030,6 +1030,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sp-asset-intake form { display:grid; gap:14px; }
 .sp-local-svg-review{display:grid;gap:8px;margin:0;padding:14px;border:1px solid var(--sp-grey-200);border-radius:12px;background:#fff}.sp-local-svg-review[hidden]{display:none}.sp-local-svg-review img{display:block;width:100%;height:min(46vh,420px);object-fit:contain;background:#fff}.sp-local-svg-review figcaption{font-size:12px;font-weight:800;color:var(--sp-grey-700)}
 .sp-production-action-feedback[data-tone="error"]{border-color:#d38b8b;background:#fff4f4}.sp-production-action-feedback[data-tone="success"]{border-color:#8db9a8;background:#f2fbf6}.sp-production-order-refs{margin:.35rem 0 0;color:var(--sp-grey-700);font-size:12px;font-weight:800}
+.sp-button[aria-busy="true"]::before{content:"";inline-size:1em;block-size:1em;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;animation:sp-busy-spin .8s linear infinite}@keyframes sp-busy-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.sp-button[aria-busy="true"]::before{animation-duration:1.8s}}
 .sp-asset-dropzone { display:grid; gap:8px; padding:22px; border:2px dashed var(--sp-border,#d8dee7); border-radius:14px; background:var(--sp-surface-soft,#f7f8fa); font-weight:800; }
 .sp-asset-dropzone span { font-size:.9rem; font-weight:500; color:var(--sp-muted,#5f6875); }
 .sp-activation-handoff { display:grid; gap:10px; padding:14px; border:1px solid #c9d8d1; border-radius:10px; background:#f4f8f6; }

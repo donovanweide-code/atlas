@@ -2360,7 +2360,10 @@ export class SportpaleisPilotService {
       let hasProductionSize = widthMm > 0 || heightMm > 0;
       if (isNumberSet) {
         if (!(heightMm > 0)) throw Object.assign(new Error("Leg voor een nummerbron de exacte fysieke cijferhoogte vast."), { statusCode: 400, code: "PRODUCTION_ASSET_SIZE_MISSING" });
-        if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;
+        // A glyph sheet's source spread is not a physical output width: the width
+        // changes per composed number. Keep one bounded nominal width beside the
+        // authoritative glyph height so a saved set can be reused by later orders.
+        widthMm = heightMm;
         hasProductionSize = true;
       } else if (hasProductionSize) {
         if (!(widthMm > 0)) widthMm = heightMm * selectedWidth / selectedHeight;

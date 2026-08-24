@@ -206,18 +206,32 @@ test("Beheerde nummerbron zet willekeurige combinaties zonder fontsubstitutie en
 });
 
 test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyphgeometrie", async (context) => {
-  const { service, admin, operator } = await fixture(context);
+  const { service, admin, operator, store } = await fixture(context);
   const bytes = vectorSvg(Array.from({ length: 10 }, (_, index) => ({ x: 20 + index * 60, y: 20, width: 10 + index * 2, height: 40 })));
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-hockey-numbers.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), provenance: "Gesanitiseerde glyphreview", intakeKind: "NUMBER_SET", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const candidates = source.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
   assert.equal(candidates.length, 10);
   const glyphMap = Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id]));
-  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers gedeeld", ownerType: "OWN_BRAND", ownerName: "Alle hockeyverenigingen", productionMethod: "SELF_PRODUCED", heightMm: 75, applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const association = (await store.read()).associations[0];
+  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers vereniging", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   assert.deepEqual(asset.numberComposition, { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" });
+  assert.equal(asset.lifecycleStatus, "PRODUCTION_READY");
+  assert.equal(asset.contexts[0].id, association.id);
+  assert.equal(asset.variants[0].widthMm, 75);
+  assert.equal(asset.variants[0].heightMm, 75);
   for (const value of ["12", "34", "77"]) {
     const preview = await service.productionAssetNumberPreview(operator.token, asset.id, value);
     assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, value.length);
   }
+  const bootstrap = await service.bootstrap(operator.token);
+  assert.equal(bootstrap.productionElements.find(({ id }) => id === asset.id)?.contexts[0].label, association.name);
+  const order = (await service.createOrder(operator.token, operator.csrfToken, {
+    orderKind: "TEAM", teamContext: association.name, customer: "Technische nummersetproef", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization,
+    items: [{ product: "Hockeyrok", association: association.name, size: "M", quantity: 1, personalization: "Shortnummer 34", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }],
+    productionLines: [{ id: "hockey-number-34", type: "NUMBER", content: "34", sourceId: asset.id, widthMm: asset.variants[0].widthMm, heightMm: asset.variants[0].heightMm, foilColor: "Wit", quantity: 1, provenance: "Technische ketentest; geen live Human Acceptance" }],
+  }, "technical-hockey-number-set-flow")).value;
+  assert.equal(order.productionLines[0].source.id, asset.id);
+  assert.equal(order.productionLines[0].validation.status, "VALID");
 });
 
 test("mixed Teamorder met logo, geschaalde sponsor en hockeynummer spiegelt iedere SELF_PRODUCED batch", () => {
@@ -283,8 +297,10 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
   assert.match(source, /Artwork of nummerset toevoegen/u);
-  assert.match(source, /Er wordt nog niets opgeslagen wanneer u een bestand kiest/u);
-  assert.match(source, /Deze zichtbare SVG opslaan voor controle/u);
+  assert.match(source, /Alleen kiezen toont een lokale preview; er wordt dan nog niets centraal opgeslagen/u);
+  assert.match(source, /Stap 2 · SVG centraal opslaan en verdergaan/u);
+  assert.match(source, /pendingSourceCount/u);
+  assert.match(source, /opgeslagen bron/u);
   assert.match(source, /Van wie ontvangen\?/u);
   assert.match(source, /inferredProductionAssetKind/u);
   assert.match(source, /Mijn productie \/ Wachtrij/u);
@@ -295,6 +311,7 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /data-production-asset-lifecycle-form/u);
   assert.match(source, /Logo\/opdruk toevoegen/u);
   assert.match(source, /exacte vectornummerbron/u);
+  assert.match(source, /type === "ASSOCIATION" && label\.toLocaleLowerCase/u);
   assert.match(source, /De zichtbare vorm en bronselectie kloppen/u);
   assert.match(source, /\+ Technische details/u);
   assert.match(source, /Kies het cijfer, of kies Niet gebruiken/u);

@@ -49,7 +49,11 @@ test("niet-canonieke vervolggroep faalt vóór voorstel, job, revision en auditm
   assert.equal(after.orders.find(({ id }) => id === controlled.id).stage, "CONTROL");
   assert.equal(after.audit.length, before.audit.length);
 
+  const proposalStartedAt = performance.now();
   const prepared = (await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }], foilColor: "Zwart" }, "hotfix-black-current")).value;
+  const proposalDurationMs = performance.now() - proposalStartedAt;
+  context.diagnostic(`MEASURED_PRODUCTION_PROPOSAL_MS=${proposalDurationMs.toFixed(1)}`);
+  assert.ok(proposalDurationMs < 30_000, "de bestaande flow moet binnen de zichtbare busy-state afronden");
   assert.equal(prepared.job.snapshot.productionGroup.foilColor, "Zwart");
   assert.deepEqual(prepared.proposal.groups.map(({ foilColor }) => foilColor), ["Zwart", "Wit"]);
   assert.equal(prepared.proposal.groups[0].status, "CONVERTED");
@@ -63,14 +67,42 @@ test("niet-canonieke vervolggroep faalt vóór voorstel, job, revision en auditm
 
 test("dagelijkse productie houdt proposal-only werk vindbaar en toont feedback in context", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
   const directHandler = source.slice(source.indexOf('if (button.dataset.action === "prepare-and-print-production-color")'), source.indexOf('if (button.dataset.action === "create-production-proposal")'));
   assert.match(directHandler, /prepareCurrentProductionGroup\(selected, foilColor\)/u);
   assert.doesNotMatch(directHandler, /createProductionProposal/u);
+  assert.match(directHandler, /if \(productionProposalBusy\) return/u);
+  assert.match(directHandler, /productionProposalBusy = true/u);
+  assert.match(directHandler, /performance\.now\(\)/u);
+  assert.match(directHandler, /Productievoorstel maken… Workspace blijft bezig/u);
   assert.match(source, /productionSearchOrders = operationalOrders\.filter\(\(\{ stage, productionStatus \}\) => \["CONTROL", "PRINT", "DONE"\]/u);
   assert.match(source, /productionStatus && \["READY", "IN_PRODUCTION"\]\.includes\(productionStatus\)/u);
   assert.match(source, /sp-production-order-refs/u);
   assert.match(source, /data-production-action-feedback/u);
   assert.match(source, /role="status" aria-live="polite"/u);
+  assert.match(source, /aria-busy="true"/u);
+  assert.match(source, /Productiebestand maken\$\{productionProposalBusy \? " · Productievoorstel maken…"/u);
+  assert.match(styles, /\.sp-button\[aria-busy="true"\]::before/u);
+  assert.match(styles, /@keyframes sp-busy-spin/u);
+});
+
+test("productiefilters houden PRINT-orders zichtbaar tot expliciet Gereed", async () => {
+  const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  const execution = source.slice(source.indexOf("function productionExecution"), source.indexOf("function proofLabel"));
+  assert.match(execution, /showAttention = activeProductionFilter === "attention" \|\| activeProductionFilter === "all"/u);
+  assert.match(execution, /showPrinting = activeProductionFilter === "printing" \|\| activeProductionFilter === "all"/u);
+  assert.match(execution, /printingOrders = operationalOrders\.filter\(\(\{ productionStatus \}\) => productionStatus === "IN_PRODUCTION"\)/u);
+  assert.match(execution, /data-production-status-panel="printing"/u);
+  assert.match(execution, /Volledig geproduceerd · expliciet Gereed melden blijft vereist/u);
+  assert.match(execution, /data-production-status-row=/u);
+  assert.match(execution, /id="productie-gereed"/u);
+  assert.match(execution, /<details class="sp-production-batch-details" open>/u);
+  assert.match(execution, /showAttention \? attentionPanel : ""/u);
+  assert.match(execution, /showPrinting \? inProductionPanel : ""/u);
+  assert.match(execution, /showPrinting \? completionPanel : ""/u);
+  const completionHandler = source.slice(source.indexOf('if (button.dataset.action === "complete-production-job"'), source.indexOf('if (button.dataset.action === "toggle-foil-roll"'));
+  assert.ok(completionHandler.indexOf('activeProductionFilter = "printing"') < completionHandler.indexOf("await load()"), "Bedrukt moet vóór herladen naar de zichtbare In productie-context schakelen");
+  assert.match(completionHandler, /blijven In productie tot expliciet Gereed/u);
 });
 
 test("SVG-intake toont lokale preview en vereist expliciete opslag na zichtbare review", async () => {
@@ -79,7 +111,7 @@ test("SVG-intake toont lokale preview en vereist expliciete opslag na zichtbare 
   assert.match(source, /Lokale SVG-preview vóór opslag/u);
   assert.match(source, /URL\.createObjectURL\(file\)/u);
   assert.match(source, /previewConfirmed/u);
-  assert.match(source, /Deze zichtbare SVG opslaan voor controle/u);
+  assert.match(source, /Stap 2 · SVG centraal opslaan en verdergaan/u);
   const submit = source.slice(source.indexOf('else if (form.matches("[data-production-asset-source-form]"))'), source.indexOf('else if (form.matches("[data-production-asset-promote-form]"))'));
   assert.ok(submit.indexOf('previewConfirmed') < submit.indexOf('api.createProductionAssetSource'), "previewbevestiging moet vóór iedere persistente assetmutatie staan");
   assert.match(submit, /Er is niets opgeslagen/u);

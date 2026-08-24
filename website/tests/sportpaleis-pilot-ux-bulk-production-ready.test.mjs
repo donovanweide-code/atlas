@@ -169,7 +169,9 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   assert.match(source, /data-direct-production-select/u);
   assert.match(source, /Alles selecteren · hele batch/u);
-  assert.match(source, /data-action="prepare-and-print-production-color"[^]*?>Productiebestand maken</u);
+  assert.match(source, /data-action="prepare-and-print-production-color"/u);
+  assert.match(source, /Productiebestand maken/u);
+  assert.match(source, /Productievoorstel maken… Workspace blijft bezig/u);
   assert.match(source, /Klaar voor productie/u);
   assert.match(source, /Aandacht nodig/u);
   assert.match(source, /action: "Oplossen ›"/u);
