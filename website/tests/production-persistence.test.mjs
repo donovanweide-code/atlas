@@ -202,6 +202,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
     entrypoints: [
       fileURLToPath(new URL("../scripts/workspace-runtime.mjs", import.meta.url)),
       fileURLToPath(new URL("../scripts/production-migrate.mjs", import.meta.url)),
+      fileURLToPath(new URL("../src/workspace-sequence.ts", import.meta.url)),
     ],
     allowedRoots: [
       fileURLToPath(new URL("../scripts", import.meta.url)),
