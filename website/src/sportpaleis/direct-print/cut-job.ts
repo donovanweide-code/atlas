@@ -372,6 +372,8 @@ function buildGroup(placed: PlacedObject, request: CutJobRequest): ProductionGro
       product: input.product,
       ...(input.requestedPhysicalSizeMm ? { requestedPhysicalSizeMm: input.requestedPhysicalSizeMm } : {}),
       ...(input.vectorProfile ? { vectorProfile: input.vectorProfile } : {}),
+      ...(input.semanticGroup ? { semanticGroup: input.semanticGroup } : {}),
+      ...(input.assetIdentity ? { assetIdentity: input.assetIdentity } : {}),
       material: input.material,
       mirror: input.productionRule.mirror,
       baseRotation: input.productionRule.rotation,

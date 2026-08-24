@@ -7,7 +7,7 @@ import test from "node:test";
 import { createCutJobBatch, minimumContourSetDistanceMm } from "../src/sportpaleis/direct-print/index.ts";
 import { normalizeSwitchEvidence } from "../src/sportpaleis/deployment-switch-evidence.mjs";
 import { inspectQuickProductionSource } from "../src/sportpaleis/quick-production-intake.mjs";
-import { NUMBER_GLYPH_SPACING_MM, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
+import { NUMBER_GLYPH_SPACING_MM, productionAssetPiece, productionAssetPieces } from "../src/sportpaleis/production-assets.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
 const passwords = { kevin: "Quick-Kevin-2026!", patrick: "Quick-Patrick-2026!", collega: "Quick-Store-2026!", "donovan-support": "Quick-Support-2026!" };
@@ -112,7 +112,7 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
     assert.ok(storedAsset.numberGlyphs[String(digit)].contours.length > 0, `cijfer ${digit} bewaart de gesloten SVG-contouren en eventuele holes`);
     assert.ok(storedAsset.numberGlyphs[String(digit)].contours.every(({ closed, points }) => closed && points.length >= 4));
   }
-  for (const number of ["10", "11", "18", "23", "38", "83", "88", "99"]) {
+  for (const number of ["10", "11", "18", "23", "28", "38", "83", "88", "99"]) {
     const preview = await service.productionAssetNumberPreview(operator.token, asset.id, number);
     assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, 2);
   }
@@ -127,6 +127,32 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   const cannotRotatePiece = productionAssetPiece({ asset: storedAsset, variant: { heightMm: 460 }, line: { id: "practice-svg-8-too-wide-rotated", content: "8", widthMm: 0, heightMm: 460, preview: { label: "Rugnummer 8" } }, order: { id: "PRACTICE-8-NO-ROTATE", association: association.name, items: [] }, foilColor: "Wit" });
   const cannotRotateJob = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: "PRACTICE-8-NO-ROTATE", revision: 1, attemptIdPrefix: "practice-svg-8-no-rotate", createdAt: "2026-08-24T00:00:00.000Z", pieces: [cannotRotatePiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
   assert.equal(cannotRotateJob.productionGeometry.groups[0].nestingRotationApplied, 0, "90° wordt niet gekozen wanneer de geroteerde vorm de absolute baanbreedte overschrijdt");
+  for (const number of ["18", "23", "28", "38", "83", "88", "99"]) {
+    const line = { id: `practice-svg-${number}`, content: number, widthMm: 0, heightMm: 200, preview: { label: `Rugnummer ${number}` }, source: { variantId: asset.variants[0].id } };
+    const numberOrder = { id: `PRACTICE-${number}`, association: association.name, items: [] };
+    const composedPiece = productionAssetPiece({ asset: storedAsset, variant: { heightMm: 200 }, line, order: numberOrder, foilColor: "Wit" });
+    const digitPieces = productionAssetPieces({ asset: storedAsset, variant: { heightMm: 200 }, line, order: numberOrder, foilColor: "Wit" });
+    const before = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: numberOrder.id, revision: 1, attemptIdPrefix: `before-${number}`, createdAt: "2026-08-24T00:00:00.000Z", pieces: [composedPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+    const after = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: numberOrder.id, revision: 1, attemptIdPrefix: `after-${number}`, createdAt: "2026-08-24T00:00:00.000Z", pieces: digitPieces, nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+    assert.equal(digitPieces.length, 2);
+    assert.ok(after.nesting.usedLengthMm < before.nesting.usedLengthMm, `${number}: fysiek gesplitste digits moeten minder baanlengte gebruiken`);
+    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.value), [number, number]);
+    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.digit).sort(), Array.from(number).sort());
+    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.digitIndex).sort(), [0, 1]);
+    assert.ok(after.productionGeometry.groups.every(({ provenance, mirrorApplied, sourceBoundsMm, boundsMm }) => {
+      const sourceSides = [sourceBoundsMm.width, sourceBoundsMm.height].sort((left, right) => left - right);
+      const placedSides = [boundsMm.width, boundsMm.height].sort((left, right) => left - right);
+      return provenance.semanticGroup.garmentCompositionSpacingMm === NUMBER_GLYPH_SPACING_MM
+        && provenance.assetIdentity.assetId === asset.id
+        && provenance.assetIdentity.assetVersion === asset.version
+        && provenance.vectorProfile === `${asset.id}@${asset.version}#${provenance.assetIdentity.geometryHash}`
+        && mirrorApplied === true
+        && sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001);
+    }));
+    assert.ok(minimumContourSetDistanceMm(after.productionGeometry.groups[0].contours, after.productionGeometry.groups[1].contours) >= 6.4 - 0.000001);
+    const saving = before.nesting.usedLengthMm - after.nesting.usedLengthMm;
+    context.diagnostic(`multi-digit-${number}: before=${before.nesting.usedLengthMm}mm; after=${after.nesting.usedLengthMm}mm; saved=${saving}mm; saving=${Number((saving / before.nesting.usedLengthMm * 100).toFixed(2))}%`);
+  }
   const back = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey rug", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "18", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "fixture-hockey-back", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-back-18")).value;
   const shorts = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey short", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, shortsNumber: "23" }, items: [{ articleId: "fixture-hockey-short", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-short-23")).value;
   assert.equal(back.productionLines[0].source.id, asset.id); assert.equal(back.productionLines[0].heightMm, 200);
@@ -138,6 +164,11 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).version, asset.version);
   assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).sourceId, source.id);
   assert.ok(job.snapshot.layout.productionGeometry?.groups.length > 0);
+  assert.equal(job.snapshot.layout.objectCount, 2, "semantisch rugnummer 18 wordt fysiek als twee digits genest");
+  assert.equal(job.snapshot.productionLines[0].content, "18", "de semantische orderbetekenis blijft ongewijzigd");
+  assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.value), ["18", "18"]);
+  assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.digit).sort(), ["1", "8"]);
+  assert.ok(job.snapshot.layout.placements.every(({ semanticGroup, assetIdentity }) => semanticGroup.garmentCompositionSpacingMm === 30 && semanticGroup.productionProfileId === "profile-source-buitenhout-mhc-backNumber" && assetIdentity.assetId === asset.id && assetIdentity.assetVersion === asset.version));
   assert.ok(job.snapshot.layout.placements.every(({ rotationApplied, mirrorApplied, vectorProfile }) => [0, 90, 180, 270].includes(rotationApplied) && mirrorApplied === true && vectorProfile?.includes(`@${asset.version}#`)));
   assert.equal(typeof job.snapshot.artifact.sha256, "string");
   assert.equal(typeof job.snapshot.artifact.productionDataHash, "string");

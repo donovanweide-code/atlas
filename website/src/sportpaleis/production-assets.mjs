@@ -638,3 +638,63 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
     productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] },
   };
 }
+
+/**
+ * Resolve one semantic production line to independently nestable physical
+ * objects. A number-set preview remains composed with the garment spacing,
+ * while the plot artifact may place each exact glyph independently.
+ */
+export function productionAssetPieces({ asset, variant, line, order, foilColor }) {
+  const numberSet = asset.applications?.some(({ kind }) => kind === "NUMBER_SET");
+  if (!numberSet) return [productionAssetPiece({ asset, variant, line, order, foilColor })];
+  if (asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED") throw assetError("Dit beeldmerk is nog niet vrijgegeven voor eigen productie.", "PRODUCTION_ASSET_NOT_READY", 409);
+  if (!/^\d{1,4}$/u.test(line.content) || !asset.numberGlyphs) throw assetError("Deze nummerbron kan de gevraagde cijferreeks niet veilig zetten.", "PRODUCTION_ASSET_GLYPH_MISSING", 409);
+  const requestedHeight = Number(line.heightMm || variant.heightMm);
+  if (!(requestedHeight > 0)) throw assetError("Een nummerbron vereist een fysieke hoogte.", "PRODUCTION_ASSET_SIZE_MISSING", 409);
+  const digits = Array.from(line.content);
+  const semanticId = `${order.id}:${line.id}:number:${line.content}`;
+  const orderItem = order.items.find(({ id }) => id === line.itemId);
+  return digits.map((digit, digitIndex) => {
+    const glyph = asset.numberGlyphs[digit];
+    if (!glyph?.contours?.length || !(glyph.heightUnits > 0)) throw assetError(`Cijfer ${digit} ontbreekt in de beheerde nummerbron.`, "PRODUCTION_ASSET_GLYPH_MISSING", 409);
+    const scale = requestedHeight / glyph.heightUnits;
+    const glyphBounds = bounds(glyph.contours);
+    const contours = glyph.contours.map((contour, contourIndex) => ({
+      ...contour,
+      id: `${semanticId}:digit-${digitIndex + 1}-${digit}:${contourIndex + 1}:${contour.id}`,
+      points: contour.points.map(({ x, y }) => ({ x: (x - glyphBounds.minX) * scale, y: (y - glyphBounds.minY) * scale })),
+    }));
+    const producedBounds = bounds(contours);
+    return {
+      id: `${order.id}-${line.itemId ?? line.id}-${asset.id}-digit-${digitIndex + 1}-${digit}`,
+      sourceOrderId: order.id,
+      label: `${line.preview?.label ?? `${asset.name} ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length})`,
+      product: orderItem?.product ?? "Productienummers",
+      association: order.association,
+      printType: "Beheerde vectornummerbron · afzonderlijk cijfer",
+      requestedPhysicalSizeMm: { widthMm: producedBounds.width, heightMm: requestedHeight },
+      vectorProfile: `${asset.id}@${asset.version}#${glyph.geometryHash}`,
+      semanticGroup: {
+        id: semanticId,
+        kind: "MULTI_DIGIT_NUMBER",
+        sourceLineId: line.id,
+        ...(line.itemId ? { itemId: line.itemId } : {}),
+        ...(orderItem?.productionProfileId ? { productionProfileId: orderItem.productionProfileId } : {}),
+        value: line.content,
+        digit,
+        digitIndex,
+        digitCount: digits.length,
+        garmentCompositionSpacingMm: NUMBER_GLYPH_SPACING_MM,
+      },
+      assetIdentity: {
+        assetId: asset.id,
+        assetVersion: asset.version,
+        geometryHash: glyph.geometryHash,
+        ...(line.source?.variantId ? { variantId: line.source.variantId } : {}),
+      },
+      material: { code: `foil-${String(foilColor).toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor },
+      contours,
+      productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] },
+    };
+  });
+}

@@ -70,6 +70,26 @@ export interface RequestedPhysicalSizeMm {
   heightMm?: number;
 }
 
+export interface SemanticProductionGroup {
+  id: string;
+  kind: "MULTI_DIGIT_NUMBER";
+  sourceLineId: string;
+  itemId?: string;
+  productionProfileId?: string;
+  value: string;
+  digit: string;
+  digitIndex: number;
+  digitCount: number;
+  garmentCompositionSpacingMm: number;
+}
+
+export interface VersionedAssetIdentity {
+  assetId: string;
+  assetVersion: string;
+  geometryHash: string;
+  variantId?: string;
+}
+
 /** Eén zelfstandig te produceren orderonderdeel. */
 export interface CutObject {
   id: string;
@@ -80,6 +100,8 @@ export interface CutObject {
   association?: string;
   requestedPhysicalSizeMm?: RequestedPhysicalSizeMm;
   vectorProfile?: string;
+  semanticGroup?: SemanticProductionGroup;
+  assetIdentity?: VersionedAssetIdentity;
   material: MaterialSpecification;
   contours: readonly VectorContour[];
   productionRule: ProductionRule;
@@ -96,6 +118,8 @@ export interface CutObjectProvenance {
   product: string;
   requestedPhysicalSizeMm?: RequestedPhysicalSizeMm;
   vectorProfile?: string;
+  semanticGroup?: SemanticProductionGroup;
+  assetIdentity?: VersionedAssetIdentity;
   material: MaterialSpecification;
   mirror: boolean;
   baseRotation: RotationDegrees;
