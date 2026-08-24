@@ -31,7 +31,7 @@ async function configureArticle140298Production(service, store, admin, operator)
   const updatedAssociation = await service.updateAssociation(admin.token, admin.csrfToken, association.id, {
     expectedRevision: association.revision,
     fontProfile: font.name,
-    dimensionsCm: { ...association.dimensionsCm, chestNumber: 7.5 },
+    dimensionsCm: { ...association.dimensionsCm, chestNumber: null },
   });
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sc-buitenboys-test-nummerset.svg", mimeType: "image/svg+xml", dataBase64: numberSetSvg().toString("base64"), intakeKind: "NUMBER_SET", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const candidates = source.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
@@ -71,21 +71,30 @@ test("artikel 140298 biedt Initialen eerst en uitsluitend voor dit artikel aanvu
   }, `article-140298-${suffix}-20260824`)).value;
 
   const initials = await create("initials", { initials: "AB" });
+  const chest = await create("chest", { chestNumber: "7" });
   const initialsBack = await create("initials-back", { initials: "AB", backNumber: "24", backNumberSizeClass: "SENIOR" });
   const initialsChest = await create("initials-chest", { initials: "AB", chestNumber: "7" });
   const all = await create("all", { initials: "AB", backNumber: "24", chestNumber: "7", backNumberSizeClass: "SENIOR" });
   assert.deepEqual(initials.productionLines.map(({ preview }) => preview.label), ["Initialen AB"]);
+  assert.deepEqual(chest.productionLines.map(({ preview }) => preview.label), ["Borstnummer 7"]);
   assert.deepEqual(initialsBack.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Rugnummer 24"]);
   assert.deepEqual(initialsChest.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Borstnummer 7"]);
   assert.deepEqual(all.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Rugnummer 24", "Borstnummer 7"]);
-  assert.ok([initials, initialsBack, initialsChest, all].every(({ customerPhone, productionLines }) => customerPhone === "" && productionLines.every(({ validation }) => validation.status === "VALID")));
+  assert.ok([initials, chest, initialsBack, initialsChest, all].every(({ customerPhone, productionLines }) => customerPhone === "" && productionLines.every(({ validation }) => validation.status === "VALID")));
   assert.equal(all.productionLines.find(({ preview }) => preview.label.startsWith("Rugnummer")).heightMm, 220);
-  assert.equal(all.productionLines.find(({ preview }) => preview.label.startsWith("Borstnummer")).heightMm, 75);
+  const initialsLine = all.productionLines.find(({ preview }) => preview.label.startsWith("Initialen"));
+  const chestLine = all.productionLines.find(({ preview }) => preview.label.startsWith("Borstnummer"));
+  assert.equal(chestLine.heightMm, initialsLine.heightMm);
+  assert.equal(chestLine.source.id, initialsLine.source.id);
+  assert.equal(chestLine.source.version, initialsLine.source.version);
+  assert.equal(chestLine.personalizationField, "chestNumber");
+  assert.equal(initialsLine.personalizationField, "initials");
 
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, all.id, all.revision, "article-140298-all-control")).value;
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "article-140298-all-proposal")).value;
   const job = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "article-140298-all-job")).value;
   assert.deepEqual(job.snapshot.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Rugnummer 24", "Borstnummer 7"]);
+  assert.equal(job.snapshot.productionLines.find(({ preview }) => preview.label === "Borstnummer 7").personalizationField, "chestNumber");
   const reprint = (await service.replotProductionJob(operator.token, operator.csrfToken, job.id, { reason: "140298 combinatie exact herhalen" }, "article-140298-all-reprint")).value;
   assert.equal(reprint.snapshotHash, job.snapshotHash);
   assert.deepEqual(reprint.snapshot.layout, job.snapshot.layout);

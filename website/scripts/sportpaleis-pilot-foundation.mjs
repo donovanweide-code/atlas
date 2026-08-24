@@ -128,6 +128,7 @@ const sourceProfileFields = [
   ["chestNumber", "Borstnummer", "chestNumber"],
   ["shortsNumber", "Shortnummer", "shortsNumber"],
 ];
+const articleProductionProfileField = (articleNumber, field) => articleNumber === "140298" && field === "chestNumber" ? "initials" : field;
 for (const association of SPORTPALEIS_ASSOCIATIONS) {
   for (const [field, label, dimensionKey] of sourceProfileFields) {
     const id = `profile-source-${profileSlug(association.name)}-${field}`;
@@ -3848,10 +3849,12 @@ function deriveCatalogProductionLines(state, orderId, items) {
       }
       for (const field of [...PERSONALIZATION_FIELDS, "initialsInfix"]) {
         const canonicalField = field === "initialsInfix" ? "initials" : field;
-        const fieldProfileId = `profile-source-${profileSlug(item.association)}-${canonicalField}`;
-        const profile = baseProfile?.supports?.includes(canonicalField)
+        const productionProfileField = articleProductionProfileField(item.articleNumber, canonicalField);
+        const usesInitialsProfileForChestNumber = field === "chestNumber" && productionProfileField === "initials";
+        const fieldProfileId = `profile-source-${profileSlug(item.association)}-${productionProfileField}`;
+        const profile = baseProfile?.supports?.includes(productionProfileField)
           ? baseProfile
-          : state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(canonicalField)) ?? baseProfile;
+          : state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(productionProfileField)) ?? baseProfile;
         if (initialsInfix && (field === "initials" || field === "initialsInfix")) continue;
         const isNumber = field === "backNumber" || field === "chestNumber" || field === "shortsNumber";
         const lineType = isNumber ? "NUMBER" : field === "initials" ? "INITIALS" : "TEXT";
@@ -3863,9 +3866,9 @@ function deriveCatalogProductionLines(state, orderId, items) {
           : field === "backNumber"
           ? Number(variant.backNumberProduction?.physicalHeightMm)
           : Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
-        const linkedNumberSet = isNumber ? associationNumberSet(state, item.association) : { association: null, asset: null, ambiguous: false };
+        const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association) : { association: null, asset: null, ambiguous: false };
         const associatedNumberHeight = field === "shortsNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.shortsNumber) * 10 : field === "chestNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.chestNumber) * 10 : 0;
-        const configuredNumberHeightMissing = field === "chestNumber" && !(associatedNumberHeight > 0) && !(configuredHeight > 0);
+        const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(associatedNumberHeight > 0) && !(configuredHeight > 0);
         const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: profile?.productionSourceSetId,
@@ -3892,6 +3895,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
           id: `catalog-line-${randomBytes(6).toString("hex")}`,
           orderId, itemId: item.id, variantId: variant.id,
           type: lineType,
+          personalizationField: field,
           content,
           source: linkedNumberSet.asset ? { kind: "PRODUCTION_ELEMENT", id: linkedNumberSet.asset.id, version: linkedNumberSet.asset.version ?? String(linkedNumberSet.asset.revision), variantId: linkedNumberSet.asset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0)?.id ?? null } : versionedSource ? {
             kind: "PRODUCTION_SOURCE",
@@ -3917,7 +3921,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
   }
   const grouped = new Map();
   for (const line of raw) {
-    const key = JSON.stringify([line.orderId, line.itemId, line.type, line.content, line.source.id, line.source.version, line.widthMm, line.heightMm, line.proofStatus, line.validation.status, line.placementRole ?? null, line.placementRule?.compositionId ?? null]);
+    const key = JSON.stringify([line.orderId, line.itemId, line.type, line.personalizationField ?? null, line.content, line.source.id, line.source.version, line.widthMm, line.heightMm, line.proofStatus, line.validation.status, line.placementRole ?? null, line.placementRule?.compositionId ?? null]);
     const existing = grouped.get(key);
     if (existing) { existing.quantity += line.quantity; existing.variantIds.push(line.variantId); }
     else grouped.set(key, { ...line, variantIds: [line.variantId] });
