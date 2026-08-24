@@ -294,6 +294,8 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   const assetModule = await readFile(new URL("../src/sportpaleis/production-assets.mjs", import.meta.url), "utf8");
   assert.match(source, /"Bibliotheek"/u);
+  assert.match(source, /card\(`\$\{BASE\}\/productie\/elementen`, "Productie-assets"/u);
+  assert.doesNotMatch(source, /<div class="sp-panel"><p class="sp-eyebrow">ÉÉN BRON<\/p><h3>Productie-assets<\/h3>/u);
   assert.match(source, /data-production-asset-source-form/u);
   assert.match(source, /data-production-asset-promote-form/u);
   assert.match(source, /Artwork of nummerset toevoegen/u);
@@ -447,8 +449,14 @@ test("multi-artwork SVG biedt alleen complete bron-eigen groepen en kan meerdere
   const second = await create(source.candidates[1], "Gesanitiseerd logo B");
   assert.notEqual(first.sourceSelection.geometryHash, second.sourceSelection.geometryHash);
   const persisted = await store.read();
-  assert.equal(persisted.productionElements.filter(({ sourceId }) => sourceId === source.id).length, 2);
+  const separateAssets = persisted.productionElements.filter(({ sourceId }) => sourceId === source.id);
+  assert.equal(separateAssets.length, 2);
+  assert.deepEqual(separateAssets.map(({ sourceSelection }) => sourceSelection.candidateIds), [[source.candidates[0].id], [source.candidates[1].id]]);
   assert.equal(persisted.productionAssetSources[0].original.dataBase64, artwork.toString("base64"));
+  const library = await service.bootstrap(admin.token);
+  assert.ok([first.id, second.id].every((id) => library.productionElements.some((asset) => asset.id === id && asset.sourceId === source.id)));
+  const reused = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Losse multi-assets", customer: "Fictief team", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: association.name, size: "M", quantity: 2, personalization: "Twee losse sponsorassets", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [first, second].map((asset, index) => ({ id: `multi-asset-${index + 1}`, type: "LOGO", content: asset.name, sourceId: asset.id, widthMm: asset.variants[0].widthMm, heightMm: asset.variants[0].heightMm, foilColor: "Wit", quantity: 1, provenance: "Multi-asset hergebruikregressie" })) }, "assets-multi-individual-order-reuse")).value;
+  assert.deepEqual(reused.productionLines.map(({ source }) => source.id), [first.id, second.id]);
 });
 
 test("Human Review bewaart iedere cijferkeuze als resumable serverconcept en valideert alleen wat ontbreekt", async (context) => {
