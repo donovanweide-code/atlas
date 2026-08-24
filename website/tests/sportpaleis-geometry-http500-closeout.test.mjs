@@ -103,7 +103,7 @@ test("geometriefout laat geen half voorstel, PlotJob of state-mutatie achter", a
   assert.equal((await store.read()).productionJobs.some(({ id }) => id === "must-rollback-job"), false);
 });
 
-test("bestaande geldige fontproductie behoudt exact dezelfde contour- en SVG-output", async () => {
+test("bestaande geldige fontproductie behoudt exact dezelfde contour- en SVG-output met expliciete adaptive-rotatieprovenance", async () => {
   const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
   const sha256 = createHash("sha256").update(bytes).digest("hex").toUpperCase();
   const piece = createManagedFontProductionPiece({
@@ -121,6 +121,6 @@ test("bestaande geldige fontproductie behoudt exact dezelfde contour- en SVG-out
   const batch = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: "GOLDEN-CONTROL", revision: 1, attemptIdPrefix: "golden-control", createdAt: "2026-08-17T00:00:00.000Z", pieces: [piece], nesting });
   const svg = createProductionPreview(batch.jobs[0]).svg;
   assert.equal(piece.contours.reduce((sum, contour) => sum + contour.points.length, 0), 370);
-  assert.equal(batch.jobs[0].contentHash, "648ed133ecbe824229ee0d85aa60ceaafec9e614e0c39f910c71afb55c524753");
+  assert.equal(batch.jobs[0].contentHash, "a2f8cc39df81c2f4fe138917ee60149055eb8321efb3ec9c0720f32e8235237c");
   assert.equal(createHash("sha256").update(svg).digest("hex").toUpperCase(), "3184A91087B47295CA7561C697B0E7D9CE239F85B437BB0FD9FA50E2A8354B3C");
 });

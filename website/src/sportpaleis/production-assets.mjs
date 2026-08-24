@@ -610,7 +610,7 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
       vectorProfile: `${asset.id}@${asset.version}#${asset.sourceSelection.geometryHash}`,
       material: { code: `foil-${String(foilColor).toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor },
       contours,
-      productionRule: { mirror: true, rotation: requestedHeight > 180 ? 90 : 0, allowedNestingRotations: [0] },
+      productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] },
     };
   }
   if (!asset.controlledVector?.contours?.length || asset.controlledVector.geometryHash !== asset.sourceSelection?.geometryHash) throw assetError("De beheerde vectoridentiteit is onvolledig.", "PRODUCTION_ASSET_IDENTITY_MISMATCH", 409);
@@ -635,6 +635,6 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
     vectorProfile: `${asset.id}@${asset.version}#${asset.controlledVector.geometryHash}`,
     material: { code: `foil-${String(foilColor).toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor },
     contours,
-    productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0] },
+    productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] },
   };
 }

@@ -596,7 +596,7 @@ export interface ProductionJobSnapshot {
   }[];
   productionLines?: SportpaleisProductionLine[];
   fontSources?: { id: string; name: string; version: string; sha256: string; originalFilename: string }[];
-  logoSources?: { id: string; revision: number; sourceLayers: NonNullable<SportpaleisProductionElement["sourceLayers"]> }[];
+  logoSources?: { id: string; version?: string; revision: number; sourceId?: string | null; sourceSelection?: SportpaleisProductionElement["sourceSelection"] | null; sourceLayers: NonNullable<SportpaleisProductionElement["sourceLayers"]> }[];
   productionProfile: { id: string; revision: number; name: string };
   sourceContours: { id: string; version: string; proofStatus: ProductionProofStatus; immutable: true }[];
   outputWriter?: { id: string; version: string; format: "SVG" | "AI" | "PDF" | "EPS"; proofStatus: ProductionProofStatus; physicalRouteStatus: "VALIDATED" | "HUMAN_VALIDATION_REQUIRED" };
@@ -606,11 +606,15 @@ export interface ProductionJobSnapshot {
     objectCount: number;
     closedContourCount?: number;
     anchorCount?: number;
+    configuredWidthMm?: number;
+    baselineUsedLengthMm?: number;
+    savedLengthVsBaselineMm?: number;
     usedWidthMm: number;
     usedLengthMm: number;
     edgeMarginMm: number | null;
     minimumGapMm: number | null;
-    placements?: { lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number }[];
+    placements?: { lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number; sourceWidthMm?: number; sourceHeightMm?: number; mirrorApplied?: boolean; baseRotationApplied?: 0 | 90 | 180 | 270; nestingRotationApplied?: 0 | 90 | 180 | 270; rotationApplied?: 0 | 90 | 180 | 270; vectorProfile?: string | null; sourceOrderId?: string }[];
+    productionGeometry?: import("./direct-print/types").ProductionGeometry;
   };
   orientation: { preMirrored: boolean; manualHorizontalFlipInWinPlot: boolean };
   scale: 1;

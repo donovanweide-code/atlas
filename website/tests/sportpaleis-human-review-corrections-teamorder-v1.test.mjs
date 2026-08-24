@@ -45,7 +45,11 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.equal(job.snapshot.layout.placements.length, 4);
   const backPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-back-10"));
   assert.equal(backPlacements.length, 2);
-  assert.ok(backPlacements.every(({ widthMm }) => Math.abs(widthMm - 200) < 0.01), "de aangevraagde fysieke 200 mm hoogte-as ligt horizontaal over de baan");
+  assert.ok(backPlacements.every(({ sourceWidthMm, sourceHeightMm, widthMm, heightMm }) => {
+    const sourceSides = [sourceWidthMm, sourceHeightMm].sort((a, b) => a - b);
+    const placedSides = [widthMm, heightMm].sort((a, b) => a - b);
+    return sourceSides.some((side) => Math.abs(side - 200) < 0.01) && sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.01);
+  }), "de aangevraagde 200 mm maat blijft exact behouden; oriëntatie volgt de kortste veilige batchlayout");
   const svg = await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8");
   assert.match(svg, /<svg/u);
   assert.match(svg, /data-production-data-sha256/u);

@@ -64,7 +64,7 @@ test("Webshop/Divide faalt server-side gesloten voor alle Winkel-statusmails en 
   assert.equal((await readdir(captureDirectory)).length, 1, "alleen de toegestane Winkel-capture bestaat");
 });
 
-test("managed-font Rugnummer groter dan 18 cm legt de fysieke hoogte-as horizontaal; exact 18 cm blijft ongewijzigd", async (context) => {
+test("managed-font behoudt brongeometrie en kiest 90° alleen wanneer adaptive nesting baanlengte bespaart", async (context) => {
   const { root, service, admin } = await fixture(context);
   const state = await service.bootstrap(admin.token);
   const font = state.productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
@@ -81,31 +81,25 @@ test("managed-font Rugnummer groter dan 18 cm legt de fysieke hoogte-as horizont
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "rugnummer-horizontal-boundary-job")).value;
   const exact = job.snapshot.layout.placements.find(({ lineId }) => lineId.includes("rug-exact-180"));
   const over = job.snapshot.layout.placements.find(({ lineId }) => lineId.includes("rug-over-181"));
-  assert.ok(Math.abs(exact.heightMm - 180) < 0.03, "exact 18 cm behoudt de aangevraagde fysieke hoogte");
-  assert.ok(Math.abs(over.widthMm - 181) < 0.03, `>18 cm legt de aangevraagde fysieke hoogte-as langs de horizontale X-as: ${JSON.stringify(over)}`);
+  for (const placement of [exact, over]) {
+    const sourceSides = [placement.sourceWidthMm, placement.sourceHeightMm].sort((a, b) => a - b);
+    const placedSides = [placement.widthMm, placement.heightMm].sort((a, b) => a - b);
+    assert.ok(sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001), "de plaatsing blijft een rigide transform zonder schaal/vervorming");
+  }
   assert.ok(job.snapshot.layout.usedWidthMm <= job.snapshot.productionGroup.workingWidthMm);
   assert.equal(job.humanAcceptance.status, "PENDING");
 
   const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
   const fontRecord = { id: "orientation-font", version: "1", sha256: createHash("sha256").update(bytes).digest("hex").toUpperCase(), status: "TECHNICALLY_VALID" };
-  const smallerPiece = createManagedFontProductionPiece({ fontRecord, bytes, content: "8", widthMm: 100, heightMm: 179, id: "physical-smaller", sourceOrderId: "test", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit" });
-  const smaller = createCutJobBatch({ organizationId: "sportpaleis", orderId: "physical-smaller", revision: 1, attemptIdPrefix: "smaller", createdAt: "2026-08-20T12:00:00.000Z", pieces: [smallerPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
-  const sourcePiece = createManagedFontProductionPiece({ fontRecord, bytes, content: "10", widthMm: 100, heightMm: 180, id: "physical-source", sourceOrderId: "test", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit" });
-  const source = createCutJobBatch({ organizationId: "sportpaleis", orderId: "physical-source", revision: 1, attemptIdPrefix: "source", createdAt: "2026-08-20T12:00:00.000Z", pieces: [sourcePiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
-  const piece = createManagedFontProductionPiece({ fontRecord, bytes, content: "8", widthMm: 100, heightMm: 181, id: "physical-horizontal", sourceOrderId: "test", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit", requestedHeightAxis: "REQUESTED_HEIGHT_AXIS_HORIZONTAL" });
-  const direct = createCutJobBatch({ organizationId: "sportpaleis", orderId: "physical-horizontal", revision: 1, attemptIdPrefix: "horizontal", createdAt: "2026-08-20T12:00:00.000Z", pieces: [piece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
-  assert.equal(direct.readyForPrinting, true);
-  assert.equal(smaller.productionGeometry.groups[0].rotationApplied, 0, "kleiner dan 18 cm behoudt de bronas");
-  assert.ok(Math.abs(smaller.productionGeometry.groups[0].boundsMm.height - 179) < 0.03);
-  assert.equal(source.productionGeometry.groups[0].rotationApplied, 0, "exact 18 cm behoudt de bronas");
-  assert.equal(direct.productionGeometry.groups[0].mirrorApplied, true);
-  assert.ok(direct.productionGeometry.groups[0].boundsMm.width > direct.productionGeometry.groups[0].boundsMm.height);
-  const secondPiece = createManagedFontProductionPiece({ fontRecord, bytes, content: "9", widthMm: 100, heightMm: 181, id: "physical-horizontal-2", sourceOrderId: "test-2", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit", requestedHeightAxis: "REQUESTED_HEIGHT_AXIS_HORIZONTAL" });
-  const sideBySide = createCutJobBatch({ organizationId: "sportpaleis", orderId: "physical-horizontal-pair", revision: 1, attemptIdPrefix: "horizontal-pair", createdAt: "2026-08-20T12:00:00.000Z", pieces: [piece, secondPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
-  assert.equal(sideBySide.productionGeometry.groups.length, 2);
-  assert.equal(sideBySide.productionGeometry.groups[0].placementMm.y, sideBySide.productionGeometry.groups[1].placementMm.y, "twee volledige horizontale Rugnummergroepen passen naast elkaar op de actieve baan");
-  assert.ok(sideBySide.nesting.usedWidthMm <= 440);
-  assert.equal(sideBySide.nesting.scaleApplied, 1);
+  const practiceEightPiece = createManagedFontProductionPiece({ fontRecord, bytes, content: "8", widthMm: 100, heightMm: 200, id: "practice-eight", sourceOrderId: "test", product: "Rugnummer", association: "Sportpaleis", foilColor: "Wit" });
+  const practiceEight = createCutJobBatch({ organizationId: "sportpaleis", orderId: "practice-eight", revision: 1, attemptIdPrefix: "practice-eight", createdAt: "2026-08-20T12:00:00.000Z", pieces: [practiceEightPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+  const placedEight = practiceEight.productionGeometry.groups[0];
+  assert.equal(practiceEight.readyForPrinting, true);
+  assert.equal(placedEight.nestingRotationApplied, 90, "de praktijk-8 roteert generiek omdat dit aantoonbaar korter is");
+  assert.ok(practiceEight.nesting.usedLengthMm < practiceEight.nesting.baselineUsedLengthMm);
+  assert.deepEqual([placedEight.sourceBoundsMm.width, placedEight.sourceBoundsMm.height].sort((a, b) => a - b), [placedEight.boundsMm.width, placedEight.boundsMm.height].sort((a, b) => a - b));
+  assert.equal(placedEight.mirrorApplied, true);
+  context.diagnostic(`practice-8: before=${practiceEight.nesting.baselineUsedLengthMm}mm; after=${practiceEight.nesting.usedLengthMm}mm; saved=${practiceEight.nesting.savedLengthVsBaselineMm}mm; rotation=${placedEight.nestingRotationApplied}°`);
   assert.ok((await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8")).includes("data-contour-id"));
 });
 

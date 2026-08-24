@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,7 +7,7 @@ import test from "node:test";
 import { createCutJobBatch, minimumContourSetDistanceMm } from "../src/sportpaleis/direct-print/index.ts";
 import { normalizeSwitchEvidence } from "../src/sportpaleis/deployment-switch-evidence.mjs";
 import { inspectQuickProductionSource } from "../src/sportpaleis/quick-production-intake.mjs";
-import { NUMBER_GLYPH_SPACING_MM } from "../src/sportpaleis/production-assets.mjs";
+import { NUMBER_GLYPH_SPACING_MM, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
 const passwords = { kevin: "Quick-Kevin-2026!", patrick: "Quick-Patrick-2026!", collega: "Quick-Store-2026!", "donovan-support": "Quick-Support-2026!" };
@@ -89,7 +89,7 @@ function vectorSvg() {
 }
 
 test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt met 200/75 mm en 30 mm multi-digit spacing", async (context) => {
-  const { service, store, admin, operator } = await fixture(context);
+  const { root, service, store, admin, operator } = await fixture(context);
   const persisted = await store.read(); const association = persisted.associations.find(({ name }) => name === "Buitenhout MHC");
   await store.mutate(async (state) => {
     const template = state.articles.find(({ id }) => id === "sp-live-137294");
@@ -101,11 +101,32 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   const candidates = source.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
   assert.equal(candidates.length, 10);
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap: Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id])), name: "Buitenhout echte SVG-contourset", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 75, heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Rug en short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const storedAfterPromotion = await store.read();
+  const storedAsset = storedAfterPromotion.productionElements.find(({ id }) => id === asset.id);
+  const storedSource = storedAfterPromotion.productionAssetSources.find(({ id }) => id === source.id);
   assert.equal(asset.numberComposition.freeContourSpacingMm, NUMBER_GLYPH_SPACING_MM);
-  for (const number of ["10", "11", "18", "23", "99"]) {
+  for (const [digit, candidate] of candidates.entries()) {
+    const storedCandidate = storedSource.candidates.find(({ id }) => id === candidate.id);
+    assert.equal(storedAsset.numberGlyphs[String(digit)].candidateId, candidate.id);
+    assert.equal(storedAsset.numberGlyphs[String(digit)].geometryHash, storedCandidate.geometryHash);
+    assert.ok(storedAsset.numberGlyphs[String(digit)].contours.length > 0, `cijfer ${digit} bewaart de gesloten SVG-contouren en eventuele holes`);
+    assert.ok(storedAsset.numberGlyphs[String(digit)].contours.every(({ closed, points }) => closed && points.length >= 4));
+  }
+  for (const number of ["10", "11", "18", "23", "38", "83", "88", "99"]) {
     const preview = await service.productionAssetNumberPreview(operator.token, asset.id, number);
     assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, 2);
   }
+  const practiceEightPiece = productionAssetPiece({ asset: storedAsset, variant: { heightMm: 200 }, line: { id: "practice-svg-8", content: "8", widthMm: 0, heightMm: 200, preview: { label: "Rugnummer 8" } }, order: { id: "PRACTICE-8", association: association.name, items: [] }, foilColor: "Wit" });
+  const practiceEightJob = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: "PRACTICE-8", revision: 1, attemptIdPrefix: "practice-svg-8", createdAt: "2026-08-24T00:00:00.000Z", pieces: [practiceEightPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+  const practiceEightGroup = practiceEightJob.productionGeometry.groups[0];
+  assert.equal(practiceEightGroup.nestingRotationApplied, 90);
+  assert.ok(practiceEightJob.nesting.usedLengthMm < practiceEightJob.nesting.baselineUsedLengthMm);
+  assert.equal(practiceEightGroup.provenance.vectorProfile, `${storedAsset.id}@${storedAsset.version}#${storedAsset.sourceSelection.geometryHash}`);
+  assert.deepEqual([practiceEightGroup.sourceBoundsMm.width, practiceEightGroup.sourceBoundsMm.height].sort((a, b) => a - b), [practiceEightGroup.boundsMm.width, practiceEightGroup.boundsMm.height].sort((a, b) => a - b));
+  context.diagnostic(`practice-svg-8: before=${practiceEightJob.nesting.baselineUsedLengthMm}mm; after=${practiceEightJob.nesting.usedLengthMm}mm; saved=${practiceEightJob.nesting.savedLengthVsBaselineMm}mm; saving=${Number(((practiceEightJob.nesting.savedLengthVsBaselineMm / practiceEightJob.nesting.baselineUsedLengthMm) * 100).toFixed(2))}%; rotation=${practiceEightGroup.nestingRotationApplied}°`);
+  const cannotRotatePiece = productionAssetPiece({ asset: storedAsset, variant: { heightMm: 460 }, line: { id: "practice-svg-8-too-wide-rotated", content: "8", widthMm: 0, heightMm: 460, preview: { label: "Rugnummer 8" } }, order: { id: "PRACTICE-8-NO-ROTATE", association: association.name, items: [] }, foilColor: "Wit" });
+  const cannotRotateJob = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: "PRACTICE-8-NO-ROTATE", revision: 1, attemptIdPrefix: "practice-svg-8-no-rotate", createdAt: "2026-08-24T00:00:00.000Z", pieces: [cannotRotatePiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+  assert.equal(cannotRotateJob.productionGeometry.groups[0].nestingRotationApplied, 0, "90° wordt niet gekozen wanneer de geroteerde vorm de absolute baanbreedte overschrijdt");
   const back = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey rug", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "18", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "fixture-hockey-back", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-back-18")).value;
   const shorts = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey short", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, shortsNumber: "23" }, items: [{ articleId: "fixture-hockey-short", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-short-23")).value;
   assert.equal(back.productionLines[0].source.id, asset.id); assert.equal(back.productionLines[0].heightMm, 200);
@@ -114,11 +135,20 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "hockey-back-proposal")).value;
   const job = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, orders: proposal.orders }, "hockey-back-job")).value;
   assert.ok(job.snapshot.productionLines.some(({ source }) => source.id === asset.id && source.version === asset.version));
+  assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).version, asset.version);
+  assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).sourceId, source.id);
+  assert.ok(job.snapshot.layout.productionGeometry?.groups.length > 0);
+  assert.ok(job.snapshot.layout.placements.every(({ rotationApplied, mirrorApplied, vectorProfile }) => [0, 90, 180, 270].includes(rotationApplied) && mirrorApplied === true && vectorProfile?.includes(`@${asset.version}#`)));
+  assert.equal(typeof job.snapshot.artifact.sha256, "string");
+  assert.equal(typeof job.snapshot.artifact.productionDataHash, "string");
+  const artifactSvg = await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8");
+  assert.equal((artifactSvg.match(/data-contour-id=/gu) ?? []).length, job.snapshot.layout.productionGeometry.contours.length, "preview/PlotJob/output delen exact dezelfde contourlayout");
+  assert.ok(artifactSvg.includes(`data-production-data-sha256="${job.snapshot.artifact.productionDataHash}"`));
   const replot = (await service.replotProductionJob(operator.token, operator.csrfToken, job.id, { reason: "Immutable SVG-versieregressie" }, "hockey-back-replot")).value;
   assert.equal(replot.snapshotHash, job.snapshotHash); assert.deepEqual(replot.snapshot, job.snapshot);
 });
 
-function rectangle(id, width, height, printType) { const points = printType === "rugnummer" ? [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: 45 }, { x: 45, y: 45 }, { x: 45, y: height }, { x: 0, y: height }, { x: 0, y: 0 }] : [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height }, { x: 0, y: 0 }]; return { id, label: id, sourceOrderId: `ORDER-${id}`, product: "Fixture", printType, association: "Fixtureclub", requestedPhysicalSizeMm: { widthMm: width, heightMm: height }, vectorProfile: "SVG@1", material: { code: "HTV-WIT", foilColor: "Wit" }, contours: [{ id: `c-${id}`, closed: true, points }], productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0] } }; }
+function rectangle(id, width, height, printType) { const points = printType === "rugnummer" ? [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: 45 }, { x: 45, y: 45 }, { x: 45, y: height }, { x: 0, y: height }, { x: 0, y: 0 }] : [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height }, { x: 0, y: 0 }]; return { id, label: id, sourceOrderId: `ORDER-${id}`, product: "Fixture", printType, association: "Fixtureclub", requestedPhysicalSizeMm: { widthMm: width, heightMm: height }, vectorProfile: "SVG@1", material: { code: "HTV-WIT", foilColor: "Wit" }, contours: [{ id: `c-${id}`, closed: true, points }], productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] } }; }
 function efficiency(pieces) { return createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: "EFFICIENCY", revision: 1, attemptIdPrefix: "adaptive-v1", createdAt: "2026-08-24T00:00:00.000Z", pieces, nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).batches[0]; }
 
 test("adaptive nesting bewijst kleine, grote en gemengde fixturewinst zonder productie-invariant te breken", (context) => {
@@ -131,7 +161,8 @@ test("adaptive nesting bewijst kleine, grote en gemengde fixturewinst zonder pro
     const batch = efficiency(pieces); const before = batch.jobs.reduce((sum, job) => sum + job.nesting.baselineUsedLengthMm, 0); const after = batch.efficiency.usedFoilLengthMm;
     assert.ok(after < before, `${name}: ${before} -> ${after}`); assert.equal(batch.objectIds.length, pieces.length); assert.ok(batch.jobs.every(({ nesting }) => nesting.scaleApplied === 1));
     assert.equal(batch.strategy.classification, pieces.length >= 8 ? "LARGE" : "SMALL");
-    context.diagnostic(`${name}: elements=${pieces.length}; before=${before}mm; after=${after}mm; saved=${Number((before - after).toFixed(3))}mm; saving=${Number((((before - after) / before) * 100).toFixed(2))}%; strategy=${batch.strategy.objective}`);
+    const rotations = batch.jobs.flatMap(({ productionGeometry }) => productionGeometry.groups.map(({ nestingRotationApplied }) => nestingRotationApplied)).filter(Boolean);
+    context.diagnostic(`${name}: elements=${pieces.length}; before=${before}mm; after=${after}mm; saved=${Number((before - after).toFixed(3))}mm; saving=${Number((((before - after) / before) * 100).toFixed(2))}%; rotations=${rotations.join(",")}; strategy=${batch.strategy.objective}`);
     for (const job of batch.jobs) for (let left = 0; left < job.productionGeometry.groups.length; left += 1) for (let right = left + 1; right < job.productionGeometry.groups.length; right += 1) assert.ok(minimumContourSetDistanceMm(job.productionGeometry.groups[left].contours, job.productionGeometry.groups[right].contours) >= 6.4 - 0.000001);
   }
 });

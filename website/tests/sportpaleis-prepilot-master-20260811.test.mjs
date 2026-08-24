@@ -13,7 +13,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-prepilot-master-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-PRE-PILOT-MASTER-CORRECTION-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true });
+  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-PRE-PILOT-MASTER-CORRECTION-20260811", allowedOrigin: "http://127.0.0.1", demoMode: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }

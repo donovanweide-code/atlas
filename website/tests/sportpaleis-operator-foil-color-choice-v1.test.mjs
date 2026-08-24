@@ -108,5 +108,8 @@ test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze
   assert.match(source, /availableColorCount > 1 \? "Welke foliekleur wil je nu produceren\?" : "Nu maken"/u);
   assert.match(source, /De enige veilige OPEN foliekleur staat klaar/u);
   assert.match(source, /BESCHIKBARE FOLIEKLEUR/u);
+  assert.match(source, /NOG TE PRODUCEREN/u);
+  assert.match(source, /data-remaining-open-production-group/u);
+  assert.match(source, /blijft centraal aanwezig en wordt beschikbaar zodra de actieve kleur Bedrukt is gemeld/u);
   assert.match(source, /nu produceren/u);
 });
