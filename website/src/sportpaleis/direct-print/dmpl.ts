@@ -1,5 +1,6 @@
 import { boundsForContours, samePoint, validateGeometry } from "./geometry.ts";
 import type { CutJob, PointMm, VectorContour } from "./types.ts";
+import { SPORTPALEIS_MACHINE_CONSTRAINTS } from "./production-constraints.ts";
 
 export const DMPL_UNITS_PER_MM = 40;
 export const DMPL_MM_PER_UNIT = 0.025;
@@ -24,9 +25,10 @@ function vectorLine(command: "U" | "D", point: PointMm): string {
 
 export function generateDmpl(job: CutJob): DmplGenerationResult {
   if (job.units !== "mm") throw new Error("DM/PL-uitvoer accepteert uitsluitend millimeter-CutJobs.");
-  if (job.productionArea.absoluteMaxWidthMm !== 450) throw new Error("Ongeldige absolute productiebreedte.");
-  if (job.productionGeometry.boundsMm.width > 450) throw new Error("CutJob overschrijdt 450 mm.");
-  const validation = validateGeometry(job.productionGeometry.contours, 450);
+  const safeTrackWidthMm = job.productionArea.absoluteMaxWidthMm;
+  if (!(safeTrackWidthMm > 0) || safeTrackWidthMm > SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm) throw new Error("Ongeldige maximale veilige productiebreedte.");
+  if (job.productionGeometry.boundsMm.width > safeTrackWidthMm) throw new Error(`CutJob overschrijdt ${safeTrackWidthMm} mm.`);
+  const validation = validateGeometry(job.productionGeometry.contours, safeTrackWidthMm);
   if (!validation.valid) {
     throw new Error(`DM/PL geweigerd: ${validation.issues.map(({ code }) => code).join(", ")}`);
   }

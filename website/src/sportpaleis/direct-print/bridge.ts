@@ -8,6 +8,7 @@ import {
   type BridgeStatus,
   type CutJob,
 } from "./types.ts";
+import { SPORTPALEIS_MACHINE_CONSTRAINTS } from "./production-constraints.ts";
 
 export interface SafeDeviceIdentity {
   expectedModel: "Summa S75T";
@@ -22,7 +23,7 @@ export interface SafeDeviceIdentity {
 export interface BridgeConfiguration {
   bridgeId: string;
   hardwareSendEnabled: false;
-  absoluteMaxWidthMm: 450;
+  absoluteMaxWidthMm: number;
   preferredWorkingWidthMm: number;
   minimumCutGapMm: number;
   pollIntervalMs: number;
@@ -33,7 +34,7 @@ export interface BridgeConfiguration {
 export const DEFAULT_BRIDGE_CONFIGURATION: BridgeConfiguration = {
   bridgeId: "wbd-sportpaleis-bridge-001",
   hardwareSendEnabled: false,
-  absoluteMaxWidthMm: 450,
+  absoluteMaxWidthMm: SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm,
   preferredWorkingWidthMm: 440,
   minimumCutGapMm: 6.4,
   pollIntervalMs: 2_000,
@@ -51,7 +52,11 @@ export function readBridgeConfiguration(value: unknown): BridgeConfiguration {
   if (!value || typeof value !== "object") throw new Error("Bridgeconfiguratie ontbreekt.");
   const candidate = value as Partial<BridgeConfiguration>;
   if (candidate.hardwareSendEnabled !== false) throw new Error("hardwareSendEnabled moet in Foundation 003 false zijn.");
-  if (candidate.absoluteMaxWidthMm !== 450) throw new Error("absoluteMaxWidthMm moet 450 zijn.");
+  if (!Number.isFinite(candidate.absoluteMaxWidthMm)
+    || (candidate.absoluteMaxWidthMm ?? 0) <= 0
+    || (candidate.absoluteMaxWidthMm ?? 0) > SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm) {
+    throw new Error(`absoluteMaxWidthMm moet tussen 0 en ${SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm} mm liggen.`);
+  }
   if (!Number.isFinite(candidate.minimumCutGapMm) || (candidate.minimumCutGapMm ?? -1) < 0) {
     throw new Error("minimumCutGapMm moet een configureerbare, niet-negatieve millimeterwaarde zijn.");
   }

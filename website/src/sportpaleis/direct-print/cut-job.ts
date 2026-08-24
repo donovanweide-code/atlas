@@ -8,6 +8,7 @@ import {
   validateGeometry,
 } from "./geometry.ts";
 import { sha256, stableJson } from "./sha256.ts";
+import { SPORTPALEIS_MACHINE_CONSTRAINTS } from "./production-constraints.ts";
 import {
   CUT_JOB_STATUS,
   type CutBatch,
@@ -105,12 +106,14 @@ function allowedNestingRotations(input: CutObject): readonly RotationDegrees[] {
 }
 
 function validateNestingConfiguration(configuration: NestingConfiguration): void {
-  if (configuration.absoluteMaxWidthMm !== 450) {
-    throw new Error("Sportpaleis absoluteMaxWidthMm moet exact 450 mm zijn.");
+  if (!Number.isFinite(configuration.absoluteMaxWidthMm)
+    || configuration.absoluteMaxWidthMm <= 0
+    || configuration.absoluteMaxWidthMm > SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm) {
+    throw new Error(`absoluteMaxWidthMm moet tussen 0 en ${SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm} mm liggen.`);
   }
   if (configuration.preferredWorkingWidthMm <= 0
     || configuration.preferredWorkingWidthMm > configuration.absoluteMaxWidthMm) {
-    throw new Error("preferredWorkingWidthMm moet tussen 0 en 450 mm liggen.");
+    throw new Error(`preferredWorkingWidthMm moet tussen 0 en ${configuration.absoluteMaxWidthMm} mm liggen.`);
   }
   if (!Number.isFinite(configuration.minimumCutGapMm) || configuration.minimumCutGapMm < 0
     || !Number.isFinite(configuration.edgeMarginMm) || configuration.edgeMarginMm < 0) {
@@ -163,14 +166,20 @@ function placementCandidates(
   configuration: NestingConfiguration,
   configuredWidthMm: number,
 ): readonly { x: number; y: number }[] {
+  // configuredWidthMm is de werkelijk veilig bruikbare dwarsbaan. De
+  // edgeMarginMm is een longitudinale aan-/afloopmarge en mag de bewezen
+  // 450-mm dwarsbaan niet opnieuw impliciet tot 440 mm reduceren.
   const edge = configuration.edgeMarginMm;
+  const usesMaximumSafeTrack = configuredWidthMm === configuration.absoluteMaxWidthMm
+    && configuration.absoluteMaxWidthMm > configuration.preferredWorkingWidthMm;
+  const left = usesMaximumSafeTrack ? 0 : edge;
   const gap = configuration.minimumCutGapMm;
   // Bound contour-aware search for predictable daily performance. Larger or
   // highly detailed batches keep the proven envelope heuristic.
   const sourceContourAnchors = sheet.flatMap(({ contours }) => contours.flatMap(({ points }) => points));
   const contourAnchors = sheet.length < 8 && sourceContourAnchors.length <= 64 ? sourceContourAnchors : [];
   const xValues = uniqueSorted([
-    edge,
+    left,
     ...sheet.flatMap(({ boundsMm }) => [
       boundsMm.minX,
       boundsMm.maxX + gap,
@@ -180,7 +189,7 @@ function placementCandidates(
       x + gap,
       x - orientation.widthMm - gap,
     ]),
-  ]).filter((x) => x >= edge && x + orientation.widthMm + edge <= configuredWidthMm + 0.000_001);
+  ]).filter((x) => x >= left && x + orientation.widthMm + (usesMaximumSafeTrack ? 0 : edge) <= configuredWidthMm + 0.000_001);
   const yValues = uniqueSorted([
     edge,
     ...sheet.flatMap(({ boundsMm }) => [
@@ -270,15 +279,18 @@ function baselineShelf(
   configuredWidthMm: number,
 ): NestSolution | undefined {
   const sheets: PlacedObject[][] = [[]];
-  let x = configuration.edgeMarginMm;
+  const usesMaximumSafeTrack = configuredWidthMm === configuration.absoluteMaxWidthMm
+    && configuration.absoluteMaxWidthMm > configuration.preferredWorkingWidthMm;
+  const lateralEdge = usesMaximumSafeTrack ? 0 : configuration.edgeMarginMm;
+  let x = lateralEdge;
   let y = configuration.edgeMarginMm;
   let rowHeight = 0;
   for (const prepared of ordered) {
     const orientation = prepared.orientations[0];
-    if (orientation.widthMm + configuration.edgeMarginMm * 2 > configuredWidthMm) return undefined;
-    if (x > configuration.edgeMarginMm
-      && x + orientation.widthMm + configuration.edgeMarginMm > configuredWidthMm) {
-      x = configuration.edgeMarginMm;
+    if (orientation.widthMm + (2 * lateralEdge) > configuredWidthMm) return undefined;
+    if (x > lateralEdge
+      && x + orientation.widthMm + lateralEdge > configuredWidthMm) {
+      x = lateralEdge;
       y = quantizeMm(y + rowHeight + configuration.minimumCutGapMm);
       rowHeight = 0;
     }
@@ -286,7 +298,7 @@ function baselineShelf(
       && y + orientation.heightMm + configuration.edgeMarginMm > configuration.maxJobLengthMm
       && (sheets.at(-1)?.length ?? 0) > 0) {
       sheets.push([]);
-      x = configuration.edgeMarginMm;
+      x = lateralEdge;
       y = configuration.edgeMarginMm;
       rowHeight = 0;
     }
@@ -329,6 +341,49 @@ function orderings(prepared: readonly PreparedObject[]): readonly (readonly Prep
   });
 }
 
+function orientationStrategies(prepared: readonly PreparedObject[]): readonly (readonly PreparedObject[])[] {
+  const variants: PreparedObject[][] = [[...prepared]];
+  const seen = new Set<string>([prepared.map(({ input }) => `${input.id}:AUTO`).join("\u0000")]);
+  const add = (choices: readonly PreparedOrientation[]): void => {
+    const signature = prepared.map(({ input }, index) => `${input.id}:${choices[index].nestingRotation}`).join("\u0000");
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    variants.push(prepared.map((item, index) => ({ ...item, orientations: [choices[index]] })));
+  };
+
+  const semanticIndexes = prepared.map(({ input }, index) => input.semanticGroup?.kind === "MULTI_DIGIT_NUMBER" ? index : -1).filter((index) => index >= 0);
+  if (!semanticIndexes.length) return variants;
+
+  // Alleen herkenbare multi-digitgroepen hebben de aanvullende gezamenlijke
+  // combinatiesearch nodig. Andere jobs behouden de bestaande snelle AUTO-
+  // heuristic, zodat voorstelperformance niet exponentieel verslechtert.
+  if (semanticIndexes.length <= 8) {
+    const visit = (semanticIndex: number, choices: PreparedOrientation[]): void => {
+      if (semanticIndex === semanticIndexes.length) { add(choices); return; }
+      const preparedIndex = semanticIndexes[semanticIndex];
+      for (const orientation of prepared[preparedIndex].orientations) {
+        const next = [...choices]; next[preparedIndex] = orientation;
+        visit(semanticIndex + 1, next);
+      }
+    };
+    visit(0, prepared.map(({ orientations }) => orientations[0]));
+  } else {
+    // Grote nummerbatches houden de zoekruimte begrensd en onderzoeken naast
+    // AUTO iedere uniforme veilige groepsoriëntatie.
+    for (const rotation of [0, 90, 180, 270] as const) {
+      const choices = prepared.map(({ orientations }) => orientations[0]);
+      let valid = true;
+      for (const index of semanticIndexes) {
+        const orientation = prepared[index].orientations.find(({ nestingRotation }) => nestingRotation === rotation);
+        if (!orientation) { valid = false; break; }
+        choices[index] = orientation;
+      }
+      if (valid) add(choices);
+    }
+  }
+  return variants;
+}
+
 function optimizeNesting(
   prepared: readonly PreparedObject[],
   configuration: NestingConfiguration,
@@ -337,9 +392,10 @@ function optimizeNesting(
     configuration.preferredWorkingWidthMm,
     configuration.absoluteMaxWidthMm,
   ])].sort((left, right) => left - right);
-  const arrangements = orderings(prepared);
+  const baselineArrangements = orderings(prepared);
+  const arrangements = orientationStrategies(prepared).flatMap((strategy) => orderings(strategy));
   const baselines = widths.flatMap((width) => {
-    const result = baselineShelf(arrangements[0], configuration, width);
+    const result = baselineShelf(baselineArrangements[0], configuration, width);
     return result ? [result] : [];
   });
   const solutions = widths.flatMap((width) => arrangements.flatMap((arrangement) => {
@@ -527,7 +583,9 @@ function createJob(
   const product = [...new Set(sheet.map(({ prepared }) => prepared.input.product))].join(" + ");
   const associations = [...new Set(sheet.map(({ prepared }) => prepared.input.association)
     .filter((value): value is string => Boolean(value)))];
-  const usedWidthMm = quantizeMm(boundsMm.maxX + request.nesting.edgeMarginMm);
+  const usesMaximumSafeTrack = configuredWidthMm === request.nesting.absoluteMaxWidthMm
+    && request.nesting.absoluteMaxWidthMm > request.nesting.preferredWorkingWidthMm;
+  const usedWidthMm = quantizeMm(usesMaximumSafeTrack ? boundsMm.width : boundsMm.maxX + request.nesting.edgeMarginMm);
   const usedLengthMm = quantizeMm(boundsMm.maxY + request.nesting.edgeMarginMm);
   const savedLengthVsBaselineMm = quantizeMm(Math.max(0, baselineLengthMm - optimizedTotalLengthMm));
   const efficiency = efficiencyMetrics(groups, configuredWidthMm, usedWidthMm, usedLengthMm, 0);

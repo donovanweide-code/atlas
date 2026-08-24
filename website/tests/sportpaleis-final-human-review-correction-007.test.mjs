@@ -35,13 +35,14 @@ test("productiestatusfilters, compact orderwerk en gegroepeerd Beheer zijn aanto
 test("productie-defaults zijn server-side beheerd en begrensd", async (context) => {
   const { service, admin } = await fixture(context);
   const before = await service.bootstrap(admin.token);
-  assert.deepEqual({ ...before.settings.productionDefaults, defaultFontId: "<validated-font>" }, { workingWidthMm: 440, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: "<validated-font>", defaultFoilColor: "Wit" });
+  assert.deepEqual({ ...before.settings.productionDefaults, defaultFontId: "<validated-font>" }, { workingWidthMm: 440, maxSafeTrackWidthMm: 450, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: "<validated-font>", defaultFoilColor: "Wit" });
   assert.ok(before.productionFonts.some(({ id, status }) => id === before.settings.productionDefaults.defaultFontId && status === "TECHNICALLY_VALID"));
   await service.updateSettings(admin.token, admin.csrfToken, { productionDefaults: { ...before.settings.productionDefaults, defaultWidthMm: 175, defaultHeightMm: 28 } });
   const after = await service.bootstrap(admin.token);
   assert.equal(after.settings.productionDefaults.defaultWidthMm, 175);
   assert.equal(after.settings.productionDefaults.defaultHeightMm, 28);
-  await assert.rejects(() => service.updateSettings(admin.token, admin.csrfToken, { productionDefaults: { ...after.settings.productionDefaults, workingWidthMm: 445, edgeMarginMm: 5 } }), /past niet binnen 450 mm/u);
+  await service.updateSettings(admin.token, admin.csrfToken, { productionDefaults: { ...after.settings.productionDefaults, workingWidthMm: 445, maxSafeTrackWidthMm: 450, edgeMarginMm: 5 } });
+  await assert.rejects(() => service.updateSettings(admin.token, admin.csrfToken, { productionDefaults: { ...after.settings.productionDefaults, workingWidthMm: 450, maxSafeTrackWidthMm: 445 } }), /nominale werkbreedte/u);
 });
 
 test("vrije productiecontext bewaart optionele klantcontext en normaliseert output server-side", async (context) => {

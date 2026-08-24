@@ -39,7 +39,7 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.deepEqual(job.snapshot.productionLines.map(({ id, quantity }) => [id, quantity]), [["mixed-initials-dw", 2], ["mixed-back-10", 2]]);
   assert.equal(job.snapshot.layout.objectCount, 4, "twee semantische rugnummers 10 blijven twee herkenbare sets naast twee initialen");
   assert.equal(job.snapshot.scale, 1);
-  assert.ok(job.snapshot.layout.usedWidthMm <= 440);
+  assert.ok(job.snapshot.layout.usedWidthMm <= job.snapshot.productionGroup.maxSafeTrackWidthMm);
   assert.equal(job.snapshot.layout.edgeMarginMm, 5);
   assert.equal(job.snapshot.layout.minimumGapMm, 6.4);
   assert.equal(job.snapshot.layout.placements.length, 4);

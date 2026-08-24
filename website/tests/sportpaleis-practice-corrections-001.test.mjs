@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { CaptureTransport, MailFoundation, MemoryMailStore, createMailOrganizations } from "../scripts/mail-foundation.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
-import { createCutJobBatch } from "../src/sportpaleis/direct-print/index.ts";
+import { createCutJobBatch, groupSemanticNumberObjects } from "../src/sportpaleis/direct-print/index.ts";
 import { createManagedFontProductionPiece } from "../src/sportpaleis/managed-font-production.mjs";
 
 const passwords = { kevin: "Practice-Admin-2026!", patrick: "Practice-Operator-2026!", collega: "Practice-Store-2026!", "donovan-support": "Practice-Support-2026!" };
@@ -86,7 +86,7 @@ test("managed-font behoudt brongeometrie en kiest 90° alleen wanneer adaptive n
     const placedSides = [placement.widthMm, placement.heightMm].sort((a, b) => a - b);
     assert.ok(sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001), "de plaatsing blijft een rigide transform zonder schaal/vervorming");
   }
-  assert.ok(job.snapshot.layout.usedWidthMm <= job.snapshot.productionGroup.workingWidthMm);
+  assert.ok(job.snapshot.layout.usedWidthMm <= job.snapshot.productionGroup.maxSafeTrackWidthMm);
   assert.equal(job.humanAcceptance.status, "PENDING");
 
   const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
@@ -101,6 +101,37 @@ test("managed-font behoudt brongeometrie en kiest 90° alleen wanneer adaptive n
   assert.equal(placedEight.mirrorApplied, true);
   context.diagnostic(`practice-8: before=${practiceEight.nesting.baselineUsedLengthMm}mm; after=${practiceEight.nesting.usedLengthMm}mm; saved=${practiceEight.nesting.savedLengthVsBaselineMm}mm; rotation=${placedEight.nestingRotationApplied}°`);
   assert.ok((await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8")).includes("data-contour-id"));
+});
+
+test("maximaal veilige 450-mm baan onderzoekt herkenbare rugnummergroepen gezamenlijk", async (context) => {
+  const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
+  const hash = createHash("sha256").update(bytes).digest("hex").toUpperCase();
+  const fontRecord = { id: "track-width-font", version: "1", sha256: hash, status: "TECHNICALLY_VALID" };
+  const cases = [{ number: "24", quantity: 1 }, { number: "24", quantity: 2 }, { number: "24", quantity: 3 }, { number: "24", quantity: 4 }, { number: "26", quantity: 2 }, { number: "26", quantity: 4 }, { number: "28", quantity: 3 }, { number: "88", quantity: 2 }];
+
+  for (const fixture of cases) {
+    const raw = Array.from({ length: fixture.quantity }, (_, copy) => Array.from(fixture.number).map((digit, digitIndex) => ({
+      ...createManagedFontProductionPiece({ fontRecord, bytes, content: digit, widthMm: 100, heightMm: 220, id: `track-${fixture.number}-${copy + 1}-${digitIndex + 1}`, sourceOrderId: `TRACK-${fixture.number}`, product: `Rugnummer ${fixture.number}`, association: "Sportpaleis", foilColor: "Zwart" }),
+      semanticGroup: { id: `track-${fixture.number}-copy-${copy + 1}`, kind: "MULTI_DIGIT_NUMBER", sourceLineId: `line-${fixture.number}`, value: fixture.number, digit, digitIndex, digitCount: fixture.number.length, copyIndex: copy + 1, copyCount: fixture.quantity, garmentCompositionSpacingMm: 30 },
+      assetIdentity: { assetId: fontRecord.id, assetVersion: fontRecord.version, sourceKind: "MANAGED_FONT", geometryHash: hash },
+    }))).flat();
+    const pieces = groupSemanticNumberObjects(raw, 6.4);
+    const make = (width) => createCutJobBatch({ organizationId: "sportpaleis", orderId: `TRACK-${fixture.number}-${fixture.quantity}`, revision: 1, attemptIdPrefix: `track-${width}-${fixture.number}-${fixture.quantity}`, createdAt: "2026-08-24T12:00:00.000Z", pieces, nesting: { absoluteMaxWidthMm: width, preferredWorkingWidthMm: Math.min(440, width), minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
+    const before = make(440);
+    const after = make(450);
+    const placements = after.productionGeometry.groups;
+    const rowCounts = Object.values(placements.reduce((rows, placement) => { const key = placement.placementMm.y.toFixed(3); rows[key] = (rows[key] ?? 0) + 1; return rows; }, {}));
+    const groupsPerRow = Math.max(...rowCounts);
+    const saving = Number((before.nesting.usedLengthMm - after.nesting.usedLengthMm).toFixed(3));
+    assert.equal(placements.length, fixture.quantity);
+    assert.ok(after.productionGeometry.boundsMm.width <= 450 + 0.000001);
+    assert.ok(placements.every(({ provenance, physicalMembers, mirrorApplied }) => provenance.semanticGroup.value === fixture.number && physicalMembers.map(({ digit }) => digit).join("") === fixture.number && mirrorApplied));
+    assert.ok(placements.every(({ sourceBoundsMm, boundsMm }) => [sourceBoundsMm.width, sourceBoundsMm.height].sort((a, b) => a - b).every((side, index) => Math.abs(side - [boundsMm.width, boundsMm.height].sort((a, b) => a - b)[index]) < 0.001)));
+    if (fixture.quantity >= 2) assert.ok(after.nesting.usedLengthMm < before.nesting.usedLengthMm, `${fixture.quantity}×${fixture.number} moet op de veilige 450-mm baan korter zijn`);
+    if (fixture.number === "24" && fixture.quantity >= 2) assert.equal(groupsPerRow, 2, `${fixture.quantity}×24 gebruikt twee herkenbare groepen naast elkaar`);
+    if (fixture.number === "26" && fixture.quantity === 4) assert.equal(groupsPerRow, 2, "4×26 gebruikt een 2+2-layout");
+    context.diagnostic(`${fixture.quantity}×${fixture.number}: group=${placements[0].sourceBoundsMm.width.toFixed(3)}×${placements[0].sourceBoundsMm.height.toFixed(3)}mm; rotations=${placements.map(({ nestingRotationApplied }) => nestingRotationApplied).join(",")}; groupsPerRow=${groupsPerRow}; totalWidth=${after.nesting.usedWidthMm}mm; before=${before.nesting.usedLengthMm}mm; after=${after.nesting.usedLengthMm}mm; saved=${saving}mm (${Number((saving / before.nesting.usedLengthMm * 100).toFixed(2))}%)`);
+  }
 });
 
 test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest als vier herkenbare fysieke sets", async (context) => {
@@ -149,8 +180,11 @@ test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest a
   const savingMm = Number((before.lengthMm - after.lengthMm).toFixed(2));
   const savingPercent = Number(((savingMm / before.lengthMm) * 100).toFixed(2));
   context.diagnostic(`4×26 candidate groups: ${placements.map(({ widthMm, heightMm, nestingRotationApplied }) => `${widthMm}×${heightMm} r${nestingRotationApplied}`).join(" | ")}; used=${after.widthMm}×${after.lengthMm}`);
-  assert.ok(after.lengthMm <= before.lengthMm, `herkenbare 26-sets mogen de production-shaped live baanlengte niet verslechteren (${after.lengthMm} <= ${before.lengthMm})`);
-  assert.ok(savingMm >= 0 && savingPercent >= 0);
+  assert.ok(after.lengthMm < before.lengthMm, `de veilige 450-mm baan moet de herkenbare 26-sets aantoonbaar compacter nesten (${after.lengthMm} < ${before.lengthMm})`);
+  assert.ok(savingMm > 0 && savingPercent > 0);
+  assert.equal(job.snapshot.layout.configuredWidthMm, 450);
+  assert.deepEqual(placements.map(({ nestingRotationApplied }) => nestingRotationApplied), [90, 90, 90, 90]);
+  assert.equal(new Set(placements.map(({ yMm }) => yMm)).size, 2, "4×26 gebruikt een 2+2-layout");
 
   const history = (await service.bootstrap(admin.token)).productionJobs.find(({ id }) => id === job.id);
   assert.deepEqual(history.snapshot.layout.placements, job.snapshot.layout.placements, "Historie bewaart alle vier sets en acht fysieke digitposities/rotaties immutable");

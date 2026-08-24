@@ -610,7 +610,7 @@ export interface ProductionJobSnapshot {
   productionProfile: { id: string; revision: number; name: string };
   sourceContours: { id: string; version: string; proofStatus: ProductionProofStatus; immutable: true }[];
   outputWriter?: { id: string; version: string; format: "SVG" | "AI" | "PDF" | "EPS"; proofStatus: ProductionProofStatus; physicalRouteStatus: "VALIDATED" | "HUMAN_VALIDATION_REQUIRED" };
-  productionGroup: { id?: string; label?: string; sourceChannel?: SportpaleisOrderSource; foilColor: string; material: string; workingWidthMm: number };
+  productionGroup: { id?: string; label?: string; sourceChannel?: SportpaleisOrderSource; foilColor: string; material: string; workingWidthMm: number; maxSafeTrackWidthMm?: number };
   layout: {
     strategy: string;
     objectCount: number;
@@ -775,6 +775,7 @@ export interface SportpaleisWorkspaceState {
     readyMailText?: string;
     productionDefaults?: {
       workingWidthMm: number;
+      maxSafeTrackWidthMm: number;
       minimumGapMm: number;
       edgeMarginMm: number;
       defaultWidthMm: number;
@@ -897,7 +898,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
     productionFonts: [],
     articles: [],
     productionProfiles: [],
-    settings: { processingDays: 5, deliveryFeeEur: 3.95, productionDefaults: { workingWidthMm: 440, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: "", defaultFoilColor: "Wit" } },
+    settings: { processingDays: 5, deliveryFeeEur: 3.95, productionDefaults: { workingWidthMm: 440, maxSafeTrackWidthMm: SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: "", defaultFoilColor: "Wit" } },
     foilRolls: [],
     feedback: [],
     extraUserRequests: [],
@@ -981,3 +982,4 @@ export function currentUser(state: SportpaleisWorkspaceState): SportpaleisUser {
 export function canAccessAdmin(state: SportpaleisWorkspaceState): boolean {
   return currentUser(state).role === "admin";
 }
+import { SPORTPALEIS_MACHINE_CONSTRAINTS } from "./direct-print/production-constraints.ts";

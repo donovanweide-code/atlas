@@ -79,7 +79,7 @@ export interface DeviceCapability {
   assetSerial: "410810-10007";
   units: "mm";
   protocols: readonly ["DMPL"];
-  absoluteMaxWidthMm: 450;
+  absoluteMaxWidthMm: number;
   hardwareSendEnabled: false;
 }
 

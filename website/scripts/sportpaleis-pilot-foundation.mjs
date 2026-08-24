@@ -11,7 +11,7 @@ import {
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
-import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects } from "../src/sportpaleis/direct-print/index.ts";
+import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects, SPORTPALEIS_MACHINE_CONSTRAINTS } from "../src/sportpaleis/direct-print/index.ts";
 import {
   CUTJOB_SVG_WRITER,
   PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID,
@@ -233,7 +233,7 @@ pioneersShortsProfile.validation.physicalCutOutput = "DATA_GAP";
 const PILOT_SETTINGS = {
   processingDays: 5,
   deliveryFeeEur: 3.95,
-  productionDefaults: { workingWidthMm: 440, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: PILOT_FONT.id, defaultFoilColor: "Wit" },
+  productionDefaults: { workingWidthMm: 440, maxSafeTrackWidthMm: SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm, minimumGapMm: 6.4, edgeMarginMm: 5, defaultWidthMm: 180, defaultHeightMm: 30, defaultFontId: PILOT_FONT.id, defaultFoilColor: "Wit" },
   receiptMailText: "We hebben de kleding ontvangen. Controleer het overzicht van artikelen en afgesproken bedrukking. De verwachte wachttijd is circa 5 dagen. Je ontvangt bericht wanneer de bestelling klaarstaat.",
   readyMailText: "De bestelling ligt klaar. Neem deze e-mail mee bij het ophalen. Was bedrukte kleding binnenstebuiten, gebruik geen droger en volg altijd het waslabel.",
 };
@@ -3363,7 +3363,8 @@ export class SportpaleisPilotService {
         const defaultFontId = requiredText(input.defaultFontId, "Standaard productiefont", 160);
         if (!state.productionFonts.some(({ id, status }) => id === defaultFontId && status === "TECHNICALLY_VALID")) throw Object.assign(new Error("Kies een technisch geldige standaardfontbron."), { statusCode: 400, code: "PRODUCTION_FONT_INVALID" });
         state.settings.productionDefaults = {
-          workingWidthMm: number("workingWidthMm", 50, 450),
+          workingWidthMm: number("workingWidthMm", 50, SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm),
+          maxSafeTrackWidthMm: number("maxSafeTrackWidthMm", 50, SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm),
           minimumGapMm: number("minimumGapMm", 0, 100),
           edgeMarginMm: number("edgeMarginMm", 0, 100),
           defaultWidthMm: number("defaultWidthMm", 1, 430),
@@ -3371,7 +3372,7 @@ export class SportpaleisPilotService {
           defaultFontId,
           defaultFoilColor: requiredText(input.defaultFoilColor, "Standaard foliekleur", 80),
         };
-        if (state.settings.productionDefaults.workingWidthMm + (2 * state.settings.productionDefaults.edgeMarginMm) > 450) throw Object.assign(new Error("Werkbreedte plus randafstanden past niet binnen 450 mm absolute materiaalbreedte."), { statusCode: 400, code: "PRODUCTION_WIDTH_INVALID" });
+        if (state.settings.productionDefaults.workingWidthMm > state.settings.productionDefaults.maxSafeTrackWidthMm) throw Object.assign(new Error("De nominale werkbreedte mag de maximale veilige productiebaan niet overschrijden."), { statusCode: 400, code: "PRODUCTION_WIDTH_INVALID" });
       }
       audit(state, user.id, "Workspace-instellingen gewijzigd", "Bedrukkingsmodule");
       return { state, value: structuredClone(state.settings) };
@@ -3772,7 +3773,7 @@ function validateProductionLines(value, state, user, orderKind) {
       if (!rule?.active || !rule.heightMm || rule.horizontalSpacingMm === null || rule.baselineOffsetMm === null || rule.status === "DATA_GAP") validation = { status: "BLOCKED", reason: "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd." };
     }
     const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
-    const maximumObjectWidthMm = defaults.workingWidthMm - (2 * defaults.edgeMarginMm);
+    const maximumObjectWidthMm = defaults.maxSafeTrackWidthMm;
     if (widthMm > maximumObjectWidthMm) validation = { status: "BLOCKED", reason: `De gevraagde breedte past niet binnen ${defaults.workingWidthMm} mm veilige werkbreedte met ${defaults.edgeMarginMm} mm randafstand.` };
     const requestedFoilColor = String(line.foilColor ?? "").trim();
     const canonicalFoilColor = requestedFoilColor ? managedFoilColor(state, requestedFoilColor) : null;
@@ -4290,7 +4291,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     attemptIdPrefix: jobNumber.toLowerCase(),
     createdAt,
     pieces,
-    nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: state.settings.productionDefaults.workingWidthMm, minimumCutGapMm: state.settings.productionDefaults.minimumGapMm, edgeMarginMm: state.settings.productionDefaults.edgeMarginMm },
+    nesting: { absoluteMaxWidthMm: state.settings.productionDefaults.maxSafeTrackWidthMm, preferredWorkingWidthMm: state.settings.productionDefaults.workingWidthMm, minimumCutGapMm: state.settings.productionDefaults.minimumGapMm, edgeMarginMm: state.settings.productionDefaults.edgeMarginMm },
   });
   if (cutJobBatch.jobs.length !== 1 || !cutJobBatch.jobs[0].readyForPrinting) throw Object.assign(new Error("De productiegroep past niet in één geldige productiejob."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const cutJob = cutJobBatch.jobs[0];
@@ -4353,7 +4354,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
-    productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm },
+    productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm, maxSafeTrackWidthMm: defaults.maxSafeTrackWidthMm },
     layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance, physicalMembers }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), physicalMembers: structuredClone(physicalMembers ?? []), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
     scale: 1,
