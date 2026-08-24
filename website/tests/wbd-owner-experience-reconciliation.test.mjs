@@ -11,7 +11,8 @@ test("Owner Experience houdt de cockpit licht, begrensd en progressive", async (
 
   assert.match(today, /Goedemorgen|Goedemiddag|Goedenavond/u);
   assert.match(today, /Dit speelt er vandaag\./u);
-  assert.match(today, /Wat ertoe doet/u);
+  assert.match(today, /Wat vraagt vandaag aandacht\?/u);
+  for (const label of ["Signaal", "Betekenis", "Evidence · waarom zie ik dit?", "Next Best Action"]) assert.match(today, new RegExp(label));
   assert.match(today, /\.slice\(0, 6\)/u);
   assert.match(today, /<details><summary><span>Sinds je laatste bezoek/u);
   assert.match(today, /<details><summary><span>Hoe Atlas werkt/u);
@@ -22,9 +23,9 @@ test("Owner Experience houdt de cockpit licht, begrensd en progressive", async (
   assert.match(owner, /aria-disabled="true"[\s\S]*Mail/u);
   assert.doesNotMatch(owner, /workspace\/wbd\/mail/u);
 
-  assert.match(css, /--wbd-owner-shell:#0d3a2f/u);
-  assert.match(css, /background:var\(--wbd-owner-shell\)/u);
-  assert.match(css, /\.wbd-atlas-layer[\s\S]*background:var\(--wbd-owner-surface\)/u);
+  assert.match(css, /--wbd-v2-cream:#f7f5ef/u);
+  assert.match(css, /position:fixed[\s\S]*width:16\.75rem/u);
+  assert.match(css, /background:var\(--wbd-v2-cream\)/u);
   assert.match(css, /@media \(max-width:840px\)[\s\S]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/u);
   assert.match(css, /min-height:3rem/u);
   assert.match(css, /:focus-visible/u);
@@ -32,8 +33,8 @@ test("Owner Experience houdt de cockpit licht, begrensd en progressive", async (
 
 test("Mail blijft een eerlijke gereserveerde positie zonder capability theatre", async () => {
   const owner = await readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8");
-  const unavailable = owner.match(/<span class="wbd-owner-sections__unavailable"[\s\S]*?<\/span>/u)?.[0] ?? "";
-  assert.match(unavailable, /aria-disabled="true"/u);
-  assert.match(unavailable, /Mail<small>later<\/small>/u);
-  assert.doesNotMatch(unavailable, /href=/u);
+  assert.match(owner, /aria-disabled="true"[^>]*title="Mail Foundation is behouden; de echte inbox is nog niet aangesloten"/u);
+  assert.match(owner, /Mail<small>foundation<\/small>/u);
+  assert.doesNotMatch(owner, /href="\/workspace\/wbd\/mail"/u);
+  assert.match(owner, /Growth<small>niet live<\/small>/u);
 });

@@ -34,6 +34,26 @@ const dateTime = (value: string | null): string => value ? new Intl.DateTimeForm
 const confidence = (value: string): string => ({ HIGH: "hoge zekerheid", MEDIUM: "redelijke zekerheid", LOW: "lage zekerheid", INSUFFICIENT_EVIDENCE: "onvoldoende bewijs" })[value] ?? value.toLowerCase();
 const freshness = (value: string): string => ({ LIVE: "zojuist opgehaald", RECENT: "recent", STALE: "verouderd", UNAVAILABLE: "bron niet beschikbaar", UNKNOWN: "actualiteit onbekend" })[value] ?? value.toLowerCase();
 
+interface OrganizationIdentity { name: string; shortName: string; logo: string | null }
+
+function organizationIdentity(value: string): OrganizationIdentity {
+  const normalized = value.toLocaleLowerCase("nl-NL").replaceAll(/[^a-z0-9]+/gu, "-");
+  if (normalized.includes("sportpaleis")) return { name: "Sportpaleis", shortName: "SP", logo: "/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png" };
+  if (normalized.includes("bij-cees")) return { name: "Bij Cees", shortName: "BC", logo: null };
+  if (normalized.includes("aquaflask")) return { name: "AquaFlask", shortName: "AF", logo: null };
+  if (normalized.includes("we-build-and-design") || normalized === "wbd") return { name: "WBD", shortName: "W", logo: "/wbd-owner-icon.svg" };
+  const words = value.split(/[\s_-]+/u).filter(Boolean);
+  return { name: value || "Onbekende context", shortName: words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("") || "?", logo: null };
+}
+
+function organizationBadge(value: string): string {
+  const organization = organizationIdentity(value);
+  const mark = organization.logo
+    ? `<img src="${esc(organization.logo)}" alt="" loading="lazy">`
+    : `<span aria-hidden="true">${esc(organization.shortName)}</span>`;
+  return `<span class="wbd-organization-badge" title="Context: ${esc(organization.name)}">${mark}<strong>${esc(organization.name)}</strong></span>`;
+}
+
 function evidenceDetail(atlas: AtlasWorkspaceView, refs: string[]): string {
   const items = refs.map((id) => atlas.evidence.find((item) => item.id === id)).filter((item): item is AtlasEvidence => Boolean(item));
   if (!items.length) return '<p class="wbd-atlas-empty">Geen herleidbare evidence gekoppeld.</p>';
@@ -43,7 +63,8 @@ function evidenceDetail(atlas: AtlasWorkspaceView, refs: string[]): string {
 function attentionCard(atlas: AtlasWorkspaceView, item: AtlasAttention, compact = false): string {
   const nba = atlas.nextBestActions.find(({ id }) => id === item.nextBestActionId);
   const prepared = nba?.preparedActionId ? atlas.preparedActions.find(({ id }) => id === nba.preparedActionId) : undefined;
-  return `<article class="wbd-atlas-attention" id="${esc(item.id)}" data-severity="${esc(item.severity)}"><header><div><span>${esc(item.type.replaceAll("_", " "))}</span><h3>${esc(item.title)}</h3></div><span>${esc(item.severity.toLowerCase())}</span></header><p>${esc(item.summary)}</p>${compact ? "" : `<div class="wbd-atlas-interpretation"><strong>Wat betekent dit?</strong><p>${esc(item.atlasInterpretation)}</p><small>${esc(confidence(item.confidence))} · ${item.occurrenceCount > 1 ? `${item.occurrenceCount} signalen gegroepeerd` : "één betekenisvol signaal"}</small></div>${nba ? `<section class="wbd-atlas-nba"><span>Next Best Action · ${esc(nba.goRequirement === "NONE" ? "geen GO nodig voor voorbereiding" : "Human GO vereist")}</span><h4>${esc(nba.recommendation)}</h4><p>${esc(nba.why)}</p><dl><div><dt>Impact</dt><dd>${esc(nba.expectedImpact)}</dd></div><div><dt>Menselijke tijd</dt><dd>circa ${nba.estimatedHumanEffortMinutes} min</dd></div><div><dt>Risico</dt><dd>${esc(nba.risk.toLowerCase())}</dd></div></dl>${nba.atlasCanPrepare.length ? `<p><strong>Atlas kan voorbereiden:</strong> ${nba.atlasCanPrepare.map(esc).join(" · ")}</p>` : ""}</section>` : ""}${prepared ? `<details class="wbd-atlas-prepared"><summary>Voorbereide actie</summary><h4>${esc(prepared.objective)}</h4><p>${esc(prepared.reason)}</p><small>Herstelpad: ${esc(prepared.rollbackOrRecovery)}</small></details>` : ""}<details class="wbd-atlas-proof"><summary>Waarom zegt Atlas dit?</summary>${evidenceDetail(atlas, item.evidenceRefs)}</details>`}<footer><small>Laatst gezien ${esc(dateTime(item.lastObservedAt))}</small><span>${item.goRequirement === "NONE" ? "Atlas mag verder voorbereiden" : "Beslissing nodig"}</span></footer></article>`;
+  const actionLabel = item.goRequirement === "NONE" ? "Voorbereiden" : "Uitvoeren na controle";
+  return `<article class="wbd-atlas-attention" id="${esc(item.id)}" data-severity="${esc(item.severity)}"><header><div>${organizationBadge(item.organizationId)}<span>${esc(item.type.replaceAll("_", " "))}</span><h3>${esc(item.title)}</h3></div><span>${esc(item.severity.toLowerCase())}</span></header><section class="wbd-attention-signal"><strong>Signaal</strong><p>${esc(item.summary)}</p></section>${compact ? "" : `<div class="wbd-atlas-interpretation"><strong>Betekenis</strong><p>${esc(item.atlasInterpretation)}</p><small>${esc(confidence(item.confidence))} · ${item.occurrenceCount > 1 ? `${item.occurrenceCount} signalen gegroepeerd` : "één betekenisvol signaal"}</small></div>${nba ? `<section class="wbd-atlas-nba"><span>Next Best Action</span><h4>${esc(nba.recommendation)}</h4><p>${esc(nba.why)}</p><dl><div><dt>Impact</dt><dd>${esc(nba.expectedImpact)}</dd></div><div><dt>Benodigde tijd</dt><dd>circa ${nba.estimatedHumanEffortMinutes} min</dd></div><div><dt>Risico</dt><dd>${esc(nba.risk.toLowerCase())}</dd></div></dl>${nba.atlasCanPrepare.length ? `<p><strong>Kan alvast worden voorbereid:</strong> ${nba.atlasCanPrepare.map(esc).join(" · ")}</p>` : ""}</section>` : ""}${prepared ? `<details class="wbd-atlas-prepared"><summary>Voorbereide actie bekijken</summary><h4>${esc(prepared.objective)}</h4><p>${esc(prepared.reason)}</p><small>Herstelpad: ${esc(prepared.rollbackOrRecovery)}</small></details>` : ""}<details class="wbd-atlas-proof"><summary>Evidence · waarom zie ik dit?</summary>${evidenceDetail(atlas, item.evidenceRefs)}</details>`}<footer><small>Laatst gezien ${esc(dateTime(item.lastObservedAt))}</small><span>${actionLabel}</span></footer></article>`;
 }
 
 function ownerFirstName(value: string): string {
@@ -58,7 +79,7 @@ function dayGreeting(now = new Date()): string {
 }
 
 function todayAttention(item: AtlasAttention): string {
-  return `<article class="wbd-today-context-card" data-context-kind="attention" data-severity="${esc(item.severity)}"><span>Attention</span><h3>${esc(item.title)}</h3><p>${esc(item.summary)}</p><a href="${esc(`${attentionPath}#${item.id}`)}">Bekijk</a></article>`;
+  return `<article class="wbd-today-context-card" data-context-kind="attention" data-severity="${esc(item.severity)}">${organizationBadge(item.organizationId)}<span>Attention</span><h3>${esc(item.title)}</h3><p>${esc(item.summary)}</p><a href="${esc(`${attentionPath}#${item.id}`)}">Bekijken</a></article>`;
 }
 
 const attentionPath = "/workspace/wbd/attention";
@@ -68,11 +89,11 @@ function todayDecision(item: AtlasWorkspaceView["decisionsNeeded"][number]): str
 }
 
 function todayInsight(atlas: AtlasWorkspaceView, item: AtlasAttention): string {
-  return `<article class="wbd-today-context-card" data-context-kind="atlas"><span>Atlas inzicht</span><h3>${esc(item.title)}</h3><p>${esc(item.atlasInterpretation)}</p><details><summary>+ Waarom is dit relevant?</summary><p>${esc(confidence(item.confidence))}. Atlas baseert dit op ${item.evidenceRefs.length} gekoppelde bron${item.evidenceRefs.length === 1 ? "" : "nen"}.</p>${evidenceDetail(atlas, item.evidenceRefs)}</details><a href="${esc(`${attentionPath}#${item.id}`)}">Bekijk</a></article>`;
+  return `<article class="wbd-today-context-card" data-context-kind="atlas">${organizationBadge(item.organizationId)}<span>Atlas heeft onderzocht</span><h3>${esc(item.title)}</h3><p>${esc(item.atlasInterpretation)}</p><details><summary>Waarom is dit relevant?</summary><p>${esc(confidence(item.confidence))}. Atlas baseert dit op ${item.evidenceRefs.length} gekoppelde bron${item.evidenceRefs.length === 1 ? "" : "nen"}.</p>${evidenceDetail(atlas, item.evidenceRefs)}</details><a href="${esc(`${attentionPath}#${item.id}`)}">Bekijken</a></article>`;
 }
 
 function todayChange(item: AtlasEvidence): string {
-  return `<article class="wbd-today-context-card" data-context-kind="change"><span>Veranderd</span><h3>${esc(String(item.normalized.summary ?? item.normalized.title ?? item.sourceIdentity))}</h3><p>Nieuwe centrale evidence sinds je laatste bezoek.</p><details><summary>+ Bron en actualiteit</summary><small>${esc(item.sourceType.replaceAll("_", " "))} · ${esc(freshness(item.freshness))} · ${esc(dateTime(item.fetchedAt))}</small></details></article>`;
+  return `<article class="wbd-today-context-card" data-context-kind="change">${organizationBadge(item.organizationId)}<span>Veranderd</span><h3>${esc(String(item.normalized.summary ?? item.normalized.title ?? item.sourceIdentity))}</h3><p>Nieuwe centrale evidence sinds je laatste bezoek.</p><details><summary>Bron en actualiteit</summary><small>${esc(item.sourceType.replaceAll("_", " "))} · ${esc(freshness(item.freshness))} · ${esc(dateTime(item.fetchedAt))}</small></details></article>`;
 }
 
 function todayQuietState(): string {
@@ -90,8 +111,8 @@ export function renderAtlasToday(topbar: string, atlas: AtlasWorkspaceView, owne
   ].slice(0, 6);
   const remainingChanges = atlas.sinceLastVisit.slice(1, 6);
   return `<main class="wbd-owner-workspace wbd-atlas-workspace">${topbar}<div class="wbd-atlas-layer"><header class="wbd-atlas-today-head"><div><p class="wbd-owner-eyebrow">Today</p><h1>${dayGreeting()} <span>${esc(ownerFirstName(ownerName))}</span></h1><p>Dit speelt er vandaag.</p></div><aside data-freshness="${esc(connector?.freshness ?? "UNKNOWN")}"><span>Atlas-status</span><strong>${connector ? esc(freshness(connector.freshness)) : "Nog niet verbonden"}</strong><details><summary>+ Bronstatus</summary><small>${connector?.lastSuccessfulAt ? `Laatste refresh ${esc(dateTime(connector.lastSuccessfulAt))}` : "Geen succesvolle connectorrefresh"}</small></details></aside></header>
-    <section class="wbd-today-now" aria-labelledby="today-matters-title"><header><div><p class="wbd-owner-eyebrow">Voor jou</p><h2 id="today-matters-title">Wat ertoe doet</h2></div><a href="${attentionPath}">Bekijk alle Attention</a></header><div class="wbd-today-context-grid">${cards.join("")}</div></section>
-    <section class="wbd-today-deepening" aria-label="Verdieping"><details><summary><span>Sinds je laatste bezoek</span><strong>${remainingChanges.length ? `${remainingChanges.length} overige veranderingen` : "Alles gezien"}</strong></summary><div>${remainingChanges.length ? remainingChanges.map(todayChange).join("") : '<p class="wbd-atlas-empty">Geen overige betekenisvolle verandering.</p>'}</div></details>${atlas.canWait.length ? `<details><summary><span>Kan wachten</span><strong>${atlas.canWait.length} bewust niet nu</strong></summary><div>${atlas.canWait.slice(0, 4).map((item) => `<article><strong>${esc(item.title)}</strong><p>${esc(item.atlasInterpretation)}</p></article>`).join("")}</div></details>` : ""}<details><summary><span>Hoe Atlas werkt</span><strong>Autonoom tot de GO-grens</strong></summary><div class="wbd-atlas-autonomy"><div><span>LIVE</span><p>Evidence en bronfreshness</p></div><div><span>DETERMINISTIC</span><p>Classificatie en interpretatie</p></div><div><span>PREPARED</span><p>NBA en conceptacties</p></div><div><span>POLICY-BOUND</span><p>Uitvoering vereist risico-evaluatie</p></div></div></details></section>
+    <section class="wbd-today-now" aria-labelledby="today-matters-title"><header><div><p class="wbd-owner-eyebrow">Voor jou</p><h2 id="today-matters-title">Wat vraagt vandaag aandacht?</h2></div><a href="${attentionPath}">Bekijk alle Attention</a></header><div class="wbd-today-context-grid">${cards.join("")}</div></section>
+    <section class="wbd-today-deepening" aria-label="Verdieping"><details><summary><span>Sinds je laatste bezoek</span><strong>${remainingChanges.length ? `${remainingChanges.length} overige veranderingen` : "Alles gezien"}</strong></summary><div>${remainingChanges.length ? remainingChanges.map(todayChange).join("") : '<p class="wbd-atlas-empty">Geen overige betekenisvolle verandering.</p>'}</div></details>${atlas.canWait.length ? `<details><summary><span>Kan wachten</span><strong>${atlas.canWait.length} bewust niet nu</strong></summary><div>${atlas.canWait.slice(0, 4).map((item) => `<article><strong>${esc(item.title)}</strong><p>${esc(item.atlasInterpretation)}</p></article>`).join("")}</div></details>` : ""}<details><summary><span>Hoe Atlas werkt</span><strong>Autonoom tot controle nodig is</strong></summary><div class="wbd-atlas-autonomy"><div><span>LIVE</span><p>Evidence en bronfreshness</p></div><div><span>DETERMINISTIC</span><p>Classificatie en interpretatie</p></div><div><span>PREPARED</span><p>NBA en conceptacties</p></div><div><span>POLICY-BOUND</span><p>Uitvoering vereist risico-evaluatie</p></div></div></details></section>
     <footer class="wbd-owner-footer"><span>Centrale owner truth · revisie ${atlas.revision}</span><span>Geen live fetch tijdens render</span><span>Release ${esc(atlas.releaseId)}</span></footer></div></main>`;
 }
 
@@ -102,7 +123,7 @@ export function renderAtlasAttention(topbar: string, atlas: AtlasWorkspaceView):
 function searchResults(view?: AtlasSearchView): string {
   if (!view) return '<p class="wbd-atlas-empty">Zoek door Organizations, Capabilities, Attention en Evidence.</p>';
   if (!view.results.length) return '<p class="wbd-atlas-empty">Geen resultaat in de centrale operationele werkelijkheid.</p>';
-  return view.results.map((item) => `<a href="${esc(item.href)}"><span>${esc(item.type)}</span><strong>${esc(item.title)}</strong><p>${esc(item.summary)}</p><small>${esc(item.source)}</small></a>`).join("");
+  return view.results.map((item) => `<a href="${esc(item.href)}">${item.type === "ORGANIZATION" ? organizationBadge(item.title) : ""}<span>${esc(item.type)}</span><strong>${esc(item.title)}</strong><p>${esc(item.summary)}</p><small>Bron: ${esc(item.source)}</small></a>`).join("");
 }
 
 export function renderAtlasSearch(topbar: string, view?: AtlasSearchView): string {

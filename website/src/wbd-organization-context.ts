@@ -77,19 +77,44 @@ function organizationSummary(control: ControlView, organization: ControlOrganiza
   const activeCommitments = context.commitments.filter(({ status }) => status === "ACTIVE").length;
   const attention = openActions ? `${openActions} bevestigde ${openActions === 1 ? "actie" : "acties"}` : "Geen bevestigde actie";
   return `<a class="wbd-directory-card" href="${organizationsPath}/${encodeURIComponent(organization.id)}" data-organization-entry data-search="${esc(`${organization.name} ${organization.relationshipType} ${organization.status}`.toLocaleLowerCase("nl-NL"))}" data-relationship="${esc(organization.relationshipType)}" data-status="${esc(organization.status)}">
-    <header><div><span>${esc(human(organization.relationshipType))}</span><h2>${esc(organization.name)}</h2></div><span class="wbd-context-chip" data-status="${esc(organization.status)}">${esc(human(organization.status))}</span></header>
+    <header><div class="wbd-directory-identity"><span class="wbd-directory-logo"><img src="/wbd-owner-icon.svg" alt=""></span><div><span>${esc(human(organization.relationshipType))}</span><h2>${esc(organization.name)}</h2></div></div><span class="wbd-context-chip" data-status="${esc(organization.status)}">${esc(human(organization.status))}</span></header>
     <p>${esc(attention)}</p><dl><div><dt>Kansen</dt><dd>${openOpportunities}</dd></div><div><dt>Afspraken</dt><dd>${activeCommitments}</dd></div><div><dt>Acties</dt><dd>${openActions}</dd></div></dl><strong>Open context →</strong>
   </a>`;
 }
 
-export function renderOrganizationDirectory(topbar: string, control: ControlView): string {
+interface VerifiedCustomerContext { name: string; initials: string; logo: string | null; capabilities: AtlasWorkspaceView["capabilityRegistry"]; lastVerified: string }
+
+function verifiedCustomerContexts(atlas?: AtlasWorkspaceView): VerifiedCustomerContext[] {
+  if (!atlas) return [];
+  const definitions = [
+    { name: "Sportpaleis", initials: "SP", logo: "/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png", matches: (value: string) => /sportpaleis/iu.test(value) },
+    { name: "Bij Cees", initials: "BC", logo: null, matches: (value: string) => /bij\s*cees/iu.test(value) },
+    { name: "AquaFlask", initials: "AF", logo: null, matches: (value: string) => /aqua\s*flask/iu.test(value) },
+  ];
+  return definitions.flatMap((definition) => {
+    const capabilities = atlas.capabilityRegistry.filter((capability) => new Set(["PROVEN", "REUSABLE"]).has(capability.maturity)
+      && capability.organizationsWhereProven.some(definition.matches));
+    if (!capabilities.length) return [];
+    const lastVerified = capabilities.map(({ lastVerified: value }) => value).sort().at(-1) ?? "onbekend";
+    return [{ ...definition, capabilities, lastVerified }];
+  });
+}
+
+function verifiedCustomerCard(context: VerifiedCustomerContext): string {
+  const logo = context.logo ? `<img src="${esc(context.logo)}" alt="">` : `<span aria-hidden="true">${esc(context.initials)}</span>`;
+  return `<article class="wbd-verified-customer"><header><span class="wbd-directory-logo">${logo}</span><div><span>Bewezen klantcontext</span><h2>${esc(context.name)}</h2></div></header><p>${context.capabilities.length} ${context.capabilities.length === 1 ? "capability heeft" : "capabilities hebben"} herleidbare evidence voor deze context.</p><ul>${context.capabilities.slice(0, 3).map(({ name }) => `<li>${esc(name)}</li>`).join("")}</ul><footer><span>Capability Registry</span><span>Laatst geverifieerd ${esc(dateLabel(context.lastVerified))}</span></footer><a href="${capabilitiesPath}">Bekijk capabilitybewijs</a></article>`;
+}
+
+export function renderOrganizationDirectory(topbar: string, control: ControlView, atlas?: AtlasWorkspaceView): string {
   const organizations = control.organizations.filter(({ status }) => status !== "ARCHIVED").sort((left, right) => left.name.localeCompare(right.name, "nl"));
-  return `<main class="wbd-owner-workspace wbd-context-workspace">${topbar}<div class="wbd-context-worklayer"><header class="wbd-context-pagehead"><div><p class="wbd-owner-eyebrow">Centrale bevestigde waarheid</p><h1>Organisaties</h1><p>Open één relatie en zie uitsluitend wat al canoniek in de WBD Control Plane staat.</p></div><strong>${organizations.length}</strong></header>
+  const verifiedContexts = verifiedCustomerContexts(atlas);
+  return `<main class="wbd-owner-workspace wbd-context-workspace">${topbar}<div class="wbd-context-worklayer"><header class="wbd-context-pagehead"><div><p class="wbd-owner-eyebrow">Klantcontext</p><h1>Klanten</h1><p>Bevestigde Organizations en bewezen klantcontext blijven zichtbaar gescheiden.</p></div><strong>${organizations.length + verifiedContexts.length}</strong></header>
     <section class="wbd-directory-tools" aria-label="Organisaties zoeken en filteren"><label>Zoeken<input type="search" data-organization-search placeholder="Zoek op naam, relatie of status" autocomplete="off"></label><label>Relatie<select data-organization-relationship><option value="">Alle relaties</option><option value="OWN_ORGANIZATION">Eigen organisatie</option><option value="CUSTOMER">Klant</option><option value="PROSPECT">Prospect</option><option value="PARTNER">Partner</option></select></label><label>Status<select data-organization-status><option value="">Alle statussen</option><option value="ACTIVE">Actief</option><option value="INACTIVE">Inactief</option><option value="UNKNOWN">Onbekend</option></select></label></section>
     <p class="wbd-directory-count" data-organization-count>${organizations.length} ${organizations.length === 1 ? "organisatie" : "organisaties"} zichtbaar</p>
     <section class="wbd-directory-list" aria-live="polite">${organizations.map((organization) => organizationSummary(control, organization)).join("") || '<p class="wbd-context-empty">Nog geen bevestigde organisaties.</p>'}</section>
     <p class="wbd-context-empty" data-organization-no-results hidden>Geen organisaties binnen deze zoekopdracht en filters.</p>
-    <footer class="wbd-owner-footer"><span>Centrale Control Plane · revisie ${control.revision}</span><span>Geen browserdossiers geïmporteerd.</span></footer></div></main>`;
+    <section class="wbd-verified-customers" aria-labelledby="verified-context-title"><header><p class="wbd-owner-eyebrow">Niet hetzelfde als live klantstatus</p><h2 id="verified-context-title">Bewezen in klantcontext</h2><p>Deze herkenning komt uitsluitend uit de centrale Capability Registry. Contract, activiteit en gezondheid worden niet afgeleid.</p></header><div>${verifiedContexts.map(verifiedCustomerCard).join("") || '<p class="wbd-context-empty">Geen bewezen klantcontext centraal beschikbaar.</p>'}</div></section>
+    <footer class="wbd-owner-footer"><span>Centrale Control Plane · revisie ${control.revision}</span>${atlas ? `<span>Capability Registry · revisie ${atlas.revision}</span>` : ""}<span>Geen browserdossiers geïmporteerd.</span></footer></div></main>`;
 }
 
 function opportunityCard(opportunity: ControlOpportunity, organizationName: string, linkedAction: ControlAction | null): string {
