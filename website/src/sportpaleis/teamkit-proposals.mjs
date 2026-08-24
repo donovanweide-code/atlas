@@ -11,7 +11,7 @@ const SOURCE_LIMIT_BYTES = 8 * 1024 * 1024;
 const ACCESS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MIME_BY_EXTENSION = Object.freeze({
   svg: "image/svg+xml", pdf: "application/pdf", eps: "application/postscript", ai: "application/illustrator",
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
 });
 
 function error(message, code, statusCode = 400, extra = {}) {
@@ -92,6 +92,7 @@ export function inspectTeamkitProposalSource(input, context) {
   else if (format === "EPS" && !bytes.subarray(0, 11).toString("ascii").startsWith("%!PS-Adobe")) throw error("De EPS-inhoud is ongeldig.", "PROPOSAL_SOURCE_SIGNATURE_INVALID");
   else if (format === "AI" && !["%PDF-", "%!PS-"].some((prefix) => bytes.subarray(0, 5).toString("ascii").startsWith(prefix))) throw error("De AI-bron heeft geen herkenbare PDF/PostScript-inhoud.", "PROPOSAL_SOURCE_SIGNATURE_INVALID");
   else if (format === "PNG" && !(dimensions = pngDimensions(bytes))) throw error("De PNG-inhoud is ongeldig.", "PROPOSAL_SOURCE_SIGNATURE_INVALID");
+  else if (format === "WEBP" && !(bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP")) throw error("De WebP-inhoud is ongeldig.", "PROPOSAL_SOURCE_SIGNATURE_INVALID");
   else if (format === "JPG" && !(dimensions = jpegDimensions(bytes))) throw error("De JPG-inhoud is ongeldig.", "PROPOSAL_SOURCE_SIGNATURE_INVALID");
   const id = `proposal-source-${randomUUID()}`; const now = context.now ?? new Date().toISOString();
   return {
@@ -131,7 +132,13 @@ function normalizePlacement(input) {
     heightMm: boundedNumber(input.physicalSizeOverride.heightMm, "Fysieke hoogte", 1, 1000),
     aspectRatioLocked: true,
   };
-  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), physicalSizeOverride, route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
+  const [defaultX, defaultY] = PRESET_POSITION[preset] ?? [50, 50];
+  const visualPosition = {
+    coordinateSpace: "GARMENT_PRINT_AREA_V1",
+    xPercent: boundedNumber(input.visualPosition?.xPercent ?? defaultX, "Visuele X-positie", 0, 100),
+    yPercent: boundedNumber(input.visualPosition?.yPercent ?? defaultY, "Visuele Y-positie", 0, 100),
+  };
+  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), visualPosition, physicalSizeOverride, route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
 }
 
 export function normalizeProposalItems(items) {
@@ -149,7 +156,10 @@ const PRESET_POSITION = Object.freeze({ LINKERBORST: [33, 28], RECHTERBORST: [67
 
 function garment(item, side) {
   const placements = item.placements.filter((placement) => placement.side === side).map((placement) => {
-    const [x, y] = PRESET_POSITION[placement.preset] ?? [50, 50]; const label = placement.text || placement.label;
+    const [fallbackX, fallbackY] = PRESET_POSITION[placement.preset] ?? [50, 50];
+    const x = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.xPercent : fallbackX;
+    const y = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.yPercent : fallbackY;
+    const label = placement.text || placement.label;
     return `<span class="tk-mark tk-mark--${placement.kind.toLowerCase()}" style="left:${x}%;top:${y}%;width:${placement.widthPercent}%" title="${esc(placement.label)}">${esc(label)}</span>`;
   }).join("");
   return `<figure class="tk-garment"><div class="tk-shirt" style="--kit-color:${esc(item.color)}"><i></i>${placements}</div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"}</figcaption></figure>`;

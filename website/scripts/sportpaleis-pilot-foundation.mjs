@@ -1735,7 +1735,26 @@ export class SportpaleisPilotService {
       if (payload.association) { const match = state.associations.find(({ id, name }) => id === payload.association.id || name === payload.association.name); proposal.association = { id: match?.id ?? (optional(payload.association.id, 160) || null), name: match?.name ?? (optional(payload.association.name, 160) || null) }; }
       for (const key of ["team", "season", "category", "notes"]) if (Object.hasOwn(payload, key)) proposal[key] = optional(payload[key], key === "notes" ? 1_500 : 160) || null;
       if (Object.hasOwn(payload, "deadline")) proposal.deadline = payload.deadline ? new Date(payload.deadline).toISOString() : null;
-      if (payload.items) proposal.items = normalizeProposalItems(payload.items);
+      if (payload.items) {
+        const items = structuredClone(payload.items);
+        const association = state.associations.find(({ id, name }) => id === proposal.association.id || name === proposal.association.name);
+        for (const item of items) for (const placement of item.placements ?? []) {
+          const match = String(placement.sourceId ?? "").match(/^association-logo:([^:]+):([A-Fa-f0-9]{64})$/u);
+          if (!match) continue;
+          const [, associationId, expectedSha256] = match;
+          if (!association?.workspaceLogo || association.id !== associationId || association.workspaceLogo.sha256.toUpperCase() !== expectedSha256.toUpperCase()) throw Object.assign(new Error("Het verenigingslogo is ondertussen gewijzigd. Kies het logo opnieuw."), { statusCode: 409, code: "ASSOCIATION_LOGO_CHANGED" });
+          let source = proposal.sources.find(({ sha256 }) => sha256.toUpperCase() === expectedSha256.toUpperCase());
+          if (!source) {
+            const logoBytes = Buffer.from(association.workspaceLogo.dataBase64, "base64"); const storedAsWebp = logoBytes.subarray(0, 4).toString("ascii") === "RIFF" && logoBytes.subarray(8, 12).toString("ascii") === "WEBP";
+            const filename = storedAsWebp ? association.workspaceLogo.filename.replace(/\.[^.]+$/u, ".webp") : association.workspaceLogo.filename;
+            source = inspectTeamkitProposalSource({ filename, mimeType: storedAsWebp ? "image/webp" : association.workspaceLogo.mimeType, dataBase64: association.workspaceLogo.dataBase64 }, { proposalId, associationName: proposal.association.name, uploaderKind: "EMPLOYEE", uploaderId: user.id, uploaderName: user.name });
+            proposal.sources.push(source);
+            audit(state, user.id, "Verenigingslogo als immutable voorstelbron vastgelegd", proposal.id, { sourceId: source.id, associationId: association.id, sha256: source.sha256 });
+          }
+          placement.sourceId = source.id;
+        }
+        proposal.items = normalizeProposalItems(items);
+      }
       proposal.currentRevision += 1; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
       if (proposal.status === "APPROVED") proposal.status = "IN_DESIGN"; else if (["DRAFT", "READY_FOR_DESIGN", "CUSTOMER_FEEDBACK", "READY_FOR_REVIEW"].includes(proposal.status)) proposal.status = "IN_DESIGN";
       const feedbackIds = Array.isArray(payload.feedbackIds) ? payload.feedbackIds.map(String) : [];

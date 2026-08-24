@@ -775,7 +775,7 @@ export interface TeamkitProposalSource {
   id: string;
   filename: string;
   mimeType: "image/svg+xml" | "application/pdf" | "application/postscript" | "application/illustrator" | "image/png" | "image/jpeg";
-  format: "SVG" | "PDF" | "EPS" | "AI" | "PNG" | "JPG";
+  format: "SVG" | "PDF" | "EPS" | "AI" | "PNG" | "JPG" | "WEBP";
   sha256: string;
   sizeBytes: number;
   immutable: true;
@@ -806,6 +806,15 @@ export interface TeamkitProposalPlacement {
   assetVersion: string | null;
   text: string | null;
   widthPercent: number;
+  /**
+   * Conceptuele plaatsing binnen een expliciet garment-/printvlak. De percentages
+   * zijn responsive canvascoordinaten en worden nooit als productie-mm gebruikt.
+   */
+  visualPosition?: {
+    coordinateSpace: "GARMENT_PRINT_AREA_V1";
+    xPercent: number;
+    yPercent: number;
+  };
   /** Optional physical production override; absence means resolve from the existing server-authoritative production truth. */
   physicalSizeOverride?: { widthMm: number; heightMm: number; aspectRatioLocked: true } | null;
   route: TeamkitFulfillmentRoute;

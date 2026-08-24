@@ -25,12 +25,27 @@ function item(sourceId) {
   return {
     id: "item-shirt", articleId: null, articleNumber: "SHIRT-2026", productName: "Wedstrijdshirt", color: "#13294b", quantity: 18, sizes: ["S", "M", "L"], team: "JO15", notes: "Clubkleuren behouden",
     placements: [
-      { id: "placement-club", kind: "CLUB_LOGO", label: "Clublogo", side: "FRONT", preset: "LINKERBORST", sourceId, productionAssetId: null, assetVersion: null, text: null, widthPercent: 22, route: "INTERN_BEDRUKKEN", supplierName: null, note: null },
+      { id: "placement-club", kind: "CLUB_LOGO", label: "Clublogo", side: "FRONT", preset: "LINKERBORST", sourceId, productionAssetId: null, assetVersion: null, text: null, widthPercent: 22, visualPosition: { coordinateSpace: "GARMENT_PRINT_AREA_V1", xPercent: 42.5, yPercent: 31.25 }, route: "INTERN_BEDRUKKEN", supplierName: null, note: null },
       { id: "placement-sponsor", kind: "SPONSOR", label: "Hoofdsponsor", side: "FRONT", preset: "MIDDENBORST", sourceId, productionAssetId: null, assetVersion: null, text: null, widthPercent: 38, route: "EXTERNE_BEDRUKKER", supplierName: "Bestaande bedrukpartner", note: null },
       { id: "placement-number", kind: "BACK_NUMBER", label: "Rugnummer", side: "BACK", preset: "RUG_MIDDEN", sourceId: null, productionAssetId: null, assetVersion: null, text: "10", widthPercent: 30, route: "NOG_TE_BEPALEN", supplierName: null, note: null },
     ],
   };
 }
+
+test("bestaand verenigingslogo wordt bij revision één keer als immutable voorstelbron vastgelegd", async (context) => {
+  const { service, operator } = await fixture(context);
+  const bootstrap = await service.bootstrap(operator.token);
+  const association = bootstrap.associations.find(({ name }) => name === "A.S.C. Waterwijk");
+  assert.ok(association?.workspaceLogo);
+  let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Visuele clublogo-review", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: association.name, team: "Senioren 1", season: "2026/2027" });
+  const sourceReference = `association-logo:${association.id}:${association.workspaceLogo.sha256}`;
+  const visualItem = item(sourceReference); visualItem.placements = [visualItem.placements[0]];
+  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [visualItem], reason: "Bestaand clublogo gebruikt" });
+  assert.equal(proposal.sources.length, 1);
+  assert.equal(proposal.sources[0].sha256, association.workspaceLogo.sha256);
+  assert.equal(proposal.items[0].placements[0].sourceId, proposal.sources[0].id);
+  assert.equal(proposal.revisions.at(-1).snapshot.sourceRefs[0].sha256, association.workspaceLogo.sha256);
+});
 
 test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhandeling end-to-end", async (context) => {
   const { store, service, admin, operator, storeUser } = await fixture(context);
@@ -60,6 +75,8 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   const staleRevision = proposal.aggregateRevision;
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [item(proposal.sources[0].id)], reason: "Eerste complete teamkit" });
   assert.equal(proposal.currentRevision, 2);
+  assert.deepEqual(proposal.items[0].placements[0].visualPosition, { coordinateSpace: "GARMENT_PRINT_AREA_V1", xPercent: 42.5, yPercent: 31.25 });
+  assert.match(proposal.revisions.at(-1).previewHtml, /left:42\.5%;top:31\.25%/u);
   await assert.rejects(service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: staleRevision, title: "Stale wijziging" }), (error) => error.code === "REVISION_CONFLICT");
 
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
