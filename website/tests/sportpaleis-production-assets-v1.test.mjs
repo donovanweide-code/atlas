@@ -427,6 +427,11 @@ test("Production dashboard gebruikt één centrale set voor Attention teller en 
   assert.match(source, /data-context-picker/u);
   assert.match(source, /create-inline-production-association/u);
   assert.match(source, /sp-asset-preparation-form/u);
+  assert.match(source, /Welke onderdelen wilt u bewaren\?/u);
+  assert.match(source, /data-asset-split-card/u);
+  assert.match(source, /assetName:\$\{esc\(candidate\.id\)\}/u);
+  assert.match(source, /Geselecteerde onderdelen bewaren/u);
+  assert.match(source, /candidateIds: \[selection\.candidateId\]/u);
   assert.doesNotMatch(source, /review=production-assets/u);
   assert.doesNotMatch(source, /A · Bibliotheek/u);
   assert.doesNotMatch(source, /G\/H · Productie & dashboard/u);
@@ -443,6 +448,9 @@ test("multi-artwork SVG biedt alleen complete bron-eigen groepen en kan meerdere
   assert.equal(inspected.candidates.length, 4);
   assert.ok(inspected.candidates.every(({ selectionMode, reviewCategory, contourCount }) => selectionMode === "OBJECT_GROUP" && reviewCategory === "ARTWORK_CANDIDATE" && contourCount === 2));
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "sanitized-four-artworks.svg", mimeType: "image/svg+xml", dataBase64: artwork.toString("base64"), provenance: "Gesanitiseerde multi-artwork fixture", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const previews = await Promise.all(source.candidates.map(({ id }) => service.productionAssetCandidatePreview(operator.token, source.id, id)));
+  assert.equal(previews.length, 4);
+  assert.ok(previews.every(({ bytes }) => bytes.toString("utf8").includes("<svg")));
   const association = (await store.read()).associations[0];
   const create = async (candidate, name) => service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name, ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 100, heightMm: 100 * candidate.boundsMm.height / candidate.boundsMm.width, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "LOGO", placement: null }], proofAuthority: "HUMAN_ACCEPTANCE" });
   const first = await create(source.candidates[0], "Gesanitiseerd logo A");

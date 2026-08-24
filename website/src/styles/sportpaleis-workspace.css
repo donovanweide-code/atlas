@@ -37,6 +37,11 @@
 .sp-asset-candidate span { display: grid; gap: .2rem; min-width: 0; }
 .sp-asset-candidate small, .sp-asset-candidate em { color: #667085; font-size: .78rem; }
 .sp-asset-candidate em { color: #9a6700; font-style: normal; }
+.sp-asset-split-card { grid-template-columns: 1fr; cursor: default; }
+.sp-asset-split-card__choice { display: flex; align-items: center; gap: .45rem; cursor: pointer; }
+.sp-asset-split-card__fields { display: grid; gap: .55rem; }
+.sp-asset-split-card__fields label { display: grid; gap: .25rem; font-size: .78rem; font-weight: 700; }
+.sp-asset-split-card__fields input, .sp-asset-split-card__fields select { width: 100%; min-width: 0; }
 .sp-asset-candidate--button { width: 100%; color: inherit; font: inherit; text-align: left; }
 .sp-asset-candidate--technical { opacity: .88; }
 .sp-visual-asset-composer { display: grid; gap: .75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--sp-border, #d8dee7); }
