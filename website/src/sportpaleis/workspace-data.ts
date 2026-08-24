@@ -614,7 +614,21 @@ export interface ProductionJobSnapshot {
     edgeMarginMm: number | null;
     minimumGapMm: number | null;
     placements?: { lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number; sourceWidthMm?: number; sourceHeightMm?: number; mirrorApplied?: boolean; baseRotationApplied?: 0 | 90 | 180 | 270; nestingRotationApplied?: 0 | 90 | 180 | 270; rotationApplied?: 0 | 90 | 180 | 270; vectorProfile?: string | null; sourceOrderId?: string }[];
-    productionGeometry?: import("./direct-print/types").ProductionGeometry;
+    productionGeometry?: {
+      groups: readonly {
+        sourcePieceId: string;
+        mirrorApplied: boolean;
+        baseRotationApplied: 0 | 90 | 180 | 270;
+        nestingRotationApplied: 0 | 90 | 180 | 270;
+        rotationApplied: 0 | 90 | 180 | 270;
+        placementMm: { x: number; y: number };
+        sourceBoundsMm: { width: number; height: number };
+        boundsMm: { width: number; height: number };
+        contours: readonly { id: string; closed: boolean; points: readonly { x: number; y: number }[] }[];
+      }[];
+      contours: readonly { id: string; closed: boolean; points: readonly { x: number; y: number }[] }[];
+      boundsMm: { width: number; height: number };
+    };
   };
   orientation: { preMirrored: boolean; manualHorizontalFlipInWinPlot: boolean };
   scale: 1;
