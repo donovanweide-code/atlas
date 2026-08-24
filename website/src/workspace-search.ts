@@ -1,6 +1,6 @@
 import type { PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 
-export type WorkspaceSearchKind = "ORDER" | "ARTICLE" | "ASSOCIATION" | "EMPLOYEE" | "PRODUCTION_JOB" | "PRODUCTION_ASSET";
+export type WorkspaceSearchKind = "ORDER" | "ARTICLE" | "ASSOCIATION" | "EMPLOYEE" | "PRODUCTION_JOB" | "PRODUCTION_ASSET" | "TEAMKIT_PROPOSAL";
 
 export interface WorkspaceSearchItem {
   id: string;
@@ -82,6 +82,20 @@ export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/worksp
       ...(asset.sourceId && candidateId ? { previewSrc: `${base.replace(/\/workspace\/sportpaleis$/u, "")}/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(asset.sourceId)}/candidates/${encodeURIComponent(candidateId)}/preview.svg` } : {}),
     });
   }
+  for (const proposal of state.teamkitProposals ?? []) items.push({
+    id: proposal.id,
+    kind: "TEAMKIT_PROPOSAL",
+    group: "Voorstellen",
+    title: proposal.proposalNumber,
+    context: `${proposal.customer.name} · ${proposal.association.name ?? proposal.team ?? proposal.status}`,
+    href: `${base}/voorstellen/${encodeURIComponent(proposal.id)}`,
+    terms: normalized([
+      proposal.proposalNumber, proposal.title, proposal.type, proposal.customer.name,
+      proposal.customer.contactName, proposal.customer.email, proposal.association.name,
+      proposal.team, proposal.season, proposal.category, proposal.status,
+      ...proposal.items.map(({ productName, articleNumber, color }) => `${productName} ${articleNumber ?? ""} ${color ?? ""}`),
+    ].join(" ")),
+  });
   return items;
 }
 

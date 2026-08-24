@@ -22,6 +22,9 @@ import type {
   SportpaleisEmployee,
   SportpaleisProductionAssetSource,
   SportpaleisQuickProductionIntake,
+  TeamkitProposal,
+  TeamkitProposalItem,
+  TeamkitFulfillmentRoute,
 } from "./workspace-data.ts";
 import { createNonCriticalReadonlyCache, type ReadonlyCacheObservation } from "../workspace-readonly-cache.ts";
 
@@ -512,6 +515,46 @@ export class SportpaleisPilotApi {
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-current-group") },
       body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor }),
     }));
+  }
+
+  async createTeamkitProposal(input: { title: string; type?: string; customerId?: string; customerName: string; contactName: string; customerEmail: string; customerPhone?: string; associationId?: string; associationName?: string; team?: string; season?: string; category?: string; deadline?: string; notes?: string }): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async updateTeamkitProposal(proposal: TeamkitProposal, input: { title?: string; type?: string; customer?: TeamkitProposal["customer"]; association?: TeamkitProposal["association"]; team?: string | null; season?: string | null; category?: string | null; deadline?: string | null; notes?: string | null; items?: TeamkitProposalItem[]; reason?: string; feedbackIds?: string[]; reopenApproved?: boolean }): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, expectedRevision: proposal.aggregateRevision }) }));
+  }
+
+  async issueTeamkitCustomerLink(proposalId: string): Promise<{ proposal: TeamkitProposal; path: string; expiresAt: string }> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/customer-link`, { method: "POST" }));
+  }
+
+  async setTeamkitProposalStatus(proposal: TeamkitProposal, status: "IN_DESIGN" | "READY_FOR_REVIEW" | "SENT_TO_CUSTOMER" | "READY_FOR_APPROVAL" | "ARCHIVED"): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, expectedRevision: proposal.aggregateRevision }) }));
+  }
+
+  async copyTeamkitProposal(proposalId: string, input: { title?: string; season?: string }): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/copy`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async addTeamkitProposalSource(proposalId: string, input: { filename: string; mimeType: string; dataBase64: string }): Promise<{ source: TeamkitProposal["sources"][number]; duplicate: boolean }> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async linkTeamkitProposalSource(proposal: TeamkitProposal, sourceId: string, productionSourceId: string): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}/sources/${encodeURIComponent(sourceId)}/production-asset`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productionSourceId, expectedRevision: proposal.aggregateRevision }) }));
+  }
+
+  async updateTeamkitFulfillmentTask(proposalId: string, taskId: string, input: { route?: TeamkitFulfillmentRoute; status?: TeamkitProposal["fulfillmentTasks"][number]["status"]; supplierName?: string | null; orderId?: string | null }): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/fulfillment/${encodeURIComponent(taskId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async previewTeamkitProposalMail(proposalId: string, input: { templateKey: "PROPOSAL_INTAKE_REQUEST" | "PROPOSAL_REVIEW_REQUEST" | "PROPOSAL_SUPPLIER_HANDOFF"; customerPath?: string; taskId?: string; recipient?: string; supplierName?: string }): Promise<MailPreview> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/mail/preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async captureTeamkitProposalMail(proposalId: string, input: { templateKey: "PROPOSAL_INTAKE_REQUEST" | "PROPOSAL_REVIEW_REQUEST" | "PROPOSAL_SUPPLIER_HANDOFF"; customerPath?: string; taskId?: string; recipient?: string; supplierName?: string }): Promise<MailHistoryEntry> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/mail/capture`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("proposal-mail") }, body: JSON.stringify(input) }));
   }
 
   async updateArticle(articleId: string, input: {

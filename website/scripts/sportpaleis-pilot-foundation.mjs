@@ -57,6 +57,20 @@ import {
   quickIntakeOrderPayload,
 } from "../src/sportpaleis/quick-production-intake.mjs";
 import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
+import {
+  approvedFulfillmentTasks,
+  createCustomerAccess,
+  createProposalRevision,
+  customerProposal,
+  findProposalByCustomerToken,
+  generateProposalPdf,
+  inspectTeamkitProposalSource,
+  normalizeProposalItems,
+  proposalSha256,
+  publicProposal,
+  renderProposalPreview,
+  validateTeamkitProposalState,
+} from "../src/sportpaleis/teamkit-proposals.mjs";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
@@ -66,7 +80,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
-const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_BODY_BYTES = 34 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 12;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -483,6 +497,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     productionElementRequirements: [],
     productionJobs: createGoldenProductionJobs(iso(now)),
     productionProposals: [],
+    teamkitProposals: [],
     quickProductionIntakes: [],
     preferences: {},
     audit: [{
@@ -697,6 +712,8 @@ export function migrateSportpaleisPilotState(input) {
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
+  state.teamkitProposals ??= [];
+  for (const proposal of state.teamkitProposals) proposal.approvalHistory ??= [];
   state.quickProductionIntakes ??= [];
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
@@ -831,6 +848,8 @@ export function validateSportpaleisPilotState(input) {
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
+  state.teamkitProposals ??= [];
+  for (const proposal of state.teamkitProposals) proposal.approvalHistory ??= [];
   state.quickProductionIntakes ??= [];
   state.nextProductionJobSequence ??= 1;
   for (const article of ARTICLE_CATALOG) {
@@ -937,7 +956,7 @@ export function validateSportpaleisPilotState(input) {
     if (!['ORIGINAL', 'REPLOT'].includes(job.kind) || !['AWAITING_HUMAN_CHECK', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) throw new Error("Ongeldige productiejobstatus.");
     if (job.kind === "REPLOT" && (!job.originJobId || !state.productionJobs.some(({ id }) => id === job.originJobId))) throw new Error("Herplot mist de oorspronkelijke productiejob.");
   }
-  return state;
+  return validateTeamkitProposalState(state);
 }
 
 function cleanStartProtectedFingerprint(state) {
@@ -1425,6 +1444,7 @@ export class SportpaleisPilotService {
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
       productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      teamkitProposals: ["admin", "operator", "store"].includes(user.role) ? state.teamkitProposals.map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
@@ -1458,6 +1478,207 @@ export class SportpaleisPilotService {
   async currentRevision(token) {
     const { state } = await this.authenticate(token);
     return { revision: state.revision };
+  }
+
+  async createTeamkitProposal(token, csrfToken, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    const result = await this.store.mutate(async (state) => {
+      state.teamkitProposals ??= [];
+      const year = new Date().getUTCFullYear();
+      const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+      const now = iso(); const id = `teamkit-proposal-${randomBytes(10).toString("hex")}`;
+      const associationName = optional(payload.associationName, 160) || null;
+      const association = associationName ? state.associations.find(({ id: associationId, name }) => associationId === payload.associationId || name === associationName) : null;
+      const proposal = {
+        id, proposalNumber: `PV-${year}-${String(highest + 1).padStart(4, "0")}`, aggregateRevision: 1, currentRevision: 1, status: "DRAFT",
+        title: requiredText(payload.title, "Interne titel", 180), type: optional(payload.type, 120) || "Teamkit",
+        customer: { id: optional(payload.customerId, 160) || null, name: requiredText(payload.customerName, "Klant", 160), contactName: requiredText(payload.contactName ?? payload.customerName, "Contactpersoon", 160), email: validEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
+        association: { id: association?.id ?? (optional(payload.associationId, 160) || null), name: association?.name ?? associationName },
+        team: optional(payload.team, 120) || null, season: optional(payload.season, 80) || null, category: optional(payload.category, 80) || null, deadline: payload.deadline ? new Date(payload.deadline).toISOString() : null,
+        notes: optional(payload.notes, 1_500) || null, items: [], sources: [], intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
+        customerAccess: null, feedback: [], revisions: [], approval: null, approvalHistory: [], fulfillmentTasks: [], createdAt: now, createdBy: { id: user.id, name: user.name, role: user.role }, updatedAt: now, updatedBy: { id: user.id, name: user.name, role: user.role }, archivedAt: null, copiedFrom: null,
+      };
+      proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, "Voorstel aangemaakt"));
+      state.teamkitProposals.unshift(proposal); audit(state, user.id, "Voorstel aangemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, association: proposal.association.name });
+      return { state, value: publicProposal(proposal) };
+    }); return result.value;
+  }
+
+  async updateTeamkitProposal(token, csrfToken, proposalId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
+      if (proposal.status === "APPROVED" && payload.reopenApproved !== true) throw Object.assign(new Error("De goedgekeurde versie is immutable. Start expliciet een nieuwe revision."), { statusCode: 409, code: "APPROVED_REVISION_IMMUTABLE" });
+      const priorApprovalRevision = proposal.approval?.revision ?? null;
+      if (proposal.status === "APPROVED" && proposal.approval) { proposal.approvalHistory ??= []; if (!proposal.approvalHistory.some(({ revision }) => revision === proposal.approval.revision)) proposal.approvalHistory.push(structuredClone(proposal.approval)); proposal.approval = null; }
+      proposal.title = payload.title === undefined ? proposal.title : requiredText(payload.title, "Titel", 180);
+      proposal.type = payload.type === undefined ? proposal.type : requiredText(payload.type, "Voorsteltype", 120);
+      if (payload.customer) proposal.customer = { id: optional(payload.customer.id, 160) || null, name: requiredText(payload.customer.name, "Klant", 160), contactName: requiredText(payload.customer.contactName, "Contactpersoon", 160), email: validEmail(payload.customer.email), phone: optional(payload.customer.phone, 40) || null };
+      if (payload.association) { const match = state.associations.find(({ id, name }) => id === payload.association.id || name === payload.association.name); proposal.association = { id: match?.id ?? (optional(payload.association.id, 160) || null), name: match?.name ?? (optional(payload.association.name, 160) || null) }; }
+      for (const key of ["team", "season", "category", "notes"]) if (Object.hasOwn(payload, key)) proposal[key] = optional(payload[key], key === "notes" ? 1_500 : 160) || null;
+      if (Object.hasOwn(payload, "deadline")) proposal.deadline = payload.deadline ? new Date(payload.deadline).toISOString() : null;
+      if (payload.items) proposal.items = normalizeProposalItems(payload.items);
+      proposal.currentRevision += 1; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      if (proposal.status === "APPROVED") proposal.status = "IN_DESIGN"; else if (["DRAFT", "READY_FOR_DESIGN", "CUSTOMER_FEEDBACK", "READY_FOR_REVIEW"].includes(proposal.status)) proposal.status = "IN_DESIGN";
+      const feedbackIds = Array.isArray(payload.feedbackIds) ? payload.feedbackIds.map(String) : [];
+      for (const feedback of proposal.feedback.filter(({ id }) => feedbackIds.includes(id))) { feedback.status = "PROCESSED"; feedback.processedAt = proposal.updatedAt; feedback.processedBy = user.id; }
+      const revision = createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, optional(payload.reason, 500) || (priorApprovalRevision ? `Nieuwe revision na akkoord V${priorApprovalRevision}` : "Voorstelinhoud bijgewerkt"), feedbackIds);
+      proposal.revisions.push(revision); audit(state, user.id, priorApprovalRevision ? "Nieuwe voorstelrevision na akkoord" : "Voorstelrevision gemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, revision: revision.number, snapshotHash: revision.snapshotHash, feedbackIds });
+      return { state, value: publicProposal(proposal) };
+    }); return result.value;
+  }
+
+  async issueTeamkitCustomerLink(token, csrfToken, proposalId) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    const issued = createCustomerAccess();
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      if (proposal.customerAccess) proposal.customerAccess.revokedAt = iso();
+      const intakePhase = ["DRAFT", "WAITING_FOR_CUSTOMER_INPUT", "READY_FOR_DESIGN"].includes(proposal.status);
+      proposal.customerAccess = issued.access; if (intakePhase) { proposal.intake.status = "REQUESTED"; proposal.intake.requestedAt = iso(); proposal.status = "WAITING_FOR_CUSTOMER_INPUT"; } proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(state, user.id, "Veilige voorstelklantlink gemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, accessContextId: issued.access.id, expiresAt: issued.access.expiresAt, purpose: intakePhase ? "INTAKE" : "REVIEW" });
+      return { state, value: { proposal: publicProposal(proposal), path: `/voorstel/${issued.token}`, expiresAt: issued.access.expiresAt } };
+    }); return result.value;
+  }
+
+  async addTeamkitProposalSource(token, csrfToken, proposalId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    if (!this.uploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      const source = inspectTeamkitProposalSource(payload, { proposalId, associationName: proposal.association.name, uploaderKind: "EMPLOYEE", uploaderId: user.id, uploaderName: user.name });
+      const duplicate = proposal.sources.find(({ sha256: hash }) => hash === source.sha256); if (duplicate) return { state, value: { source: publicProposal({ ...proposal, sources: [duplicate] }).sources[0], duplicate: true } };
+      proposal.sources.push(source); proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(state, user.id, "Voorstelbron geüpload", proposal.id, { sourceId: source.id, filename: source.filename, mimeType: source.mimeType, sha256: source.sha256, quality: source.quality.status });
+      return { state, value: { source: publicProposal({ ...proposal, sources: [source] }).sources[0], duplicate: false } };
+    }); return result.value;
+  }
+
+  async linkTeamkitProposalSource(token, csrfToken, proposalId, sourceId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); const source = proposal?.sources.find(({ id }) => id === sourceId);
+      if (!proposal || !source) throw Object.assign(new Error("Voorstelbron niet gevonden."), { statusCode: 404, code: "PROPOSAL_SOURCE_NOT_FOUND" });
+      if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
+      const productionSourceId = requiredText(payload.productionSourceId, "Production Asset-bron", 180);
+      const productionSource = state.productionAssetSources?.find(({ id }) => id === productionSourceId);
+      if (!productionSource || productionSource.original.sha256 !== source.sha256) throw Object.assign(new Error("De Production Asset-bron komt niet exact overeen met de immutable voorstelbron."), { statusCode: 409, code: "PROPOSAL_SOURCE_HASH_MISMATCH" });
+      source.promotedProductionSourceId = productionSource.id; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(state, user.id, "Voorstelbron gekoppeld aan Production Assets", proposal.id, { sourceId, productionSourceId, sha256: source.sha256, proposalNumber: proposal.proposalNumber });
+      return { state, value: publicProposal(proposal) };
+    }); return result.value;
+  }
+
+  async setTeamkitProposalStatus(token, csrfToken, proposalId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const allowed = new Set(["IN_DESIGN", "READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL", "ARCHIVED"]); const status = String(payload.status ?? "");
+    if (!allowed.has(status)) throw Object.assign(new Error("Deze status kan alleen via de bijbehorende veilige flow worden gezet."), { statusCode: 400, code: "PROPOSAL_STATUS_INVALID" });
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
+      if (proposal.status === "APPROVED" && status !== "ARCHIVED") throw Object.assign(new Error("Een approved proposal blijft immutable."), { statusCode: 409, code: "APPROVED_REVISION_IMMUTABLE" });
+      if (["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(status) && !proposal.items.length) throw Object.assign(new Error("Voeg minimaal één artikel toe voordat dit voorstel naar de klant gaat."), { statusCode: 409, code: "PROPOSAL_ITEMS_REQUIRED" });
+      proposal.status = status; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; if (status === "ARCHIVED") proposal.archivedAt = proposal.updatedAt;
+      audit(state, user.id, status === "SENT_TO_CUSTOMER" ? "Voorstel verstuurd" : status === "READY_FOR_APPROVAL" ? "Goedkeuring gevraagd" : status === "ARCHIVED" ? "Voorstel gearchiveerd" : "Voorstelstatus gewijzigd", proposal.id, { status, revision: proposal.currentRevision });
+      return { state, value: publicProposal(proposal) };
+    }); return result.value;
+  }
+
+  async copyTeamkitProposal(token, csrfToken, proposalId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const source = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!source) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      const year = new Date().getUTCFullYear(); const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0); const now = iso();
+      const copy = structuredClone(source); copy.id = `teamkit-proposal-${randomBytes(10).toString("hex")}`; copy.proposalNumber = `PV-${year}-${String(highest + 1).padStart(4, "0")}`; copy.aggregateRevision = 1; copy.currentRevision = 1; copy.status = "DRAFT"; copy.title = optional(payload.title, 180) || `${source.title} — nieuw seizoen`; copy.season = optional(payload.season, 80) || null; copy.customerAccess = null; copy.feedback = []; copy.revisions = []; copy.approval = null; copy.approvalHistory = []; copy.fulfillmentTasks = []; copy.intake = { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} }; copy.createdAt = now; copy.createdBy = { id: user.id, name: user.name, role: user.role }; copy.updatedAt = now; copy.updatedBy = { id: user.id, name: user.name, role: user.role }; copy.archivedAt = null; copy.copiedFrom = { proposalId: source.id, approvedRevision: source.approval?.revision ?? source.approvalHistory?.at(-1)?.revision ?? null };
+      copy.sources = copy.sources.map((item) => ({ ...item, proposalId: copy.id })); copy.revisions.push(createProposalRevision(copy, { id: user.id, name: user.name, role: user.role }, `Gebruikt als basis vanuit ${source.proposalNumber}`));
+      state.teamkitProposals.unshift(copy); audit(state, user.id, "Voorstel gekopieerd", copy.id, { sourceProposalId: source.id, sourceApprovedRevision: source.approval?.revision ?? null, proposalNumber: copy.proposalNumber });
+      return { state, value: publicProposal(copy) };
+    }); return result.value;
+  }
+
+  async publicTeamkitProposal(token, now = new Date()) {
+    const result = await this.store.mutate(async (state) => { const proposal = findProposalByCustomerToken(state, token, now); proposal.customerAccess.lastOpenedAt = now.toISOString(); proposal.intake.openedAt ??= now.toISOString(); audit(state, "customer", "Klantformulier geopend", proposal.id, { accessContextId: proposal.customerAccess.id }); return { state, value: customerProposal(proposal) }; }); return result.value;
+  }
+
+  async savePublicTeamkitIntake(token, payload, { submit = false } = {}) {
+    const result = await this.store.mutate(async (state) => {
+      const proposal = findProposalByCustomerToken(state, token); const data = proposalIntakeData(payload.data);
+      const uploads = Array.isArray(payload.sources) ? payload.sources.slice(0, 12) : []; let total = proposal.sources.reduce((sum, source) => sum + source.sizeBytes, 0);
+      for (const upload of uploads) {
+        const source = inspectTeamkitProposalSource(upload, { proposalId: proposal.id, associationName: proposal.association.name, uploaderKind: "CUSTOMER", uploaderId: proposal.customerAccess.id, uploaderName: proposal.customer.contactName }); total += source.sizeBytes;
+        if (total > 24 * 1024 * 1024) throw Object.assign(new Error("De totale upload voor dit voorstel is groter dan 24 MB."), { statusCode: 413, code: "PROPOSAL_TOTAL_UPLOAD_LIMIT" });
+        if (!proposal.sources.some(({ sha256: hash }) => hash === source.sha256)) { proposal.sources.push(source); audit(state, "customer", "Bron geüpload", proposal.id, { sourceId: source.id, filename: source.filename, mimeType: source.mimeType, sha256: source.sha256, quality: source.quality.status }); }
+      }
+      proposal.intake.data = { ...proposal.intake.data, ...data }; proposal.intake.status = submit ? "SUBMITTED" : "DRAFT_SAVED"; proposal.intake.draftSavedAt = iso(); if (submit) proposal.intake.submittedAt = iso();
+      proposal.status = submit ? "READY_FOR_DESIGN" : "WAITING_FOR_CUSTOMER_INPUT"; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: proposal.customerAccess.id, name: proposal.customer.contactName, role: "customer" };
+      audit(state, "customer", submit ? "Klantformulier ingediend" : "Klantformulier concept opgeslagen", proposal.id, { accessContextId: proposal.customerAccess.id, sourceCount: proposal.sources.length });
+      return { state, value: customerProposal(proposal) };
+    }); return result.value;
+  }
+
+  async savePublicTeamkitFeedback(token, payload) {
+    const result = await this.store.mutate(async (state) => {
+      const proposal = findProposalByCustomerToken(state, token); const revision = Number(payload.revision);
+      if (revision !== proposal.currentRevision) throw Object.assign(new Error("Er is inmiddels een nieuwere versie. Vernieuw de preview voordat u feedback geeft."), { statusCode: 409, code: "PROPOSAL_REVISION_STALE", currentRevision: proposal.currentRevision });
+      const kind = allowedValue(payload.kind ?? "GENERAL", ["GENERAL", "ITEM", "PLACEMENT"], "Feedbacksoort"); const decision = allowedValue(payload.decision ?? "CHANGE", ["CORRECT", "CHANGE"], "Feedbackkeuze");
+      const feedback = { id: `proposal-feedback-${randomBytes(8).toString("hex")}`, revision, createdAt: iso(), customerName: requiredText(payload.customerName ?? proposal.customer.contactName, "Naam", 160), kind, targetId: optional(payload.targetId, 180) || null, decision, message: requiredText(payload.message, "Feedback", 1_500), status: "OPEN", processedAt: null, processedBy: null };
+      proposal.feedback.push(feedback); proposal.status = "CUSTOMER_FEEDBACK"; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: proposal.customerAccess.id, name: feedback.customerName, role: "customer" };
+      audit(state, "customer", "Feedback ontvangen", proposal.id, { feedbackId: feedback.id, revision, kind, targetId: feedback.targetId, decision }); return { state, value: customerProposal(proposal) };
+    }); return result.value;
+  }
+
+  async approvePublicTeamkitProposal(token, payload) {
+    const result = await this.store.mutate(async (state) => {
+      const proposal = findProposalByCustomerToken(state, token); const revisionNumber = Number(payload.revision);
+      if (proposal.approval?.revision === revisionNumber) return { state, value: customerProposal(proposal) };
+      if (!["SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(proposal.status)) throw Object.assign(new Error("Sportpaleis heeft deze versie nog niet voor akkoord vrijgegeven."), { statusCode: 409, code: "PROPOSAL_APPROVAL_NOT_READY" });
+      if (revisionNumber !== proposal.currentRevision) throw Object.assign(new Error("Deze preview is niet meer de actuele versie."), { statusCode: 409, code: "PROPOSAL_REVISION_STALE", currentRevision: proposal.currentRevision });
+      const revision = proposal.revisions.find(({ number }) => number === revisionNumber); if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
+      const customerName = requiredText(payload.customerName, "Naam", 160); const customerEmail = validEmail(payload.customerEmail ?? proposal.customer.email); const pdf = generateProposalPdf(revision.snapshot, true); const previewHtml = renderProposalPreview(revision.snapshot, { customer: true });
+      proposal.approval = { revision: revisionNumber, approvedAt: iso(), customerName, customerEmail, accessContextId: proposal.customerAccess.id, snapshotHash: revision.snapshotHash, previewHtml, previewSha256: proposalSha256(previewHtml), pdfBase64: pdf.toString("base64"), pdfSha256: proposalSha256(pdf), artifactFilename: `${proposal.proposalNumber}-V${revisionNumber}-akkoord.pdf` };
+      proposal.approvalHistory ??= []; const nextTasks = approvedFulfillmentTasks(proposal, revision, state); proposal.fulfillmentTasks.push(...nextTasks.filter(({ id }) => !proposal.fulfillmentTasks.some((task) => task.id === id))); proposal.status = "APPROVED"; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: proposal.customerAccess.id, name: customerName, role: "customer" };
+      audit(state, "customer", "Klant akkoord", proposal.id, { proposalNumber: proposal.proposalNumber, revision: revisionNumber, snapshotHash: revision.snapshotHash, previewSha256: proposal.approval.previewSha256, pdfSha256: proposal.approval.pdfSha256, fulfillmentTaskIds: proposal.fulfillmentTasks.map(({ id }) => id) });
+      for (const task of proposal.fulfillmentTasks) audit(state, "system", task.kind === "INTERNAL_PRODUCTION" ? "Interne afhandeling voorbereid" : task.kind === "EXTERNAL_SUPPLIER" ? "Uitbesteedtaak voorbereid" : "Afhandelroute vereist", task.id, { proposalId: proposal.id, approvedRevision: revisionNumber, itemId: task.itemId, placementId: task.placementId, route: task.route, assetRef: task.assetRef });
+      return { state, value: customerProposal(proposal) };
+    }); return result.value;
+  }
+
+  async teamkitProposalSource(token, proposalId, sourceId) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]); const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); const source = proposal?.sources.find(({ id }) => id === sourceId);
+    if (!source?.dataBase64) throw Object.assign(new Error("Bronbestand niet gevonden."), { statusCode: 404, code: "PROPOSAL_SOURCE_NOT_FOUND" });
+    return { bytes: source.safePreviewSvg ? Buffer.from(source.safePreviewSvg, "utf8") : Buffer.from(source.dataBase64, "base64"), mimeType: source.safePreviewSvg ? "image/svg+xml" : source.mimeType, filename: source.filename, sha256: source.sha256, cacheControl: "private, no-store", allowSameOriginFrame: source.format === "PDF" };
+  }
+
+  async publicTeamkitProposalSource(token, sourceId) {
+    const state = await this.store.read(); const proposal = findProposalByCustomerToken(state, token); const source = proposal.sources.find(({ id }) => id === sourceId); if (!source) throw Object.assign(new Error("Bronbestand niet gevonden."), { statusCode: 404, code: "PROPOSAL_SOURCE_NOT_FOUND" });
+    if (!["SVG", "PNG", "JPG", "PDF"].includes(source.format)) throw Object.assign(new Error("Voor dit brontype is geen veilige browserpreview beschikbaar."), { statusCode: 415, code: "PROPOSAL_SOURCE_PREVIEW_UNAVAILABLE" });
+    return { bytes: source.safePreviewSvg ? Buffer.from(source.safePreviewSvg, "utf8") : Buffer.from(source.dataBase64, "base64"), mimeType: source.safePreviewSvg ? "image/svg+xml" : source.mimeType, filename: source.filename, sha256: source.sha256, cacheControl: "private, no-store", allowSameOriginFrame: source.format === "PDF" };
+  }
+
+  async teamkitProposalPdf(token, proposalId, requestedRevision = null) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]); const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+    if (requestedRevision !== null) { const revisionNumber = Number(requestedRevision); const approved = [proposal.approval, ...(proposal.approvalHistory ?? [])].filter(Boolean).find(({ revision }) => revision === revisionNumber); if (!approved) throw Object.assign(new Error("Deze approved voorstelversie is niet beschikbaar."), { statusCode: 404, code: "PROPOSAL_APPROVED_PDF_NOT_FOUND" }); return { bytes: Buffer.from(approved.pdfBase64, "base64"), mimeType: "application/pdf", filename: approved.artifactFilename, sha256: approved.pdfSha256, cacheControl: "private, no-store", allowSameOriginFrame: true }; }
+    const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision); const bytes = proposal.approval?.revision === proposal.currentRevision ? Buffer.from(proposal.approval.pdfBase64, "base64") : generateProposalPdf(revision.snapshot, false);
+    return { bytes, mimeType: "application/pdf", filename: proposal.approval?.revision === proposal.currentRevision ? proposal.approval.artifactFilename : `${proposal.proposalNumber}-V${proposal.currentRevision}-concept.pdf`, sha256: proposalSha256(bytes), cacheControl: "private, no-store", allowSameOriginFrame: true };
+  }
+
+  async publicTeamkitProposalPdf(token) {
+    const state = await this.store.read(); const proposal = findProposalByCustomerToken(state, token); if (!proposal.approval) throw Object.assign(new Error("De definitieve PDF is nog niet beschikbaar."), { statusCode: 404, code: "PROPOSAL_PDF_NOT_AVAILABLE" });
+    return { bytes: Buffer.from(proposal.approval.pdfBase64, "base64"), mimeType: "application/pdf", filename: proposal.approval.artifactFilename, sha256: proposal.approval.pdfSha256, cacheControl: "private, no-store", allowSameOriginFrame: true };
+  }
+
+  async updateTeamkitFulfillmentTask(token, csrfToken, proposalId, taskId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); const task = proposal?.fulfillmentTasks.find(({ id }) => id === taskId); if (!proposal || !task) throw Object.assign(new Error("Afhandelingstaak niet gevonden."), { statusCode: 404, code: "PROPOSAL_TASK_NOT_FOUND" });
+      if (task.approvedRevision !== proposal.approval?.revision) throw Object.assign(new Error("Deze taak hoort niet bij de immutable approved revision."), { statusCode: 409, code: "PROPOSAL_TASK_REVISION_INVALID" });
+      if (payload.route) { const route = allowedValue(payload.route, ["INTERN_BEDRUKKEN", "EXTERNE_BEDRUKKER", "NOG_TE_BEPALEN"], "Afhandelroute"); task.route = route; task.kind = route === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : route === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION"; task.attention = route === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : null; task.status = route === "EXTERNE_BEDRUKKER" ? "READY_TO_SEND" : "HUMAN_CHECK"; }
+      if (payload.status) task.status = allowedValue(payload.status, ["HUMAN_CHECK", "READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"], "Taakstatus");
+      if (Object.hasOwn(payload, "supplierName")) task.supplierName = optional(payload.supplierName, 160) || null; if (Object.hasOwn(payload, "orderId")) task.orderId = optional(payload.orderId, 160) || null;
+      task.updatedAt = iso(); proposal.aggregateRevision += 1; proposal.updatedAt = task.updatedAt; proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; audit(state, user.id, "Voorstelafhandeling gewijzigd", task.id, { proposalId: proposal.id, approvedRevision: task.approvedRevision, route: task.route, status: task.status, orderId: task.orderId });
+      return { state, value: publicProposal(proposal) };
+    }); return result.value;
   }
 
   async addProductionFont(token, csrfToken, payload) {
@@ -2930,6 +3151,24 @@ export class SportpaleisPilotService {
     return this.#mail().history({ organizationId: "sportpaleis", contextType: "order", contextId: orderId }, { id: user.id, name: user.name, role: user.role });
   }
 
+  async previewTeamkitProposalMail(token, proposalId, payload) {
+    const { state, user } = await this.authenticate(token);
+    return this.#mail().preview(this.#teamkitProposalMailRequest(state, user, proposalId, payload), { id: user.id, name: user.name, role: user.role });
+  }
+
+  async captureTeamkitProposalMail(token, csrfToken, proposalId, payload, idempotencyKey) {
+    const { state, user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken);
+    const request = { ...this.#teamkitProposalMailRequest(state, user, proposalId, payload), idempotencyKey };
+    const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role });
+    if (!result.duplicate) await this.store.mutate(async (next) => {
+      const proposal = next.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) return { state: next, value: undefined };
+      proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(next, user.id, "Voorstelmail vastgelegd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: result.status === "SMTP_ACCEPTED" });
+      return { state: next, value: undefined };
+    });
+    return result;
+  }
+
   #mail() {
     if (this.mailMode !== "capture") throw Object.assign(new Error("Externe mail is in deze pilotomgeving uitgeschakeld."), { statusCode: 503, code: "MAIL_TRANSPORT_DISABLED" });
     if (!this.mailFoundation) throw Object.assign(new Error("Mail Foundation is lokaal niet ingericht."), { statusCode: 503, code: "MAIL_FOUNDATION_UNAVAILABLE" });
@@ -3684,12 +3923,44 @@ export class SportpaleisPilotService {
     };
   }
 
+  #teamkitProposalMailRequest(state, user, proposalId, payload) {
+    const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+    const templateKey = allowedValue(payload.templateKey, ["PROPOSAL_INTAKE_REQUEST", "PROPOSAL_REVIEW_REQUEST", "PROPOSAL_SUPPLIER_HANDOFF"], "Voorstelbericht");
+    let recipient = proposal.customer.email; let context;
+    if (templateKey === "PROPOSAL_SUPPLIER_HANDOFF") {
+      const task = proposal.fulfillmentTasks.find(({ id }) => id === String(payload.taskId));
+      if (!proposal.approval || !task || task.kind !== "EXTERNAL_SUPPLIER") throw Object.assign(new Error("Kies een uitbesteedtaak uit de exact goedgekeurde voorstelversie."), { statusCode: 409, code: "PROPOSAL_SUPPLIER_TASK_REQUIRED" });
+      recipient = validEmail(payload.recipient);
+      context = { supplier: { name: requiredText(payload.supplierName ?? task.supplierName, "Naam bedrukker", 160) }, proposal: { number: proposal.proposalNumber, version: `V${proposal.approval.revision}`, customer: proposal.association.name ?? proposal.customer.name, specification: task.specification } };
+    } else {
+      const customerPath = requiredText(payload.customerPath, "Klantlink", 500); const match = customerPath.match(/^\/voorstel\/([A-Za-z0-9_-]{30,})$/u);
+      if (!match || findProposalByCustomerToken(state, match[1]).id !== proposal.id) throw Object.assign(new Error("Maak eerst een actuele, veilige klantlink voor dit voorstel."), { statusCode: 409, code: "PROPOSAL_CUSTOMER_LINK_REQUIRED" });
+      if (templateKey === "PROPOSAL_REVIEW_REQUEST" && !["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(proposal.status)) throw Object.assign(new Error("Zet de exacte voorstelversie eerst klaar voor controle."), { statusCode: 409, code: "PROPOSAL_REVIEW_NOT_READY" });
+      const publicLink = new URL(customerPath, this.allowedOrigin).href;
+      context = { customer: { name: proposal.customer.contactName }, proposal: { number: proposal.proposalNumber, title: proposal.title, version: `V${proposal.currentRevision}`, link: publicLink, expires: new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeZone: "Europe/Amsterdam" }).format(new Date(proposal.customerAccess.expiresAt)) } };
+    }
+    return { organizationId: "sportpaleis", contextType: "teamkit-proposal", contextId: proposal.id, templateKey, recipient, context, attachments: [], requestedByRole: user.role };
+  }
+
   async #assertCsrf(token, csrfToken) {
     const { session } = await this.authenticate(token);
     if (!csrfToken || !safeEqualHex(session.csrfHash, sha256(csrfToken))) {
       throw Object.assign(new Error("Ongeldige requestbeveiliging."), { statusCode: 403, code: "CSRF_INVALID" });
     }
   }
+}
+
+function proposalIntakeData(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw Object.assign(new Error("Het klantformulier bevat geen geldige velden."), { statusCode: 400, code: "PROPOSAL_INTAKE_INVALID" });
+  const allowed = new Set(["association", "team", "contactName", "email", "phone", "products", "quantities", "teams", "sizes", "colors", "clubLogo", "sponsors", "initials", "names", "backNumbers", "shortNumbers", "otherPrint", "positions", "notes"]);
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!allowed.has(key)) continue;
+    if (Array.isArray(raw)) result[key] = raw.slice(0, 100).map((item) => String(item ?? "").trim().slice(0, 240));
+    else result[key] = String(raw ?? "").trim().slice(0, key === "notes" ? 2_000 : 1_000);
+  }
+
+  return result;
 }
 
 function requiredText(value, label, maximum) {
@@ -5065,6 +5336,7 @@ function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(S
 }
 
 export function createSportpaleisPilotRequestHandler(service, { onError } = {}) {
+  const publicProposalBuckets = new Map();
   return async function handle(request, response) {
     const requestUrl = new URL(request.url ?? "/", "http://sportpaleis.local");
     const route = requestUrl.pathname;
@@ -5076,8 +5348,26 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const token = parseCookies(request)[SESSION_COOKIE];
       const csrf = request.headers["x-csrf-token"];
       const method = request.method ?? "GET";
+      if (route.startsWith("/api/sportpaleis/v1/public/proposals/")) {
+        const bucketKey = sha256(`${request.socket.remoteAddress ?? "unknown"}:${route.split("/")[6] ?? "unknown"}`); const now = Date.now();
+        const recent = (publicProposalBuckets.get(bucketKey) ?? []).filter((stamp) => now - stamp < 15 * 60 * 1_000);
+        if (recent.length >= 90) throw Object.assign(new Error("Te veel verzoeken voor deze klantlink. Probeer later opnieuw."), { statusCode: 429, code: "PROPOSAL_RATE_LIMITED" });
+        recent.push(now); publicProposalBuckets.set(bucketKey, recent);
+      }
       if (route === "/health/sportpaleis" && method === "GET") return json(response, 200, await service.health()) ?? true;
       if (route === "/ready/sportpaleis" && method === "GET") return json(response, 200, { status: "ready", releaseId: service.releaseId }) ?? true;
+      const publicProposalMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)$/);
+      if (publicProposalMatch && method === "GET") { json(response, 200, await service.publicTeamkitProposal(decodeURIComponent(publicProposalMatch[1]))); return true; }
+      const publicProposalDraftMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)\/(draft|submit)$/);
+      if (publicProposalDraftMatch && method === "POST") { json(response, 200, await service.savePublicTeamkitIntake(decodeURIComponent(publicProposalDraftMatch[1]), await readJson(request), { submit: publicProposalDraftMatch[2] === "submit" })); return true; }
+      const publicProposalFeedbackMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)\/feedback$/);
+      if (publicProposalFeedbackMatch && method === "POST") { json(response, 201, await service.savePublicTeamkitFeedback(decodeURIComponent(publicProposalFeedbackMatch[1]), await readJson(request))); return true; }
+      const publicProposalApprovalMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)\/approve$/);
+      if (publicProposalApprovalMatch && method === "POST") { json(response, 200, await service.approvePublicTeamkitProposal(decodeURIComponent(publicProposalApprovalMatch[1]), await readJson(request))); return true; }
+      const publicProposalSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)\/sources\/([^/]+)$/);
+      if (publicProposalSourceMatch && method === "GET") { binary(response, 200, await service.publicTeamkitProposalSource(decodeURIComponent(publicProposalSourceMatch[1]), decodeURIComponent(publicProposalSourceMatch[2]))); return true; }
+      const publicProposalPdfMatch = route.match(/^\/api\/sportpaleis\/v1\/public\/proposals\/([^/]+)\/final\.pdf$/);
+      if (publicProposalPdfMatch && method === "GET") { binary(response, 200, await service.publicTeamkitProposalPdf(decodeURIComponent(publicProposalPdfMatch[1]))); return true; }
       if (route === "/api/sportpaleis/v1/auth/activate" && method === "POST") {
         json(response, 200, await service.activateInvitedUser(await readJson(request)));
         return true;
@@ -5123,6 +5413,29 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.currentRevision(token));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/teamkit-proposals" && method === "POST") { json(response, 201, await service.createTeamkitProposal(token, csrf, await readJson(request))); return true; }
+      const teamkitProposalMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)$/);
+      if (teamkitProposalMatch && method === "PATCH") { json(response, 200, await service.updateTeamkitProposal(token, csrf, decodeURIComponent(teamkitProposalMatch[1]), await readJson(request))); return true; }
+      const teamkitCustomerLinkMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/customer-link$/);
+      if (teamkitCustomerLinkMatch && method === "POST") { json(response, 200, await service.issueTeamkitCustomerLink(token, csrf, decodeURIComponent(teamkitCustomerLinkMatch[1]))); return true; }
+      const teamkitStatusMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/status$/);
+      if (teamkitStatusMatch && method === "POST") { json(response, 200, await service.setTeamkitProposalStatus(token, csrf, decodeURIComponent(teamkitStatusMatch[1]), await readJson(request))); return true; }
+      const teamkitCopyMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/copy$/);
+      if (teamkitCopyMatch && method === "POST") { json(response, 201, await service.copyTeamkitProposal(token, csrf, decodeURIComponent(teamkitCopyMatch[1]), await readJson(request))); return true; }
+      const teamkitSourceCreateMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/sources$/);
+      if (teamkitSourceCreateMatch && method === "POST") { json(response, 201, await service.addTeamkitProposalSource(token, csrf, decodeURIComponent(teamkitSourceCreateMatch[1]), await readJson(request))); return true; }
+      const teamkitSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/sources\/([^/]+)$/);
+      if (teamkitSourceMatch && method === "GET") { binary(response, 200, await service.teamkitProposalSource(token, decodeURIComponent(teamkitSourceMatch[1]), decodeURIComponent(teamkitSourceMatch[2]))); return true; }
+      const teamkitSourceLinkMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/sources\/([^/]+)\/production-asset$/);
+      if (teamkitSourceLinkMatch && method === "POST") { json(response, 200, await service.linkTeamkitProposalSource(token, csrf, decodeURIComponent(teamkitSourceLinkMatch[1]), decodeURIComponent(teamkitSourceLinkMatch[2]), await readJson(request))); return true; }
+      const teamkitPdfMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/pdf$/);
+      if (teamkitPdfMatch && method === "GET") { binary(response, 200, await service.teamkitProposalPdf(token, decodeURIComponent(teamkitPdfMatch[1]), requestUrl.searchParams.get("revision"))); return true; }
+      const teamkitTaskMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/fulfillment\/([^/]+)$/);
+      if (teamkitTaskMatch && method === "PATCH") { json(response, 200, await service.updateTeamkitFulfillmentTask(token, csrf, decodeURIComponent(teamkitTaskMatch[1]), decodeURIComponent(teamkitTaskMatch[2]), await readJson(request))); return true; }
+      const teamkitMailPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/mail\/preview$/);
+      if (teamkitMailPreviewMatch && method === "POST") { json(response, 200, await service.previewTeamkitProposalMail(token, decodeURIComponent(teamkitMailPreviewMatch[1]), await readJson(request))); return true; }
+      const teamkitMailCaptureMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/mail\/capture$/);
+      if (teamkitMailCaptureMatch && method === "POST") { json(response, 200, await service.captureTeamkitProposalMail(token, csrf, decodeURIComponent(teamkitMailCaptureMatch[1]), await readJson(request), request.headers["idempotency-key"])); return true; }
       if (route === "/api/sportpaleis/v1/orders" && method === "POST") {
         json(response, 201, await service.createOrder(token, csrf, await readJson(request), request.headers["idempotency-key"]));
         return true;

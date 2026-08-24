@@ -107,6 +107,8 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/activeren`,
   `${sportpaleisBoundary}/orders`,
   `${sportpaleisBoundary}/orders/nieuw`,
+  `${sportpaleisBoundary}/voorstellen`,
+  `${sportpaleisBoundary}/voorstellen/nieuw`,
   `${sportpaleisBoundary}/zoeken`,
   `${sportpaleisBoundary}/productie`,
   `${sportpaleisBoundary}/context`,
@@ -126,6 +128,8 @@ const parameterizedWorkspaceRoutes = [
   /^\/workspace\/wbd\/business-foundation\/finance\/facturen\/verzonden\/[^/]+$/,
   /^\/workspace\/wbd\/kennisvoorstellen\/[^/]+$/,
   /^\/workspace\/sportpaleis\/orders\/[^/]+$/,
+  /^\/workspace\/sportpaleis\/voorstellen\/[^/]+$/,
+  /^\/workspace\/sportpaleis\/voorstel\/[^/]+$/,
 ];
 
 const mimeTypes = new Map([
@@ -165,7 +169,7 @@ export function isKnownWorkspaceRoute(pathname) {
 
 function isCanonicalSportpaleisRoute(pathname) {
   const normalized = normalizePathname(pathname);
-  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren"]
+  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/voorstellen", "/voorstel", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren"]
     .some((root) => normalized === root || normalized.startsWith(`${root}/`));
 }
 
@@ -191,6 +195,13 @@ function sendHtml(response, statusCode, body, method = "GET") {
 function sendWbdOwnerHtml(response, statusCode, body, method = "GET") {
   response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  sendHtml(response, statusCode, body, method);
+}
+
+function sendSportpaleisHtml(response, statusCode, body, method = "GET") {
+  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader("Referrer-Policy", "same-origin");
   sendHtml(response, statusCode, body, method);
 }
 
@@ -452,15 +463,17 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       && await serveAsset(response, method, pathname, distRoot)) return;
     if (pathname === "/wbd-owner-icon.svg" && canonicalWbdRequest && await serveAsset(response, method, pathname, distRoot)) return;
     if (canonicalSportpaleisRequest && isCanonicalSportpaleisRoute(pathname)) {
-      sendHtml(response, 200, sportpaleisHtml, method);
+      sendSportpaleisHtml(response, 200, sportpaleisHtml, method);
       return;
     }
     if (isKnownWorkspaceRoute(pathname)) {
-      sendHtml(response, 200, pathname.startsWith("/workspace/sportpaleis/") ? sportpaleisHtml : workspaceHtml, method);
+      if (pathname.startsWith("/workspace/sportpaleis/")) sendSportpaleisHtml(response, 200, sportpaleisHtml, method);
+      else sendHtml(response, 200, workspaceHtml, method);
       return;
     }
     if (isWorkspaceBoundaryPath(pathname)) {
-      sendHtml(response, 404, pathname.startsWith("/workspace/sportpaleis/") ? sportpaleisHtml : workspaceHtml, method);
+      if (pathname.startsWith("/workspace/sportpaleis/")) sendSportpaleisHtml(response, 404, sportpaleisHtml, method);
+      else sendHtml(response, 404, workspaceHtml, method);
       return;
     }
     sendHtml(response, 404, outsideBoundaryHtml, method);

@@ -727,6 +727,197 @@ export interface ProductionProposal {
   productionJobIds?: string[];
 }
 
+export type TeamkitProposalStatus =
+  | "DRAFT"
+  | "WAITING_FOR_CUSTOMER_INPUT"
+  | "READY_FOR_DESIGN"
+  | "IN_DESIGN"
+  | "READY_FOR_REVIEW"
+  | "SENT_TO_CUSTOMER"
+  | "CUSTOMER_FEEDBACK"
+  | "READY_FOR_APPROVAL"
+  | "APPROVED"
+  | "ARCHIVED";
+
+export type TeamkitFulfillmentRoute = "INTERN_BEDRUKKEN" | "EXTERNE_BEDRUKKER" | "NOG_TE_BEPALEN";
+export type TeamkitPlacementPreset = "LINKERBORST" | "RECHTERBORST" | "MIDDENBORST" | "RUG_BOVEN" | "RUG_MIDDEN" | "MOUW_LINKS" | "MOUW_RECHTS" | "SHORT_LINKS" | "SHORT_RECHTS" | "BROEK" | "TAS";
+
+export interface TeamkitProposalSource {
+  id: string;
+  filename: string;
+  mimeType: "image/svg+xml" | "application/pdf" | "application/postscript" | "application/illustrator" | "image/png" | "image/jpeg";
+  format: "SVG" | "PDF" | "EPS" | "AI" | "PNG" | "JPG";
+  sha256: string;
+  sizeBytes: number;
+  immutable: true;
+  dataBase64?: string;
+  safePreviewSvg?: string | null;
+  uploadedAt: string;
+  uploader: { kind: "CUSTOMER" | "EMPLOYEE"; id: string; name: string };
+  proposalId: string;
+  associationName: string | null;
+  version: number;
+  quality: {
+    status: "VECTOR_SUITABLE" | "RASTER_HIGH_RES_REVIEW" | "LOW_RES_BETTER_SOURCE_REQUIRED" | "UNKNOWN_REVIEW";
+    widthPx: number | null;
+    heightPx: number | null;
+    message: string;
+  };
+  promotedProductionSourceId?: string | null;
+}
+
+export interface TeamkitProposalPlacement {
+  id: string;
+  kind: "CLUB_LOGO" | "SPONSOR" | "NAME" | "INITIALS" | "BACK_NUMBER" | "SHORT_NUMBER" | "FREE_TEXT";
+  label: string;
+  side: "FRONT" | "BACK";
+  preset: TeamkitPlacementPreset;
+  sourceId: string | null;
+  productionAssetId: string | null;
+  assetVersion: string | null;
+  text: string | null;
+  widthPercent: number;
+  route: TeamkitFulfillmentRoute;
+  supplierName: string | null;
+  note: string | null;
+}
+
+export interface TeamkitProposalItem {
+  id: string;
+  articleId: string | null;
+  articleNumber: string | null;
+  productName: string;
+  color: string;
+  quantity: number | null;
+  sizes: string[];
+  team: string | null;
+  notes: string | null;
+  placements: TeamkitProposalPlacement[];
+}
+
+export interface TeamkitProposalFeedback {
+  id: string;
+  revision: number;
+  createdAt: string;
+  customerName: string;
+  kind: "GENERAL" | "ITEM" | "PLACEMENT";
+  targetId: string | null;
+  decision: "CORRECT" | "CHANGE";
+  message: string;
+  status: "OPEN" | "PROCESSED";
+  processedAt: string | null;
+  processedBy: string | null;
+}
+
+export interface TeamkitProposalSnapshot {
+  proposalId: string;
+  proposalNumber: string;
+  revision: number;
+  title: string;
+  type: string;
+  customer: { id: string | null; name: string; contactName: string; email: string; phone: string | null };
+  association: { id: string | null; name: string | null };
+  team: string | null;
+  season: string | null;
+  category: string | null;
+  deadline: string | null;
+  notes: string | null;
+  items: TeamkitProposalItem[];
+  sourceRefs: { id: string; filename: string; mimeType: string; sha256: string; version: number; qualityStatus: TeamkitProposalSource["quality"]["status"] }[];
+}
+
+export interface TeamkitProposalRevision {
+  number: number;
+  createdAt: string;
+  createdBy: { id: string; name: string; role: SportpaleisRole | "customer" };
+  reason: string;
+  feedbackIds: string[];
+  snapshot: TeamkitProposalSnapshot;
+  snapshotHash: string;
+  previewHtml: string;
+  previewSha256: string;
+}
+
+export interface TeamkitFulfillmentTask {
+  id: string;
+  proposalId: string;
+  approvedRevision: number;
+  customerName: string;
+  associationName: string | null;
+  itemId: string;
+  placementId: string;
+  assetRef: { sourceId: string | null; productionAssetId: string | null; version: string | null; sha256: string | null };
+  route: TeamkitFulfillmentRoute;
+  kind: "INTERNAL_PRODUCTION" | "EXTERNAL_SUPPLIER" | "ROUTE_DECISION";
+  status: "HUMAN_CHECK" | "READY_TO_SEND" | "SENT" | "CONFIRMED" | "RETURNED" | "READY" | "COMPLETED";
+  attention: string | null;
+  specification: string;
+  supplierName: string | null;
+  orderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamkitProposalApproval {
+  revision: number;
+  approvedAt: string;
+  customerName: string;
+  customerEmail: string;
+  accessContextId: string;
+  snapshotHash: string;
+  previewHtml: string;
+  previewSha256: string;
+  pdfBase64: string;
+  pdfSha256: string;
+  artifactFilename: string;
+}
+
+export interface TeamkitProposal {
+  id: string;
+  proposalNumber: string;
+  aggregateRevision: number;
+  currentRevision: number;
+  status: TeamkitProposalStatus;
+  title: string;
+  type: string;
+  customer: { id: string | null; name: string; contactName: string; email: string; phone: string | null };
+  association: { id: string | null; name: string | null };
+  team: string | null;
+  season: string | null;
+  category: string | null;
+  deadline: string | null;
+  notes: string | null;
+  items: TeamkitProposalItem[];
+  sources: TeamkitProposalSource[];
+  intake: {
+    status: "NOT_REQUESTED" | "REQUESTED" | "DRAFT_SAVED" | "SUBMITTED";
+    requestedAt: string | null;
+    openedAt: string | null;
+    draftSavedAt: string | null;
+    submittedAt: string | null;
+    data: Record<string, unknown>;
+  };
+  customerAccess: {
+    id: string;
+    tokenHash: string;
+    createdAt: string;
+    expiresAt: string;
+    revokedAt: string | null;
+    lastOpenedAt: string | null;
+  } | null;
+  feedback: TeamkitProposalFeedback[];
+  revisions: TeamkitProposalRevision[];
+  approval: TeamkitProposalApproval | null;
+  approvalHistory: TeamkitProposalApproval[];
+  fulfillmentTasks: TeamkitFulfillmentTask[];
+  createdAt: string;
+  createdBy: { id: string; name: string; role: SportpaleisRole };
+  updatedAt: string;
+  updatedBy: { id: string; name: string; role: SportpaleisRole | "customer" };
+  archivedAt: string | null;
+  copiedFrom: { proposalId: string; approvedRevision: number | null } | null;
+}
+
 export interface WorkspaceFeedback {
   id: string;
   page: string;
@@ -815,6 +1006,7 @@ export interface SportpaleisWorkspaceState {
   productionElementRequirements: SportpaleisProductionElementRequirement[];
   productionJobs: ProductionJob[];
   productionProposals?: ProductionProposal[];
+  teamkitProposals?: TeamkitProposal[];
   preferences: Record<string, WorkspacePreference>;
   audit: WorkspaceAuditEntry[];
   appliedActionIds: string[];
