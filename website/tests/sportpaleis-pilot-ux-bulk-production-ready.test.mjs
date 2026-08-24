@@ -177,7 +177,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(source, /action: "Oplossen ›"/u);
   assert.match(source, /data-action="select-all-completion-orders"[^]*?>Alles selecteren</u);
   assert.match(source, /data-action="bulk-complete-production-orders"[^]*?>Gereed</u);
-  assert.match(source, /data-filter="deleted"[^]*?>Verwijderd</u);
+  assert.match(source, /filterButton\("deleted", "Verwijderd"\)/u);
   assert.match(source, /data-delete-order-form/u);
   assert.doesNotMatch(source, /bulk-complete-production-orders[^]{0,800}(mail|notification)/iu);
   assert.match(server, /completeProductionOrders/u);

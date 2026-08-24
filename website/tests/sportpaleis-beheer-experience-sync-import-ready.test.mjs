@@ -155,8 +155,8 @@ test("contextzoeking vindt SP, 26, artikel en verkoopnummer en blijft snel op re
 
 test("beheer-UX gebruikt menselijke status, veilige rolpreview en hard-uit import", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /VANDAAG · MIJN WERK/u);
-  assert.match(source, /Productiebestand maken/u);
+  assert.match(source, /VOLGENDE BESTE ACTIE/u);
+  assert.match(source, /Productievoorstel maken/u);
   assert.match(source, /Alleen voorbeeld/u);
   assert.match(source, /Je rechten en actieve beheerderssessie zijn niet gewijzigd/u);
   assert.match(source, /DIVIDE \/ WEBSHOPMAIL/u);

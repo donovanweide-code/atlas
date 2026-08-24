@@ -238,11 +238,11 @@ test("First-Use copy maakt voorbereiding, review en hard-off boundaries explicie
   assert.match(source, /Initialen/u);
   assert.match(source, /Overnemen/u);
   assert.match(source, /Behouden/u);
-  assert.match(source, /data-filter="done"[^>]*>Gereed</u);
-  assert.match(source, /data-filter="ready-for-pickup"[^>]*>Klaar om op te halen</u);
+  assert.match(source, /button\("done"\)/u);
+  assert.match(source, /filterButton\("ready-for-pickup", "Afhalen"\)/u);
   assert.match(source, /Kleding opgehaald/u);
   assert.match(source, /data-production-order-search/u);
-  assert.match(source, /SP-2026-… of later 26…/u);
+  assert.match(source, /Ordernummer, klant of team/u);
   assert.match(source, /sourceContext\?\.externalReference/u);
   assert.match(source, /complete-one-production-order/u);
   assert.match(source, /DIVIDE \/ WEBSHOPMAIL/u);

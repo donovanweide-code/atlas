@@ -24,8 +24,8 @@ test("productiestatusfilters, compact orderwerk en gegroepeerd Beheer zijn aanto
   assert.match(source, /data-printing-sticky/u);
   assert.match(source, /productionStatus === "READY"/u);
   assert.match(source, /data-free-font-search/u);
-  assert.match(source, /Medewerkers & rollen/u);
-  assert.match(source, /Koppelingen & synchronisatie/u);
+  assert.match(source, /MENSEN & TOEGANG/u);
+  assert.match(source, /Websitecontrole/u);
   assert.match(source, /Vrije productieopdracht/u);
   assert.match(css, /sp-selected-item__identity/u);
   assert.match(css, /sp-printing-sticky\[hidden\]/u);
