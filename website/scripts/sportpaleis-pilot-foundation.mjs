@@ -81,7 +81,7 @@ const MAX_LOGIN_ATTEMPTS = 6;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 12;
+const PILOT_SCHEMA_VERSION = 13;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
@@ -473,6 +473,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     organizationId: "sport-2000-sportpaleis-bv",
     revision: 1,
     nextOrderSequence: 1,
+    nextTeamkitOrderSequence: 1,
     nextProductionJobSequence: 5,
     users: [],
     employees: structuredClone(CONFIRMED_EMPLOYEES),
@@ -514,7 +515,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
@@ -565,6 +566,7 @@ export function migrateSportpaleisPilotState(input) {
       };
   }
   for (const order of state.orders ?? []) {
+    order.referenceSeries ??= order.teamkitContext?.kind === "TEAMKIT_APPROVAL" || /^TK-/u.test(String(order.id)) ? "TK" : "SP";
     order.standardPersonalization ??= { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
     order.standardPersonalization.initialsInfix ??= "";
     for (const item of order.items ?? []) for (const variant of item.variants ?? []) if (variant.personalizationValues) variant.personalizationValues.initialsInfix ??= "";
@@ -822,6 +824,8 @@ export function migrateSportpaleisPilotState(input) {
       }
     }
   }
+  const highestTeamkitSequence = (state.orders ?? []).reduce((highest, order) => Math.max(highest, Number(String(order.id).match(/^TK-\d{4}-(\d+)$/u)?.[1] ?? 0)), 0);
+  state.nextTeamkitOrderSequence = Number.isInteger(state.nextTeamkitOrderSequence) && state.nextTeamkitOrderSequence > highestTeamkitSequence ? state.nextTeamkitOrderSequence : highestTeamkitSequence + 1;
   state.fontConfirmationVersion = SPORTPALEIS_FONT_CONFIRMATION.id;
   state.schemaVersion = PILOT_SCHEMA_VERSION;
   return state;
@@ -852,6 +856,8 @@ export function validateSportpaleisPilotState(input) {
   for (const proposal of state.teamkitProposals) proposal.approvalHistory ??= [];
   state.quickProductionIntakes ??= [];
   state.nextProductionJobSequence ??= 1;
+  state.nextTeamkitOrderSequence ??= 1;
+  if (!Number.isInteger(state.nextTeamkitOrderSequence) || state.nextTeamkitOrderSequence < 1) throw new Error("Ongeldige Teamkit-ordernummerreeks.");
   for (const article of ARTICLE_CATALOG) {
     const existing = state.articles.find(({ id }) => id === article.id);
     if (!existing) state.articles.push(structuredClone(article));
@@ -946,8 +952,13 @@ export function validateSportpaleisPilotState(input) {
     }
     for (const line of order.productionLines ?? []) {
       const incompleteCompositeSegment = ["INITIALS_FIRST", "INITIALS_INFIX", "INITIALS_LAST"].includes(line.placementRole) && line.validation?.status === "BLOCKED" && line.widthMm >= 0 && line.heightMm >= 0;
-      if (!PRODUCTION_LINE_TYPES.has(line.type) || !PRODUCTION_PROOF_STATUSES.has(line.proofStatus) || (!incompleteCompositeSegment && (!(line.widthMm > 0) || !(line.heightMm > 0))) || !Number.isInteger(line.quantity)) throw new Error("Ongeldige productieregel in datastore.");
+      const explicitTeamkitDataGap = line.dataGap?.status === "DATA_GAP" && line.validation?.status === "BLOCKED" && Array.isArray(line.dataGap.fields) && line.dataGap.fields.length > 0 && line.widthMm >= 0 && line.heightMm >= 0;
+      if (!PRODUCTION_LINE_TYPES.has(line.type) || !PRODUCTION_PROOF_STATUSES.has(line.proofStatus) || (!incompleteCompositeSegment && !explicitTeamkitDataGap && (!(line.widthMm > 0) || !(line.heightMm > 0))) || !Number.isInteger(line.quantity) || line.quantity < 1) throw new Error("Ongeldige productieregel in datastore.");
       if (line.source?.kind === "FONT" && !state.productionFonts.some(({ id, version, sha256: hash }) => id === line.source.id && version === line.source.version && hash === line.source.sha256)) throw new Error("Productieregel verwijst naar een ontbrekende fontversie.");
+    }
+    if (order.referenceSeries === "TK") {
+      if (!order.teamkitContext || order.teamkitContext.kind !== "TEAMKIT_APPROVAL" || !/^TK-\d{4}-\d{4,}$/u.test(order.id)) throw new Error("Teamkit-productieorder mist expliciete immutable herkomst.");
+      if (!order.teamkitContext.fulfillmentTaskIds?.length || !order.teamkitContext.idempotencyKey) throw new Error("Teamkit-productieorder mist taak- of idempotencyherkomst.");
     }
   }
   for (const job of state.productionJobs) {
@@ -970,7 +981,7 @@ export function cleanSportpaleisPilotOrders(input) {
   const beforeFingerprint = cleanStartProtectedFingerprint(state);
   const orders = state.orders ?? [];
   for (const order of orders) {
-    const structurallyPilotBound = /^SP(?:W)?-/u.test(String(order.id))
+    const structurallyPilotBound = /^(?:SP(?:W)?|TK)-/u.test(String(order.id))
       && ["INDIVIDUAL", "TEAM", "CUSTOM", "LEGACY"].includes(order.orderKind)
       && order.barcode?.value === `SPW:${order.id}`
       && Array.isArray(order.items)
@@ -1164,6 +1175,212 @@ function idempotent(state, key, userId, operation, valueFactory) {
   const value = valueFactory();
   state.idempotency[identity] = { at: iso(), value };
   return { duplicate: false, value };
+}
+
+function createWorkspaceOrderRecord(state, user, payload, options = {}) {
+  const referenceSeries = options.referenceSeries === "TK" ? "TK" : "SP";
+  const sequenceKey = referenceSeries === "TK" ? "nextTeamkitOrderSequence" : "nextOrderSequence";
+  const sequence = Number(state[sequenceKey]);
+  if (!Number.isInteger(sequence) || sequence < 1) throw Object.assign(new Error("De ordernummerreeks is ongeldig."), { statusCode: 409, code: "ORDER_SEQUENCE_INVALID" });
+  state[sequenceKey] += 1;
+  const id = `${referenceSeries}-${new Date().getFullYear()}-${String(sequence).padStart(4, "0")}`;
+  const orderKind = ["INDIVIDUAL", "TEAM", "CUSTOM"].includes(payload.orderKind) ? payload.orderKind : "LEGACY";
+  const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
+  let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind, { allowTeamkitDataGaps: referenceSeries === "TK" });
+  const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: false });
+  const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0, optionalAssociation: orderKind === "TEAM", maximumQuantity: referenceSeries === "TK" ? 10_000 : 99 });
+  if (orderKind === "TEAM") items.forEach((item, index) => {
+    if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
+    item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
+  });
+  if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
+  applyProductionReadiness(items, productionLines);
+  const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
+  const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
+  const teamCustomerFallback = teamContext ? `Teamorder · ${teamContext}` : associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
+  const createdAt = iso();
+  const note = String(payload.internalNote ?? "").trim();
+  const priority = validatePriority(payload.priority, user, createdAt);
+  const requestedSalesNumber = String(payload.salesNumber ?? user.salesNumber ?? "").trim() || null;
+  const salesEmployee = requestedSalesNumber ? state.employees.find((candidate) => candidate.active && candidate.salesNumber === requestedSalesNumber) : null;
+  if (requestedSalesNumber && !salesEmployee) throw Object.assign(new Error("Dit verkoopnummer is niet gekoppeld aan een actieve werknemer."), { statusCode: 400, code: "SALES_ATTRIBUTION_INVALID" });
+  const source = allowedValue(payload.source ?? "STORE", ["STORE", "WEBSHOP_XPRT", "TEAM_MAIL", "INVOICE", "MANUAL"], "Orderbron");
+  const sourceContext = {
+    source,
+    label: ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop · ACA XPRT", TEAM_MAIL: "Team-/verenigingsmail", INVOICE: "Factuur", MANUAL: "Handmatig" })[source],
+    externalReference: String(payload.externalReference ?? "").trim() || null,
+    provenance: source === "STORE" ? "Handmatig vastgelegd in Sportpaleis Workspace" : requiredText(payload.provenance, "Bronverwijzing", 400),
+    transactionalAuthority: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : source === "STORE" || source === "MANUAL" ? "WORKSPACE" : "EXTERNAL",
+  };
+  const fulfillmentMode = allowedValue(payload.deliveryMode ?? "PICKUP", ["PICKUP", "DELIVERY"], "Leverwijze");
+  const deliveryAddress = validDeliveryAddress(payload.deliveryAddress, fulfillmentMode);
+  const teamkitContext = options.teamkitContext ? structuredClone(options.teamkitContext) : null;
+  const order = {
+    id,
+    referenceSeries,
+    ...(teamkitContext ? { teamkitContext } : {}),
+    revision: 1,
+    customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : orderKind === "CUSTOM" ? String(payload.customer ?? "").trim().slice(0, 120) || "Vrije productieopdracht" : requiredText(payload.customer, "Klant", 120),
+    customerEmail: optionalEmail(payload.customerEmail),
+    customerPhone: String(payload.customerPhone ?? "").trim().slice(0, 40),
+    association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
+    associations,
+    standardPersonalization,
+    createdAt,
+    updatedAt: createdAt,
+    promisedAt: payload.promisedAt ? validDate(payload.promisedAt) : null,
+    stage: "ORDER",
+    owner: user.name,
+    acceptedBy: { userId: user.id, name: user.name, salesNumber: user.salesNumber ?? null, at: createdAt },
+    salesAttribution: { employeeId: salesEmployee?.id ?? null, salesNumber: requestedSalesNumber, label: salesEmployee?.name ?? "Niet gekoppeld", accountType: salesEmployee?.accountType ?? (salesEmployee ? "HUMAN" : "UNASSIGNED"), selectedByUserId: user.id, selectedAt: createdAt },
+    sourceContext,
+    orderKind,
+    ...(teamContext ? { teamContext } : {}),
+    communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL" && source !== "WEBSHOP_XPRT", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
+    notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
+    priority,
+    attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttentionText(items),
+    barcode: { value: `SPW:${id}`, featureEnabled: false, hardwareValidated: false },
+    pickup: { status: "NOT_PICKED_UP", pickedUpAt: null, pickedUpBy: null },
+    payment: { status: "UNKNOWN", updatedAt: null, updatedBy: null, source: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : "UNKNOWN" },
+    fulfillment: { mode: fulfillmentMode, status: "PENDING", updatedAt: null, updatedBy: null, feeEur: fulfillmentMode === "DELIVERY" ? state.settings.deliveryFeeEur : 0, address: deliveryAddress },
+    operationalFacts: {},
+    eventHistory: [{ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "button" }],
+    totalPieces: items.reduce((sum, item) => sum + item.quantity, 0),
+    foilStates: [...new Set([...items.map(({ foilColor }) => foilColor), ...productionLines.map(({ foilColor }) => foilColor).filter(Boolean)])].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
+    items,
+    productionLines,
+  };
+  assertOrderProductionDecorationCardinality(state, order);
+  if (teamkitContext) order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "TEAMKIT_APPROVED_ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { ...teamkitContext } });
+  const automaticValidationBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
+  if (!automaticValidationBlocker) order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_VALIDATED", at: createdAt, userId: user.id, userName: user.name, source: "automatic-validation" });
+  else if (!order.attention) order.attention = automaticValidationBlocker;
+  state.orders.unshift(order);
+  audit(state, user.id, teamkitContext ? "Teamkit-productiereferentie aangemaakt" : "Order aangemaakt", id, { revision: 1, referenceSeries, automaticValidation: automaticValidationBlocker ? "ATTENTION" : "PASSED", ...(automaticValidationBlocker ? { reason: automaticValidationBlocker } : {}), ...(teamkitContext ? { teamkitContext } : {}) });
+  return order;
+}
+
+function teamkitProfileProductionLine(state, proposal, revision, item, placement, task, provenance) {
+  const field = ({ NAME: "name", INITIALS: "initials", BACK_NUMBER: "backNumber", SHORT_NUMBER: "shortsNumber" })[placement.kind];
+  if (!field) return null;
+  const article = state.articles.find(({ id, active }) => id === item.articleId && active);
+  const association = article ? state.associations.find(({ name }) => name === article.association) : null;
+  const profile = article ? state.productionProfiles.find(({ id }) => id === article.profileId) : null;
+  const proposalAssociationMatches = !revision.snapshot.association.name || association?.name === revision.snapshot.association.name;
+  const applicable = Boolean(article && association && profile && proposalAssociationMatches && article.supports?.includes(field) && profile.supports?.includes(field));
+  const override = placement.physicalSizeOverride ?? null;
+  let backNumberProduction = null;
+  if (applicable && field === "backNumber") {
+    const classes = [...new Set((item.sizes ?? []).map((size) => inferBackNumberSizeClass(association, article, size)).filter(Boolean))];
+    if (classes.length === 1) backNumberProduction = resolveBackNumberProductionContext(association, profile, classes[0], item.sizes[0]);
+  }
+  const dimensionKey = ({ initials: "initialsShirt", name: "nameHeight", shortsNumber: "shortsNumber" })[field];
+  const associationHeightMm = dimensionKey ? Number(association?.dimensionsCm?.[dimensionKey]) * 10 : 0;
+  const profileHeightMm = Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
+  const resolvedHeightMm = field === "backNumber" ? Number(backNumberProduction?.physicalHeightMm) : associationHeightMm > 0 ? associationHeightMm : profileHeightMm > 0 ? profileHeightMm : 0;
+  const variant = {
+    id: placement.id,
+    quantity: item.quantity,
+    personalizationValues: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: backNumberProduction?.sizeClass ?? "", shortsNumber: "", [field]: placement.text },
+    backNumberProduction,
+  };
+  const derived = applicable ? deriveCatalogProductionLines(state, `teamkit-resolver:${proposal.id}:${revision.number}`, [{ id: item.id, association: association.name, productionProfileId: profile.id, sourceProvenance: provenance, variants: [variant] }])[0] : null;
+  const fields = [];
+  if (!applicable || !derived || derived.validation.status !== "VALID") fields.push("SOURCE");
+  if (!override && !(resolvedHeightMm > 0)) fields.push("DIMENSIONS");
+  const requestedFoil = applicable ? effectiveCatalogFoilColor(article, association, profile) : "";
+  const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
+  if (!foilColor) fields.push("FOIL_COLOR");
+  const widthMm = Number(override?.widthMm ?? (resolvedHeightMm > 0 && derived?.heightMm > 0 ? derived.widthMm * resolvedHeightMm / derived.heightMm : derived?.widthMm ?? 0));
+  const heightMm = Number(override?.heightMm ?? resolvedHeightMm);
+  const measurementSource = override ? "EXPLICIT_PROPOSAL_OVERRIDE" : resolvedHeightMm > 0 ? "PRODUCTION_PROFILE" : "DATA_GAP";
+  const measurementEvidence = override
+    ? `${proposal.proposalNumber} V${revision.number} · expliciete goedgekeurde maatoverride`
+    : field === "backNumber" && backNumberProduction
+      ? `${backNumberProduction.source} · ${backNumberProduction.sizeClass}`
+      : associationHeightMm > 0
+        ? `${association.source.file} · ${association.source.sheet}!${association.source.range} · ${dimensionKey}`
+        : profileHeightMm > 0
+          ? `Productieprofiel ${profile.id}@${profile.revision ?? 1} · ${profile.sizeLabel}`
+          : "Geen toepasselijke server-authoritative productiemaat gevonden";
+  const context = { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: article?.id ?? null, profileId: profile?.id ?? null, profileRevision: profile?.revision ?? null, measurementSource, measurementEvidence, explicitOverride: override };
+  const base = {
+    id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"),
+    type: derived?.type ?? ({ NAME: "TEXT", INITIALS: "INITIALS", BACK_NUMBER: "NUMBER", SHORT_NUMBER: "NUMBER" })[placement.kind],
+    content: String(placement.text ?? placement.label).trim(),
+    sourceId: derived?.source?.id ?? profile?.id ?? null,
+    sourceVersion: derived?.source?.version ?? String(profile?.revision ?? "unresolved"),
+    sourceSha256: derived?.source?.sha256,
+    widthMm: Math.round(widthMm * 1000) / 1000,
+    heightMm: Math.round(heightMm * 1000) / 1000,
+    foilColor: foilColor ?? undefined,
+    quantity: item.quantity,
+    previewLabel: placement.label,
+    provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`,
+    teamkitProductionContext: context,
+  };
+  if (!fields.length) return base;
+  const labels = { SOURCE: "toepasselijke productierijpe profiel-/contourbron", DIMENSIONS: "productieprofiel/default of expliciete fysieke maatoverride", FOIL_COLOR: "beheerde foliekleur" };
+  return { ...base, dataGap: { fields: [...new Set(fields)], reason: `Controle nodig: ${[...new Set(fields)].map((entry) => labels[entry]).join(", ")} ontbreekt.` } };
+}
+
+function teamkitProductionLine(state, proposal, revision, item, placement, task) {
+  const type = ({ CLUB_LOGO: "LOGO", SPONSOR: "LOGO", NAME: "TEXT", INITIALS: "INITIALS", BACK_NUMBER: "NUMBER", SHORT_NUMBER: "NUMBER", FREE_TEXT: "TEXT" })[placement.kind] ?? "PRODUCTION_ELEMENT";
+  const provenance = `${proposal.proposalNumber} V${revision.number} · item ${item.id} · placement ${placement.id} · task ${task.id} · asset ${task.assetRef.productionAssetId ?? task.assetRef.sourceId ?? "ontbreekt"}@${task.assetRef.version ?? "onbekend"}#${task.assetRef.sha256 ?? "onbekend"}`;
+  const profileLine = teamkitProfileProductionLine(state, proposal, revision, item, placement, task, provenance);
+  if (profileLine) return profileLine;
+  const asset = state.productionElements.find(({ id }) => id === task.assetRef.productionAssetId);
+  const actualAssetHash = asset?.sourceLayers?.vectorSource?.sha256 ?? asset?.sourceLayers?.validatedCutContour?.sha256 ?? null;
+  const sourceMatches = Boolean(asset
+    && asset.lifecycleStatus === "PRODUCTION_READY"
+    && asset.productionMethod === "SELF_PRODUCED"
+    && (!task.assetRef.version || task.assetRef.version === asset.version)
+    && (!task.assetRef.sha256 || task.assetRef.sha256 === actualAssetHash));
+  const override = placement.physicalSizeOverride ?? null;
+  const widthMm = Number(override?.widthMm ?? asset?.sizePolicy?.defaultWidthMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.widthMm ?? 0);
+  const heightMm = Number(override?.heightMm ?? asset?.sizePolicy?.defaultHeightMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.heightMm ?? 0);
+  const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
+  const requestedFoil = String(asset?.defaultFoilColor ?? association?.defaultFoilColor ?? "").trim();
+  const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
+  const fields = [];
+  if (!sourceMatches) fields.push("SOURCE");
+  if (!(widthMm > 0) || !(heightMm > 0)) fields.push("DIMENSIONS");
+  if (!foilColor) fields.push("FOIL_COLOR");
+  const content = String(placement.text ?? asset?.name ?? placement.label).trim();
+  const measurementEvidence = override ? `${proposal.proposalNumber} V${revision.number} · expliciete goedgekeurde maatoverride` : asset ? `Production Asset ${asset.id}@${asset.version ?? asset.revision}` : "Geen toepasselijke productiemaat gevonden";
+  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, profileId: null, profileRevision: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
+  if (!fields.length) return base;
+  const labels = { SOURCE: "goedgekeurde productiebron", DIMENSIONS: "fysieke maat in millimeters", FOIL_COLOR: "beheerde foliekleur" };
+  const reason = `Controle nodig: ${fields.map((field) => labels[field]).join(", ")} ontbreekt of wijkt af van de goedgekeurde bron.`;
+  return { ...base, sourceVersion: task.assetRef.version ?? "unresolved", sourceSha256: task.assetRef.sha256 ?? undefined, dataGap: { fields, reason } };
+}
+
+function teamkitOrderInput(state, proposal, revision, item, tasks) {
+  if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999) throw Object.assign(new Error(`Vul voor ${item.productName} eerst een uitvoerbaar aantal van 1–999 in.`), { statusCode: 409, code: "TEAMKIT_ITEM_QUANTITY_REQUIRED" });
+  const placements = tasks.map((task) => {
+    const placement = item.placements.find(({ id }) => id === task.placementId);
+    if (!placement) throw Object.assign(new Error("Een interne afhandelingstaak mist de immutable placement."), { statusCode: 409, code: "TEAMKIT_PLACEMENT_NOT_FOUND" });
+    return { placement, task };
+  });
+  const productionLines = placements.map(({ placement, task }) => teamkitProductionLine(state, proposal, revision, item, placement, task));
+  const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
+  const printableSummary = placements.map(({ placement }) => `${placement.label}${placement.text ? `: ${placement.text}` : ""}`).join(" · ");
+  const teamLabel = [revision.snapshot.association.name, item.team ?? revision.snapshot.team, item.productName].filter(Boolean).join(" · ").slice(0, 120);
+  return {
+    orderKind: "TEAM",
+    teamContext: teamLabel || `${proposal.proposalNumber} · ${item.productName}`,
+    customer: revision.snapshot.customer.name,
+    customerEmail: revision.snapshot.customer.email,
+    customerPhone: revision.snapshot.customer.phone ?? "",
+    standardPersonalization: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
+    source: "MANUAL",
+    externalReference: `${proposal.proposalNumber}/V${revision.number}/${item.articleNumber ?? item.id}`,
+    provenance: `Immutable Teamkit approval ${proposal.proposalNumber} V${revision.number} · snapshot ${revision.snapshotHash} · PDF ${proposal.approval.pdfSha256}`,
+    internalNote: `Klantakkoord ${proposal.proposalNumber} · V${revision.number}. Productie alleen via bestaande Human GO.`,
+    items: [{ product: item.productName, ...(association ? { association: association.name } : {}), size: "", quantity: item.quantity, personalization: printableSummary || "Approved Teamkit-bedrukking", foilColor: productionLines.find(({ foilColor }) => foilColor)?.foilColor ?? "Onbekend", deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } }],
+    productionLines,
+  };
 }
 
 function parseDelimitedRows(text, delimiter) {
@@ -1675,10 +1892,69 @@ export class SportpaleisPilotService {
       if (task.approvedRevision !== proposal.approval?.revision) throw Object.assign(new Error("Deze taak hoort niet bij de immutable approved revision."), { statusCode: 409, code: "PROPOSAL_TASK_REVISION_INVALID" });
       if (payload.route) { const route = allowedValue(payload.route, ["INTERN_BEDRUKKEN", "EXTERNE_BEDRUKKER", "NOG_TE_BEPALEN"], "Afhandelroute"); task.route = route; task.kind = route === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : route === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION"; task.attention = route === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : null; task.status = route === "EXTERNE_BEDRUKKER" ? "READY_TO_SEND" : "HUMAN_CHECK"; }
       if (payload.status) task.status = allowedValue(payload.status, ["HUMAN_CHECK", "READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"], "Taakstatus");
-      if (Object.hasOwn(payload, "supplierName")) task.supplierName = optional(payload.supplierName, 160) || null; if (Object.hasOwn(payload, "orderId")) task.orderId = optional(payload.orderId, 160) || null;
+      if (Object.hasOwn(payload, "supplierName")) task.supplierName = optional(payload.supplierName, 160) || null;
+      if (Object.hasOwn(payload, "orderId") && (optional(payload.orderId, 160) || null) !== task.orderId) throw Object.assign(new Error("Een TK-order wordt uitsluitend atomair via ‘Interne productie klaarzetten’ gekoppeld."), { statusCode: 409, code: "TEAMKIT_ORDER_LINK_MANAGED" });
       task.updatedAt = iso(); proposal.aggregateRevision += 1; proposal.updatedAt = task.updatedAt; proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; audit(state, user.id, "Voorstelafhandeling gewijzigd", task.id, { proposalId: proposal.id, approvedRevision: task.approvedRevision, route: task.route, status: task.status, orderId: task.orderId });
       return { state, value: publicProposal(proposal) };
     }); return result.value;
+  }
+
+  async prepareTeamkitInternalProduction(token, csrfToken, proposalId, payload = {}) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId);
+      if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      if (!proposal.approval || proposal.status !== "APPROVED") throw Object.assign(new Error("Alleen een exact goedgekeurd voorstel kan naar interne productie."), { statusCode: 409, code: "TEAMKIT_APPROVAL_REQUIRED" });
+      const revision = proposal.revisions.find(({ number }) => number === proposal.approval.revision);
+      if (!revision || revision.snapshotHash !== proposal.approval.snapshotHash) throw Object.assign(new Error("De immutable approved revision is niet exact beschikbaar."), { statusCode: 409, code: "TEAMKIT_APPROVAL_EVIDENCE_INVALID" });
+      const tasks = proposal.fulfillmentTasks.filter(({ approvedRevision, route, kind }) => approvedRevision === revision.number && route === "INTERN_BEDRUKKEN" && kind === "INTERNAL_PRODUCTION");
+      if (!tasks.length) throw Object.assign(new Error("Dit voorstel bevat geen interne bedrukking voor de approved revision."), { statusCode: 409, code: "TEAMKIT_INTERNAL_PRODUCTION_EMPTY" });
+      const grouped = new Map();
+      for (const task of tasks) grouped.set(task.itemId, [...(grouped.get(task.itemId) ?? []), task]);
+      const existingOrders = [...grouped.entries()].map(([itemId, itemTasks]) => {
+        const linkedIds = [...new Set(itemTasks.map(({ orderId }) => orderId).filter(Boolean))];
+        if (linkedIds.length !== 1) return null;
+        const order = state.orders.find(({ id }) => id === linkedIds[0]);
+        return order?.teamkitContext?.proposalId === proposal.id && order.teamkitContext.approvedRevision === revision.number && order.teamkitContext.itemId === itemId ? order : null;
+      });
+      if (existingOrders.every(Boolean)) return { state, value: { duplicate: true, proposal: publicProposal(proposal), orders: existingOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) })) } };
+      if (payload.expectedRevision !== undefined && proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
+      const orders = [];
+      for (const [itemId, itemTasks] of grouped) {
+        const item = revision.snapshot.items.find(({ id }) => id === itemId);
+        if (!item) throw Object.assign(new Error("Een interne afhandelingstaak mist het immutable approved artikel."), { statusCode: 409, code: "TEAMKIT_ITEM_NOT_FOUND" });
+        const deterministicKey = `teamkit-order:${proposal.id}:${revision.number}:${item.id}`;
+        const context = {
+          kind: "TEAMKIT_APPROVAL",
+          proposalId: proposal.id,
+          proposalNumber: proposal.proposalNumber,
+          approvedRevision: revision.number,
+          itemId: item.id,
+          itemSnapshotHash: proposalSha256(JSON.stringify(item)),
+          fulfillmentTaskIds: itemTasks.map(({ id }) => id),
+          placementRefs: itemTasks.map((task) => ({ placementId: task.placementId, taskId: task.id, assetId: task.assetRef.productionAssetId ?? task.assetRef.sourceId ?? null, assetVersion: task.assetRef.version ?? null, assetSha256: task.assetRef.sha256 ?? null })),
+          snapshotHash: revision.snapshotHash,
+          previewSha256: proposal.approval.previewSha256,
+          pdfSha256: proposal.approval.pdfSha256,
+          idempotencyKey: deterministicKey,
+        };
+        const alreadyExists = state.orders.find(({ teamkitContext }) => teamkitContext?.idempotencyKey === deterministicKey);
+        const outcome = alreadyExists ? { duplicate: true, value: alreadyExists } : idempotent(state, deterministicKey, "system:teamkit", "CREATE_TEAMKIT_ORDER", () => createWorkspaceOrderRecord(state, user, teamkitOrderInput(state, proposal, revision, item, itemTasks), { referenceSeries: "TK", teamkitContext: context }));
+        const order = state.orders.find(({ id }) => id === outcome.value.id);
+        if (!order) throw Object.assign(new Error("De Teamkit-productiereferentie kon niet atomair worden teruggevonden."), { statusCode: 500, code: "TEAMKIT_ORDER_ATOMIC_LINK_FAILED" });
+        const status = productionStatusForOrder(state, order);
+        for (const task of itemTasks) {
+          if (task.orderId && task.orderId !== order.id) throw Object.assign(new Error("Een Teamkit-taak is al aan een andere order gekoppeld."), { statusCode: 409, code: "TEAMKIT_TASK_ORDER_CONFLICT" });
+          task.orderId = order.id; task.status = status.productionStatus === "READY" ? "READY" : "HUMAN_CHECK"; task.attention = status.productionStatus === "READY" ? null : status.productionStatusReason; task.updatedAt = iso();
+        }
+        audit(state, user.id, "Teamkit-afhandeling atomair gekoppeld", order.id, { proposalId: proposal.id, proposalNumber: proposal.proposalNumber, approvedRevision: revision.number, itemId: item.id, fulfillmentTaskIds: itemTasks.map(({ id }) => id), productionStatus: status.productionStatus, productionStatusReason: status.productionStatusReason, idempotencyKey: deterministicKey, plotJobCreated: false });
+        orders.push({ ...order, ...status });
+      }
+      proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(state, user.id, "Human GO · interne Teamkit-productie klaargezet", proposal.id, { proposalNumber: proposal.proposalNumber, approvedRevision: revision.number, orderIds: orders.map(({ id }) => id), plotJobCreated: false });
+      return { state, value: { duplicate: false, proposal: publicProposal(proposal), orders } };
+    });
+    return result.value;
   }
 
   async addProductionFont(token, csrfToken, payload) {
@@ -1974,86 +2250,7 @@ export class SportpaleisPilotService {
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator", "store"]);
     const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_ORDER", () => {
-        const sequence = state.nextOrderSequence;
-        state.nextOrderSequence += 1;
-        const id = `SP-${new Date().getFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const orderKind = ["INDIVIDUAL", "TEAM", "CUSTOM"].includes(payload.orderKind) ? payload.orderKind : "LEGACY";
-        const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
-        let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind);
-        const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: false });
-        const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0, optionalAssociation: orderKind === "TEAM" });
-        if (orderKind === "TEAM") items.forEach((item, index) => {
-          if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
-          item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
-        });
-        if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
-        applyProductionReadiness(items, productionLines);
-        const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
-        const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
-        const teamCustomerFallback = teamContext ? `Teamorder · ${teamContext}` : associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
-        const createdAt = iso();
-        const note = String(payload.internalNote ?? "").trim();
-        const priority = validatePriority(payload.priority, user, createdAt);
-        const requestedSalesNumber = String(payload.salesNumber ?? user.salesNumber ?? "").trim() || null;
-        const salesEmployee = requestedSalesNumber ? state.employees.find((candidate) => candidate.active && candidate.salesNumber === requestedSalesNumber) : null;
-        if (requestedSalesNumber && !salesEmployee) throw Object.assign(new Error("Dit verkoopnummer is niet gekoppeld aan een actieve werknemer."), { statusCode: 400, code: "SALES_ATTRIBUTION_INVALID" });
-        const source = allowedValue(payload.source ?? "STORE", ["STORE", "WEBSHOP_XPRT", "TEAM_MAIL", "INVOICE", "MANUAL"], "Orderbron");
-        const sourceContext = {
-          source,
-          label: ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop · ACA XPRT", TEAM_MAIL: "Team-/verenigingsmail", INVOICE: "Factuur", MANUAL: "Handmatig" })[source],
-          externalReference: String(payload.externalReference ?? "").trim() || null,
-          provenance: source === "STORE" ? "Handmatig vastgelegd in Sportpaleis Workspace" : requiredText(payload.provenance, "Bronverwijzing", 400),
-          transactionalAuthority: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : source === "STORE" || source === "MANUAL" ? "WORKSPACE" : "EXTERNAL",
-        };
-        const fulfillmentMode = allowedValue(payload.deliveryMode ?? "PICKUP", ["PICKUP", "DELIVERY"], "Leverwijze");
-        const deliveryAddress = validDeliveryAddress(payload.deliveryAddress, fulfillmentMode);
-        const order = {
-          id,
-          revision: 1,
-          customer: orderKind === "TEAM" ? String(payload.customer ?? "").trim().slice(0, 120) || teamCustomerFallback : orderKind === "CUSTOM" ? String(payload.customer ?? "").trim().slice(0, 120) || "Vrije productieopdracht" : requiredText(payload.customer, "Klant", 120),
-          customerEmail: optionalEmail(payload.customerEmail),
-          customerPhone: String(payload.customerPhone ?? "").trim().slice(0, 40),
-          association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
-          associations,
-          standardPersonalization,
-          createdAt,
-          updatedAt: createdAt,
-          promisedAt: payload.promisedAt ? validDate(payload.promisedAt) : null,
-          stage: "ORDER",
-          owner: user.name,
-          acceptedBy: { userId: user.id, name: user.name, salesNumber: user.salesNumber ?? null, at: createdAt },
-          salesAttribution: { employeeId: salesEmployee?.id ?? null, salesNumber: requestedSalesNumber, label: salesEmployee?.name ?? "Niet gekoppeld", accountType: salesEmployee?.accountType ?? (salesEmployee ? "HUMAN" : "UNASSIGNED"), selectedByUserId: user.id, selectedAt: createdAt },
-          sourceContext,
-          orderKind,
-          ...(teamContext ? { teamContext } : {}),
-          communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL" && source !== "WEBSHOP_XPRT", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
-          notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
-          priority,
-          attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttentionText(items),
-          barcode: { value: `SPW:${id}`, featureEnabled: false, hardwareValidated: false },
-          pickup: { status: "NOT_PICKED_UP", pickedUpAt: null, pickedUpBy: null },
-          payment: { status: "UNKNOWN", updatedAt: null, updatedBy: null, source: source === "WEBSHOP_XPRT" ? "ACA_XPRT" : "UNKNOWN" },
-          fulfillment: { mode: fulfillmentMode, status: "PENDING", updatedAt: null, updatedBy: null, feeEur: fulfillmentMode === "DELIVERY" ? state.settings.deliveryFeeEur : 0, address: deliveryAddress },
-          operationalFacts: {},
-          eventHistory: [{ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "button" }],
-          totalPieces: items.reduce((sum, item) => sum + item.quantity, 0),
-          foilStates: [...new Set([
-            ...items.map(({ foilColor }) => foilColor),
-            ...productionLines.map(({ foilColor }) => foilColor).filter(Boolean),
-          ])].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
-          items,
-          productionLines,
-        };
-        assertOrderProductionDecorationCardinality(state, order);
-        const automaticValidationBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
-        if (!automaticValidationBlocker) {
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_VALIDATED", at: createdAt, userId: user.id, userName: user.name, source: "automatic-validation" });
-        } else if (!order.attention) order.attention = automaticValidationBlocker;
-        state.orders.unshift(order);
-        audit(state, user.id, "Order aangemaakt", id, { revision: 1, automaticValidation: automaticValidationBlocker ? "ATTENTION" : "PASSED", ...(automaticValidationBlocker ? { reason: automaticValidationBlocker } : {}) });
-        return order;
-      });
+      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_ORDER", () => createWorkspaceOrderRecord(state, user, payload));
       return { state, value: outcome };
     });
     return result.value;
@@ -4375,7 +4572,7 @@ function associationNumberSet(state, associationName, { field = null, profileId 
   return { association, asset: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
 }
 
-function validateProductionLines(value, state, user, orderKind) {
+function validateProductionLines(value, state, user, orderKind, options = {}) {
   if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) return [];
   if (!Array.isArray(value) || value.length > 100) throw Object.assign(new Error("Gebruik maximaal 100 productieregels."), { statusCode: 400, code: "PRODUCTION_LINES_INVALID" });
   const validated = value.map((line, index) => {
@@ -4384,6 +4581,40 @@ function validateProductionLines(value, state, user, orderKind) {
     const content = normalizeProductionContent(type, requiredText(line.content, "Inhoud", 160), line.placementRole);
     if (type === "NUMBER" && !/^\d{1,4}$/u.test(content)) throw Object.assign(new Error("Een nummerregel bevat alleen 1 tot 4 cijfers."), { statusCode: 400, code: "PRODUCTION_NUMBER_INVALID" });
     if (type === "INITIALS" && content.length > 12) throw Object.assign(new Error("Initialen bevatten maximaal 12 tekens."), { statusCode: 400, code: "PRODUCTION_INITIALS_INVALID" });
+    const requestedTeamkitContext = options.allowTeamkitDataGaps === true ? line.teamkitProductionContext : null;
+    const teamkitProductionContext = requestedTeamkitContext ? {
+      proposalPlacementId: requiredText(requestedTeamkitContext.proposalPlacementId, "Teamkit-placement", 180),
+      side: allowedValue(requestedTeamkitContext.side, ["FRONT", "BACK"], "Teamkit-zijde"),
+      preset: allowedValue(requestedTeamkitContext.preset, ["LINKERBORST", "RECHTERBORST", "MIDDENBORST", "RUG_BOVEN", "RUG_MIDDEN", "MOUW_LINKS", "MOUW_RECHTS", "SHORT_LINKS", "SHORT_RECHTS", "BROEK", "TAS"], "Teamkit-positie"),
+      articleId: optional(requestedTeamkitContext.articleId, 180) || null,
+      profileId: optional(requestedTeamkitContext.profileId, 180) || null,
+      profileRevision: Number.isInteger(requestedTeamkitContext.profileRevision) ? requestedTeamkitContext.profileRevision : null,
+      measurementSource: allowedValue(requestedTeamkitContext.measurementSource, ["PRODUCTION_PROFILE", "PRODUCTION_ASSET", "EXPLICIT_PROPOSAL_OVERRIDE", "DATA_GAP"], "Teamkit-maatbron"),
+      measurementEvidence: requiredText(requestedTeamkitContext.measurementEvidence, "Teamkit-maatbewijs", 500),
+      explicitOverride: requestedTeamkitContext.explicitOverride ? { widthMm: Number(requestedTeamkitContext.explicitOverride.widthMm), heightMm: Number(requestedTeamkitContext.explicitOverride.heightMm), aspectRatioLocked: true } : null,
+    } : undefined;
+    const requestedDataGapFields = Array.isArray(line.dataGap?.fields) ? [...new Set(line.dataGap.fields)] : [];
+    if (options.allowTeamkitDataGaps === true && requestedDataGapFields.length) {
+      if (requestedDataGapFields.some((field) => !["SOURCE", "DIMENSIONS", "FOIL_COLOR"].includes(field))) throw Object.assign(new Error("Ongeldige Teamkit DATA_GAP."), { statusCode: 400, code: "TEAMKIT_PRODUCTION_DATA_GAP_INVALID" });
+      const widthMm = Number(line.widthMm) || 0; const heightMm = Number(line.heightMm) || 0; const quantity = Number(line.quantity);
+      if (widthMm < 0 || heightMm < 0 || widthMm > 1000 || heightMm > 1000 || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Ongeldige geblokkeerde Teamkit-productieregel."), { statusCode: 400, code: "TEAMKIT_PRODUCTION_DATA_GAP_INVALID" });
+      const reason = requiredText(line.dataGap.reason, "Reden ontbrekende productiegegevens", 500);
+      return {
+        id: String(line.id ?? "").trim() || `teamkit-data-gap-${index + 1}-${randomBytes(5).toString("hex")}`,
+        type,
+        content,
+        source: { kind: "PROFILE", id: optional(line.sourceId, 180) || "teamkit-production-data-gap", version: optional(line.sourceVersion, 120) || "unresolved", ...(optional(line.sourceSha256, 128) ? { sha256: optional(line.sourceSha256, 128) } : {}) },
+        widthMm: Math.round(widthMm * 1000) / 1000,
+        heightMm: Math.round(heightMm * 1000) / 1000,
+        quantity,
+        preview: { kind: "PROFILE_REFERENCE", label: optional(line.previewLabel, 160) || content, aspectRatioLocked: ["LOGO", "PRODUCTION_ELEMENT"].includes(type) },
+        provenance: requiredText(line.provenance, "Teamkit-herkomst", 500),
+        proofStatus: "DATA_GAP",
+        validation: { status: "BLOCKED", reason },
+        dataGap: { status: "DATA_GAP", fields: requestedDataGapFields, reason },
+        ...(teamkitProductionContext ? { teamkitProductionContext } : {}),
+      };
+    }
     const initialsInfix = ["INITIALS_FIRST", "INITIALS_INFIX", "INITIALS_LAST"].includes(line.placementRole);
     const widthMm = Number(line.widthMm); const heightMm = Number(line.heightMm); const quantity = Number(line.quantity);
     if ((!initialsInfix && (!(widthMm >= 1 && widthMm <= 1000) || !(heightMm >= 1 && heightMm <= 1000))) || (initialsInfix && (!(widthMm >= 0 && widthMm <= 1000) || !(heightMm >= 0 && heightMm <= 1000))) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Afmetingen moeten geldig zijn en aantal 1â€“999."), { statusCode: 400, code: "PRODUCTION_LINE_DIMENSIONS_INVALID" });
@@ -4451,6 +4682,7 @@ function validateProductionLines(value, state, user, orderKind) {
       provenance: optional(line.provenance, 500) || `${orderKind} · handmatig vastgelegd in Workspace`,
       proofStatus,
       validation,
+      ...(teamkitProductionContext ? { teamkitProductionContext } : {}),
       ...(initialsInfix ? { placementRole: line.placementRole, placementRule } : {}),
     };
   });
@@ -5157,10 +5389,11 @@ function inferBackNumberSizeClass(association, article, garmentSize) {
 
 function validateItems(value, state, standardPersonalization, options = {}) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 50) throw Object.assign(new Error("Een order vereist 1 tot 50 artikelen."), { statusCode: 400, code: "VALIDATION_ERROR" });
+  const maximumQuantity = Number.isInteger(options.maximumQuantity) ? options.maximumQuantity : 99;
   return value.map((item) => {
     const requestedVariants = Array.isArray(item.variants) && item.variants.length ? item.variants : [{ quantity: item.quantity, size: item.size, deviation: item.deviation, overrides: item.overrides, participantName: item.participantName }];
     const quantity = requestedVariants.reduce((sum, variant) => sum + Number(variant.quantity), 0);
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw Object.assign(new Error("Ongeldig aantal."), { statusCode: 400, code: "VALIDATION_ERROR" });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximumQuantity) throw Object.assign(new Error("Ongeldig aantal."), { statusCode: 400, code: "VALIDATION_ERROR" });
     if (item.articleId) {
       const article = state.articles.find(({ id }) => id === item.articleId);
       if (!article?.active) throw Object.assign(new Error("Artikel is niet beschikbaar."), { statusCode: 400, code: "ARTICLE_UNAVAILABLE" });
@@ -5173,7 +5406,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       const labels = { initials: "Initialen", name: "Naam", backNumber: "Rug", chestNumber: "Borst", shortsNumber: "Short" };
       const variants = requestedVariants.map((variant) => {
         const variantQuantity = Number(variant.quantity);
-        if (!Number.isInteger(variantQuantity) || variantQuantity < 1 || variantQuantity > 99) throw Object.assign(new Error("Ongeldig aantal in artikelvariant."), { statusCode: 400, code: "VALIDATION_ERROR" });
+        if (!Number.isInteger(variantQuantity) || variantQuantity < 1 || variantQuantity > maximumQuantity) throw Object.assign(new Error("Ongeldig aantal in artikelvariant."), { statusCode: 400, code: "VALIDATION_ERROR" });
         const enteredSize = String(variant.size ?? "").trim().slice(0, 20);
         const size = enteredSize || "Niet opgegeven";
         if (enteredSize && article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(enteredSize)) throw Object.assign(new Error(`${enteredSize} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
@@ -5432,6 +5665,8 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (teamkitPdfMatch && method === "GET") { binary(response, 200, await service.teamkitProposalPdf(token, decodeURIComponent(teamkitPdfMatch[1]), requestUrl.searchParams.get("revision"))); return true; }
       const teamkitTaskMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/fulfillment\/([^/]+)$/);
       if (teamkitTaskMatch && method === "PATCH") { json(response, 200, await service.updateTeamkitFulfillmentTask(token, csrf, decodeURIComponent(teamkitTaskMatch[1]), decodeURIComponent(teamkitTaskMatch[2]), await readJson(request))); return true; }
+      const teamkitInternalProductionMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/internal-production$/);
+      if (teamkitInternalProductionMatch && method === "POST") { json(response, 201, await service.prepareTeamkitInternalProduction(token, csrf, decodeURIComponent(teamkitInternalProductionMatch[1]), await readJson(request))); return true; }
       const teamkitMailPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/mail\/preview$/);
       if (teamkitMailPreviewMatch && method === "POST") { json(response, 200, await service.previewTeamkitProposalMail(token, decodeURIComponent(teamkitMailPreviewMatch[1]), await readJson(request))); return true; }
       const teamkitMailCaptureMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/mail\/capture$/);

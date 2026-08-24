@@ -126,7 +126,12 @@ function normalizePlacement(input) {
   const sourceId = nullableText(input.sourceId, "Bron", 180); const productionAssetId = nullableText(input.productionAssetId, "Productieasset", 180);
   if (["CLUB_LOGO", "SPONSOR"].includes(kind) && !sourceId && !productionAssetId) throw error("Kies voor dit logo een bron of bestaand asset.", "PROPOSAL_PLACEMENT_SOURCE_REQUIRED");
   if (!["CLUB_LOGO", "SPONSOR"].includes(kind) && !nullableText(input.text, "Opdruktekst", 120)) throw error("Vul de opdruktekst in.", "PROPOSAL_PLACEMENT_TEXT_REQUIRED");
-  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
+  const physicalSizeOverride = input.physicalSizeOverride == null ? null : {
+    widthMm: boundedNumber(input.physicalSizeOverride.widthMm, "Fysieke breedte", 1, 1000),
+    heightMm: boundedNumber(input.physicalSizeOverride.heightMm, "Fysieke hoogte", 1, 1000),
+    aspectRatioLocked: true,
+  };
+  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), physicalSizeOverride, route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
 }
 
 export function normalizeProposalItems(items) {
@@ -252,7 +257,18 @@ export function validateTeamkitProposalState(state) {
     proposal.approvalHistory ??= [];
     const approvals = [...proposal.approvalHistory, ...(proposal.approval ? [proposal.approval] : [])]; const approvedRevisions = new Set();
     for (const approval of approvals) { const revision = proposal.revisions.find(({ number }) => number === approval.revision); const pdf = Buffer.from(approval.pdfBase64, "base64"); if (approvedRevisions.has(approval.revision) || !revision || revision.snapshotHash !== approval.snapshotHash || proposalSha256(approval.previewHtml) !== approval.previewSha256 || proposalSha256(pdf) !== approval.pdfSha256 || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Approved proposal is niet exact reproduceerbaar."); approvedRevisions.add(approval.revision); }
-    const taskIds = new Set(); for (const task of proposal.fulfillmentTasks) { if (taskIds.has(task.id) || !approvedRevisions.has(task.approvedRevision)) throw new Error("Dubbele of onherleidbare afhandelingstaak."); taskIds.add(task.id); }
+    const taskIds = new Set(); for (const task of proposal.fulfillmentTasks) {
+      if (taskIds.has(task.id) || !approvedRevisions.has(task.approvedRevision)) throw new Error("Dubbele of onherleidbare afhandelingstaak."); taskIds.add(task.id);
+      if (task.orderId) {
+        const order = state.orders.find(({ id }) => id === task.orderId);
+        if (!order || order.referenceSeries !== "TK" || order.teamkitContext?.kind !== "TEAMKIT_APPROVAL" || order.teamkitContext.proposalId !== proposal.id || order.teamkitContext.approvedRevision !== task.approvedRevision || order.teamkitContext.itemId !== task.itemId || !order.teamkitContext.fulfillmentTaskIds.includes(task.id)) throw new Error("Teamkit-afhandelingstaak mist een atomair herleidbare TK-order.");
+      }
+    }
+    const internalGroups = new Map();
+    for (const task of proposal.fulfillmentTasks.filter(({ kind, route }) => kind === "INTERNAL_PRODUCTION" && route === "INTERN_BEDRUKKEN")) {
+      const key = `${task.approvedRevision}:${task.itemId}`; internalGroups.set(key, [...(internalGroups.get(key) ?? []), task]);
+    }
+    for (const tasks of internalGroups.values()) if (new Set(tasks.map(({ orderId }) => orderId).filter(Boolean)).size > 1) throw new Error("Eén approved Teamkit-item verwijst naar meerdere productieorders.");
   }
   return state;
 }

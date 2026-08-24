@@ -549,6 +549,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/fulfillment/${encodeURIComponent(taskId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
+  async prepareTeamkitInternalProduction(proposal: TeamkitProposal): Promise<{ duplicate: boolean; proposal: TeamkitProposal; orders: WorkspaceOrder[] }> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}/internal-production`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: proposal.aggregateRevision }) }));
+  }
+
   async previewTeamkitProposalMail(proposalId: string, input: { templateKey: "PROPOSAL_INTAKE_REQUEST" | "PROPOSAL_REVIEW_REQUEST" | "PROPOSAL_SUPPLIER_HANDOFF"; customerPath?: string; taskId?: string; recipient?: string; supplierName?: string }): Promise<MailPreview> {
     return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/mail/preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }

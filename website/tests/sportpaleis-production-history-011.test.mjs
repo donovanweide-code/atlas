@@ -22,7 +22,7 @@ test("Production history 011 — immutable Golden evidence and auditable replot"
 
   await context.test("alleen expliciet vastgelegde Golden- en SVG-combinaties dragen hun eigen begrensde fysieke bewijs", async () => {
     const bootstrap = await service.bootstrap(admin.token);
-    assert.equal(bootstrap.schemaVersion, 12);
+    assert.equal(bootstrap.schemaVersion, 13);
     assert.equal(bootstrap.productionJobs.length, 4);
     assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "PHYSICALLY_VALIDATED").length, 3);
     assert.equal(bootstrap.productionJobs.filter(({ proofStatus }) => proofStatus === "WINPLOT_VALIDATED").length, 1);

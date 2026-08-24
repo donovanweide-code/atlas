@@ -54,6 +54,20 @@ export interface SportpaleisProductionLine {
   provenance: string;
   proofStatus: ProductionProofStatus;
   validation: { status: "VALID" | "BLOCKED"; reason: string | null };
+  /** Explicit fail-closed evidence when an approved Teamkit placement has no reliable physical production data yet. */
+  dataGap?: { status: "DATA_GAP"; fields: ("SOURCE" | "DIMENSIONS" | "FOIL_COLOR")[]; reason: string };
+  /** Immutable Teamkit placement/measurement evidence. Visual percentages are never interpreted as production millimetres. */
+  teamkitProductionContext?: {
+    proposalPlacementId: string;
+    side: "FRONT" | "BACK";
+    preset: TeamkitPlacementPreset;
+    articleId: string | null;
+    profileId: string | null;
+    profileRevision: number | null;
+    measurementSource: "PRODUCTION_PROFILE" | "PRODUCTION_ASSET" | "EXPLICIT_PROPOSAL_OVERRIDE" | "DATA_GAP";
+    measurementEvidence: string;
+    explicitOverride: { widthMm: number; heightMm: number; aspectRatioLocked: true } | null;
+  };
   placementRole?: "INITIALS_FIRST" | "INITIALS_INFIX" | "INITIALS_LAST";
   placementRule?: {
     compositionId: string;
@@ -392,6 +406,21 @@ export interface WorkspaceOrder {
   acceptedBy?: OrderAcceptedBy;
   salesAttribution?: { employeeId?: string | null; salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
   sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string }; webshopDocument?: { sourceId: string; sourceMessageId: string; filename: string; sha256: string; contentHash: string } };
+  referenceSeries?: "SP" | "TK";
+  teamkitContext?: {
+    kind: "TEAMKIT_APPROVAL";
+    proposalId: string;
+    proposalNumber: string;
+    approvedRevision: number;
+    itemId: string;
+    itemSnapshotHash: string;
+    fulfillmentTaskIds: string[];
+    placementRefs: { placementId: string; taskId: string; assetId: string | null; assetVersion: string | null; assetSha256: string | null }[];
+    snapshotHash: string;
+    previewSha256: string;
+    pdfSha256: string;
+    idempotencyKey: string;
+  };
   totalPieces: number;
   attention?: string;
   productionReference?: "SNIJTEST-001";
@@ -777,6 +806,8 @@ export interface TeamkitProposalPlacement {
   assetVersion: string | null;
   text: string | null;
   widthPercent: number;
+  /** Optional physical production override; absence means resolve from the existing server-authoritative production truth. */
+  physicalSizeOverride?: { widthMm: number; heightMm: number; aspectRatioLocked: true } | null;
   route: TeamkitFulfillmentRoute;
   supplierName: string | null;
   note: string | null;
@@ -965,7 +996,7 @@ export interface WorkspaceAuditEntry {
 }
 
 export interface SportpaleisWorkspaceState {
-  schemaVersion: 12;
+  schemaVersion: 13;
   configurationVersion?: string;
   revision: number;
   currentUserId: string;
@@ -1038,7 +1069,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
     { id: "collega", name: "Winkelmedewerker", initials: "WM", role: "store", email: "collega@sportpaleis.nl", status: "Actief" },
   ];
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     revision: 1,
     currentUserId: "kevin",
     users,

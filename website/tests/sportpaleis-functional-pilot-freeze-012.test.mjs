@@ -27,7 +27,7 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
 
   await context.test("winkel ziet een toegestane echte fontbron maar geen logo-library of jobhistorie", async () => {
     const view = await service.bootstrap(storeUser.token);
-    assert.equal(view.schemaVersion, 12);
+    assert.equal(view.schemaVersion, 13);
     assert.equal(view.releaseId, "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811");
     assert.equal(view.productionFonts.length, 1);
     assert.equal(view.productionFonts[0].sha256, "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F");

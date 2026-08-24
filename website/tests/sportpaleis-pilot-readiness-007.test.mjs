@@ -49,7 +49,7 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
       ],
       orders: [{ id: "SP-LEGACY-DUPLICATE", revision: 1, stage: "ORDER", owner: "Patrick", createdAt: "2026-08-09T10:00:00.000Z", updatedAt: "2026-08-09T10:00:00.000Z", items: [{ articleId: "asc-live-137294" }] }],
     });
-    assert.equal(migrated.schemaVersion, 12);
+    assert.equal(migrated.schemaVersion, 13);
     assert.equal(migrated.articles.filter(({ articleNumber, association }) => articleNumber === "137294" && association === "A.S.C. Waterwijk").length, 1);
     assert.equal(migrated.orders[0].items[0].articleId, "sp-live-137294");
     assert.match(migrated.migrationWarnings.at(-1), /canonieke sp-live-ID/);

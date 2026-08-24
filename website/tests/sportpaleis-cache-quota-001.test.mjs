@@ -19,7 +19,7 @@ class SessionStorage {
 
 function bootstrap(overrides = {}) {
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     revision: 751,
     currentUserId: "user-1",
     currentUser: { id: "user-1", name: "Operator", email: "operator@example.test", role: "operator", status: "Actief", seatType: "customer", workContexts: ["PRODUCTION"], defaultContext: "PRODUCTION" },
