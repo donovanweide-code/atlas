@@ -66,6 +66,8 @@ class MemoryPool {
     this.row = null;
     this.rollbackCalls = 0;
     this.failNextUpdate = null;
+    this.fullStateReads = 0;
+    this.revisionReads = 0;
   }
 
   async getConnection() {
@@ -90,7 +92,12 @@ class MemoryConnection {
   async query(sql, params = []) {
     if (sql.includes("FROM wbd_schema_migrations")) return [{ checksum: this.pool.checksum }];
     if (sql.startsWith("SELECT revision, state_json")) {
+      this.pool.fullStateReads += 1;
       return this.pool.row ? [{ revision: this.pool.row.revision, state_json: this.pool.row.state_json }] : [];
+    }
+    if (sql.startsWith("SELECT revision FROM sp_runtime_state")) {
+      this.pool.revisionReads += 1;
+      return this.pool.row ? [{ revision: this.pool.row.revision }] : [];
     }
     if (sql.startsWith("INSERT INTO sp_runtime_state")) {
       this.pool.row = { revision: Number(params[2]), state_json: params[3] };
@@ -288,6 +295,29 @@ test("MariaDB-store initialiseert leeg, bewaart transacties en overleeft een sto
   assert.equal(state.settings.processingDays, 6);
   assert.equal(state.revision, 2);
   assert.equal((await restarted.storageStatus()).engine, "mariadb");
+});
+
+test("MariaDB-store hergebruikt gevalideerde state bij gelijke revision en invalideert veilig", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const fullReadsAfterInitialize = pool.fullStateReads;
+  const first = await store.read();
+  const second = await store.read();
+  assert.notEqual(first, second);
+  assert.equal(pool.fullStateReads, fullReadsAfterInitialize);
+  assert.equal(pool.revisionReads, 2);
+  await store.mutate(async (state) => { state.settings.processingDays = 9; return { state, value: null }; });
+  const after = await store.read();
+  assert.equal(after.settings.processingDays, 9);
+  assert.equal(pool.fullStateReads, fullReadsAfterInitialize + 1);
+  assert.equal(pool.revisionReads, 3);
+  pool.row = { revision: 50, state_json: JSON.stringify({ ...after, revision: 50, settings: { ...after.settings, processingDays: 4 } }) };
+  const external = await store.read();
+  assert.equal(external.revision, 50);
+  assert.equal(external.settings.processingDays, 4);
+  assert.equal(pool.fullStateReads, fullReadsAfterInitialize + 2);
 });
 
 test("MariaDB-store behoudt functionele fouten na rollback en vertaalt alleen echte DB-fouten", async () => {

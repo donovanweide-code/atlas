@@ -31,3 +31,19 @@
 .sp-studio-placement[data-visual-surface="FRONT_TORSO"],.sp-studio-placement[data-visual-surface="BACK_TORSO"],.sp-review-placement[data-visual-surface="FRONT_TORSO"],.sp-review-placement[data-visual-surface="BACK_TORSO"]{transform:translate(-50%,-50%) perspective(520px) rotateX(1deg)}
 .sp-review-garment>div{overflow:hidden;clip-path:polygon(10% 13%,28% 5%,40% 1%,60% 1%,72% 5%,90% 13%,100% 32%,88% 42%,78% 31%,80% 100%,20% 100%,22% 31%,12% 42%,0 32%)}
 .sp-studio-quality-warning{margin:0;border-radius:9px;background:#fff4d8;padding:9px 10px;color:#6e5216;font-size:10px;font-weight:750;line-height:1.4}.sp-studio-quality-warning[hidden]{display:none}
+
+/* Final Sportpaleis shell: presentation only. Teamwear uses the same black/white/red language as the daily Workspace. */
+.sp-teamwear-entry li.is-active,.sp-teamwear-entry li.is-done,.sp-teamwear-start a,.sp-teamwear-start button,.sp-teamwear-next,.sp-catalog-price strong,.sp-review-item>footer strong{color:#b30f26}
+.sp-teamwear-start article.is-active{border-color:#d3172f;background:#fff;box-shadow:inset 0 0 0 1px #d3172f}
+.sp-teamwear-start i,.sp-teamwear-context-picker button>span{background:#f5f5f5;color:#16191d}
+.sp-teamwear-studio-wrap{border-color:#d7d9dc;background:#eceeef;box-shadow:0 28px 80px rgba(16,18,21,.14)}
+.sp-teamwear-studio-head,.sp-teamwear-discovery,.sp-teamwear-quote{border-color:#d7d9dc}
+.sp-studio-toolbar button:hover,.sp-studio-toolbar button:focus-visible,.sp-studio-toolbar button.is-active{background:#fff0f2;color:#b30f26}
+.sp-studio-print-area.has-guide-x:before,.sp-studio-print-area.has-guide-y:before{background:#d3172f}.sp-studio-print-area.has-guide-x.has-guide-y:after{border-color:#d3172f}
+.sp-teamwear-quote>header{background:#111318}.sp-teamwear-quote>section{background:#f5f5f5}.sp-teamwear-quote>section strong{color:#111318}
+.sp-workspace.is-teamwear-focus{background:#eceeef}.sp-teamwear-focus-back{color:#22262b}
+.sp-teamwear-discovery .sp-studio-tabs{display:flex;flex-wrap:wrap;gap:6px}.sp-teamwear-discovery .sp-studio-tabs span{border:1px solid #d8dadd;border-radius:7px;background:#fff;padding:6px 8px;color:#292d32;font-size:8px;font-weight:800}
+.sp-teamwear-studio .sp-club-asset-card:focus-visible,.sp-teamwear-studio .sp-club-asset-card[aria-pressed="true"]{outline:2px solid #d3172f;outline-offset:2px}
+.sp-club-experience{--club-ink:#17191d;--club-deep:#111318;--club-mint:#f4f4f5;--club-warm:#f7f5f4}.sp-club-hero{background:#111318;box-shadow:0 26px 70px rgba(16,18,21,.18)}.sp-club-hero__identity strong,.sp-club-hero__actions>span{color:#e3e3e4}.sp-club-hero .sp-button--primary{color:#111318}.sp-club-subnav a{color:#292d32}.sp-club-subnav a:hover,.sp-club-subnav a:focus-visible{background:#fff0f2;color:#a90e24}.sp-club-section__head h2{color:#17191d}
+.sp-catalog-filters button.is-active,.sp-studio-tabs button.is-active,.sp-studio-side-switch button.is-active{border-color:#17191d;background:#17191d;color:#fff}.sp-club-asset-card:hover,.sp-club-asset-card:focus-visible{border-color:#d3172f;box-shadow:0 0 0 3px rgba(211,23,47,.09)}
+.sp-studio-save-state{background:#f1f1f2!important;color:#35393f!important}.sp-studio-save-state.is-dirty{background:#fff0f2!important;color:#a90e24!important}.sp-studio-itemrail button.is-active{border-color:#d3172f;background:#fff0f2}.sp-studio-placement.is-selected .sp-studio-placement__body{border-color:#d3172f;box-shadow:0 0 0 2px #fff,0 0 0 4px #d3172f}.sp-studio-resize{background:#d3172f}.sp-studio-properties__empty>span{background:#f2f2f3;color:#292d32}.sp-studio-upload label{border-color:#b9bcc0;background:#f7f7f8;color:#292d32}.sp-studio-add button,.sp-studio-upload button{color:#292d32}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -31,6 +31,16 @@ function item(sourceId) {
     ],
   };
 }
+
+test("Teamwear experience houdt catalogus in Collectie en Studio bij contextgebonden ontwerpassets", async () => {
+  const source = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
+  assert.match(source, /const contextAssets = clubAssets\(state, proposal\)/u);
+  assert.match(source, /Ontwerp toevoegen/u);
+  assert.match(source, /Alleen assets van deze klant, vereniging of dit voorstel/u);
+  assert.match(source, /<strong>Catalogus<\\\/strong>[\s\S]*?Asset Library/u);
+  assert.match(source, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Maten & aantallen[\s\S]*Voorstel[\s\S]*Afhandeling/u);
+  assert.match(source, /Logo[\s\S]*Sponsor[\s\S]*Naam \/ nummer[\s\S]*Vrije opdruk[\s\S]*Upload/u);
+});
 
 test("bestaand verenigingslogo wordt bij revision één keer als immutable voorstelbron vastgelegd", async (context) => {
   const { service, operator } = await fixture(context);

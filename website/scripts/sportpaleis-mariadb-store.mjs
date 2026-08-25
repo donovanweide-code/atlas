@@ -87,6 +87,8 @@ export class SportpaleisMariaDbStore {
     this.ownsPool = !pool;
     this.bootstrap = bootstrap;
     this.migrationFile = path.resolve(migrationFile);
+    this.cachedState = null;
+    this.cachedRevision = null;
   }
 
   async initialize() {
@@ -127,6 +129,7 @@ export class SportpaleisMariaDbStore {
           "INSERT INTO sp_runtime_state (organization_id, schema_version, revision, state_json, created_at, updated_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
           [state.organizationId, state.schemaVersion, state.revision, JSON.stringify(state)],
         );
+        this.#remember(state);
       } else {
         const persistedState = jsonValue(rows[0].state_json);
         const state = validateSportpaleisPilotState(structuredClone(persistedState));
@@ -152,6 +155,7 @@ export class SportpaleisMariaDbStore {
             );
           }
         }
+        this.#remember(state);
       }
       await connection.commit();
     } catch (error) {
@@ -165,6 +169,15 @@ export class SportpaleisMariaDbStore {
   }
 
   async read() {
+    if (this.cachedState && this.cachedRevision !== null) {
+      const revisionRows = await this.pool.query(
+        "SELECT revision FROM sp_runtime_state WHERE organization_id = ?",
+        ["sport-2000-sportpaleis-bv"],
+      );
+      if (revisionRows.length === 1 && Number(revisionRows[0].revision) === this.cachedRevision) {
+        return structuredClone(this.cachedState);
+      }
+    }
     const rows = await this.pool.query(
       "SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ?",
       ["sport-2000-sportpaleis-bv"],
@@ -176,7 +189,8 @@ export class SportpaleisMariaDbStore {
     if (Number(rows[0].revision) !== Number(state.revision)) {
       throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
     }
-    return state;
+    this.#remember(state);
+    return structuredClone(state);
   }
 
   async mutate(mutator) {
@@ -211,6 +225,7 @@ export class SportpaleisMariaDbStore {
       }
       phase = "commit";
       await connection.commit();
+      this.#remember(next);
       return { state: next, value: result.value };
     } catch (error) {
       const rollback = await rollbackWithStatus(connection);
@@ -249,6 +264,11 @@ export class SportpaleisMariaDbStore {
     } catch (error) {
       throw new SportpaleisMariaDbStoreError("Workspace MariaDB is niet bereikbaar.", "DATABASE_CONNECTION_FAILED", error);
     }
+  }
+
+  #remember(state) {
+    this.cachedState = structuredClone(state);
+    this.cachedRevision = Number(state.revision);
   }
 }
 

@@ -32,12 +32,18 @@ export function isOperationalOrder(order: PilotBootstrap["orders"][number]): boo
   return !order.deletion && !isConfirmedPilotTestOrder(order);
 }
 
+export function isFinalCleanStartOrder(order: PilotBootstrap["orders"][number]): boolean {
+  return order.deletion?.byUserId === "system:final-clean-start"
+    || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
+}
+
 export function isOperationalProductionOrder(order: PilotBootstrap["orders"][number]): boolean {
   return isOperationalOrder(order) && order.productionArchive?.status !== "ARCHIVED";
 }
 
 export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/workspace/sportpaleis"): WorkspaceSearchItem[] {
   const items: WorkspaceSearchItem[] = [];
+  const historyOrderIds = new Set(state.orders.filter((order) => !isFinalCleanStartOrder(order)).map(({ id }) => id));
   for (const order of state.orders.filter(isOperationalOrder)) {
     const articleTerms = order.items.flatMap(({ articleNumber, product, association, variants }) => [articleNumber, product, association, ...(variants ?? []).map(({ participantName }) => participantName)]).filter(Boolean);
     items.push({
@@ -66,7 +72,7 @@ export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/worksp
     href: state.capabilities.admin ? `${base}/beheer/werknemers#${encodeURIComponent(employee.id)}` : `${base}/orders/nieuw?verkoopnummer=${encodeURIComponent(employee.salesNumber)}`,
     terms: normalized([employee.name, "verkoopnummer", employee.salesNumber].join(" ")),
   });
-  if (state.capabilities.operator || state.capabilities.admin) for (const job of state.productionJobs) items.push({
+  if (state.capabilities.operator || state.capabilities.admin) for (const job of state.productionJobs.filter(({ snapshot }) => snapshot.orderIds.some((id) => historyOrderIds.has(id)))) items.push({
     id: job.id, kind: "PRODUCTION_JOB", group: "Productiehistorie", title: job.jobNumber,
     context: `${job.snapshot.association} · ${job.initiatedBy.name}`,
     href: `${base}/productie/historie/${encodeURIComponent(job.id)}`,
@@ -82,7 +88,7 @@ export function buildWorkspaceSearchIndex(state: PilotBootstrap, base = "/worksp
       ...(asset.sourceId && candidateId ? { previewSrc: `${base.replace(/\/workspace\/sportpaleis$/u, "")}/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(asset.sourceId)}/candidates/${encodeURIComponent(candidateId)}/preview.svg` } : {}),
     });
   }
-  for (const proposal of state.teamkitProposals ?? []) items.push({
+  for (const proposal of (state.teamkitProposals ?? []).filter(({ status }) => status !== "ARCHIVED")) items.push({
     id: proposal.id,
     kind: "TEAMKIT_PROPOSAL",
     group: "Voorstellen",

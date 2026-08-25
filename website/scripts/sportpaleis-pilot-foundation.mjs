@@ -1658,6 +1658,13 @@ export class SportpaleisPilotService {
     const { state, user, session } = await this.authenticate(token);
     const admin = user.role === "admin";
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
+    const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
+      || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
+    const operationalOrders = state.orders.filter((order) => !finalCleanStartOrder(order));
+    const operationalOrderIds = new Set(operationalOrders.map(({ id }) => id));
+    const knownOrderIds = new Set(state.orders.map(({ id }) => id));
+    const operationalJobs = state.productionJobs.filter(({ snapshot }) => snapshot.orderIds.some((id) => operationalOrderIds.has(id)) || snapshot.orderIds.every((id) => !knownOrderIds.has(id)));
+    const operationalProposals = state.productionProposals.filter((proposal) => proposal.orders?.some(({ id }) => operationalOrderIds.has(id)));
     return {
       schemaVersion: PILOT_SCHEMA_VERSION,
       revision: state.revision,
@@ -1666,7 +1673,7 @@ export class SportpaleisPilotService {
       users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: structuredClone(state.orders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
+      orders: structuredClone(operationalOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
@@ -1678,9 +1685,9 @@ export class SportpaleisPilotService {
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElementRequirements) : [],
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
-      productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
-      productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
-      teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(operationalJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
+      productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
