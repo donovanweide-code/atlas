@@ -6,7 +6,7 @@ readonly ENGINE_ROOT=/srv/wbd/shared/release-engine
 readonly INBOX_ROOT=/srv/wbd/shared/release-inbox
 readonly ENV_FILE=/etc/wbd/production.env
 readonly SERVICE=wbd-workspace.service
-readonly LEGACY_RELEASE_HELPER=/usr/local/sbin/spw-immutable-release
+readonly LEGACY_RELEASE_HELPER=/usr/local/libexec/wbd-deployment/spw-immutable-release.sh
 
 fail() { printf '{"status":"BLOCKED","code":"%s"}\n' "$1" >&2; exit 1; }
 valid_id() { [[ ${1:-} =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || fail INVALID_ID; }

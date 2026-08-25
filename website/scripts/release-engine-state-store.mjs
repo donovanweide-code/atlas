@@ -35,7 +35,7 @@ export class InMemoryReleaseStateStore {
 
   async lock(identity, owner) {
     const key = `${identity.tenant}--${identity.application}`;
-    if (this.#locks.has(key)) throw new Error(`Release lock bezet voor ${key}.`);
+    if (this.#locks.has(key)) throw Object.assign(new Error(`Release lock bezet voor ${key}.`), { code: "CONCURRENT_RELEASE" });
     this.#locks.add(key);
     return async () => { this.#locks.delete(key); };
   }
@@ -101,10 +101,10 @@ export class FileReleaseStateStore {
       } catch (error) {
         if (error?.code !== "EEXIST") throw error;
         let metadata;
-        try { metadata = JSON.parse(await readFile(path.join(lock, "owner.json"), "utf8")); } catch { throw new Error(`Release lock bezet en niet veilig verifieerbaar voor ${identity.tenant}/${identity.application}.`); }
+        try { metadata = JSON.parse(await readFile(path.join(lock, "owner.json"), "utf8")); } catch { throw Object.assign(new Error(`Release lock bezet en niet veilig verifieerbaar voor ${identity.tenant}/${identity.application}.`), { code: "CONCURRENT_RELEASE" }); }
         let alive = true;
         try { process.kill(Number(metadata.pid), 0); } catch (processError) { if (processError?.code === "ESRCH") alive = false; else throw processError; }
-        if (alive || attempt > 0) throw new Error(`Release lock bezet voor ${identity.tenant}/${identity.application}.`);
+        if (alive || attempt > 0) throw Object.assign(new Error(`Release lock bezet voor ${identity.tenant}/${identity.application}.`), { code: "CONCURRENT_RELEASE" });
         await rm(lock, { recursive: true, force: false });
       }
     }

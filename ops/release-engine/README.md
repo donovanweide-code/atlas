@@ -11,6 +11,8 @@ A normal release has two owner actions:
 
 Everything before GO is inspection/preparation. Everything after GO is the checksum-locked activation plan, verification, and automatic application rollback. A destructive migration, credential rotation, unexpected scope, or recovery outside the contract creates a new material decision and never inherits the normal GO.
 
+Every prepare, activation, and automatic recovery holds the shared production deployment lock used by the existing immutable release foundation. A parallel tenant release therefore blocks the engine as `ENVIRONMENT_LOCK`; a second run for the same tenant/application is `CONCURRENT_RELEASE`. Immediately before activation the engine re-reads health, readiness, release, and commit. Drift invalidates the prepared plan immutably and requires a newly proven forward-only candidate; stale plans can never be switched.
+
 ## Boundaries
 
 - `release-engine-service.mjs` is the durable server-side runner. It uses a protected Unix socket; it has no SSH, PowerShell, arbitrary-command, or artifact-build endpoint.

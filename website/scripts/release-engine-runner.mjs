@@ -68,9 +68,36 @@ export class WbdReleaseEngine {
     return this.transition(contract, "CANDIDATE", "candidate_registered", { contractHash: contract.contractHash, commit: contract.commit, tag: contract.tag }, `candidate-${contract.contractHash}`);
   }
 
+  async acquireOperationLocks(contract, purpose) {
+    let releaseEnvironment;
+    try {
+      releaseEnvironment = this.platform.acquireEnvironmentLock
+        ? await this.platform.acquireEnvironmentLock(contract, purpose)
+        : async () => {};
+    } catch (error) {
+      throw classifyReleaseError(error, {
+        stage: "LOCKING", className: "ENVIRONMENT_LOCK", component: "production-environment",
+        candidate: contract.releaseId, nextAction: "Wacht tot de actieve production release-run klaar is; lees daarna baseline en health opnieuw.", retrySafe: true,
+      });
+    }
+    try {
+      const releaseApplication = await this.stateStore.lock(identity(contract), purpose);
+      return async () => {
+        await releaseApplication();
+        await releaseEnvironment();
+      };
+    } catch (error) {
+      await releaseEnvironment();
+      throw classifyReleaseError(error, {
+        stage: "LOCKING", className: "CONCURRENT_RELEASE", component: `${contract.tenant}:${contract.application}`,
+        candidate: contract.releaseId, nextAction: "Laat de bestaande release-run eindigen en herhaal daarna vanaf een verse read-only baseline.", retrySafe: true,
+      });
+    }
+  }
+
   async inspectAndPrepare(contract) {
     await this.register(contract);
-    const unlock = await this.stateStore.lock(identity(contract), "prepare");
+    const unlock = await this.acquireOperationLocks(contract, "prepare");
     try {
       const current = await this.state(contract);
       if (current.state === "AWAITING_HUMAN_GO") return this.platform.loadPlan(contract);
@@ -206,7 +233,7 @@ export class WbdReleaseEngine {
   }
 
   async approveAndActivate(contract, approval) {
-    const unlock = await this.stateStore.lock(identity(contract), "activate");
+    const unlock = await this.acquireOperationLocks(contract, "activate");
     let switched = false;
     let plan;
     try {
@@ -218,10 +245,13 @@ export class WbdReleaseEngine {
       if (approval?.releaseId !== contract.releaseId || approval?.planHash !== plan.planHash || approval?.decision !== "GO" || !approval?.actor) {
         throw Object.assign(new Error("Human GO komt niet exact overeen met het locked deployplan."), { code: "GO_MISMATCH" });
       }
-      await this.transition(contract, "ACTIVATING", "human_go_approved", { actor: approval.actor, planHash: plan.planHash }, `go-${plan.planHash}`, String(approval.actor));
       const active = await this.platform.inspectCurrent(contract);
-      if (active.releaseId !== plan.observedBaseline.releaseId || active.commit !== plan.observedBaseline.commit) throw Object.assign(new Error("Final baseline drift vóór activation."), { code: "BASELINE_DRIFT" });
+      if (active.health !== "PASS" || active.readiness !== "PASS") throw Object.assign(new Error("Actieve productie is niet gezond tijdens final drift recheck."), { code: "CURRENT_HEALTH_FAIL" });
+      if (active.releaseId !== plan.observedBaseline.releaseId || active.commit !== plan.observedBaseline.commit) {
+        throw Object.assign(new Error(`Final baseline drift vóór activation: actueel ${active.releaseId}/${active.commit}, plan ${plan.observedBaseline.releaseId}/${plan.observedBaseline.commit}.`), { code: "BASELINE_DRIFT" });
+      }
       await this.checkpoint(contract, "final_drift_recheck_passed", { active }, `drift-${plan.planHash}`);
+      await this.transition(contract, "ACTIVATING", "human_go_approved", { actor: approval.actor, planHash: plan.planHash }, `go-${plan.planHash}`, String(approval.actor));
 
       for (const step of plan.migrations.steps) {
         await guarded(() => this.platform.applyMigration(contract, step, plan), { stage: "ACTIVATING", component: `migration:${step.database}:${step.migrationId}`, candidate: contract.releaseId, className: "MIGRATION", nextAction: "Stop vóór switch; inspecteer intent journal, ledger en echt schema.", retrySafe: true });
@@ -246,7 +276,12 @@ export class WbdReleaseEngine {
         nextAction: switched ? "Automatische rollback uitvoeren en rollback-smokes verifiëren." : "Productie ongewijzigd laten en de concrete pre-switch blocker oplossen.",
       }).diagnostic;
       if (!switched) {
-        await this.transition(contract, "BLOCKED", "activation_blocked_before_switch", diagnostic, `activation-blocked-${Date.now()}`);
+        const stale = diagnostic.class === "BASELINE_DRIFT";
+        if ((await this.state(contract))?.state !== "BLOCKED") {
+          await this.transition(contract, "BLOCKED", stale ? "stale_plan_invalidated" : "activation_blocked_before_switch", {
+            ...diagnostic, planHash: plan?.planHash ?? null, invalidated: stale,
+          }, `${stale ? "stale-plan" : "activation-blocked"}-${Date.now()}`);
+        }
         throw Object.assign(new Error(diagnostic.message), { diagnostic });
       }
       await this.transition(contract, "ROLLING_BACK", "rollback_started", diagnostic, `rollback-start-${Date.now()}`);
@@ -271,7 +306,7 @@ export class WbdReleaseEngine {
     if (["CANDIDATE", "BLOCKED"].includes(state.state)) return this.inspectAndPrepare(contract);
     if (state.state === "AWAITING_HUMAN_GO") return { state: state.state, approval: this.approvalSummary(contract, await this.platform.loadPlan(contract)) };
     if (["ACTIVATING", "VERIFYING", "ROLLING_BACK"].includes(state.state)) {
-      const unlock = await this.stateStore.lock(identity(contract), "automatic-recovery");
+      const unlock = await this.acquireOperationLocks(contract, "automatic-recovery");
       try {
         const plan = await this.platform.loadPlan(contract);
         verifyLockedDeployPlan(plan, contract);

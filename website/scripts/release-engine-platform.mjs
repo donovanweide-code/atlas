@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -52,8 +52,8 @@ export class LinuxReleasePlatform {
   constructor({
     root = "/srv/wbd", environmentFile = "/etc/wbd/production.env", backupRoot = "/var/backups/wbd-mariadb",
     stateRoot = "/srv/wbd/shared/release-engine", inboxRoot = "/srv/wbd/shared/release-inbox",
-    broker = "/usr/local/libexec/wbd-release-engine-operation", healthUrl = "http://127.0.0.1:3000/healthz",
-    readinessUrl = "http://127.0.0.1:3000/readyz", fetchImpl = fetch,
+    broker = "/usr/local/libexec/wbd-release-engine-operation", healthUrl = "http://127.0.0.1:3000/health",
+    readinessUrl = "http://127.0.0.1:3000/ready", deploymentLockFile = "/srv/wbd/shared/.spw-release-deploy.lock", fetchImpl = fetch,
   } = {}) {
     this.root = root;
     this.environmentFile = environmentFile;
@@ -61,9 +61,45 @@ export class LinuxReleasePlatform {
     this.stateRoot = stateRoot;
     this.inboxRoot = inboxRoot;
     this.broker = broker;
+    this.deploymentLockFile = deploymentLockFile;
     this.healthUrl = healthUrl;
     this.readinessUrl = readinessUrl;
     this.fetchImpl = fetchImpl;
+  }
+
+  async acquireEnvironmentLock(_contract, purpose) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(String(purpose ?? ""))) throw new Error("Ongeldige environment-lock purpose.");
+    const child = spawn("/usr/bin/flock", ["--nonblock", "--exclusive", this.deploymentLockFile, "/usr/bin/sleep", "infinity"], {
+      stdio: ["ignore", "ignore", "pipe"], windowsHide: true,
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(0, 2_000); });
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(Object.assign(new Error(`Production environment lock is bezet${stderr.trim() ? `: ${stderr.trim()}` : "."}`), { code: "ENVIRONMENT_LOCKED" }));
+      };
+      child.once("error", fail);
+      child.once("exit", (code) => fail(Object.assign(new Error(`flock stopte met code ${code}.`), { code: "ENVIRONMENT_LOCKED" })));
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      }, 100).unref();
+    });
+    let released = false;
+    return async () => {
+      if (released) return;
+      released = true;
+      if (child.exitCode === null) {
+        await new Promise((resolve) => {
+          child.once("exit", resolve);
+          child.kill("SIGTERM");
+        });
+      }
+    };
   }
 
   async #probe(url) {
@@ -269,10 +305,18 @@ export class InMemoryReleasePlatform {
     this.failures = new Map();
     this.restartCount = 0;
     this.unexpectedPushes = 0;
+    this.environmentLocked = false;
+    this.environmentLeaseHeld = false;
   }
 
   fail(operation, error = new Error(`${operation} injected failure`)) { this.failures.set(operation, error); return this; }
   maybeFail(operation) { this.calls.push(operation); const error = this.failures.get(operation); if (error) throw error; }
+  async acquireEnvironmentLock(_contract, purpose) {
+    this.maybeFail(`environmentLock:${purpose}`);
+    if (this.environmentLocked || this.environmentLeaseHeld) throw Object.assign(new Error("Production environment lock is bezet."), { code: "ENVIRONMENT_LOCKED" });
+    this.environmentLeaseHeld = true;
+    return async () => { this.environmentLeaseHeld = false; };
+  }
   async inspectCurrent() { this.maybeFail("inspectCurrent"); return structuredClone(this.current); }
   async inspectArtifact() { this.maybeFail("inspectArtifact"); return structuredClone(this.artifact); }
   async readEnvironment() { this.maybeFail("readEnvironment"); return structuredClone(this.environment); }

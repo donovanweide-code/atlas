@@ -342,11 +342,45 @@ test("rollback failure escalates to BLOCKED with ROLLBACK diagnostic", async () 
   assert.equal((await result.engine.state(result.contract)).state, "BLOCKED");
 });
 
-test("concurrent release for same tenant/app is rejected", async () => {
+test("ENVIRONMENT_LOCK blocks WBD prepare while a parallel Sportpaleis release owns production", async () => {
+  const result = fixture();
+  const releaseEnvironment = await result.platform.acquireEnvironmentLock(result.contract, "sportpaleis-final");
+  await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "ENVIRONMENT_LOCK" && error.diagnostic.retrySafe === true);
+  assert.equal((await result.engine.state(result.contract)).state, "CANDIDATE");
+  assert.equal(result.platform.calls.includes("inspectCurrent"), false);
+  await releaseEnvironment();
+  const plan = await result.engine.inspectAndPrepare(result.contract);
+  assert.equal(plan.observedBaseline.commit, result.contract.expectedBaseline.commit);
+});
+
+test("CONCURRENT_RELEASE_PROTECTION rejects the same tenant/app and releases the environment lease", async () => {
   const result = fixture();
   const release = await result.store.lock({ tenant: result.contract.tenant, application: result.contract.application }, "other-run");
-  await assert.rejects(result.engine.inspectAndPrepare(result.contract), /lock bezet/iu);
+  await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "CONCURRENT_RELEASE");
+  assert.equal(result.platform.environmentLeaseHeld, false);
   await release();
+});
+
+test("BASELINE_DRIFT_RECHECK invalidates a stale plan before migrations or switch", async () => {
+  const result = await prepared();
+  result.platform.current = { ...result.platform.current, releaseId: "SPW-NEWER-PRODUCTION", commit: "f".repeat(40) };
+  await assert.rejects(activate(result), (error) => error.diagnostic.class === "BASELINE_DRIFT");
+  const events = await result.engine.events(result.contract);
+  const stale = events.find((event) => event.type === "stale_plan_invalidated");
+  assert.equal(stale?.details.invalidated, true);
+  assert.equal(stale?.details.planHash, result.plan.planHash);
+  assert.equal((await result.engine.state(result.contract)).state, "BLOCKED");
+  assert.equal(result.platform.calls.some((call) => call.startsWith("applyMigration:")), false);
+  assert.equal(result.platform.calls.includes("atomicSwitch"), false);
+  assert.equal(result.platform.restartCount, 0);
+});
+
+test("STALE_PLAN_INVALIDATION prohibits replay of the old Human GO", async () => {
+  const result = await prepared();
+  result.platform.current = { ...result.platform.current, releaseId: "SPW-NEWER-PRODUCTION", commit: "f".repeat(40) };
+  await assert.rejects(activate(result), (error) => error.diagnostic.class === "BASELINE_DRIFT");
+  await assert.rejects(activate(result), /Human GO niet toegestaan vanuit BLOCKED/iu);
+  assert.equal(result.platform.calls.includes("atomicSwitch"), false);
 });
 
 test("durable lock recovers only a proven-dead runner PID", async () => {
@@ -421,10 +455,12 @@ test("machine identity service is hardened and break-glass is not granted to run
   const sudoers = await readFile(new URL("../../ops/release-engine/wbd-release-engine.sudoers", import.meta.url), "utf8");
   const broker = await readFile(new URL("../../ops/release-engine/wbd-release-engine-operation", import.meta.url), "utf8");
   assert.match(unit, /User=wbd-release[\s\S]*NoNewPrivileges=true[\s\S]*ProtectSystem=strict/u);
+  assert.match(unit, /ReadWritePaths=.*\.spw-release-deploy\.lock/u);
   const sudoRules = sudoers.split(/\r?\n/u).filter((line) => line.trim() && !line.trim().startsWith("#")).join("\n");
   assert.doesNotMatch(sudoRules, /\/bin\/(ba)?sh|systemctl|NOPASSWD:\s*ALL/u);
   assert.doesNotMatch(broker, /\beval\b|ssh|scp|sftp|powershell/iu);
   assert.match(broker, /OPERATION_NOT_ALLOWLISTED/u);
+  assert.match(broker, /\/usr\/local\/libexec\/wbd-deployment\/spw-immutable-release\.sh/u);
   assert.match(broker, /-prechange-production\.env/u);
   assert.doesNotMatch(broker, /snapshot\)\s*[\s\S]{0,200}\/dev\/null/u);
 });
