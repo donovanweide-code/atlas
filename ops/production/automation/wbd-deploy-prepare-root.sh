@@ -7,6 +7,7 @@ inputs=/srv/wbd/shared/deploy-inputs
 plan_dir=/srv/wbd/shared/deploy-plans
 
 release_ok() { [[ "$1" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
+current_release_ok() { [[ "$1" =~ ^(SPW|WBD)-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
 hash_ok() { [[ "$1" =~ ^[a-f0-9]{64}$ ]]; }
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 sha() { sha256sum "$1" | awk '{print $1}'; }
@@ -53,7 +54,7 @@ case "$command" in
     ;;
   prepare)
     IFS= read -r release; IFS= read -r expected_current; IFS= read -r artifact_sha; IFS= read -r manifest_sha
-    release_ok "$release" && release_ok "$expected_current" || fail "ongeldige release-ID"
+    release_ok "$release" && current_release_ok "$expected_current" || fail "ongeldige release-ID"
     hash_ok "$artifact_sha" && hash_ok "$manifest_sha" || fail "ongeldige SHA-256"
     artifact="$incoming/$release.tar.gz"; manifest="$incoming/$release.manifest.json"
     [[ -f "$artifact" && ! -L "$artifact" && "$(sha "$artifact")" == "$artifact_sha" ]] || fail "artifact wijkt af"

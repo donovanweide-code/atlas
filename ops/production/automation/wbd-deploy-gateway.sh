@@ -8,6 +8,7 @@ incoming=/srv/wbd/incoming
 original="${SSH_ORIGINAL_COMMAND:-}"
 
 release_ok() { [[ "$1" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
+current_release_ok() { [[ "$1" =~ ^(SPW|WBD)-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
 hash_ok() { [[ "$1" =~ ^[a-f0-9]{64}$ ]]; }
 run_id_ok() { [[ "$1" =~ ^[0-9]{1,20}$ ]]; }
 deny() { printf 'DENIED: %s\n' "$1" >&2; exit 64; }
@@ -50,7 +51,7 @@ case "$role:$command" in
     ;;
   prepare:prepare)
     release_ok "${arg1:-}" || deny "ongeldige release-ID"
-    release_ok "${arg2:-}" || deny "ongeldige current release-ID"
+    current_release_ok "${arg2:-}" || deny "ongeldige current release-ID"
     hash_ok "${arg3:-}" || deny "ongeldige artifact-SHA"
     hash_ok "${arg4:-}" || deny "ongeldige manifest-SHA"
     audit "prepare release=$arg1 expected_current=$arg2 artifact_sha256=$arg3 manifest_sha256=$arg4"
@@ -71,7 +72,7 @@ case "$role:$command" in
   switch:preflight)
     release_ok "${arg1:-}" || deny "ongeldige release-ID"
     hash_ok "${arg2:-}" || deny "ongeldige deployplan-SHA"
-    release_ok "${arg3:-}" || deny "ongeldige current release-ID"
+    current_release_ok "${arg3:-}" || deny "ongeldige current release-ID"
     run_id_ok "${arg4:-}" || deny "ongeldige workflow-run-ID"
     audit "preflight release=$arg1 plan_sha256=$arg2 expected_current=$arg3 run_id=$arg4"
     # Root helper consumes release, plan SHA and workflow run ID as the

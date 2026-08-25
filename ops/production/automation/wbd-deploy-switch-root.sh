@@ -6,6 +6,7 @@ plan_dir=/srv/wbd/shared/deploy-plans
 evidence_dir=/srv/wbd/shared/deploy-evidence
 
 release_ok() { [[ "$1" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
+current_release_ok() { [[ "$1" =~ ^(SPW|WBD)-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]; }
 hash_ok() { [[ "$1" =~ ^[a-f0-9]{64}$ ]]; }
 run_id_ok() { [[ "$1" =~ ^[0-9]{1,20}$ ]]; }
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -28,7 +29,7 @@ read_common() {
 }
 preflight() {
   local expected_current="$1" current_path current_id rollback rollback_sha env_snapshot env_sha candidate
-  release_ok "$expected_current" || fail "ongeldige current release-ID"
+  current_release_ok "$expected_current" || fail "ongeldige current release-ID"
   current_path="$(readlink -f /srv/wbd/current)"; current_id="$(basename "$current_path")"
   [[ "$current_id" == "$expected_current" && "$(plan_value "$plan" previous.path)" == "$current_path" ]] || fail "current release wijkt af"
   candidate="$(plan_value "$plan" candidatePath)"
