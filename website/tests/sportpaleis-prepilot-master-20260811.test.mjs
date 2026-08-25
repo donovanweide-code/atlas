@@ -163,7 +163,8 @@ test("PRE-PILOT CORRECTION — operator beheert begrensde productieregels en pro
   assert.equal(element.revision, 1);
   const order = (await service.bootstrap(operator.token)).orders.find(({ stage }) => stage !== "DONE");
   const inventory = await service.setProductionElementRequirement(operator.token, operator.csrfToken, { orderId: order.id, variantId: "acceptatie-logo-wit", quantity: 32 });
-  assert.deepEqual({ openDemand: inventory[0].openDemand, projected: inventory[0].projectedFreeStock, shortage: inventory[0].shortage, suggested: inventory[0].suggestedReplenishment }, { openDemand: 32, projected: 8, shortage: true, suggested: 32 });
+  const inventoryItem = inventory.find(({ variantId }) => variantId === "acceptatie-logo-wit");
+  assert.deepEqual({ openDemand: inventoryItem.openDemand, projected: inventoryItem.projectedFreeStock, shortage: inventoryItem.shortage, suggested: inventoryItem.suggestedReplenishment }, { openDemand: 32, projected: 8, shortage: true, suggested: 32 });
   await assert.rejects(service.upsertProductionElement(storeUser.token, storeUser.csrfToken, { name: "Niet toegestaan", ownerType: "OWN_BRAND", ownerName: "Sportpaleis", sourceAsset: "n.v.t.", sourceStatus: "DATA_GAP", variants: [{ label: "test", productionMode: "INTERNAL_PLOT" }] }), (error) => error.code === "FORBIDDEN");
 
   const pure = sportpaleisProductionInventoryView({ orders: [{ id: "open", stage: "PRINT" }, { id: "done", stage: "DONE" }], productionElements: [element], productionElementRequirements: [{ orderId: "open", variantId: "acceptatie-logo-wit", quantity: 3 }, { orderId: "done", variantId: "acceptatie-logo-wit", quantity: 99 }] });

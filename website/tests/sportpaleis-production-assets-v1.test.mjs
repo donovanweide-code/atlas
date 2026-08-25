@@ -83,9 +83,10 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   const operatorBootstrap = await service.bootstrap(operator.token);
   assert.deepEqual(operatorBootstrap.productionAssetSources, []);
   const bootstrap = await service.bootstrap(admin.token);
-  assert.equal(bootstrap.productionAssetSources[0].candidates[0].controlledVector, undefined);
-  assert.equal(bootstrap.productionAssetSources[0].candidates[0].previewSvg, undefined);
-  assert.equal(bootstrap.productionAssetSources[0].documentPreviewSvg, undefined);
+  const bootstrapSource = bootstrap.productionAssetSources.find(({ id }) => id === source.id);
+  assert.equal(bootstrapSource.candidates[0].controlledVector, undefined);
+  assert.equal(bootstrapSource.candidates[0].previewSvg, undefined);
+  assert.equal(bootstrapSource.documentPreviewSvg, undefined);
   await assert.rejects(service.promoteProductionAsset(operator.token, operator.csrfToken, source.id, {}), (error) => error.code === "FORBIDDEN");
   await assert.rejects(service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [source.candidates[0].id], proofAuthority: "NO" }), (error) => error.code === "PRODUCTION_PROOF_AUTHORITY_REQUIRED");
   const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK");
@@ -126,7 +127,7 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   assert.match(svg, /data-production-data-sha256/u);
   assert.match(svg, /<path/u);
   const persisted = await store.read();
-  assert.equal(persisted.productionAssetSources[0].original.dataBase64, bytes.toString("base64"));
+  assert.equal(persisted.productionAssetSources.find(({ original }) => original.sha256 === source.original.sha256).original.dataBase64, bytes.toString("base64"));
   assert.ok(persisted.productionElements.find(({ id }) => id === asset.id).controlledVector.contours.length);
 });
 

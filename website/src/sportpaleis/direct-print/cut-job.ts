@@ -217,6 +217,7 @@ function tryPlace(
   configuration: NestingConfiguration,
   configuredWidthMm: number,
   collisionCache: Map<string, boolean>,
+  minimumY = 0,
 ): { placement?: PlacedObject; evaluated: number } {
   let best: PlacedObject | undefined;
   let bestScore: readonly number[] | undefined;
@@ -226,6 +227,7 @@ function tryPlace(
   for (const orientation of prepared.orientations) {
     for (const candidate of placementCandidates(sheet, orientation, configuration, configuredWidthMm)) {
       evaluated += 1;
+      if (candidate.y + 0.000_001 < minimumY) continue;
       const contours = translateContours(orientation.contours, candidate);
       const boundsMm = boundsForContours(contours);
       const jobLength = boundsMm.maxY + configuration.edgeMarginMm;
@@ -266,12 +268,20 @@ function nestInOrder(
 ): NestSolution | undefined {
   const sheets: PlacedObject[][] = [[]];
   let evaluatedCandidateCount = 0;
+  let activeSectionRank: number | null = null;
+  let sectionFloorMm = configuration.edgeMarginMm;
   for (const prepared of ordered) {
-    let result = tryPlace(prepared, sheets.at(-1) ?? [], configuration, configuredWidthMm, collisionCache);
+    const sectionRank = Number(prepared.input.nestingSection?.rank ?? 99);
+    if (activeSectionRank !== null && sectionRank !== activeSectionRank) {
+      sectionFloorMm = quantizeMm((sheets.at(-1) ?? []).reduce((maximum, placed) => Math.max(maximum, placed.boundsMm.maxY), configuration.edgeMarginMm) + configuration.minimumCutGapMm);
+    }
+    activeSectionRank = sectionRank;
+    let result = tryPlace(prepared, sheets.at(-1) ?? [], configuration, configuredWidthMm, collisionCache, sectionFloorMm);
     evaluatedCandidateCount += result.evaluated;
     if (!result.placement && (sheets.at(-1)?.length ?? 0) > 0 && configuration.maxJobLengthMm !== undefined) {
       sheets.push([]);
-      result = tryPlace(prepared, [], configuration, configuredWidthMm, collisionCache);
+      sectionFloorMm = configuration.edgeMarginMm;
+      result = tryPlace(prepared, [], configuration, configuredWidthMm, collisionCache, sectionFloorMm);
       evaluatedCandidateCount += result.evaluated;
     }
     if (!result.placement) return undefined;
@@ -298,7 +308,15 @@ function baselineShelf(
   let x = lateralEdge;
   let y = configuration.edgeMarginMm;
   let rowHeight = 0;
+  let activeSectionRank: number | null = null;
   for (const prepared of ordered) {
+    const sectionRank = Number(prepared.input.nestingSection?.rank ?? 99);
+    if (activeSectionRank !== null && sectionRank !== activeSectionRank) {
+      x = lateralEdge;
+      y = quantizeMm(y + rowHeight + configuration.minimumCutGapMm);
+      rowHeight = 0;
+    }
+    activeSectionRank = sectionRank;
     const orientation = prepared.orientations[0];
     if (orientation.widthMm + (2 * lateralEdge) > configuredWidthMm) return undefined;
     if (x > lateralEdge
@@ -339,11 +357,12 @@ function compareSolutions(left: NestSolution, right: NestSolution): number {
 
 function orderings(prepared: readonly PreparedObject[]): readonly (readonly PreparedObject[])[] {
   const byId = (left: PreparedObject, right: PreparedObject) => left.input.id.localeCompare(right.input.id);
+  const bySection = (left: PreparedObject, right: PreparedObject) => Number(left.input.nestingSection?.rank ?? 99) - Number(right.input.nestingSection?.rank ?? 99);
   const candidates = [
-    [...prepared].sort((left, right) => right.sortHeightMm - left.sortHeightMm || right.sortWidthMm - left.sortWidthMm || byId(left, right)),
-    [...prepared].sort((left, right) => right.sortWidthMm - left.sortWidthMm || right.sortHeightMm - left.sortHeightMm || byId(left, right)),
-    [...prepared].sort((left, right) => right.sortAreaMm2 - left.sortAreaMm2 || byId(left, right)),
-    [...prepared].sort(byId),
+    [...prepared].sort((left, right) => bySection(left, right) || right.sortHeightMm - left.sortHeightMm || right.sortWidthMm - left.sortWidthMm || byId(left, right)),
+    [...prepared].sort((left, right) => bySection(left, right) || right.sortWidthMm - left.sortWidthMm || right.sortHeightMm - left.sortHeightMm || byId(left, right)),
+    [...prepared].sort((left, right) => bySection(left, right) || right.sortAreaMm2 - left.sortAreaMm2 || byId(left, right)),
+    [...prepared].sort((left, right) => bySection(left, right) || byId(left, right)),
   ];
   const seen = new Set<string>();
   return candidates.filter((candidate) => {
@@ -457,6 +476,7 @@ function buildGroup(placed: PlacedObject, request: CutJobRequest): ProductionGro
       product: input.product,
       ...(input.requestedPhysicalSizeMm ? { requestedPhysicalSizeMm: input.requestedPhysicalSizeMm } : {}),
       ...(input.vectorProfile ? { vectorProfile: input.vectorProfile } : {}),
+      ...(input.nestingSection ? { nestingSection: input.nestingSection } : {}),
       ...(input.semanticGroup ? { semanticGroup: input.semanticGroup } : {}),
       ...(input.assetIdentity ? { assetIdentity: input.assetIdentity } : {}),
       material: input.material,

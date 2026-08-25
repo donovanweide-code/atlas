@@ -43,10 +43,9 @@ test("Pioneers 2 loopt van normale order tot byte-identiek SVG-productieartefact
     items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
   }, "review-pioneers-order")).value;
   assert.equal(created.salesAttribution.label, "Donovan"); assert.equal(created.productionLines.length, 1);
-  assert.equal(created.productionLines[0].source.kind, "PRODUCTION_SOURCE");
-  assert.equal(created.productionLines[0].source.sourceSetId, PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID);
-  assert.equal(created.productionLines[0].source.outputWriterId, CUTJOB_SVG_WRITER.id);
-  assert.equal(created.productionLines[0].proofStatus, "PHYSICALLY_VALIDATED"); assert.equal(created.productionLines[0].heightMm, 200);
+  assert.equal(created.productionLines[0].source.kind, "PRODUCTION_ELEMENT");
+  assert.equal(created.productionLines[0].source.id, "production-asset-verified-pioneers-rug-senior-200");
+  assert.equal(created.productionLines[0].proofStatus, "GEOMETRY_VALIDATED"); assert.equal(created.productionLines[0].heightMm, 200);
   const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "human-review-local" }, created.revision);
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "review-pioneers-control")).value;
   const readyState = await service.bootstrap(admin.token); const readyOrder = readyState.orders.find(({ id }) => id === controlled.id);

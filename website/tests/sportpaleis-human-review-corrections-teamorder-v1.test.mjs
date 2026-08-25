@@ -43,7 +43,14 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.equal(job.snapshot.layout.edgeMarginMm, 5);
   assert.equal(job.snapshot.layout.minimumGapMm, 6.4);
   assert.equal(job.snapshot.layout.placements.length, 4);
+  const initialsPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-initials-dw"));
   const backPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-back-10"));
+  assert.ok(initialsPlacements.every(({ nestingSection }) => nestingSection.key === "initials"));
+  assert.ok(backPlacements.every(({ nestingSection }) => nestingSection.key === "back-numbers"));
+  const physicalGroups = job.snapshot.layout.productionGeometry.groups;
+  const initialsBounds = physicalGroups.filter(({ provenance }) => provenance.nestingSection?.key === "initials").map(({ boundsMm }) => boundsMm);
+  const backBounds = physicalGroups.filter(({ provenance }) => provenance.nestingSection?.key === "back-numbers").map(({ boundsMm }) => boundsMm);
+  assert.ok(Math.max(...initialsBounds.map(({ maxY }) => maxY)) + job.snapshot.layout.minimumGapMm <= Math.min(...backBounds.map(({ minY }) => minY)) + 0.001, "initialen blijven in een eigen fysieke band en worden niet tussen rugnummers genest");
   assert.equal(backPlacements.length, 2);
   assert.ok(backPlacements.every(({ physicalMembers }) => physicalMembers.map(({ digit }) => digit).join("") === "10"));
   assert.deepEqual([...new Set(backPlacements.map(({ semanticGroup }) => semanticGroup.copyIndex))].sort(), [1, 2]);
@@ -56,6 +63,41 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.match(svg, /<svg/u);
   assert.match(svg, /data-production-data-sha256/u);
   assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), beforeGolden);
+});
+
+test("één kleurbatch houdt Initialen, Rugnummers, Shortnummers en Namen in deterministische fysieke banden", async (context) => {
+  const { service, admin } = await fixture(context);
+  const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
+  const created = (await service.createOrder(admin.token, admin.csrfToken, {
+    orderKind: "CUSTOM", customer: "Gemengde praktijkbatch", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    items: [{ product: "Gemengde productie", size: "", quantity: 4, personalization: "Initialen, rug, short en naam", foilColor: "Wit", deviation: true, overrides: empty }],
+    productionLines: [
+      { id: "practice-name", type: "TEXT", content: "DONOVAN", previewLabel: "Naam DONOVAN", widthMm: 180, heightMm: 32, quantity: 1, sourceId: font.id },
+      { id: "practice-short", type: "NUMBER", content: "19", previewLabel: "Shortnummer 19", widthMm: 70, heightMm: 75, quantity: 1, sourceId: font.id },
+      { id: "practice-back", type: "NUMBER", content: "24", previewLabel: "Rugnummer 24", widthMm: 190, heightMm: 200, quantity: 1, sourceId: font.id },
+      { id: "practice-initials", type: "INITIALS", content: "DB", previewLabel: "Initialen DB", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id },
+    ],
+  }, "practice-decoration-sections-order")).value;
+  const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, created.revision, "practice-decoration-sections-control")).value;
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "practice-decoration-sections-proposal")).value;
+  assert.equal(proposal.groups.length, 1);
+  assert.deepEqual(proposal.groups[0].productionLineRefs.map(({ lineId }) => lineId), ["practice-initials", "practice-back", "practice-short", "practice-name"]);
+  const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "practice-decoration-sections-job")).value;
+  const grouped = new Map();
+  for (const group of job.snapshot.layout.productionGeometry.groups) {
+    const key = group.provenance.nestingSection.key;
+    grouped.set(key, [...(grouped.get(key) ?? []), group]);
+  }
+  const keys = ["initials", "back-numbers", "short-numbers", "names"];
+  assert.deepEqual([...grouped.keys()], keys);
+  for (let index = 1; index < keys.length; index += 1) {
+    const before = grouped.get(keys[index - 1]).map(({ boundsMm }) => boundsMm);
+    const after = grouped.get(keys[index]).map(({ boundsMm }) => boundsMm);
+    assert.ok(Math.max(...before.map(({ maxY }) => maxY)) + job.snapshot.layout.minimumGapMm <= Math.min(...after.map(({ minY }) => minY)) + 0.001);
+  }
+  assert.equal(job.snapshot.scale, 1);
+  assert.equal(job.snapshot.layout.objectCount, 4);
+  assert.ok(job.snapshot.layout.productionGeometry.groups.every(({ mirrorApplied }) => mirrorApplied === job.snapshot.orientation.preMirrored));
 });
 
 test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, expliciet Afronden en Opgehaald blijven apart", async (context) => {

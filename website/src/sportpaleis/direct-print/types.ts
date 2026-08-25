@@ -116,6 +116,8 @@ export interface CutObject {
   association?: string;
   requestedPhysicalSizeMm?: RequestedPhysicalSizeMm;
   vectorProfile?: string;
+  /** Deterministische fysieke band binnen één kleurjob; voorkomt vermenging van decoration types. */
+  nestingSection?: { key: string; label: string; rank: number };
   semanticGroup?: SemanticProductionGroup;
   assetIdentity?: VersionedAssetIdentity;
   material: MaterialSpecification;
@@ -134,6 +136,7 @@ export interface CutObjectProvenance {
   product: string;
   requestedPhysicalSizeMm?: RequestedPhysicalSizeMm;
   vectorProfile?: string;
+  nestingSection?: { key: string; label: string; rank: number };
   semanticGroup?: SemanticProductionGroup;
   assetIdentity?: VersionedAssetIdentity;
   material: MaterialSpecification;

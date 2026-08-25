@@ -97,7 +97,8 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
     assert.equal(profile.validation.physicalCutOutput, "VALIDATED");
     assert.deepEqual(profile.validation.validatedScope, ["Senior rugnummerhoogte 200 mm", "Snijlijnen/cijfercontouren 2, 34 en 77", "Fysieke snijtest uitgevoerd en snijlijnen correct bevestigd"]);
     for (const field of ["placement", "referenceDistance", "rotation", "mirror"]) assert.equal(profile.validation[field], "DATA_GAP");
-    assert.equal(profile.backNumberSizeClasses.JUNIOR.status, "DATA_GAP");
+    assert.equal(profile.backNumberSizeClasses.JUNIOR.status, "SOURCE_CONFIGURED");
+    assert.equal(profile.backNumberSizeClasses.JUNIOR.physicalHeightMm, 160);
     const shorts = (await service.bootstrap(admin.token)).productionProfiles.find(({ id }) => id === "profile-pioneers-shorts");
     assert.equal(shorts.validation.cutContour, "DATA_GAP");
     assert.equal(shorts.validation.physicalCutOutput, "DATA_GAP");

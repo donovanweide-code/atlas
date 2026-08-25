@@ -176,10 +176,10 @@ test("kleine type-sortering ordent stabiel binnen één kleur vóór de bestaand
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, created.revision, "p0-sort-control")).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "p0-sort-proposal")).value;
   assert.equal(proposal.groups.length, 1);
-  assert.deepEqual(proposal.groups[0].productionLineRefs.map(({ lineId }) => lineId), ["initials-a", "initials-b", "short-a", "short-b", "back-a", "back-b", "name-a", "name-b"]);
+  assert.deepEqual(proposal.groups[0].productionLineRefs.map(({ lineId }) => lineId), ["initials-a", "initials-b", "back-a", "back-b", "short-a", "short-b", "name-a", "name-b"]);
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "p0-sort-job-001")).value;
-  assert.deepEqual(job.snapshot.productionLines.map(({ id }) => id), ["initials-a", "initials-b", "short-a", "short-b", "back-a", "back-b", "name-a", "name-b"]);
-  assert.deepEqual(job.snapshot.productionLines.map(({ widthMm, heightMm }) => [widthMm, heightMm]), [[50, 30], [50, 30], [50, 75], [55, 75], [120, 200], [130, 200], [120, 30], [140, 30]]);
+  assert.deepEqual(job.snapshot.productionLines.map(({ id }) => id), ["initials-a", "initials-b", "back-a", "back-b", "short-a", "short-b", "name-a", "name-b"]);
+  assert.deepEqual(job.snapshot.productionLines.map(({ widthMm, heightMm }) => [widthMm, heightMm]), [[50, 30], [50, 30], [120, 200], [130, 200], [50, 75], [55, 75], [120, 30], [140, 30]]);
   assert.equal(job.snapshot.scale, 1); assert.equal(job.snapshot.artifact.format, "SVG");
   assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), before, "Golden/reference-jobs blijven byte- en objectgelijk");
 });

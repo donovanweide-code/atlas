@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,6 +7,7 @@ import test from "node:test";
 
 import { parseSportpaleisDividePdfText } from "../scripts/sportpaleis-divide-import.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 
 const passwords = { kevin: "Practice-Kevin-2026!", patrick: "Practice-Patrick-2026!", collega: "Practice-Store-2026!", "donovan-support": "Practice-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -32,6 +34,44 @@ function textPdf(lines) {
 }
 
 const sourceHash = "a".repeat(64);
+
+test("vijf echte productiebronnen blijven byte-identiek, leveren 0-9 en koppelen aan de juiste profielen", async (context) => {
+  const expected = [
+    ["pioneers-rug-junior-160", "1C336C5E380A3100DDFD2318302D2AC10ACE60F4E44F4E544509DD628920522B", 160],
+    ["hockey-rug-200", "4F30D058BE23E208EBA9FA40A5779A9E0FA826FDAEAA34F51029ADF57F887293", 200],
+    ["pioneers-short-80", "E89630E0450B35F10AE1D0DA1C231AF98E5E6D96B887DE3DE9629F2A2FF29860", 80],
+    ["hockey-short-75", "17859D2173CFC5A75B488CEA75033A92D22EBAE036C989EE226DA6E40B43F015", 75],
+    ["pioneers-rug-senior-200", "58343DD0C38F913C871E3AB421A48AF48304FAED80BFF67A5CF407DA65EE839C", 200],
+  ];
+  const entries = verifiedProductionNumberSources();
+  assert.equal(entries.length, expected.length);
+  for (const [key, expectedSha, expectedHeight] of expected) {
+    const entry = entries.find(({ definition }) => definition.key === key);
+    assert.ok(entry, key);
+    const bytes = Buffer.from(entry.source.original.dataBase64, "base64");
+    assert.equal(createHash("sha256").update(bytes).digest("hex").toUpperCase(), expectedSha);
+    assert.equal(entry.source.original.sha256, expectedSha);
+    assert.equal(entry.source.candidates.length, 10);
+    assert.equal(new Set(entry.source.candidates.map(({ geometryHash }) => geometryHash)).size, 10);
+    assert.deepEqual(Object.keys(entry.element.numberGlyphs), ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+    assert.equal(entry.element.lifecycleStatus, "PRODUCTION_READY");
+    assert.equal(entry.element.variants[0].heightMm, expectedHeight);
+    assert.equal(entry.element.sourceLayers.vectorSource.sha256, expectedSha);
+  }
+  assert.equal(entries.find(({ definition }) => definition.key === "pioneers-rug-senior-200").source.inspection.svg.excludedTextAnnotationCount, 1);
+  assert.equal(entries.find(({ definition }) => definition.key === "hockey-rug-200").source.inspection.svg.excludedTextAnnotationCount, 0);
+
+  const { service, operator } = await fixture(context);
+  const bootstrap = await service.bootstrap(operator.token);
+  assert.equal(bootstrap.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).length, 5);
+  const junior = (await service.createOrder(operator.token, operator.csrfToken, {
+    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104-J", provenance: "Pioneers junior source fixture", association: "Almerer Pioneers", customer: "Pioneers Junior", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    items: [{ articleId: "sp-live-116386", size: "M", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "18", backNumberSizeClass: "JUNIOR" } }],
+  }, "pioneers-junior-exact-source")).value;
+  assert.equal(junior.productionLines[0].heightMm, 160);
+  assert.equal(junior.productionLines[0].source.id, "production-asset-verified-pioneers-rug-junior-160");
+  assert.equal(junior.productionLines[0].validation.status, "VALID");
+});
 
 test("SV Huizen Webshop-PDF bewaart de artikelspecifieke bedrukking per artikel", () => {
   const parsed = parseSportpaleisDividePdfText({ sourceDocumentId: sourceHash, sourceHash, pages: [[
@@ -95,7 +135,7 @@ test("VVA / Spartaan voorraadlogo is uitsluitend Webshop, verlaagt 74 eenmaal en
   await assert.rejects(service.applyWebshopStockLogo(operator.token, operator.csrfToken, accepted.value.id, { expectedRevision: applied.value.revision }, "apply-stock-260000103-new"), (error) => error.code === "WEBSHOP_STOCK_LOGO_NOT_PENDING");
 });
 
-test("Pioneers 45 rug, borst en short gebruiken nooit een generiek fallback-font", async (context) => {
+test("Pioneers 45 gebruikt de echte rug- en shortbronnen en houdt borst fail-closed", async (context) => {
   const { service, store, operator } = await fixture(context);
   const created = (await service.createOrder(operator.token, operator.csrfToken, {
     orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104", provenance: "Gecontroleerde webshop-PDF fixture", association: "Almerer Pioneers", customer: "Pioneers 45", customerEmail: "", customerPhone: "", standardPersonalization: empty,
@@ -110,7 +150,13 @@ test("Pioneers 45 rug, borst en short gebruiken nooit een generiek fallback-font
     ["45", 80, "Shortnummer 45"],
   ]);
   assert.ok(created.productionLines.every(({ source }) => source.id !== "font-0f330cf7aa7dd6c6"));
-  assert.ok(created.productionLines.every(({ validation }) => validation.status === "BLOCKED" && /FFF englisch|productiebron/iu.test(validation.reason)));
+  const [back, chest, shorts] = created.productionLines;
+  assert.equal(back.source.id, "production-asset-verified-pioneers-rug-senior-200");
+  assert.equal(back.validation.status, "VALID");
+  assert.equal(shorts.source.id, "production-asset-verified-pioneers-short-80");
+  assert.equal(shorts.validation.status, "VALID");
+  assert.equal(chest.validation.status, "BLOCKED");
+  assert.match(chest.validation.reason, /FFF englisch|productiebron/iu);
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "pioneers-45-control")).value;
   await assert.rejects(service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "pioneers-45-proposal"), (error) => ["PIONEERS_NUMBER_SOURCE_REVIEW_REQUIRED", "PIONEERS_NUMBER_SOURCE_MISMATCH", "ORDER_NOT_READY"].includes(error.code));
   assert.equal((await store.read()).productionJobs.some(({ snapshot }) => snapshot?.orders?.some(({ id }) => id === created.id)), false);

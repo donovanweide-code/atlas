@@ -289,6 +289,7 @@ export interface ProductionProfile {
   backNumberSizeClasses?: Partial<Record<BackNumberSizeClass, { physicalHeightMm: number | null; sourceValueMm?: number | null; status: "VALIDATED" | "SOURCE_CONFIGURED" | "DATA_GAP"; source: string }>>;
   productionSourceSetId?: string;
   outputWriterId?: string;
+  productionNumberAssetIds?: string[];
   supports?: (keyof OrderPersonalization)[];
   initialsInfixRule?: { active: boolean; heightMm: number | null; horizontalSpacingMm: number | null; baselineOffsetMm: number | null; alignment: "CENTER"; status: "SOURCE_CONFIGURED" | "DATA_GAP"; revision: number; /** Read-only migration compatibility; never used for new output. */ verticalOffsetMm?: number | null };
 }
@@ -448,6 +449,7 @@ export interface SportpaleisProductionElement {
   /** Production Assets V1: one immutable source can yield many managed assets. */
   sourceId?: string;
   version?: string;
+  verifiedSourceKey?: string;
   lifecycleStatus?: "CANDIDATE" | "REVIEW" | "PRODUCTION_READY" | "ARCHIVED";
   productionMethod?: "SELF_PRODUCED" | "PHYSICAL_TRANSFER";
   sizePolicy?: {
@@ -643,7 +645,7 @@ export interface ProductionJobSnapshot {
       lineId: string; xMm: number; yMm: number; widthMm: number; heightMm: number;
       sourceWidthMm?: number; sourceHeightMm?: number; mirrorApplied?: boolean;
       baseRotationApplied?: 0 | 90 | 180 | 270; nestingRotationApplied?: 0 | 90 | 180 | 270; rotationApplied?: 0 | 90 | 180 | 270;
-      vectorProfile?: string | null; sourceOrderId?: string;
+      vectorProfile?: string | null; nestingSection?: { key: string; label: string; rank: number } | null; sourceOrderId?: string;
       semanticGroup?: {
         id: string; kind: "MULTI_DIGIT_NUMBER"; sourceLineId: string; itemId?: string; productionProfileId?: string;
         value: string; digit: string; digitIndex: number; digitCount: number; copyIndex?: number; copyCount?: number; garmentCompositionSpacingMm: number;

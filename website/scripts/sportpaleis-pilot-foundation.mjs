@@ -30,6 +30,7 @@ import {
   productionAssetPiece,
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
+import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -681,6 +682,7 @@ export function migrateSportpaleisPilotState(input) {
   state.webshopIntake.stockLogo ??= { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] };
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
+  reconcileVerifiedProductionNumberSources(state);
   for (const source of state.productionAssetSources) {
     source.revision ??= 1;
     source.intakeKind ??= source.inspection?.intakeKind ?? "ARTWORK";
@@ -823,6 +825,7 @@ export function validateSportpaleisPilotState(input) {
   state.mailbatches ??= [];
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
+  reconcileVerifiedProductionNumberSources(state);
   state.productionFonts ??= [];
   if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
   state.productionElementRequirements ??= [];
@@ -863,6 +866,7 @@ export function validateSportpaleisPilotState(input) {
       if (profile.outputWriterId) existing.outputWriterId = profile.outputWriterId;
     }
   }
+  reconcileVerifiedProductionNumberSources(state);
   applyPioneersProductionAuthority(state);
   applyScBuitenboysShortAuthority(state);
   state.settings ??= structuredClone(PILOT_SETTINGS);
@@ -3860,10 +3864,13 @@ function associationProfileSizeLabel(association, profile) {
 
 function resolveBackNumberProductionContext(association, profile, sizeClass, garmentSize) {
   if (!sizeClass) return null;
+  const configured = profile.backNumberSizeClasses?.[sizeClass];
+  if (sizeClass === "JUNIOR" && profile.productionNumberAssetIds?.length && Number(configured?.physicalHeightMm) > 0 && ["SOURCE_CONFIGURED", "VALIDATED"].includes(configured.status)) {
+    return { sizeClass, physicalHeightMm: Number(configured.physicalHeightMm), status: configured.status, source: configured.source };
+  }
   if (sizeClass === "JUNIOR" && association?.juniorValidationStatus === "VALIDATED") {
     return { sizeClass, physicalHeightMm: association.juniorPhysicalHeightMm, status: "VALIDATED", source: association.juniorValidationNote };
   }
-  const configured = profile.backNumberSizeClasses?.[sizeClass];
   if (sizeClass === "SENIOR" && configured?.status !== "VALIDATED" && Number(association?.dimensionsCm?.backNumberSenior) > 0) return {
     sizeClass,
     physicalHeightMm: Number(association.dimensionsCm.backNumberSenior) * 10,
@@ -3911,6 +3918,48 @@ function configuredManagedFont(state, profile) {
 
 const PIONEERS_ASSOCIATION = "Almerer Pioneers";
 const PIONEERS_PROFILE_AUTHORITY_EVENT = "SPW-PIONEERS-NUMBER-AUTHORITY-20260825";
+const VERIFIED_NUMBER_SOURCE_EVENT = "SPW-VERIFIED-SVG-NUMBER-SOURCES-20260825";
+
+function reconcileVerifiedProductionNumberSources(state) {
+  state.productionAssetSources ??= [];
+  state.productionElements ??= [];
+  state.audit ??= [];
+  const entries = verifiedProductionNumberSources();
+  for (const entry of entries) {
+    const source = state.productionAssetSources.find(({ original }) => original?.sha256 === entry.source.original.sha256);
+    if (!source) state.productionAssetSources.push(entry.source);
+    const sourceId = source?.id ?? entry.source.id;
+    const existing = state.productionElements.find((element) => element.verifiedSourceKey === entry.definition.key
+      || element.sourceId === sourceId && element.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && placement === entry.definition.placement) && element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - entry.definition.heightMm) <= 0.01));
+    if (!existing) {
+      const element = structuredClone(entry.element);
+      element.sourceId = sourceId;
+      element.sourceLayers.vectorSource.sha256 = entry.source.original.sha256;
+      element.sourceLayers.validatedCutContour.sourceId = sourceId;
+      state.productionElements.push(element);
+      const auditId = `audit-${VERIFIED_NUMBER_SOURCE_EVENT.toLocaleLowerCase("en-US")}-${entry.definition.key}`;
+      if (!state.audit.some(({ id }) => id === auditId)) state.audit.unshift({ id: auditId, at: "2026-08-25T00:00:00.000Z", userId: "system:verified-source-import", action: "Gecontroleerde SVG-nummerset opgenomen", subject: element.id, details: { sourceId, sourceSha256: entry.source.original.sha256, sourceFilename: entry.source.original.filename, assetVersion: element.version, physicalHeightMm: entry.definition.heightMm, placement: entry.definition.placement, sourceBytesImmutable: true, geometryAiGenerated: false } });
+    }
+  }
+  const assetsByKey = new Map(state.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).map((element) => [element.verifiedSourceKey, element.id]));
+  const links = new Map([
+    ["profile-pioneers-shirt", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
+    ["profile-source-almerer-pioneers-backNumber", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
+    ["profile-pioneers-shorts", ["pioneers-short-80"]],
+    ["profile-source-almerer-pioneers-shortsNumber", ["pioneers-short-80"]],
+  ]);
+  for (const [profileId, keys] of links) {
+    const profile = state.productionProfiles?.find(({ id }) => id === profileId);
+    if (!profile) continue;
+    profile.productionNumberAssetIds = keys.map((key) => assetsByKey.get(key)).filter(Boolean);
+    if (keys.includes("pioneers-rug-senior-200")) {
+      profile.backNumberSizeClasses ??= {};
+      profile.backNumberSizeClasses.SENIOR = { physicalHeightMm: 200, status: "VALIDATED", source: "Pioneers rugnummers senior 20cm.svg · SHA-256 58343DD0C38F913C871E3AB421A48AF48304FAED80BFF67A5CF407DA65EE839C · bestaande fysieke Senior-validatie blijft authoritative" };
+      profile.backNumberSizeClasses.JUNIOR = { physicalHeightMm: 160, status: "SOURCE_CONFIGURED", source: "Pioneers rugnummers junior 16cm.svg · SHA-256 1C336C5E380A3100DDFD2318302D2AC10ACE60F4E44F4E544509DD628920522B" };
+    }
+    if (keys.includes("pioneers-short-80")) profile.sizeLabel = "Shortnummer 8 cm · gecontroleerde SVG-contourset";
+  }
+}
 
 function normalizedProductionIdentity(value) {
   return String(value ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
@@ -4022,7 +4071,7 @@ function assertPioneersNumberSource(state, order, line) {
     if (source && seniorBackNumber && source.sourceSetId === PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID) return;
   }
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
-    const linked = associationNumberSet(state, PIONEERS_ASSOCIATION);
+    const linked = associationNumberSet(state, PIONEERS_ASSOCIATION, { field: line.personalizationField, profileId: item.productionProfileId, requestedHeightMm: line.heightMm });
     if (!linked.ambiguous && linked.asset?.id === line.source.id && (linked.asset.version ?? String(linked.asset.revision)) === line.source.version) return;
   }
   if (line.source?.kind === "FONT") {
@@ -4032,15 +4081,26 @@ function assertPioneersNumberSource(state, order, line) {
   throw Object.assign(new Error(`${line.preview?.label ?? line.content}: gekoppelde bron wijkt af van de gecontroleerde Pioneers-bron “${canonicalName}”; productie blijft op REVIEW.`), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_MISMATCH" });
 }
 
-function associationNumberSet(state, associationName) {
+function associationNumberSet(state, associationName, { field = null, profileId = null, requestedHeightMm = null } = {}) {
   const association = state.associations.find(({ id, name }) => id === associationName || name === associationName);
   if (!association) return { association: null, asset: null, ambiguous: false };
+  const placementMatchesField = (placement) => {
+    const normalized = normalizedProductionIdentity(placement);
+    if (field === "backNumber") return normalized.includes("rug");
+    if (field === "shortsNumber") return normalized.includes("short") || normalized.includes("rok");
+    if (field === "chestNumber") return normalized.includes("borst");
+    return true;
+  };
+  const profile = profileId ? state.productionProfiles?.find(({ id }) => id === profileId) : null;
+  const linkedAssetIds = new Set(profile?.productionNumberAssetIds ?? []);
   const matches = state.productionElements.filter((element) => element.lifecycleStatus === "PRODUCTION_READY"
     && element.productionMethod === "SELF_PRODUCED"
-    && element.applications?.some(({ kind }) => kind === "NUMBER_SET")
+    && element.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && placementMatchesField(placement))
     && Object.keys(element.numberGlyphs ?? {}).length === 10
     && Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => element.numberGlyphs?.[digit])
-    && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name)));
+    && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name))
+    && (!linkedAssetIds.size || linkedAssetIds.has(element.id))
+    && (!linkedAssetIds.size || !(Number(requestedHeightMm) > 0) || element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)));
   return { association, asset: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
 }
 
@@ -4194,10 +4254,11 @@ function deriveCatalogProductionLines(state, orderId, items) {
           : field === "backNumber"
           ? Number(variant.backNumberProduction?.physicalHeightMm)
           : Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
-        const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association) : { association: null, asset: null, ambiguous: false };
-        const associatedNumberHeight = field === "shortsNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.shortsNumber) * 10 : field === "chestNumber" ? Number(linkedNumberSet.association?.dimensionsCm?.chestNumber) * 10 : 0;
+        const association = state.associations.find(({ id, name }) => id === item.association || name === item.association);
+        const associatedNumberHeight = field === "shortsNumber" ? Number(association?.dimensionsCm?.shortsNumber) * 10 : field === "chestNumber" ? Number(association?.dimensionsCm?.chestNumber) * 10 : 0;
         const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(associatedNumberHeight > 0) && !(configuredHeight > 0);
         const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
+        const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association, { field, profileId: profile?.id, requestedHeightMm }) : { association: null, asset: null, ambiguous: false };
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: profile?.productionSourceSetId,
           outputWriterId: profile?.outputWriterId,
@@ -4355,8 +4416,8 @@ function productionProgressForOrder(state, order) {
 function productionLineTypeRank(line) {
   const label = String(line.preview?.label ?? "").trim().toLocaleLowerCase("nl-NL");
   if (line.type === "INITIALS" || String(line.placementRole ?? "").startsWith("INITIALS_") || label.startsWith("initialen") || label.startsWith("tussenvoegsel")) return 0;
-  if (label.startsWith("shortnummer")) return 1;
-  if (line.type === "BACK_NUMBER" || label.startsWith("rugnummer")) return 2;
+  if (line.type === "BACK_NUMBER" || label.startsWith("rugnummer")) return 1;
+  if (label.startsWith("shortnummer")) return 2;
   if (line.type === "NAME" || label.startsWith("naam")) return 3;
   return 4;
 }
@@ -4387,6 +4448,11 @@ function productionClosureForOrder(state, order) {
   if ((order.productionLines ?? []).length > 0 && !progress?.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
   if (!(order.productionLines ?? []).length && !stockApplications.length) return { status: "NOT_ELIGIBLE", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." };
   return { status: "ELIGIBLE", reason: null };
+}
+
+function productionLineNestingSection(line) {
+  const rank = productionLineTypeRank(line);
+  return { key: ["initials", "back-numbers", "short-numbers", "names", "other"][rank], label: ["Initialen", "Rugnummers", "Shortnummers", "Namen / naambalken", "Overige opdrukken"][rank], rank };
 }
 
 function normalizedSourceValue(value) {
@@ -4634,8 +4700,9 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const [first] = resolved;
   if (!first || first.source.outputWriterId !== CUTJOB_SVG_WRITER.id || first.source.outputWriterVersion !== CUTJOB_SVG_WRITER.version) throw Object.assign(new Error(`Outputwriter ${[...writerIdentities][0] ?? "onbekend"} is niet geïnstalleerd.`), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const geometryStartedAt = performance.now();
+  const useDecorationSections = new Set(resolved.map(({ line }) => productionLineTypeRank(line))).size > 1;
   const rawPieces = resolved.flatMap(({ line, piece, pieces: resolvePieces }) => Array.from({ length: line.quantity }, (_, copy) =>
-    resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).flat());
+    (resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).map((resolvedPiece) => ({ ...resolvedPiece, ...(useDecorationSections ? { nestingSection: productionLineNestingSection(line) } : {}) }))).flat());
   const geometryMs = millisecondsSince(geometryStartedAt);
   const semanticGroupingStartedAt = performance.now();
   const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm);
@@ -4720,7 +4787,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
     generationMetrics: productionArtifact ? { ...productionArtifact.generationMetrics, snapshotTotalMs: Math.round((performance.now() - snapshotStartedAt) * 10) / 10 } : null,
     productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm, maxSafeTrackWidthMm: defaults.maxSafeTrackWidthMm },
-    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance, physicalMembers }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), physicalMembers: structuredClone(physicalMembers ?? []), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
+    layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance, physicalMembers }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, nestingSection: structuredClone(provenance.nestingSection ?? null), sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), physicalMembers: structuredClone(physicalMembers ?? []), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
     scale: 1,
     artifact: productionArtifact?.artifact ?? { filename: `${jobNumber}-production-manifest.json`, format: "MANIFEST", version: PILOT_RELEASE_ID, sha256: manifestHash, path: `immutable://sportpaleis/plotjobs/${jobNumber}/production-manifest.json`, manifest },

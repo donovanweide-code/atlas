@@ -5,7 +5,7 @@ const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
 const MAX_POINTS = 250_000;
 const FLATTEN_TOLERANCE_MM = 0.04;
-const ALLOWED_TAGS = new Set(["svg", "g", "path", "polygon", "polyline", "rect", "circle", "ellipse", "line", "title", "desc", "metadata"]);
+const ALLOWED_TAGS = new Set(["svg", "g", "path", "polygon", "polyline", "rect", "circle", "ellipse", "line", "title", "desc", "metadata", "text", "tspan"]);
 const GEOMETRY_TAGS = new Set(["path", "polygon", "polyline", "rect", "circle", "ellipse", "line"]);
 
 function svgError(message, code = "PRODUCTION_ASSET_SVG_INVALID", statusCode = 400) {
@@ -310,7 +310,9 @@ function artworkGroupCandidates(contours, sourceGroups, warnings) {
 
 function parseSvg(source, intakeKind) {
   if (/<!ENTITY\b/iu.test(source) || /<!DOCTYPE[^>]*\[/iu.test(source)) throw svgError("De SVG bevat niet-toegestane XML-entiteiten.", "PRODUCTION_ASSET_SVG_ENTITY_UNSAFE");
-  if (/<(?:script|foreignObject|iframe|object|embed|image|text|tspan|style|use|symbol|filter|mask|pattern)\b/iu.test(source)) throw svgError("De SVG bevat tekst, raster of niet-toegestane actieve/indirecte inhoud.", "PRODUCTION_ASSET_SVG_CONTENT_UNSAFE");
+  if (/<(?:script|foreignObject|iframe|object|embed|image|style|use|symbol|filter|mask|pattern)\b/iu.test(source)) throw svgError("De SVG bevat raster of niet-toegestane actieve/indirecte inhoud.", "PRODUCTION_ASSET_SVG_CONTENT_UNSAFE");
+  const textCount = [...source.matchAll(/<text\b/giu)].length;
+  if (textCount && intakeKind !== "NUMBER_SET") throw svgError("De SVG bevat tekst die niet als productiegeometrie kan worden gebruikt.", "PRODUCTION_ASSET_SVG_CONTENT_UNSAFE");
   if (/\son[a-z]+\s*=/iu.test(source) || /(?:href|xlink:href)\s*=/iu.test(source) || /url\s*\(/iu.test(source)) throw svgError("De SVG bevat een externe of actieve verwijzing.", "PRODUCTION_ASSET_SVG_REFERENCE_UNSAFE");
   const clean = source.replace(/<\?xml[^>]*>/giu, "").replace(/<!DOCTYPE[^>]*>/giu, "").replace(/<!--[\s\S]*?-->/gu, "");
   const stack = [{ tag: "root", matrix: [1, 0, 0, 1, 0, 0], hidden: false, contours: null, groupId: null }]; const contours = []; const sourceGroups = [];
@@ -349,7 +351,7 @@ function parseSvg(source, intakeKind) {
   const full = candidate(contours, 0, "FULL_ARTWORK", warnings);
   const glyphs = intakeKind === "NUMBER_SET" ? numberGlyphCandidates(contours, sourceGroups, warnings) : [];
   const artworks = intakeKind === "ARTWORK" ? artworkGroupCandidates(contours, sourceGroups, warnings) : [];
-  return { contours, full, glyphs, artworks, evidence: { pathCount, contourCount: contours.length, pointCount, strokeCount, transformCount, sourceGroupCount: sourceGroups.length, artworkCandidateCount: artworks.length, textCount: 0, rasterCount: 0, scriptCount: 0, externalReferenceCount: 0, boundsMm: { width: value.width, height: value.height } } };
+  return { contours, full, glyphs, artworks, evidence: { pathCount, contourCount: contours.length, pointCount, strokeCount, transformCount, sourceGroupCount: sourceGroups.length, artworkCandidateCount: artworks.length, textCount, excludedTextAnnotationCount: textCount, rasterCount: 0, scriptCount: 0, externalReferenceCount: 0, boundsMm: { width: value.width, height: value.height } } };
 }
 
 export function inspectProductionAssetSvg({ bytes, filename, mimeType = "image/svg+xml", intakeKind = "ARTWORK" }) {
