@@ -24,6 +24,7 @@ test("first-day medewerker vindt en begrijpt de primaire dagelijkse Sportpaleis-
     ["Beheer toont concrete inrichting", /Vereniging[\s\S]*Plaatsingen[\s\S]*Fonts[\s\S]*Maten[\s\S]*Kleuren[\s\S]*Productiemethode[\s\S]*Actie/u],
   ];
   for (const [task, pattern] of evidence) assert.match(workspace, pattern, `${task} moet zonder interne kennis vindbaar zijn`);
+  assert.match(workspace, /\["nieuw", "team", "eigen-artikel"\]\.includes\(detailId\)/u, "standalone Bedrukken en de andere order-entryroutes mogen nooit als een order-ID worden opgehaald");
 });
 
 test("first-day medewerker kan de volledige Teamwear-flow bronmatig volgen", () => {

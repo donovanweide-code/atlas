@@ -87,12 +87,18 @@ Recovered from the approved Teamkit V1 candidate report, the Teamwear convergenc
 | TW-081 | Final Consolidation | First-day employee can complete Teamkit | Full source-to-experience scenario asserts context, collection, Studio tools, sizes, proposal and handling | Every primary step is discoverable and complete in the candidate contract | `sportpaleis-first-day-employee-acceptance.test.mjs` | DONE |
 | TW-082 | Final Consolidation | Before/after desktop and 390px evidence | Responsive product contract and earlier real Premium Shell evidence remain valid; current candidate browser capture has no available automation instance | Product remains responsive; only fresh automated screenshot capture is unavailable | responsive tests; browser list `[]`; existing evidence pack | ALREADY CORRECT |
 | TW-083 | Candidate boundary | Authoritative supplier catalog feed/credentials | Adapter seam exists, controlled fixtures active | Cannot claim live supplier sync without external source | convergence report | HUMAN INPUT REQUIRED |
+| TW-084 | Final Teamwear bijsturing §32–33 | Six-brand official source matrix | Stanno, Nike Teamwear, adidas Teamwear, JAKO, Robey and Craft references are held in the existing central catalog foundation | Employee can choose a verified official discovery route without six copied catalogs | `SPORTPALEIS_TEAMWEAR_BRAND_SOURCES`; source-matrix test | DONE |
+| TW-085 | Final Teamwear bijsturing §15 | Quiet official catalogue discovery | Collection renders one compact official-brand discovery panel | “Rustig kijken” is available before direct search | `officialBrandDiscovery()`; source contract test | DONE |
+| TW-086 | Final Teamwear bijsturing §15 | Direct brand/model/article search | Existing bounded query includes supplier article number | `BV6708` resolves directly without requiring association navigation | live Chrome + convergence query | ALREADY CORRECT |
+| TW-087 | Final Teamwear bijsturing §15 | Known club products route | Existing context article projection remains ahead of general catalog | Known club garments can be reused directly | `teamwearContextArticles()`; live Chrome | ALREADY CORRECT |
+| TW-088 | Final Teamwear bijsturing §15–16 | All discovery routes end in one collection | Official references, direct search and known products all add existing catalog/article IDs to proposal items | One “Onze collectie”; no cart or brand-owned copy | collection handler/convergence test | ALREADY CORRECT |
+| TW-089 | Final Teamwear bijsturing §18/31 | Source rights/provenance fail closed | Official links do not claim feed connectivity; data connection remains NOT_CONNECTED until verified | Employee may browse; Workspace never invents or silently scrapes authoritative product truth | brand source matrix + source test | DONE |
 
 ## Recovery summary after remediation
 
-- Existing approved Teamwear requirements found: **83**
-- DONE / ALREADY CORRECT: **81**
+- Existing approved Teamwear requirements found: **89**
+- DONE / ALREADY CORRECT: **87**
 - NOT DONE: **0**
 - HUMAN INPUT REQUIRED: **2**
 
-All safe gaps recovered from the existing approved Teamwear sources are implemented. The two human-input rows are one underlying external truth: an authoritative supplier catalog feed/access agreement and its credentials/contract. They are intentionally not guessed or replaced with a parallel catalog. Fresh automated screenshots remain an evidence-tool limitation, not a product-functionality gap: the normal Workspace URL is browser-accessible while the in-app browser inventory for this run returned no browser instance.
+All safe gaps recovered from the existing approved Teamwear sources are implemented. The two human-input rows are one underlying external truth: an authoritative supplier catalog feed/access agreement and its credentials/contract. They are intentionally not guessed or replaced with a parallel catalog. Live desktop Chrome is now available and proves the existing Teamwear flow and direct article search; the externally linked Chrome tab does not provide a working 390/320 viewport override, which remains an evidence-tool limitation rather than a product-functionality gap.

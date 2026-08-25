@@ -40,6 +40,8 @@ test("Teamwear experience houdt catalogus in Collectie en Studio bij contextgebo
   assert.match(source, /<strong>Catalogus<\\\/strong>[\s\S]*?Asset Library/u);
   assert.match(source, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Maten & aantallen[\s\S]*Voorstel[\s\S]*Afhandeling/u);
   assert.match(source, /studio-filter-assets[\s\S]*CLUB_LOGO[\s\S]*SPONSOR[\s\S]*NAME[\s\S]*BACK_NUMBER[\s\S]*FREE_TEXT/u);
+  assert.match(source, /RUSTIG KIJKEN[\s\S]*Officiële merkcollecties[\s\S]*Ik weet wat ik zoek/u);
+  assert.match(source, /SPORTPALEIS_TEAMWEAR_BRAND_SOURCES/u);
 });
 
 test("bestaand verenigingslogo wordt bij revision één keer als immutable voorstelbron vastgelegd", async (context) => {

@@ -1661,7 +1661,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   const loadOrderDetailRoute = async (): Promise<void> => {
     if (!state) return;
     const detailId = path().match(new RegExp(`^${BASE}/orders/([^/]+)$`))?.[1];
-    if (!detailId) return;
+    if (!detailId || ["nieuw", "team", "eigen-artikel"].includes(detailId)) return;
     const id = decodeURIComponent(detailId);
     if (!state.orders.some((order) => order.id === id)) state.orders.push(await api.order(id));
   };

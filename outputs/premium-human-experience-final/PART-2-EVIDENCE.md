@@ -1,12 +1,12 @@
 # Part 2 — Premium Teamwear Experience evidence
 
-The canonical source recovery contains 83 previously approved Teamwear requirements. This Part does not replace or shorten that matrix.
+The canonical source recovery contains 89 previously approved Teamwear requirements. This Part does not replace or shorten that matrix.
 
 ## Requirement → implementation → evidence
 
 | Requirement group | Implementation | Evidence | Status |
 |---|---|---|---|
-| Full source recovery | 83 requirements retained; 81 software-complete and 2 rows representing one external supplier-feed truth | `TEAMWEAR-SOURCE-RECOVERY.md` | PASS |
+| Full source recovery | 89 requirements retained; 87 software-complete and 2 rows representing one external supplier-feed truth | `TEAMWEAR-SOURCE-RECOVERY.md` | PASS |
 | Context → Collection → Studio → Sizes → Proposal → Handling | State-driven six-step route and stable context snapshots | first-day and reconciliation suites | PASS |
 | Progressive start | Existing relationship first; only title/team essential; contact/planning/notes disclosed later | `teamkitProposalCreate()` | PASS |
 | Catalog in Collection | Bounded search/filter, grouped models, lazy media; removed from visible Studio | convergence suite | PASS |
@@ -32,3 +32,13 @@ The canonical source recovery contains 83 previously approved Teamwear requireme
 - Fresh automated screenshots could not be captured because the Browser inventory returned `[]`; no product code or infrastructure workaround was added.
 
 **SPORTPALEIS PREMIUM TEAMWEAR EXPERIENCE — PART 2 PASS — READY FOR FINAL INTEGRATION**
+
+## Laatste source-to-experience bijsturing
+
+- Zes gecontroleerde discovery-bronnen zijn in dezelfde centrale catalogusfoundation vastgelegd: Stanno, Nike Teamwear, adidas Teamwear, JAKO, Robey en Craft.
+- Geen feed, toegang of merkrecht wordt verzonnen: alle externe data-adapters blijven `DISCOVERY_REQUIRED` / `NOT_CONNECTED` totdat de echte leverancierstoegang is bevestigd.
+- De Collectie ondersteunt drie routes naar exact dezelfde `Onze collectie`: officiële merkcollectie bekijken, direct zoeken op merk/model/artikelnummer en bekende clubartikelen hergebruiken.
+- De Studio-runtime blijft catalogusvrij en garment-first; de legacy markup wordt vóór render verwijderd en de regressie bewaakt dit contract.
+- Live Chrome R1 bewijst de volledige stepper, 103 bounded modellen, exact zoeken op `BV6708`, één gekozen garment, de ontwerpacties, front/back en klantpreview. Candidate-live bewijs voor de zes merklinks volgt na release.
+- Centrale contextassets, cross-proposal reuse, immutable source, surface projection, klantreview/PDF/approval en de 1200×1200 render seam blijven regressiegroen.
+- Desktop live: PASS. 390/320 live viewportcapture: tooling limitation van de gekoppelde externe Chrome-tab; responsive productcontract blijft regressiegroen.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis-product-catalog.ts";
+import { SPORTPALEIS_CATALOG_SOURCE_ADAPTERS, SPORTPALEIS_TEAMWEAR_BRAND_SOURCES, buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis-product-catalog.ts";
 
 function article(id, association, sizes) {
   return { id, active: true, name: `${association} Pride Shirt`, articleNumber: "460001", supplierArticleNumber: "460001", association, category: "Shirts", imageKey: "shirt-navy", availableSizes: sizes, variantLabels: ["Navy"] };
@@ -30,4 +30,13 @@ test("catalogusquery begrenst elke pagina voor een grote centrale productset", (
   assert.equal(page.products.length, 12);
   assert.equal(page.total, 5_100);
   assert.equal(page.hasMore, true);
+});
+
+test("zes gecontroleerde merkbronnen blijven discovery-references en vormen geen tweede cataloguswaarheid", () => {
+  assert.deepEqual(SPORTPALEIS_TEAMWEAR_BRAND_SOURCES.map(({ brand }) => brand), ["Stanno", "Nike Teamwear", "adidas Teamwear", "JAKO", "Robey", "Craft"]);
+  assert.ok(SPORTPALEIS_TEAMWEAR_BRAND_SOURCES.every(({ officialWebsiteUrl, officialCatalogUrl, dataConnection }) => officialWebsiteUrl.startsWith("https://") && officialCatalogUrl.startsWith("https://") && dataConnection === "NOT_CONNECTED"));
+  assert.equal(new Set(SPORTPALEIS_TEAMWEAR_BRAND_SOURCES.map(({ id }) => id)).size, 6);
+  const sourceAdapters = SPORTPALEIS_CATALOG_SOURCE_ADAPTERS.filter(({ id }) => id !== "sportpaleis-existing");
+  assert.equal(sourceAdapters.length, 6);
+  assert.ok(sourceAdapters.every(({ status, kind }) => status === "DISCOVERY_REQUIRED" && kind === "CONTROLLED_MANUAL"));
 });
