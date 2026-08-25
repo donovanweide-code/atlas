@@ -5,6 +5,10 @@ import { boundsForContours, flattenSourcePath, samePoint, validateGeometry } fro
 
 const FONT_OUTLINE_TOLERANCE_MM = 0.02;
 const MAX_POINTS_PER_PRODUCTION_PIECE = 150_000;
+const MAX_PARSED_FONT_CACHE_ENTRIES = 16;
+const MAX_MANAGED_FONT_GEOMETRY_CACHE_ENTRIES = 256;
+const parsedFontCache = new Map();
+const managedFontGeometryCache = new Map();
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex").toUpperCase();
@@ -29,11 +33,21 @@ export function normalizeAndValidateManagedFontContours(contours) {
   return normalized;
 }
 
-function parseFont(bytes) {
+function parseFont(bytes, identity = null) {
   try {
+    if (identity && parsedFontCache.has(identity)) {
+      const cached = parsedFontCache.get(identity);
+      parsedFontCache.delete(identity);
+      parsedFontCache.set(identity, cached);
+      return cached;
+    }
     const font = create(Buffer.from(bytes));
     if (!font || typeof font.layout !== "function" || !Number.isFinite(font.unitsPerEm) || font.unitsPerEm <= 0 || !Number.isInteger(font.numGlyphs) || font.numGlyphs < 1) {
       throw new Error("Fonttabellen ontbreken.");
+    }
+    if (identity) {
+      parsedFontCache.set(identity, font);
+      if (parsedFontCache.size > MAX_PARSED_FONT_CACHE_ENTRIES) parsedFontCache.delete(parsedFontCache.keys().next().value);
     }
     return font;
   } catch {
@@ -176,26 +190,47 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
   }
   if (!(Number(widthMm) > 0) || !(Number(heightMm) > 0)) throw managedFontError("Een productiefont vereist positieve fysieke afmetingen.");
 
-  const font = parseFont(sourceBytes);
-  const positioned = positionedGlyphCommands(font, content);
-  // Physical text size is height-led. Applying one scale factor to both axes
-  // preserves the exact font outline; width is a contour result, never an
-  // independent text transform.
-  const scale = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
-  const contours = [];
-  for (let glyphIndex = 0; glyphIndex < positioned.glyphs.length; glyphIndex += 1) {
-    const glyph = positioned.glyphs[glyphIndex];
-    const commandSets = contourCommands(glyph.commands, glyph.offsetX, glyph.offsetY, positioned.bounds, scale);
-    for (let contourIndex = 0; contourIndex < commandSets.length; contourIndex += 1) {
-      const contour = flattenSourcePath(`${id}-g${glyphIndex + 1}-c${contourIndex + 1}`, commandSets[contourIndex], FONT_OUTLINE_TOLERANCE_MM);
-      if (contour.closed && contour.points.length >= 4) contours.push(contour);
+  const geometryIdentity = JSON.stringify([actualHash, String(content), Number(heightMm), FONT_OUTLINE_TOLERANCE_MM]);
+  let cachedGeometry = managedFontGeometryCache.get(geometryIdentity);
+  let productionContours;
+  let contourBounds;
+  if (cachedGeometry) {
+    managedFontGeometryCache.delete(geometryIdentity);
+    managedFontGeometryCache.set(geometryIdentity, cachedGeometry);
+    productionContours = cachedGeometry.contours.map(({ idSuffix, closed, points }) => ({ id: `${id}${idSuffix}`, closed, points }));
+    contourBounds = cachedGeometry.bounds;
+  } else {
+    // Fontkit parsing and glyph flattening depend only on immutable source
+    // bytes, content and physical height. Reusing that geometry avoids doing
+    // the same contour work once per identical shirt while every returned
+    // contour still receives its original order/copy-specific identity.
+    const font = parseFont(sourceBytes, actualHash);
+    const positioned = positionedGlyphCommands(font, content);
+    // Physical text size is height-led. Applying one scale factor to both axes
+    // preserves the exact font outline; width is a contour result, never an
+    // independent text transform.
+    const scale = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
+    const contours = [];
+    for (let glyphIndex = 0; glyphIndex < positioned.glyphs.length; glyphIndex += 1) {
+      const glyph = positioned.glyphs[glyphIndex];
+      const commandSets = contourCommands(glyph.commands, glyph.offsetX, glyph.offsetY, positioned.bounds, scale);
+      for (let contourIndex = 0; contourIndex < commandSets.length; contourIndex += 1) {
+        const contour = flattenSourcePath(`${id}-g${glyphIndex + 1}-c${contourIndex + 1}`, commandSets[contourIndex], FONT_OUTLINE_TOLERANCE_MM);
+        if (contour.closed && contour.points.length >= 4) contours.push(contour);
+      }
     }
+    const sourcePointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
+    if (!contours.length || sourcePointCount > MAX_POINTS_PER_PRODUCTION_PIECE) throw managedFontError("De fontcontour is leeg of te complex voor veilige productie.");
+    productionContours = normalizeAndValidateManagedFontContours(contours);
+    contourBounds = boundsForContours(productionContours);
+    if (!(contourBounds.width > 0) || !(contourBounds.height > 0)) throw managedFontError("De fontcontour heeft geen bruikbare fysieke afmetingen.");
+    cachedGeometry = {
+      bounds: Object.freeze({ ...contourBounds }),
+      contours: Object.freeze(productionContours.map((contour) => Object.freeze({ idSuffix: contour.id.slice(String(id).length), closed: contour.closed, points: Object.freeze(contour.points.map((point) => Object.freeze({ ...point }))) }))),
+    };
+    managedFontGeometryCache.set(geometryIdentity, cachedGeometry);
+    if (managedFontGeometryCache.size > MAX_MANAGED_FONT_GEOMETRY_CACHE_ENTRIES) managedFontGeometryCache.delete(managedFontGeometryCache.keys().next().value);
   }
-  const sourcePointCount = contours.reduce((sum, contour) => sum + contour.points.length, 0);
-  if (!contours.length || sourcePointCount > MAX_POINTS_PER_PRODUCTION_PIECE) throw managedFontError("De fontcontour is leeg of te complex voor veilige productie.");
-  const productionContours = normalizeAndValidateManagedFontContours(contours);
-  const contourBounds = boundsForContours(productionContours);
-  if (!(contourBounds.width > 0) || !(contourBounds.height > 0)) throw managedFontError("De fontcontour heeft geen bruikbare fysieke afmetingen.");
 
   return {
     id,

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -368,7 +369,8 @@ function collapseEquivalentVectorComponents(candidates) {
 }
 
 async function inspectPdf(bytes) {
-  const loadingTask = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, isEvalSupported: false, useSystemFonts: false });
+  const standardFontDataUrl = fileURLToPath(new URL(".", import.meta.resolve("pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"))).replaceAll("\\", "/").replace(/\/?$/u, "/");
+  const loadingTask = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, isEvalSupported: false, useSystemFonts: false, standardFontDataUrl });
   const document = await loadingTask.promise;
   const pageCount = document.numPages;
   const candidates = [];

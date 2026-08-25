@@ -130,7 +130,7 @@ test("Divide contract segmenteert multi-page 26-orders en stuurt alleen geperson
   assert.equal(reconcileSportpaleisDivideRevision([v1.record], parsed.orders[0]).action, "NO_OP");
   const changed = structuredClone(parsed.orders[0]); changed.contentHash = "changed";
   assert.equal(reconcileSportpaleisDivideRevision([v1.record], changed, "PRODUCED").safety, "HUMAN_GO_REQUIRED");
-  assert.deepEqual(createSportpaleisWebshopIntakeState(), { enabled: false, status: "NOT_ACTIVE", startBoundary: null, lastSuccessfulRetrievalAt: null, highWaterMark: null, processedSourceIdentifiers: [], processedOrderRevisionIdentifiers: [], retrievalMode: "OFF", channel: "WEBSHOP_XPRT" });
+  assert.deepEqual(createSportpaleisWebshopIntakeState(), { enabled: true, status: "READY", startBoundary: null, lastSuccessfulRetrievalAt: null, highWaterMark: null, processedSourceIdentifiers: [], processedOrderRevisionIdentifiers: [], retrievalMode: "CONTROLLED_MAIL_DOCUMENT_ADAPTER", channel: "WEBSHOP_XPRT", sources: [], matches: [], printEvents: [], stockLogo: { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] } });
 });
 
 function searchState(size = 1) {
@@ -153,13 +153,14 @@ test("contextzoeking vindt SP, 26, artikel en verkoopnummer en blijft snel op re
   assert.ok(performance.now() - started < 1_500, "indexeren en drie zoekacties blijven buiten de kritieke UI-grens");
 });
 
-test("beheer-UX gebruikt menselijke status, veilige rolpreview en hard-uit import", async () => {
+test("beheer-UX gebruikt menselijke status, veilige rolpreview en begrensde mail/PDF-adapter", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /VOLGENDE BESTE ACTIE/u);
   assert.match(source, /Productievoorstel maken/u);
   assert.match(source, /Alleen voorbeeld/u);
   assert.match(source, /Je rechten en actieve beheerderssessie zijn niet gewijzigd/u);
   assert.match(source, /DIVIDE \/ WEBSHOPMAIL/u);
-  assert.match(source, /Niet actief/u);
+  assert.match(source, /Gecontroleerde mail- en PDF-intake/u);
+  assert.match(source, /Historische mailboximport en automatische ordercreatie blijven uit/u);
   assert.doesNotMatch(source.slice(source.indexOf("function rolePreview"), source.indexOf("function synchronizationAdmin")), /updateUser|savePreferences|switchUser/u);
 });

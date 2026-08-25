@@ -29,6 +29,8 @@ export interface SportpaleisProductionLine {
   itemId?: string;
   variantId?: string;
   variantIds?: string[];
+  personalizationField?: "initials" | "name" | "backNumber" | "chestNumber" | "shortsNumber";
+  decorationIdentity?: { orderId: string; itemId: string; articleNumber: string; decorationType: "initials" | "name" | "backNumber" | "chestNumber" | "shortsNumber"; placement: string; value: string; foilColor: string; productionProfileId: string };
   type: ProductionLineType;
   content: string;
   source: {
@@ -120,15 +122,28 @@ export interface SportpaleisWebsiteSyncState {
 }
 
 export interface SportpaleisWebshopIntakeState {
-  enabled: false;
-  status: "NOT_ACTIVE";
-  startBoundary: null;
-  lastSuccessfulRetrievalAt: null;
-  highWaterMark: null;
+  enabled: boolean;
+  status: "READY" | "ATTENTION";
+  startBoundary: string | null;
+  lastSuccessfulRetrievalAt: string | null;
+  highWaterMark: string | null;
   processedSourceIdentifiers: string[];
   processedOrderRevisionIdentifiers: string[];
-  retrievalMode: "OFF";
+  retrievalMode: "CONTROLLED_MAIL_DOCUMENT_ADAPTER";
   channel: "WEBSHOP_XPRT";
+  sources: {
+    id: string; sourceMessageId: string; receivedAt: string; filename: string; mimeType: "application/pdf";
+    sizeBytes: number; sha256: string; dataBase64?: string; immutable: true; importedAt: string; importedBy: string;
+  }[];
+  matches: {
+    id: string; sourceId: string; externalReference: string; orderDate: string | null; customer: string | null; association: string | null;
+    contentHash: string; status: "HUMAN_CHECK" | "ACCEPTED"; orderId: string | null; reviewReasons: string[];
+    articles: { articleNumber: string; description: string; size: string; color: string; quantity: number; personalization: { kind: "INITIALS" | "BACK_NAME" | "BACK_NUMBER" | "CHEST_NUMBER" | "SHORTS_NUMBER" | "STOCK_LOGO"; value: string; sourceLabel: string; sourceValue: string }[]; articlePersonalizationRule?: { kind: string; source: string; overridesGeneralChoice: true } }[];
+    source: { pageNumbers: number[]; segmentHash: string; originalEvidence: string };
+    acceptedAt: string | null; acceptedBy: string | null;
+  }[];
+  printEvents: { id: string; orderId: string; at: string; byUserId: string; kind: "PRINT" | "REPRINT" }[];
+  stockLogo: { association: "VVA / Spartaan"; currentStock: number; unconfirmedValue20: number; mutations: { id: string; orderId: string; quantity: number; previousStock: number; nextStock: number; at: string; byUserId: string; idempotencyKey: string }[] };
 }
 
 export interface OrderAcceptedBy {
@@ -375,13 +390,14 @@ export interface WorkspaceOrder {
   owner: string;
   acceptedBy?: OrderAcceptedBy;
   salesAttribution?: { employeeId?: string | null; salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
-  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string } };
+  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string }; webshopDocument?: { sourceId: string; sourceMessageId: string; filename: string; sha256: string; contentHash: string } };
   totalPieces: number;
   attention?: string;
   productionReference?: "SNIJTEST-001";
   foilStates?: { color: string; status: "READY" | "HOLD" }[];
   items: WorkspaceOrderItem[];
   productionLines?: SportpaleisProductionLine[];
+  stockApplications?: { id: string; kind: "STOCK_LOGO"; association: "VVA / Spartaan"; quantity: number; status: "PENDING" | "APPLIED"; appliedAt: string | null; appliedBy: string | null; source: "WEBSHOP_XPRT" }[];
   notes?: { id: string; scope: "order" | "customer"; kind: "internal" | "attention"; text: string; authorId: string; authorName: string; createdAt: string }[];
   priority?: { requestedBy: string; alignedWith: string; reason: string; explanation: string; createdAt: string } | null;
   communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null }; production?: { status: string; updatedAt?: string; providerReference?: string | null }; ready: { status: string; updatedAt?: string; providerReference?: string | null } };

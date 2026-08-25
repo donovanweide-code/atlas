@@ -98,7 +98,7 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   assert.deepEqual(new Set(finalBulk.completed.map(({ id }) => id)), new Set([mixed.id, blue.id]));
   state = await service.bootstrap(admin.token);
   assert.ok([mixed.id, white.id, blue.id].every((id) => state.orders.find((order) => order.id === id).stage === "DONE"));
-  assert.ok(state.audit.some(({ action, subject }) => action === "Volledig geproduceerde order in bulk Gereed gemeld" && subject === mixed.id));
+  assert.ok(state.audit.some(({ action, subject }) => action === "Volledig geproduceerde orders in bulk afgerond" && subject === mixed.id));
   assert.ok([whiteJob.id, blueJob.id].map((id) => state.productionJobs.find((job) => job.id === id)).every(({ snapshot }) => new Set(snapshot.productionLines.map(({ foilColor }) => foilColor)).size === 1), "kleur blijft een harde PlotJob-grens");
 });
 

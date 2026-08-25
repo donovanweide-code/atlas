@@ -58,7 +58,7 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.deepEqual((await store.read()).productionJobs.filter(({ id }) => id.includes("golden")), beforeGolden);
 });
 
-test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, Gereed, Klaar om op te halen en Opgehaald blijven apart", async (context) => {
+test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, expliciet Afronden en Opgehaald blijven apart", async (context) => {
   const { store, service, admin, operator } = await fixture(context);
   const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const created = (await service.createOrder(admin.token, admin.csrfToken, { orderKind: "INDIVIDUAL", customer: "Lifecycle fixture", customerEmail: "", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: empty }], productionLines: [{ id: "lifecycle-dw", type: "INITIALS", content: "DW", previewLabel: "Initialen DW", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id }] }, "human-review-lifecycle-order")).value;
@@ -87,15 +87,12 @@ test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, Gereed, Kl
   const sharedReady = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
   assert.equal(sharedReady.stage, "DONE");
   assert.equal(sharedReady.productionClosure.status, "CONFIRMED");
-  assert.equal(sharedReady.fulfillment.status, "PENDING");
+  assert.equal(sharedReady.fulfillment.status, "READY_FOR_PICKUP");
   assert.equal(sharedReady.pickup.status, "NOT_PICKED_UP");
   assert.ok(sharedReady.eventHistory.some(({ type }) => type === "PRODUCTION_READY"));
   assert.equal(sharedReady.communication.ready.status, "NOT_SENT");
-  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "PICKED_UP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-picked-too-early"), (error) => error.code === "ORDER_NOT_READY_FOR_PICKUP");
-  const pickupReady = (await service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "READY_FOR_PICKUP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-ready-for-pickup")).value;
-  assert.equal(pickupReady.fulfillment.status, "READY_FOR_PICKUP");
-  assert.equal(pickupReady.communication.ready.status, "NOT_SENT");
-  const picked = (await service.recordOperationalEvent(admin.token, admin.csrfToken, pickupReady.id, { action: "PICKED_UP", expectedRevision: pickupReady.revision }, "human-review-lifecycle-picked-up")).value;
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "READY_FOR_PICKUP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-duplicate-ready-for-pickup"), (error) => error.code === "FULFILLMENT_ALREADY_ADVANCED");
+  const picked = (await service.recordOperationalEvent(admin.token, admin.csrfToken, sharedReady.id, { action: "PICKED_UP", expectedRevision: sharedReady.revision }, "human-review-lifecycle-picked-up")).value;
   assert.equal(picked.stage, "DONE");
   assert.equal(picked.pickup.status, "PICKED_UP");
   assert.ok(picked.eventHistory.some(({ type }) => type === "PICKED_UP"));
@@ -139,7 +136,7 @@ test("Winkel met meerdere productiegroepen wordt pas na laatste Bedrukt eligible
   assert.equal(completed.completed.length, 1);
   const done = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
   assert.equal(done.stage, "DONE");
-  assert.equal(done.fulfillment.status, "PENDING");
+  assert.equal(done.fulfillment.status, "READY_FOR_PICKUP");
   assert.equal(done.eventHistory.filter(({ type }) => type === "PRODUCTION_READY").length, 1);
 });
 
@@ -232,7 +229,7 @@ test("syncreview is admin-only en Overnemen wijzigt geen lokale productieconfig"
 
 test("First-Use copy maakt voorbereiding, review en hard-off boundaries expliciet", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /Een productiebestand is voorbereiding; alleen Bedrukt rondt de stap af/u);
+  assert.match(source, /Een voorstel, SVG of voorbereide PlotJob rondt een kleur nooit af; alleen Bedrukt doet dat/u);
   assert.match(source, /Vereniging \(optioneel\)/u);
   assert.match(source, /Rugnummers/u);
   assert.match(source, /Initialen/u);
@@ -246,5 +243,5 @@ test("First-Use copy maakt voorbereiding, review en hard-off boundaries explicie
   assert.match(source, /sourceContext\?\.externalReference/u);
   assert.match(source, /complete-one-production-order/u);
   assert.match(source, /DIVIDE \/ WEBSHOPMAIL/u);
-  assert.match(source, /Niet actief/u);
+  assert.match(source, /Gecontroleerde mail- en PDF-intake/u);
 });

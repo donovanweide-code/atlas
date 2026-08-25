@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const SUPPORTED = new Map([
@@ -49,7 +50,8 @@ async function embeddedText(bytes, mimeType) {
   if (["text/plain", "message/rfc822"].includes(mimeType)) return clean(bytes.toString("utf8"), 100_000);
   if (mimeType !== "application/pdf") return "";
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const document = await pdfjs.getDocument({ data: new Uint8Array(bytes), disableWorker: true }).promise;
+  const standardFontDataUrl = fileURLToPath(new URL(".", import.meta.resolve("pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"))).replaceAll("\\", "/").replace(/\/?$/u, "/");
+  const document = await pdfjs.getDocument({ data: new Uint8Array(bytes), disableWorker: true, disableFontFace: true, useSystemFonts: false, isEvalSupported: false, standardFontDataUrl }).promise;
   const pages = [];
   for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 40); pageNumber += 1) {
     const page = await document.getPage(pageNumber);
@@ -148,7 +150,7 @@ export function quickIntakeOrderPayload(record, input, state) {
       orderKind: "INDIVIDUAL",
       customer: clean(input?.customer, 120) || "Nog te controleren",
       customerEmail: clean(input?.customerEmail, 160),
-      customerPhone: clean(input?.customerPhone, 40) || "Niet vastgelegd via bron",
+      customerPhone: clean(input?.customerPhone, 40),
       standardPersonalization,
       items: [{ articleId: article.id, size: value("size"), quantity: safeQuantity, deviation: false, overrides: {} }],
       source: "MANUAL",

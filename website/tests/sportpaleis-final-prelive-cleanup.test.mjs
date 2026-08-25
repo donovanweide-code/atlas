@@ -63,8 +63,8 @@ test("Productie is batch-first en technische prepared PlotJobs staan alleen in h
   assert.match(primary, /\+ Bekijk wat meegaat/u);
   assert.match(primary, /data-direct-production-order-select/u);
   assert.match(primary, /Alles is veilig voorgeselecteerd/u);
-  assert.match(primary, /\+ Bekijk orders/u);
-  assert.match(primary, /orders Gereed melden/u);
+  assert.match(primary, /\+ Bekijk technisch complete orders/u);
+  assert.match(primary, /orders Afronden/u);
   assert.match(primary, /Plot-\/printhistorie/u);
   assert.match(primary, /voorbereid\$\{currentJobs\.length/u);
 });

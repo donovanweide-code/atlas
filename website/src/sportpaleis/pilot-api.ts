@@ -273,6 +273,22 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async ingestWebshopMailDocument(input: { sourceMessageId: string; receivedAt: string; filename: string; mimeType: "application/pdf"; dataBase64: string }): Promise<{ duplicate: boolean; value: unknown }> {
+    return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/mail-document`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-source-${input.sourceMessageId}`) }, body: JSON.stringify(input) }));
+  }
+
+  async acceptWebshopMatch(matchId: string, input: { explicitAgreement: true; customer: string; customerEmail?: string; customerPhone?: string; association: string; backNumberSizeClass: "JUNIOR" | "SENIOR" }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+    return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/matches/${encodeURIComponent(matchId)}/accept`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-match-${matchId}`) }, body: JSON.stringify(input) }));
+  }
+
+  async recordWebshopOrderPrint(orderId: string): Promise<{ duplicate: boolean; value: unknown }> {
+    return responseBody(await this.#mutatingFetch(`${API}/webshop-orders/${encodeURIComponent(orderId)}/print`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-print-${orderId}`) } }));
+  }
+
+  async applyWebshopStockLogo(order: WorkspaceOrder): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+    return responseBody(await this.#mutatingFetch(`${API}/webshop-orders/${encodeURIComponent(order.id)}/stock-logo/apply`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-stock-logo-${order.id}`) }, body: JSON.stringify({ expectedRevision: order.revision }) }));
+  }
+
   async acceptQuickProductionIntake(intakeId: string, input: { explicitAgreement: true; customer: string; customerEmail: string; customerPhone: string; association?: string; backNumberSizeClass?: "JUNIOR" | "SENIOR"; fields: Record<string, string> }): Promise<{ duplicate: boolean; value: { intake: SportpaleisQuickProductionIntake; order: WorkspaceOrder } }> {
     return responseBody(await this.#mutatingFetch(`${API}/quick-production-intakes/${encodeURIComponent(intakeId)}/accept`, {
       method: "POST",

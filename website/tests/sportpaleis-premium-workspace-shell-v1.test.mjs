@@ -24,10 +24,10 @@ test("Webshop scheidt dagelijks orderwerk van importbeheer", async () => {
   const daily = source.slice(source.indexOf("function webshopImport"), source.indexOf("function webshopAdmin"));
   const admin = source.slice(source.indexOf("function webshopAdmin"), source.indexOf("function allWorkspace"));
   assert.match(daily, /sourceContext\?\.source === "WEBSHOP_XPRT"/u);
-  assert.match(daily, /Ordernummer, klant of vereniging/u);
+  assert.match(daily, /Volledig ordernummer, laatste 3 cijfers of klantnaam/u);
   assert.doesNotMatch(daily, /importplanning|startBoundary|retrievalMode/iu);
   assert.match(admin, /Import & synchronisatie/u);
-  assert.match(admin, /data-mailbatch-import-form/u);
+  assert.match(admin, /data-webshop-document-intake-form/u);
   assert.match(admin, /Geavanceerd · planning en bronstatus/u);
 });
 

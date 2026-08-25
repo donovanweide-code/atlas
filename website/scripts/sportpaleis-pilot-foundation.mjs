@@ -46,6 +46,8 @@ import {
 } from "./sportpaleis-website-sync.mjs";
 import {
   createSportpaleisWebshopIntakeState,
+  parseSportpaleisDividePdfText,
+  reconcileSportpaleisDivideRevision,
 } from "./sportpaleis-divide-import.mjs";
 import {
   createQuickProductionIntakeRecord,
@@ -95,6 +97,18 @@ const PILOT_FONT = Object.freeze({
 });
 
 const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
+for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "Almerer Pioneers" && ["116386", "116388"].includes(String(articleNumber)))) {
+  article.supports = [...new Set([...(article.supports ?? []), "backNumber", "chestNumber"])];
+  article.personalizationPolicy = { mode: "combination", fields: { ...(article.personalizationPolicy?.fields ?? {}), backNumber: "optional", chestNumber: "optional" } };
+  if (!article.commercialPrintOptions?.some(({ canonicalField }) => canonicalField === "chestNumber")) article.commercialPrintOptions = [...(article.commercialPrintOptions ?? []), { sourceLabel: "Rug / Borst / Short nummer · borst", canonicalField: "chestNumber", priceEur: 0, status: "VALIDATED" }];
+  article.priceConfiguration ??= { articleUnitPriceEur: null, personalizationUnitPricesEur: {}, sourceLabel: "Pioneers praktijkcorrectie 2026-08-25" };
+  article.priceConfiguration.personalizationUnitPricesEur ??= {};
+  article.priceConfiguration.personalizationUnitPricesEur.chestNumber ??= article.priceConfiguration.personalizationUnitPricesEur.backNumber ?? 0;
+}
+for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "FC Huizen" && ["131247", "131246"].includes(String(articleNumber)))) {
+  article.supports = [...new Set([...(article.supports ?? []), "name"])];
+  article.personalizationPolicy = { mode: "combination", fields: { ...(article.personalizationPolicy?.fields ?? {}), name: "optional" } };
+}
 const ARTICLE_IMAGE_KEYS = new Set(ARTICLE_CATALOG.map(({ imageKey }) => imageKey));
 
 const PRODUCTION_PROFILES = [
@@ -658,6 +672,13 @@ export function migrateSportpaleisPilotState(input) {
   state.mailbatches ??= [];
   state.websiteSync = { ...createSportpaleisWebsiteSyncState(), ...(state.websiteSync ?? {}) };
   state.webshopIntake = { ...createSportpaleisWebshopIntakeState(), ...(state.webshopIntake ?? {}) };
+  state.webshopIntake.enabled = true;
+  state.webshopIntake.status = state.webshopIntake.status === "ATTENTION" ? "ATTENTION" : "READY";
+  state.webshopIntake.retrievalMode = "CONTROLLED_MAIL_DOCUMENT_ADAPTER";
+  state.webshopIntake.sources ??= [];
+  state.webshopIntake.matches ??= [];
+  state.webshopIntake.printEvents ??= [];
+  state.webshopIntake.stockLogo ??= { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] };
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
   for (const source of state.productionAssetSources) {
@@ -825,7 +846,7 @@ export function validateSportpaleisPilotState(input) {
       for (const field of PERSONALIZATION_FIELDS) if (existing.priceConfiguration.personalizationUnitPricesEur[field] == null && article.priceConfiguration?.personalizationUnitPricesEur?.[field] != null) existing.priceConfiguration.personalizationUnitPricesEur[field] = article.priceConfiguration.personalizationUnitPricesEur[field];
       if ((!existing.priceConfiguration.sourceLabel || existing.priceConfiguration.sourceLabel.startsWith("DATA_GAP")) && article.priceConfiguration?.sourceLabel) existing.priceConfiguration.sourceLabel = article.priceConfiguration.sourceLabel;
       existing.displayOrder ??= ARTICLE_CATALOG.findIndex(({ id }) => id === article.id) + 1;
-      if (article.articleNumber === "140298") {
+      if (article.articleNumber === "140298" || article.association === PIONEERS_ASSOCIATION && ["116386", "116388"].includes(String(article.articleNumber))) {
         existing.supports = structuredClone(article.supports);
         existing.personalizationPolicy = structuredClone(article.personalizationPolicy);
         existing.commercialPrintOptions = structuredClone(article.commercialPrintOptions);
@@ -842,6 +863,8 @@ export function validateSportpaleisPilotState(input) {
       if (profile.outputWriterId) existing.outputWriterId = profile.outputWriterId;
     }
   }
+  applyPioneersProductionAuthority(state);
+  applyScBuitenboysShortAuthority(state);
   state.settings ??= structuredClone(PILOT_SETTINGS);
   state.settings.deliveryFeeEur ??= PILOT_SETTINGS.deliveryFeeEur;
   state.settings.productionDefaults = { ...structuredClone(PILOT_SETTINGS.productionDefaults), ...(state.settings.productionDefaults ?? {}) };
@@ -863,7 +886,8 @@ export function validateSportpaleisPilotState(input) {
     if (employee.accountType && !["HUMAN", "FUNCTION", "SYSTEM"].includes(employee.accountType)) throw new Error("Ongeldig verkoopnummer-accounttype.");
   }
   if (state.websiteSync.mode !== "STAGE_ONLY") throw new Error("Website-sync mag alleen bronwijzigingen klaarzetten.");
-  if (state.webshopIntake.enabled !== false || state.webshopIntake.retrievalMode !== "OFF") throw new Error("Divide/PDF-retrieval moet expliciet uit blijven.");
+  if (state.webshopIntake.enabled !== true || state.webshopIntake.retrievalMode !== "CONTROLLED_MAIL_DOCUMENT_ADAPTER") throw new Error("Webshop document-intake moet uitsluitend via de gecontroleerde Mail/Document-adapter lopen.");
+  for (const source of state.webshopIntake.sources ?? []) if (!source.immutable || source.mimeType !== "application/pdf" || sha256(Buffer.from(source.dataBase64, "base64")) !== String(source.sha256).toLowerCase()) throw new Error("Immutable webshop-PDF ontbreekt of is gewijzigd.");
   if (new Set(state.orders.map(({ id }) => id)).size !== state.orders.length) throw new Error("Dubbel ordernummer.");
   if (new Set(state.productionFonts.map(({ id }) => id)).size !== state.productionFonts.length || new Set(state.productionFonts.map(({ sha256: hash }) => hash)).size !== state.productionFonts.length) throw new Error("Dubbele productiefontbron.");
   if (new Set((state.productionAssetSources ?? []).map(({ id }) => id)).size !== (state.productionAssetSources ?? []).length || new Set((state.productionAssetSources ?? []).map(({ original }) => original.sha256)).size !== (state.productionAssetSources ?? []).length) throw new Error("Dubbele productieassetbron.");
@@ -1388,7 +1412,7 @@ export class SportpaleisPilotService {
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
-      webshopIntake: admin ? structuredClone(state.webshopIntake) : undefined,
+      webshopIntake: ["admin", "operator"].includes(user.role) ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
       productionElements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElements.map((element) => ({ ...element, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
       productionAssetSources: admin ? structuredClone((state.productionAssetSources ?? []).map((source) => ({ ...(({ documentPreviewSvg: _documentPreviewSvg, ...metadata }) => metadata)(source), original: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(source.original), candidates: source.candidates.map((candidate) => (({ previewSvg: _previewSvg, controlledVector: _controlledVector, ...metadata }) => metadata)(candidate)) }))) : [],
@@ -1660,6 +1684,13 @@ export class SportpaleisPilotService {
         const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === job.id));
         const group = proposal?.groups?.find(({ productionJobId: id }) => id === job.id);
         if (!proposal || !group) throw Object.assign(new Error("Deze productiejob mist de onveranderlijke productieregelkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
+        for (const line of job.snapshot?.productionLines ?? []) {
+          const order = state.orders.find(({ id }) => id === line.orderId);
+          if (order) {
+            assertPioneersNumberSource(state, order, line);
+            assertScBuitenboysShortSource(state, order, line);
+          }
+        }
         const at = iso();
         job.status = "COMPLETED";
         job.humanAcceptance = { status: "PASS", acceptedSourceDate: at.slice(0, 10), sourceProofStatus: job.proofStatus, note: `Bedrukt bevestigd door ${user.name}; immutable snapshot en artifacthash zijn ongewijzigd.` };
@@ -1771,7 +1802,7 @@ export class SportpaleisPilotService {
           sourceContext,
           orderKind,
           ...(teamContext ? { teamContext } : {}),
-          communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
+          communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL" && source !== "WEBSHOP_XPRT", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
           notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
           priority,
           attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttentionText(items),
@@ -1789,6 +1820,7 @@ export class SportpaleisPilotService {
           items,
           productionLines,
         };
+        assertOrderProductionDecorationCardinality(state, order);
         const automaticValidationBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
         if (!automaticValidationBlocker) {
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_VALIDATED", at: createdAt, userId: user.id, userName: user.name, source: "automatic-validation" });
@@ -1815,6 +1847,162 @@ export class SportpaleisPilotService {
         state.quickProductionIntakes.unshift(intake);
         audit(state, user.id, "Quick Production Intake-bron opgeslagen", intake.id, { filename: intake.source.filename, sourceKind: intake.source.sourceKind, sha256: intake.source.sha256, extractionEngine: intake.extraction.engine });
         return publicQuickProductionIntake(intake);
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async ingestWebshopMailDocument(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const sourceMessageId = requiredText(payload.sourceMessageId, "Bronbericht-ID", 180);
+    const receivedAt = validDate(payload.receivedAt);
+    const inspected = await inspectQuickProductionSource({ filename: payload.filename, mimeType: payload.mimeType, dataBase64: payload.dataBase64 });
+    if (inspected.source.sourceKind !== "PDF") throw Object.assign(new Error("De gecontroleerde Webshopadapter accepteert uitsluitend de relevante PDF-bijlage uit het mailbericht."), { statusCode: 400, code: "WEBSHOP_PDF_REQUIRED" });
+    const parsed = parseSportpaleisDividePdfText({ pages: [inspected.extraction.extractedText], sourceDocumentId: inspected.source.sha256, sourceHash: inspected.source.sha256, detectedAt: receivedAt });
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `INGEST_WEBSHOP_MAIL_DOCUMENT:${sourceMessageId}`, () => {
+        const sameMessage = state.webshopIntake.sources.find((source) => source.sourceMessageId === sourceMessageId);
+        if (sameMessage && sameMessage.sha256 !== inspected.source.sha256) throw Object.assign(new Error("Dit mailbericht-ID is al met een andere immutable PDF vastgelegd."), { statusCode: 409, code: "WEBSHOP_SOURCE_ID_CONFLICT" });
+        if (sameMessage) return { source: sameMessage, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === sameMessage.id) };
+        const duplicateHash = state.webshopIntake.sources.find(({ sha256: hash }) => hash === inspected.source.sha256);
+        if (duplicateHash) return { source: duplicateHash, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === duplicateHash.id) };
+        const importedAt = iso();
+        const source = { id: `webshop-source-${randomBytes(8).toString("hex")}`, sourceMessageId, receivedAt, filename: inspected.source.filename, mimeType: "application/pdf", sizeBytes: inspected.source.sizeBytes, sha256: inspected.source.sha256, dataBase64: inspected.source.dataBase64, immutable: true, importedAt, importedBy: user.id };
+        state.webshopIntake.sources.unshift(source);
+        const matches = parsed.orders.map((parsedOrder) => {
+          const existingRevisions = state.webshopIntake.matches.filter(({ externalReference }) => externalReference === parsedOrder.externalReference).map(({ contentHash }, index) => ({ revision: index + 1, contentHash }));
+          const revision = reconcileSportpaleisDivideRevision(existingRevisions, parsedOrder);
+          if (revision.action === "NO_OP") return state.webshopIntake.matches.find(({ externalReference, contentHash }) => externalReference === parsedOrder.externalReference && contentHash === parsedOrder.contentHash);
+          const reviewReasons = [
+            ...(!parsedOrder.customer ? ["Klantnaam ontbreekt"] : []),
+            ...(!parsedOrder.association ? ["Vereniging ontbreekt"] : []),
+            ...parsedOrder.articles.flatMap((article) => [
+              ...(!article.description ? [`${article.articleNumber}: omschrijving ontbreekt`] : []),
+              ...(!article.size ? [`${article.articleNumber}: maat ontbreekt`] : []),
+              ...(!article.color ? [`${article.articleNumber}: artikelkleur ontbreekt`] : []),
+            ]),
+          ];
+          const match = { id: `webshop-match-${randomBytes(8).toString("hex")}`, sourceId: source.id, externalReference: parsedOrder.externalReference, orderDate: parsedOrder.orderDate, customer: parsedOrder.customer, association: parsedOrder.association, contentHash: parsedOrder.contentHash, status: "HUMAN_CHECK", orderId: null, reviewReasons, articles: parsedOrder.articles.map(({ articleNumber, description, size, color, quantity, personalization, articlePersonalizationRule }) => ({ articleNumber, description, size, color, quantity, personalization, ...(articlePersonalizationRule ? { articlePersonalizationRule } : {}) })), source: { pageNumbers: parsedOrder.pageNumbers, segmentHash: parsedOrder.source.segmentHash, originalEvidence: parsedOrder.source.originalEvidence }, acceptedAt: null, acceptedBy: null };
+          state.webshopIntake.matches.unshift(match);
+          state.webshopIntake.processedOrderRevisionIdentifiers.push(`${parsedOrder.externalReference}:${parsedOrder.contentHash}`);
+          return match;
+        }).filter(Boolean);
+        state.webshopIntake.processedSourceIdentifiers.push(`${sourceMessageId}:${source.sha256}`);
+        state.webshopIntake.lastSuccessfulRetrievalAt = importedAt;
+        state.webshopIntake.highWaterMark = receivedAt;
+        state.webshopIntake.status = matches.some(({ reviewReasons }) => reviewReasons.length) ? "ATTENTION" : "READY";
+        audit(state, user.id, "Webshopmail-PDF immutable ingelezen", source.id, { sourceMessageId, filename: source.filename, sha256: source.sha256, matches: matches.length, automaticOrderCreation: false });
+        return { source, matches };
+      });
+      return { state, value: outcome };
+    });
+    const value = result.value.value;
+    return { duplicate: result.value.duplicate, value: { ...value, source: (({ dataBase64: _dataBase64, ...source }) => source)(value.source) } };
+  }
+
+  async webshopDocumentSource(token, sourceId) {
+    const { state, user } = await this.authenticate(token);
+    assertRole(user, ["admin", "operator"]);
+    const source = state.webshopIntake.sources.find(({ id }) => id === sourceId);
+    if (!source) throw Object.assign(new Error("Webshopbron niet gevonden."), { statusCode: 404, code: "WEBSHOP_SOURCE_NOT_FOUND" });
+    return { bytes: Buffer.from(source.dataBase64, "base64"), mimeType: source.mimeType, filename: source.filename, sha256: source.sha256, disposition: "inline", allowSameOriginFrame: true };
+  }
+
+  async acceptWebshopMatch(token, csrfToken, matchId, payload) {
+    const { state, user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const match = state.webshopIntake.matches.find(({ id }) => id === matchId);
+    if (!match) throw Object.assign(new Error("Webshopcontrolevoorstel niet gevonden."), { statusCode: 404, code: "WEBSHOP_MATCH_NOT_FOUND" });
+    if (match.status === "ACCEPTED") {
+      const order = state.orders.find(({ id }) => id === match.orderId);
+      if (!order) throw Object.assign(new Error("De eerder gekoppelde webshoporder ontbreekt."), { statusCode: 409, code: "WEBSHOP_ORDER_LINK_MISSING" });
+      return { duplicate: true, value: order };
+    }
+    if (payload.explicitAgreement !== true) throw Object.assign(new Error("Expliciet medewerkerakkoord is vereist."), { statusCode: 409, code: "WEBSHOP_AGREEMENT_REQUIRED" });
+    const existing = state.orders.find(({ sourceContext }) => sourceContext?.source === "WEBSHOP_XPRT" && sourceContext.externalReference === match.externalReference);
+    if (existing) throw Object.assign(new Error("Dit webshopordernummer bestaat al; dubbele materialisatie is geblokkeerd."), { statusCode: 409, code: "WEBSHOP_ORDER_DUPLICATE" });
+    const association = requiredText(payload.association || match.association, "Vereniging", 160);
+    const customer = requiredText(payload.customer || match.customer, "Klant", 120);
+    const backNumberSizeClass = allowedValue(payload.backNumberSizeClass ?? "SENIOR", ["JUNIOR", "SENIOR"], "Rugnummermaat");
+    const items = match.articles.map((sourceArticle) => {
+      const articleMatches = state.articles.filter(({ active, association: owner, articleNumber }) => active !== false && owner === association && String(articleNumber) === String(sourceArticle.articleNumber));
+      if (articleMatches.length !== 1) throw Object.assign(new Error(`${sourceArticle.articleNumber}: artikelmatch is niet exact; controle blijft vereist.`), { statusCode: 409, code: "WEBSHOP_ARTICLE_MATCH_REVIEW_REQUIRED" });
+      const article = articleMatches[0];
+      const supported = new Set(article.supports ?? []);
+      const overrides = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", shortsNumber: "", backNumberSizeClass: "" };
+      for (const personalization of sourceArticle.personalization) {
+        const field = ({ INITIALS: "initials", BACK_NAME: "name", BACK_NUMBER: "backNumber", CHEST_NUMBER: "chestNumber", SHORTS_NUMBER: "shortsNumber" })[personalization.kind];
+        if (field && supported.has(field)) overrides[field] = personalization.value;
+      }
+      if (overrides.backNumber) overrides.backNumberSizeClass = backNumberSizeClass;
+      return { articleId: article.id, size: requiredText(sourceArticle.size, `${sourceArticle.articleNumber} maat`, 40), quantity: sourceArticle.quantity, deviation: true, overrides };
+    });
+    const source = state.webshopIntake.sources.find(({ id }) => id === match.sourceId);
+    if (!source) throw Object.assign(new Error("De immutable webshopbron ontbreekt."), { statusCode: 409, code: "WEBSHOP_SOURCE_NOT_FOUND" });
+    const created = await this.createOrder(token, csrfToken, { orderKind: "INDIVIDUAL", customer, customerEmail: optional(payload.customerEmail, 160), customerPhone: optional(payload.customerPhone, 40), association, standardPersonalization: {}, items, source: "WEBSHOP_XPRT", externalReference: match.externalReference, provenance: `Mail ${source.sourceMessageId} · ${source.filename} · SHA-256 ${source.sha256}` }, `webshop-match:${match.id}`);
+    const linked = await this.store.mutate(async (next) => {
+      const current = next.webshopIntake.matches.find(({ id }) => id === match.id);
+      const order = next.orders.find(({ id }) => id === created.value.id);
+      const storedSource = next.webshopIntake.sources.find(({ id }) => id === match.sourceId);
+      if (!current || !order || !storedSource) throw Object.assign(new Error("Webshopbron en order konden niet atomair worden gekoppeld."), { statusCode: 409, code: "WEBSHOP_ORDER_LINK_FAILED" });
+      if (current.status === "HUMAN_CHECK") {
+        current.status = "ACCEPTED"; current.orderId = order.id; current.acceptedAt = iso(); current.acceptedBy = user.id;
+        const stockLogoQuantity = current.articles.reduce((total, article) => total + (article.personalization.some(({ kind }) => kind === "STOCK_LOGO") ? article.quantity : 0), 0);
+        if (stockLogoQuantity > 0) {
+          if (normalizedSourceValue(association).replaceAll(" ", "") !== "vva/spartaan") throw Object.assign(new Error("Voorraadlogo-automatisering is uitsluitend toegestaan voor VVA / Spartaan Webshoporders."), { statusCode: 409, code: "WEBSHOP_STOCK_LOGO_SCOPE_MISMATCH" });
+          order.stockApplications = [{ id: `stock-application-${randomBytes(8).toString("hex")}`, kind: "STOCK_LOGO", association: "VVA / Spartaan", quantity: stockLogoQuantity, status: "PENDING", appliedAt: null, appliedBy: null, source: "WEBSHOP_XPRT" }];
+        }
+        order.sourceContext.webshopDocument = { sourceId: storedSource.id, sourceMessageId: storedSource.sourceMessageId, filename: storedSource.filename, sha256: storedSource.sha256, contentHash: current.contentHash };
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "WEBSHOP_DOCUMENT_ACCEPTED", at: current.acceptedAt, userId: user.id, userName: user.name, source: "explicit-human-agreement", details: { matchId: current.id, sourceId: storedSource.id, sourceSha256: storedSource.sha256, externalReference: current.externalReference } });
+        order.revision += 1; order.updatedAt = current.acceptedAt;
+        audit(next, user.id, "Webshop-PDF gecontroleerd en als canonieke order geaccepteerd", current.id, { orderId: order.id, externalReference: current.externalReference, sourceSha256: storedSource.sha256 });
+      }
+      return { state: next, value: order };
+    });
+    return { duplicate: created.duplicate, value: linked.value };
+  }
+
+  async applyWebshopStockLogo(token, csrfToken, orderId, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `APPLY_WEBSHOP_STOCK_LOGO:${orderId}`, () => {
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!order || order.sourceContext?.source !== "WEBSHOP_XPRT") throw Object.assign(new Error("Webshoporder niet gevonden."), { statusCode: 404, code: "WEBSHOP_ORDER_NOT_FOUND" });
+        if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De webshoporder is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+        const pending = (order.stockApplications ?? []).filter(({ association, status }) => association === "VVA / Spartaan" && status === "PENDING");
+        if (!pending.length) throw Object.assign(new Error("Er staat geen nog toe te passen VVA / Spartaan-voorraadlogo open."), { statusCode: 409, code: "WEBSHOP_STOCK_LOGO_NOT_PENDING" });
+        const quantity = pending.reduce((sum, item) => sum + item.quantity, 0);
+        const stock = state.webshopIntake.stockLogo;
+        if (stock.currentStock < quantity) throw Object.assign(new Error(`Onvoldoende voorraadlogo's: ${stock.currentStock} beschikbaar, ${quantity} nodig.`), { statusCode: 409, code: "WEBSHOP_STOCK_LOGO_INSUFFICIENT" });
+        const at = iso(); const previousStock = stock.currentStock; stock.currentStock -= quantity;
+        for (const application of pending) { application.status = "APPLIED"; application.appliedAt = at; application.appliedBy = user.id; }
+        stock.mutations.unshift({ id: `stock-mutation-${randomBytes(8).toString("hex")}`, orderId: order.id, quantity: -quantity, previousStock, nextStock: stock.currentStock, at, byUserId: user.id, idempotencyKey });
+        order.stage = "PRINT"; order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "WEBSHOP_STOCK_LOGO_APPLIED", at, userId: user.id, userName: user.name, source: "physical-stock-application", details: { quantity, previousStock, nextStock: stock.currentStock, plotJobCreated: false } });
+        audit(state, user.id, "Webshop voorraadlogo fysiek toegepast", order.id, { association: "VVA / Spartaan", quantity, previousStock, nextStock: stock.currentStock, plotJobCreated: false });
+        return order;
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async recordWebshopOrderPrint(token, csrfToken, orderId, idempotencyKey) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `PRINT_WEBSHOP_ORDER:${orderId}`, () => {
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!order || order.sourceContext?.source !== "WEBSHOP_XPRT") throw Object.assign(new Error("Webshoporder niet gevonden."), { statusCode: 404, code: "WEBSHOP_ORDER_NOT_FOUND" });
+        const previous = state.webshopIntake.printEvents.filter(({ orderId: id }) => id === order.id).length;
+        const event = { id: `webshop-print-${randomBytes(8).toString("hex")}`, orderId: order.id, at: iso(), byUserId: user.id, kind: previous ? "REPRINT" : "PRINT" };
+        state.webshopIntake.printEvents.unshift(event);
+        order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: event.kind === "REPRINT" ? "WEBSHOP_ORDER_REPRINTED" : "WEBSHOP_ORDER_PRINTED", at: event.at, userId: user.id, userName: user.name, source: "explicit-print", details: { printEventId: event.id } });
+        audit(state, user.id, event.kind === "REPRINT" ? "Webshoporder opnieuw geprint" : "Webshoporder geprint", order.id, { printEventId: event.id });
+        return event;
       });
       return { state, value: outcome };
     });
@@ -1968,8 +2156,15 @@ export class SportpaleisPilotService {
             continue;
           }
           const progress = productionProgressForOrder(state, order);
-          if (!progress?.trackedComplete || !progress.complete) {
+          const stockApplications = order.stockApplications ?? [];
+          const stockComplete = stockApplications.length > 0 && stockApplications.every(({ status }) => status === "APPLIED");
+          const plottedComplete = (order.productionLines ?? []).length === 0 ? true : Boolean(progress?.trackedComplete && progress.complete);
+          if (!plottedComplete || stockApplications.some(({ status }) => status !== "APPLIED")) {
             skipped.push({ id: order.id, code: "PRODUCTION_LINES_PENDING", reason: "Nog niet alle vereiste productieregels per foliekleur zijn bedrukt." });
+            continue;
+          }
+          if (!(order.productionLines ?? []).length && !stockComplete) {
+            skipped.push({ id: order.id, code: "PRODUCTION_LINES_PENDING", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." });
             continue;
           }
           const previous = order.stage;
@@ -1977,8 +2172,17 @@ export class SportpaleisPilotService {
           order.revision += 1;
           order.updatedAt = iso();
           order.eventHistory ??= [];
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false } });
-          audit(state, user.id, selections.length === 1 ? "Volledig geproduceerde order Gereed gemeld" : "Volledig geproduceerde order in bulk Gereed gemeld", order.id, { from: previous, to: order.stage, revision: order.revision, customerMailSent: false });
+          const pickupReady = order.fulfillment?.mode !== "DELIVERY";
+          if (pickupReady) {
+            order.fulfillment ??= { mode: "PICKUP", status: "PENDING", updatedAt: null, updatedBy: null };
+            order.fulfillment.status = "READY_FOR_PICKUP";
+            order.fulfillment.updatedAt = order.updatedAt;
+            order.fulfillment.updatedBy = user.id;
+            order.operationalFacts ??= {};
+            order.operationalFacts.READY_FOR_PICKUP = { at: order.updatedAt, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" };
+          }
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false, fulfillmentStatus: pickupReady ? "READY_FOR_PICKUP" : order.fulfillment?.status ?? "PENDING", explicitHumanAction: "AFRONDEN" } });
+          audit(state, user.id, selections.length === 1 ? "Volledig geproduceerde order afgerond" : "Volledig geproduceerde orders in bulk afgerond", order.id, { from: previous, to: order.stage, revision: order.revision, fulfillmentStatus: order.fulfillment?.status ?? null, customerMailSent: false });
           completed.push(order);
         }
         return { completed, skipped };
@@ -2031,6 +2235,7 @@ export class SportpaleisPilotService {
         const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
         order.standardPersonalization = standardPersonalization;
         order.items = items;
+        assertOrderProductionDecorationCardinality(state, order);
         order.associations = associations;
         order.association = associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging";
         order.totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -3704,6 +3909,129 @@ function configuredManagedFont(state, profile) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+const PIONEERS_ASSOCIATION = "Almerer Pioneers";
+const PIONEERS_PROFILE_AUTHORITY_EVENT = "SPW-PIONEERS-NUMBER-AUTHORITY-20260825";
+
+function normalizedProductionIdentity(value) {
+  return String(value ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
+}
+
+function pioneersCanonicalFontName(state) {
+  const association = state.associations.find(({ name }) => name === PIONEERS_ASSOCIATION);
+  const evidence = association?.fontEvidence;
+  return evidence?.applied && evidence.confirmationStatus === "MATCH" ? String(evidence.canonicalName ?? "").trim() : "";
+}
+
+function applyPioneersProductionAuthority(state) {
+  const association = state.associations.find(({ name }) => name === PIONEERS_ASSOCIATION);
+  const canonicalName = pioneersCanonicalFontName(state);
+  if (!association || !canonicalName) return;
+  const update = (record, field = "fontProfile") => {
+    if (!record || normalizedProductionIdentity(record[field]) === normalizedProductionIdentity(canonicalName)) return;
+    const previous = record[field];
+    record[field] = canonicalName;
+    record.revision = Number(record.revision ?? 1) + 1;
+    record.validationHistory ??= [];
+    if (!record.validationHistory.some(({ source }) => source === PIONEERS_PROFILE_AUTHORITY_EVENT)) record.validationHistory.push({ at: "2026-08-25T00:00:00.000Z", userId: "system:pioneers-source-authority", field, previous, next: canonicalName, source: PIONEERS_PROFILE_AUTHORITY_EVENT });
+  };
+  update(association);
+  for (const profile of state.productionProfiles ?? []) if (/^profile-pioneers-|^profile-source-almerer-pioneers-(?:backNumber|chestNumber|shortsNumber)$/u.test(profile.id)) update(profile);
+}
+
+const SC_BUITENBOYS_ASSOCIATION = "SC Buitenboys";
+const SC_BUITENBOYS_SHORT_PROFILE_ID = "profile-source-sc-buitenboys-shortsNumber";
+const SC_BUITENBOYS_SHORT_PROFILE_AUTHORITY_EVENT = "SPW-SC-BUITENBOYS-SHORT-SPAIN-20260825";
+
+function applyScBuitenboysShortAuthority(state) {
+  const profile = state.productionProfiles?.find(({ id }) => id === SC_BUITENBOYS_SHORT_PROFILE_ID);
+  if (!profile || normalizedProductionIdentity(profile.fontProfile) === "spain") return;
+  const previous = profile.fontProfile;
+  profile.fontProfile = "Spain";
+  profile.revision = Number(profile.revision ?? 1) + 1;
+  profile.validation ??= {};
+  profile.validation.font = "SOURCE_CONFIGURED";
+  profile.validation.source = `${String(profile.validation.source ?? "").trim()} Praktijkbevestiging 2026-08-25: SC Buitenboys shortnummer gebruikt uitsluitend het gecontroleerde Spain-profiel.`.trim();
+  profile.validationHistory ??= [];
+  profile.validationHistory.push({ at: "2026-08-25T00:00:00.000Z", userId: "system:sc-buitenboys-short-authority", field: "fontProfile", previous, next: "Spain", source: SC_BUITENBOYS_SHORT_PROFILE_AUTHORITY_EVENT });
+}
+
+function assertScBuitenboysShortSource(state, order, line) {
+  const item = order?.items?.find(({ id }) => id === line.itemId);
+  if (item?.association !== SC_BUITENBOYS_ASSOCIATION || line.personalizationField !== "shortsNumber") return;
+  if (item.productionProfileId !== SC_BUITENBOYS_SHORT_PROFILE_ID) throw Object.assign(new Error("SC Buitenboys shortnummer mist het canonieke Spain-shortprofiel; productie blijft op REVIEW."), { statusCode: 409, code: "SC_BUITENBOYS_SHORT_PROFILE_MISMATCH" });
+  if (line.source?.kind === "FONT") {
+    const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
+    if (font && normalizedProductionIdentity(font.name) === "spain") return;
+  }
+  throw Object.assign(new Error("SC Buitenboys shortnummer heeft geen exact beheerde Spain-fontbron; productie blijft op REVIEW."), { statusCode: 409, code: "SC_BUITENBOYS_SHORT_SOURCE_REVIEW_REQUIRED" });
+}
+
+function productionDecorationIdentity(order, line) {
+  if (line.decorationIdentity) return line.decorationIdentity;
+  const item = order?.items?.find(({ id }) => id === line.itemId);
+  if (!item || !line.personalizationField) return null;
+  return { orderId: order.id, itemId: item.id, articleNumber: item.articleNumber, decorationType: line.personalizationField, placement: line.personalizationField, value: line.content, foilColor: line.foilColor ?? item.foilColor, productionProfileId: item.productionProfileId };
+}
+
+function assertOrderProductionDecorationCardinality(state, order) {
+  if (order.orderKind !== "INDIVIDUAL") return;
+  const catalogLines = (order.productionLines ?? []).filter(({ personalizationField }) => PERSONALIZATION_FIELDS.includes(personalizationField));
+  const compositionLines = (order.productionLines ?? []).filter(({ placementRule }) => Boolean(placementRule?.compositionId));
+  if (!catalogLines.length && !compositionLines.length) return;
+  const expected = new Map();
+  for (const item of order.items ?? []) for (const variant of item.variants ?? []) for (const field of PERSONALIZATION_FIELDS) {
+    const raw = variant.personalizationValues?.[field];
+    const type = ["backNumber", "chestNumber", "shortsNumber"].includes(field) ? "NUMBER" : field === "initials" ? "INITIALS" : "TEXT";
+    const value = normalizeProductionContent(type, raw);
+    if (!value) continue;
+    const key = JSON.stringify([item.id, item.articleNumber, field, value]);
+    expected.set(key, Number(expected.get(key) ?? 0) + Number(variant.quantity));
+  }
+  const actual = new Map();
+  for (const line of catalogLines) {
+    const item = order.items.find(({ id }) => id === line.itemId);
+    if (!item) throw Object.assign(new Error("Een productieregel mist de oorspronkelijke orderregel."), { statusCode: 409, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" });
+    const key = JSON.stringify([item.id, item.articleNumber, line.personalizationField, line.content]);
+    actual.set(key, Number(actual.get(key) ?? 0) + Number(line.quantity));
+    const identity = productionDecorationIdentity(order, line);
+    if (!identity || identity.orderId !== order.id || identity.itemId !== item.id || identity.articleNumber !== item.articleNumber || identity.decorationType !== line.personalizationField || identity.value !== line.content || identity.foilColor !== item.foilColor || !identity.productionProfileId) throw Object.assign(new Error(`${line.preview?.label ?? line.content}: productie-identiteit is onvolledig.`), { statusCode: 409, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" });
+  }
+  const compositions = new Map();
+  for (const line of compositionLines) compositions.set(line.placementRule.compositionId, [...(compositions.get(line.placementRule.compositionId) ?? []), line]);
+  for (const lines of compositions.values()) {
+    const ordered = [...lines].sort((left, right) => left.placementRule.segmentIndex - right.placementRule.segmentIndex);
+    if (ordered.length !== 3 || ordered[0].placementRole !== "INITIALS_FIRST" || ordered[2].placementRole !== "INITIALS_LAST") throw Object.assign(new Error("Samengestelde initialen missen fysieke segmenten."), { statusCode: 409, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH" });
+    const item = order.items.find(({ id }) => id === ordered[0].itemId);
+    if (!item || ordered.some(({ itemId, quantity }) => itemId !== item.id || quantity !== ordered[0].quantity)) throw Object.assign(new Error("Samengestelde initialen missen een eenduidige bronregel."), { statusCode: 409, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" });
+    const value = `${ordered[0].content}${ordered[2].content}`;
+    const key = JSON.stringify([item.id, item.articleNumber, "initials", value]);
+    actual.set(key, Number(actual.get(key) ?? 0) + Number(ordered[0].quantity));
+  }
+  const keys = new Set([...expected.keys(), ...actual.keys()]);
+  for (const key of keys) if (Number(expected.get(key) ?? 0) !== Number(actual.get(key) ?? 0)) throw Object.assign(new Error("De productie-output komt niet exact één-op-één overeen met de bronvereisten."), { statusCode: 409, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH", identity: JSON.parse(key), expected: Number(expected.get(key) ?? 0), actual: Number(actual.get(key) ?? 0) });
+}
+
+function assertPioneersNumberSource(state, order, line) {
+  const item = order?.items?.find(({ id }) => id === line.itemId);
+  if (item?.association !== PIONEERS_ASSOCIATION || line.type !== "NUMBER") return;
+  const canonicalName = pioneersCanonicalFontName(state);
+  if (!canonicalName) throw Object.assign(new Error("De gecontroleerde digitale Pioneers-nummerbron ontbreekt; productie blijft op REVIEW."), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_REVIEW_REQUIRED" });
+  if (line.source?.kind === "PRODUCTION_SOURCE") {
+    const source = productionSourceByIdentity(line.source.id, line.source.version);
+    const seniorBackNumber = line.personalizationField === "backNumber" && Number(line.heightMm) === 200;
+    if (source && seniorBackNumber && source.sourceSetId === PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID) return;
+  }
+  if (line.source?.kind === "PRODUCTION_ELEMENT") {
+    const linked = associationNumberSet(state, PIONEERS_ASSOCIATION);
+    if (!linked.ambiguous && linked.asset?.id === line.source.id && (linked.asset.version ?? String(linked.asset.revision)) === line.source.version) return;
+  }
+  if (line.source?.kind === "FONT") {
+    const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
+    if (font && normalizedProductionIdentity(font.name) === normalizedProductionIdentity(canonicalName)) return;
+  }
+  throw Object.assign(new Error(`${line.preview?.label ?? line.content}: gekoppelde bron wijkt af van de gecontroleerde Pioneers-bron “${canonicalName}”; productie blijft op REVIEW.`), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_MISMATCH" });
+}
+
 function associationNumberSet(state, associationName) {
   const association = state.associations.find(({ id, name }) => id === associationName || name === associationName);
   if (!association) return { association: null, asset: null, ambiguous: false };
@@ -3896,6 +4224,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
           orderId, itemId: item.id, variantId: variant.id,
           type: lineType,
           personalizationField: field,
+          decorationIdentity: { orderId, itemId: item.id, articleNumber: item.articleNumber, decorationType: field, placement: field, value: content, foilColor: item.foilColor, productionProfileId: profile?.id ?? item.productionProfileId },
           content,
           source: linkedNumberSet.asset ? { kind: "PRODUCTION_ELEMENT", id: linkedNumberSet.asset.id, version: linkedNumberSet.asset.version ?? String(linkedNumberSet.asset.revision), variantId: linkedNumberSet.asset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0)?.id ?? null } : versionedSource ? {
             kind: "PRODUCTION_SOURCE",
@@ -3921,7 +4250,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
   }
   const grouped = new Map();
   for (const line of raw) {
-    const key = JSON.stringify([line.orderId, line.itemId, line.type, line.personalizationField ?? null, line.content, line.source.id, line.source.version, line.widthMm, line.heightMm, line.proofStatus, line.validation.status, line.placementRole ?? null, line.placementRule?.compositionId ?? null]);
+    const key = JSON.stringify([line.orderId, line.itemId, line.decorationIdentity?.articleNumber ?? null, line.type, line.personalizationField ?? null, line.decorationIdentity?.placement ?? null, line.content, line.decorationIdentity?.foilColor ?? null, line.decorationIdentity?.productionProfileId ?? null, line.source.id, line.source.version, line.widthMm, line.heightMm, line.proofStatus, line.validation.status, line.placementRole ?? null, line.placementRule?.compositionId ?? null]);
     const existing = grouped.get(key);
     if (existing) { existing.quantity += line.quantity; existing.variantIds.push(line.variantId); }
     else grouped.set(key, { ...line, variantIds: [line.variantId] });
@@ -4052,8 +4381,11 @@ function productionClosureForOrder(state, order) {
   if (order.stage === "DONE") return { status: "CONFIRMED", reason: null };
   if (order.stage !== "PRINT") return { status: "NOT_ELIGIBLE", reason: "De order is nog niet volledig fysiek geproduceerd." };
   const progress = productionProgressForOrder(state, order);
-  if (!progress?.trackedComplete) return { status: "NOT_ELIGIBLE", reason: "Niet alle vereiste productieregels zijn aan een fysieke productiegroep gekoppeld." };
-  if (!progress.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
+  const stockApplications = order.stockApplications ?? [];
+  if (stockApplications.some(({ status }) => status !== "APPLIED")) return { status: "NOT_ELIGIBLE", reason: "Het voorraadlogo is nog niet fysiek toegepast." };
+  if ((order.productionLines ?? []).length > 0 && !progress?.trackedComplete) return { status: "NOT_ELIGIBLE", reason: "Niet alle vereiste productieregels zijn aan een fysieke productiegroep gekoppeld." };
+  if ((order.productionLines ?? []).length > 0 && !progress?.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
+  if (!(order.productionLines ?? []).length && !stockApplications.length) return { status: "NOT_ELIGIBLE", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." };
   return { status: "ELIGIBLE", reason: null };
 }
 
@@ -4166,8 +4498,11 @@ function productionLineWriterIdentity(state, line) {
 function buildProductionProposalGroups(state, orders) {
   const grouped = new Map();
   for (const order of orders) {
+    assertOrderProductionDecorationCardinality(state, order);
     if (!order.productionLines?.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
     for (const line of order.productionLines) {
+      assertPioneersNumberSource(state, order, line);
+      assertScBuitenboysShortSource(state, order, line);
       const writer = productionLineWriterIdentity(state, line);
       const foilColor = productionLineFoilColor(state, order, line);
       const sourceChannel = order.sourceContext?.source ?? "STORE";
@@ -4208,9 +4543,11 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
   const escapedContourId = (id) => String(id).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
   const expectedContourIds = contours.map(({ id }) => escapedContourId(id)).sort();
   const sortedArtifactContourIds = [...artifactContourIds].sort();
-  const remainingArtifactContours = new Map(artifactContourIds.map((id) => [id, artifactContourIds.filter((candidate) => candidate === id).length]));
+  const remainingArtifactContours = new Map();
+  for (const id of artifactContourIds) remainingArtifactContours.set(id, Number(remainingArtifactContours.get(id) ?? 0) + 1);
   const actualArtifactInstances = (cutJob?.productionGeometry?.groups ?? []).reduce((count, group) => {
-    const required = new Map((group.contours ?? []).map(({ id }) => { const escaped = escapedContourId(id); return [escaped, (group.contours ?? []).filter((contour) => escapedContourId(contour.id) === escaped).length]; }));
+    const required = new Map();
+    for (const { id } of group.contours ?? []) { const escaped = escapedContourId(id); required.set(escaped, Number(required.get(escaped) ?? 0) + 1); }
     const complete = required.size > 0 && [...required].every(([id, quantity]) => Number(remainingArtifactContours.get(id) ?? 0) >= quantity);
     if (complete) for (const [id, quantity] of required) remainingArtifactContours.set(id, Number(remainingArtifactContours.get(id)) - quantity);
     return count + Number(complete);
@@ -4227,7 +4564,17 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
 }
 
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot) {
+  const generationStartedAt = performance.now();
+  const millisecondsSince = (startedAt) => Math.round((performance.now() - startedAt) * 10) / 10;
   if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT", "PRODUCTION_ELEMENT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
+  for (const line of productionLines) {
+    const order = orders.find(({ id }) => id === line.orderId)
+      ?? orders.find(({ items }) => items.some(({ id }) => id === line.itemId))
+      ?? orders[0];
+    if (order) assertPioneersNumberSource(state, order, line);
+    if (order) assertScBuitenboysShortSource(state, order, line);
+  }
+  const sourceResolutionStartedAt = performance.now();
   const resolved = productionLines.map((line) => {
     if (line.source.kind === "PRODUCTION_SOURCE") {
       const source = productionSourceByIdentity(line.source.id, line.source.version);
@@ -4281,13 +4628,19 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
       },
     };
   });
+  const sourceResolutionMs = millisecondsSince(sourceResolutionStartedAt);
   const writerIdentities = new Set(resolved.map(({ source }) => `${source.outputWriterId}@${source.outputWriterVersion}`));
   if (writerIdentities.size !== 1) throw Object.assign(new Error("Eén productiegroep kan alleen productiebronnen voor dezelfde versioned outputwriter bevatten."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const [first] = resolved;
   if (!first || first.source.outputWriterId !== CUTJOB_SVG_WRITER.id || first.source.outputWriterVersion !== CUTJOB_SVG_WRITER.version) throw Object.assign(new Error(`Outputwriter ${[...writerIdentities][0] ?? "onbekend"} is niet geïnstalleerd.`), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
+  const geometryStartedAt = performance.now();
   const rawPieces = resolved.flatMap(({ line, piece, pieces: resolvePieces }) => Array.from({ length: line.quantity }, (_, copy) =>
     resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).flat());
+  const geometryMs = millisecondsSince(geometryStartedAt);
+  const semanticGroupingStartedAt = performance.now();
   const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm);
+  const semanticGroupingMs = millisecondsSince(semanticGroupingStartedAt);
+  const nestingStartedAt = performance.now();
   const cutJobBatch = createCutJobBatch({
     organizationId: state.organizationId,
     orderId: orders.map(({ id }) => id).join("+"),
@@ -4297,36 +4650,43 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     pieces,
     nesting: { absoluteMaxWidthMm: state.settings.productionDefaults.maxSafeTrackWidthMm, preferredWorkingWidthMm: state.settings.productionDefaults.workingWidthMm, minimumCutGapMm: state.settings.productionDefaults.minimumGapMm, edgeMarginMm: state.settings.productionDefaults.edgeMarginMm },
   });
+  const nestingMs = millisecondsSince(nestingStartedAt);
   if (cutJobBatch.jobs.length !== 1 || !cutJobBatch.jobs[0].readyForPrinting) throw Object.assign(new Error("De productiegroep past niet in één geldige productiejob."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const cutJob = cutJobBatch.jobs[0];
+  const svgStartedAt = performance.now();
   const preview = createProductionPreview(cutJob);
   assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, preview.svg);
   const productionDataHash = sha256(JSON.stringify(productionLines)).toUpperCase();
   const svg = preview.svg.replace("<svg ", `<svg data-production-data-sha256="${productionDataHash}" data-cutjob-sha256="${cutJob.contentHash.toUpperCase()}" `);
   const bytes = Buffer.from(svg, "utf8");
   const artifactHash = sha256(bytes).toUpperCase();
+  const svgAndIntegrityMs = millisecondsSince(svgStartedAt);
   const relativeDirectory = path.join("outputs", "sportpaleis-plotjobs", jobNumber);
   const relativePath = path.join(relativeDirectory, `${jobNumber}-production.svg`).replaceAll(path.sep, "/");
   const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
   const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
+  const persistenceStartedAt = performance.now();
   mkdirSync(absoluteDirectory, { recursive: true });
   if (path.resolve(absolutePath).startsWith(`${absoluteDirectory}${path.sep}`) === false) throw new Error("Ongeldige productiebestandlocatie.");
   try { writeFileSync(absolutePath, bytes, { flag: "wx" }); }
   catch (error) {
     if (error?.code !== "EEXIST" || sha256(readFileSync(absolutePath)).toUpperCase() !== artifactHash) throw error;
   }
+  const persistenceMs = millisecondsSince(persistenceStartedAt);
   return {
     cutJob,
     preview,
     productionDataHash,
     sources: resolved.map(({ source }) => source),
     outputWriter: { ...CUTJOB_SVG_WRITER },
+    generationMetrics: { sourceResolutionMs, geometryMs, semanticGroupingMs, nestingMs, svgAndIntegrityMs, persistenceMs, totalMs: millisecondsSince(generationStartedAt), inputLineCount: productionLines.length, physicalPieceCount: rawPieces.length, nestedObjectCount: pieces.length },
     artifact: { filename: `${jobNumber}-production.svg`, format: "SVG", version: `${CUTJOB_SVG_WRITER.id}@${CUTJOB_SVG_WRITER.version}`, sha256: artifactHash, path: relativePath, productionDataHash },
   };
 }
 
 function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined) {
-  const allProductionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id })) : order.items.map((item, index) => ({ ...lineFromOrderItem(state, order, item, index), orderId: order.id })));
+  const snapshotStartedAt = performance.now();
+  const allProductionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id, ...(productionDecorationIdentity(order, line) ? { decorationIdentity: productionDecorationIdentity(order, line) } : {}) })) : order.items.map((item, index) => ({ ...lineFromOrderItem(state, order, item, index), orderId: order.id })));
   const selectedLineKeys = productionGroup?.lineRefs ? new Set(productionGroup.lineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`)) : null;
   const selectedLineOrder = productionGroup?.lineRefs ? new Map(productionGroup.lineRefs.map(({ orderId, lineId }, index) => [`${orderId}|${lineId}`, index])) : null;
   const productionLines = selectedLineKeys
@@ -4358,6 +4718,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
+    generationMetrics: productionArtifact ? { ...productionArtifact.generationMetrics, snapshotTotalMs: Math.round((performance.now() - snapshotStartedAt) * 10) / 10 } : null,
     productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm, maxSafeTrackWidthMm: defaults.maxSafeTrackWidthMm },
     layout: productionArtifact ? { strategy: productionArtifact.cutJob.nesting.strategy, objectCount: productionArtifact.cutJob.productionGeometry.groups.length, closedContourCount: productionArtifact.cutJob.productionGeometry.contours.length, anchorCount: productionArtifact.cutJob.productionGeometry.contours.reduce((sum, contour) => sum + contour.points.length, 0), configuredWidthMm: productionArtifact.cutJob.nesting.configuredWidthMm, baselineUsedLengthMm: productionArtifact.cutJob.nesting.baselineUsedLengthMm, savedLengthVsBaselineMm: productionArtifact.cutJob.nesting.savedLengthVsBaselineMm, usedWidthMm: productionArtifact.cutJob.nesting.usedWidthMm, usedLengthMm: productionArtifact.cutJob.nesting.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: productionArtifact.cutJob.productionGeometry.groups.map(({ sourcePieceId, placementMm, sourceBoundsMm, boundsMm, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, provenance, physicalMembers }) => ({ lineId: sourcePieceId, xMm: placementMm.x, yMm: placementMm.y, widthMm: boundsMm.width, heightMm: boundsMm.height, sourceWidthMm: sourceBoundsMm.width, sourceHeightMm: sourceBoundsMm.height, mirrorApplied, baseRotationApplied, nestingRotationApplied, rotationApplied, vectorProfile: provenance.vectorProfile ?? null, sourceOrderId: provenance.sourceOrderId, semanticGroup: structuredClone(provenance.semanticGroup ?? null), physicalMembers: structuredClone(physicalMembers ?? []), assetIdentity: structuredClone(provenance.assetIdentity ?? null) })), productionGeometry: structuredClone(productionArtifact.cutJob.productionGeometry) } : { strategy: "MINIMUM_SAFE_ROLL_LENGTH_FIRST_RECTANGLE_PREVIEW", objectCount: layout.placements.length, usedWidthMm: layout.usedWidthMm, usedLengthMm: layout.usedLengthMm, edgeMarginMm: defaults.edgeMarginMm, minimumGapMm: defaults.minimumGapMm, placements: layout.placements },
     orientation: manifest.orientation,
@@ -4701,6 +5062,30 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/quick-production-intakes" && method === "POST") {
         json(response, 201, await service.createQuickProductionIntake(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/webshop-intakes/mail-document" && method === "POST") {
+        json(response, 201, await service.ingestWebshopMailDocument(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const webshopSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/webshop-intakes\/sources\/([^/]+)$/);
+      if (webshopSourceMatch && method === "GET") {
+        binary(response, 200, await service.webshopDocumentSource(token, decodeURIComponent(webshopSourceMatch[1])));
+        return true;
+      }
+      const webshopAcceptMatch = route.match(/^\/api\/sportpaleis\/v1\/webshop-intakes\/matches\/([^/]+)\/accept$/);
+      if (webshopAcceptMatch && method === "POST") {
+        json(response, 201, await service.acceptWebshopMatch(token, csrf, decodeURIComponent(webshopAcceptMatch[1]), await readJson(request)));
+        return true;
+      }
+      const webshopPrintMatch = route.match(/^\/api\/sportpaleis\/v1\/webshop-orders\/([^/]+)\/print$/);
+      if (webshopPrintMatch && method === "POST") {
+        json(response, 201, await service.recordWebshopOrderPrint(token, csrf, decodeURIComponent(webshopPrintMatch[1]), request.headers["idempotency-key"]));
+        return true;
+      }
+      const webshopStockLogoMatch = route.match(/^\/api\/sportpaleis\/v1\/webshop-orders\/([^/]+)\/stock-logo\/apply$/);
+      if (webshopStockLogoMatch && method === "POST") {
+        json(response, 200, await service.applyWebshopStockLogo(token, csrf, decodeURIComponent(webshopStockLogoMatch[1]), await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const quickIntakeSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/quick-production-intakes\/([^/]+)\/source$/);

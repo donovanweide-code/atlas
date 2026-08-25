@@ -5,15 +5,19 @@ const sha256 = (value) => createHash("sha256").update(String(value)).digest("hex
 
 export function createSportpaleisWebshopIntakeState() {
   return {
-    enabled: false,
-    status: "NOT_ACTIVE",
+    enabled: true,
+    status: "READY",
     startBoundary: null,
     lastSuccessfulRetrievalAt: null,
     highWaterMark: null,
     processedSourceIdentifiers: [],
     processedOrderRevisionIdentifiers: [],
-    retrievalMode: "OFF",
+    retrievalMode: "CONTROLLED_MAIL_DOCUMENT_ADAPTER",
     channel: "WEBSHOP_XPRT",
+    sources: [],
+    matches: [],
+    printEvents: [],
+    stockLogo: { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] },
   };
 }
 
@@ -35,6 +39,9 @@ export function normalizeDividePersonalization(label, sourceValue) {
     ? { kind: "BACK_NUMBER", value, sourceLabel: label, sourceValue }
     : { kind: "BACK_NAME", value, sourceLabel: label, sourceValue };
   if (normalizedLabel === "initialen") return { kind: "INITIALS", value, sourceLabel: label, sourceValue };
+  if (["borstnummer", "nummer borst"].includes(normalizedLabel)) return { kind: "CHEST_NUMBER", value, sourceLabel: label, sourceValue };
+  if (["shortnummer", "broeknummer", "nummer short"].includes(normalizedLabel)) return { kind: "SHORTS_NUMBER", value, sourceLabel: label, sourceValue };
+  if (["voorraadlogo", "clublogo", "logo"].includes(normalizedLabel)) return { kind: "STOCK_LOGO", value, sourceLabel: label, sourceValue };
   throw Object.assign(new Error(`Onbekende personalisatie: ${label}.`), { code: "DIVIDE_PERSONALIZATION_UNKNOWN" });
 }
 
@@ -70,7 +77,7 @@ function splitOrderSegments(pages) {
   return segments;
 }
 
-function parseArticleBlocks(rawText) {
+function parseArticleBlocks(rawText, association = "") {
   const lines = rawText.split("\n").map(clean).filter(Boolean);
   const articles = [];
   let current = null;
@@ -95,16 +102,33 @@ function parseArticleBlocks(rawText) {
       if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) throw Object.assign(new Error(`Ongeldig aantal bij artikel ${current.articleNumber}.`), { code: "DIVIDE_ARTICLE_QUANTITY_INVALID" });
       current.quantity = parsed;
     } else {
-      const personalization = line.match(/^(Rugnummer|Naam\s*\(Rug\)|Initialen)\s*:\s*(.+)$/iu);
-      if (personalization) current.personalization.push(normalizeDividePersonalization(personalization[1], personalization[2]));
+      const combinedNumber = line.match(/^Rug\s*\/\s*Borst\s*\/\s*Short\s*nummer\s*:\s*(.+)$/iu);
+      if (combinedNumber) current.personalization.push(
+        normalizeDividePersonalization("Rugnummer", combinedNumber[1]),
+        normalizeDividePersonalization("Borstnummer", combinedNumber[1]),
+        normalizeDividePersonalization("Shortnummer", combinedNumber[1]),
+      );
+      else {
+        const personalization = line.match(/^(Rugnummer|Borstnummer|Shortnummer|Broeknummer|Naam\s*\(Rug\)|Rugnaam|Initialen|Voorraadlogo|Clublogo|Logo)\s*:\s*(.+)$/iu);
+        if (personalization) current.personalization.push(normalizeDividePersonalization(personalization[1].replace(/^Rugnaam$/iu, "Naam (Rug)"), personalization[2]));
+      }
     }
   }
   if (!articles.length) throw Object.assign(new Error("Bestelling bevat geen herkenbare artikelregels."), { code: "DIVIDE_ARTICLES_EMPTY" });
-  return articles.map((article) => ({
-    ...article,
+  return articles.map((article) => {
+    const product = article.description.toLocaleLowerCase("nl-NL");
+    const huizenArticleRule = /(?:sv|fc)\s*huizen/iu.test(association)
+      ? (/trainingsbroek|backpack/u.test(product) ? "INITIALS" : /training\s*(?:shirt|top)/u.test(product) ? "BACK_NAME" : null)
+      : null;
+    const personalization = huizenArticleRule
+      ? article.personalization.filter(({ kind }) => kind === huizenArticleRule)
+      : article.personalization;
+    return {
+    ...article, personalization,
     originalEvidence: article.sourceLines.join("\n"),
-    productionRelevant: article.personalization.length > 0,
-  }));
+    productionRelevant: personalization.length > 0,
+    ...(huizenArticleRule ? { articlePersonalizationRule: { kind: huizenArticleRule, source: "SV_HUIZEN_ARTICLE_PRODUCT_RULE", overridesGeneralChoice: true } } : {}),
+  }; });
 }
 
 export function parseSportpaleisDividePdfText({ pages, sourceDocumentId, sourceHash, detectedAt = new Date().toISOString() }) {
@@ -112,13 +136,17 @@ export function parseSportpaleisDividePdfText({ pages, sourceDocumentId, sourceH
   if (!String(sourceDocumentId ?? "").trim() || !/^[a-f0-9]{64}$/iu.test(String(sourceHash ?? ""))) throw Object.assign(new Error("Brondocument-ID en SHA-256 zijn verplicht."), { code: "DIVIDE_SOURCE_PROVENANCE_INVALID" });
   const segments = splitOrderSegments(pages);
   const orders = segments.map((segment) => {
-    const articles = parseArticleBlocks(segment.rawText);
     const orderDate = segment.rawText.match(/(?:Besteldatum|Orderdatum)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
-    const normalized = { reference: segment.reference, orderDate, articles };
+    const customer = segment.rawText.match(/(?:Klant(?:naam)?|Naam klant)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
+    const association = segment.rawText.match(/(?:Vereniging|Club|Team)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
+    const articles = parseArticleBlocks(segment.rawText, association ?? "");
+    const normalized = { reference: segment.reference, orderDate, customer, association, articles };
     return {
       externalReference: segment.reference,
       channel: "WEBSHOP_XPRT",
       orderDate,
+      customer,
+      association,
       pageNumbers: segment.pageNumbers,
       articles,
       productionLines: articles.filter(({ productionRelevant }) => productionRelevant).map(({ articleNumber, description, size, color, quantity, personalization }) => ({ articleNumber, description, size, color, quantity, personalization })),

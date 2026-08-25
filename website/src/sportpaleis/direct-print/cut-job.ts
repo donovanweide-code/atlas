@@ -33,6 +33,7 @@ interface PreparedOrientation {
 
 interface PreparedObject {
   input: CutObject;
+  collisionIdentity: string;
   sourceBoundsMm: ReturnType<typeof boundsForContours>;
   orientations: readonly PreparedOrientation[];
   sortWidthMm: number;
@@ -148,6 +149,10 @@ function prepareObject(input: CutObject): PreparedObject {
   });
   return {
     input,
+    // Object ids encode order/copy traceability, not physical shape. Use an
+    // id-independent immutable geometry identity so identical shirt pieces do
+    // not repeat the same expensive contour-distance calculation.
+    collisionIdentity: sha256(stableJson({ contours: input.contours.map(({ id: _id, ...contour }) => contour), mirror: input.productionRule.mirror, rotation: input.productionRule.rotation })),
     sourceBoundsMm,
     orientations,
     sortWidthMm: Math.max(...orientations.map(({ widthMm }) => widthMm)),
@@ -211,6 +216,7 @@ function tryPlace(
   sheet: readonly PlacedObject[],
   configuration: NestingConfiguration,
   configuredWidthMm: number,
+  collisionCache: Map<string, boolean>,
 ): { placement?: PlacedObject; evaluated: number } {
   let best: PlacedObject | undefined;
   let bestScore: readonly number[] | undefined;
@@ -228,8 +234,14 @@ function tryPlace(
       // Only evaluate contour distance when physical envelopes meet. This
       // allows safe use of obvious empty contour regions without scaling,
       // rotating, or introducing a separate optimizer.
-      if (sheet.some((placed) => placementEnvelopesConflict(boundsMm, placed.boundsMm, configuration.minimumCutGapMm)
-        && contourSetsConflict(contours, placed.contours, configuration.minimumCutGapMm))) continue;
+      if (sheet.some((placed) => {
+        if (!placementEnvelopesConflict(boundsMm, placed.boundsMm, configuration.minimumCutGapMm)) return false;
+        const relativeX = quantizeMm(candidate.x - placed.xMm);
+        const relativeY = quantizeMm(candidate.y - placed.yMm);
+        const cacheKey = `${prepared.collisionIdentity}|${orientation.nestingRotation}|${placed.prepared.collisionIdentity}|${placed.orientation.nestingRotation}|${relativeX}|${relativeY}|${configuration.minimumCutGapMm}`;
+        if (!collisionCache.has(cacheKey)) collisionCache.set(cacheKey, contourSetsConflict(contours, placed.contours, configuration.minimumCutGapMm));
+        return collisionCache.get(cacheKey) === true;
+      })) continue;
 
       const resultingLength = Math.max(currentLength, boundsMm.maxY);
       const resultingWidth = Math.max(
@@ -250,15 +262,16 @@ function nestInOrder(
   ordered: readonly PreparedObject[],
   configuration: NestingConfiguration,
   configuredWidthMm: number,
+  collisionCache: Map<string, boolean>,
 ): NestSolution | undefined {
   const sheets: PlacedObject[][] = [[]];
   let evaluatedCandidateCount = 0;
   for (const prepared of ordered) {
-    let result = tryPlace(prepared, sheets.at(-1) ?? [], configuration, configuredWidthMm);
+    let result = tryPlace(prepared, sheets.at(-1) ?? [], configuration, configuredWidthMm, collisionCache);
     evaluatedCandidateCount += result.evaluated;
     if (!result.placement && (sheets.at(-1)?.length ?? 0) > 0 && configuration.maxJobLengthMm !== undefined) {
       sheets.push([]);
-      result = tryPlace(prepared, [], configuration, configuredWidthMm);
+      result = tryPlace(prepared, [], configuration, configuredWidthMm, collisionCache);
       evaluatedCandidateCount += result.evaluated;
     }
     if (!result.placement) return undefined;
@@ -398,8 +411,9 @@ function optimizeNesting(
     const result = baselineShelf(baselineArrangements[0], configuration, width);
     return result ? [result] : [];
   });
+  const collisionCache = new Map<string, boolean>();
   const solutions = widths.flatMap((width) => arrangements.flatMap((arrangement) => {
-    const result = nestInOrder(arrangement, configuration, width);
+    const result = nestInOrder(arrangement, configuration, width, collisionCache);
     return result ? [result] : [];
   }));
   if (baselines.length === 0 && solutions.length === 0) {
