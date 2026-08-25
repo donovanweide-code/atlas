@@ -6,6 +6,7 @@ const workspace = await readFile(new URL("../src/sportpaleis-workspace.ts", impo
 const teamwearWorkspace = await readFile(new URL("../src/sportpaleis-teamkit-workspace.ts", import.meta.url), "utf8");
 const teamwearExperience = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
 const teamwearCss = await readFile(new URL("../src/styles/sportpaleis-teamwear.css", import.meta.url), "utf8");
+const proposalCss = await readFile(new URL("../src/styles/sportpaleis-proposal.css", import.meta.url), "utf8");
 
 test("first-day medewerker vindt en begrijpt de primaire dagelijkse Sportpaleis-taken", () => {
   const evidence = [
@@ -42,4 +43,5 @@ test("first-day medewerker kan de volledige Teamwear-flow bronmatig volgen", () 
   assert.match(teamwearExperience, /PDF openen/u);
   assert.match(teamwearExperience, /Via Mail voorbereiden/u);
   assert.match(teamwearCss, /Tenant-brand enforcement[\s\S]*--teamwear-accent:#d3172f[\s\S]*focus-visible[\s\S]*var\(--teamwear-accent\)/u, "de finale tenantlaag dwingt rood/zwart af voor actieve en focusstates");
+  assert.match(proposalCss, /Sportpaleis customer surface[\s\S]*\.tk-public\{background:linear-gradient\(180deg,#090a0c[\s\S]*\.tk-button--primary\{background:#17191d[\s\S]*#d3172f/u, "ook de klantpreview gebruikt de Sportpaleis-merkkleuren");
 });

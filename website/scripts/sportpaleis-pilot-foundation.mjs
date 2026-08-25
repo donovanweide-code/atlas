@@ -78,6 +78,7 @@ const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const PERSONAL_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
@@ -433,7 +434,18 @@ function normalizedEmail(value) {
 
 function publicAdminUser(user, state, now = new Date()) {
   const result = publicUser(user);
-  if (user.status !== "Uitgenodigd") return result;
+  if (user.status !== "Uitgenodigd") {
+    const recoveries = (state.passwordResetRequests ?? []).filter((request) => request.userId === user.id && !request.usedAt);
+    const latest = recoveries.sort((left, right) => String(right.requestedAt).localeCompare(String(left.requestedAt)))[0];
+    return {
+      ...result,
+      recovery: latest ? {
+        state: latest.tokenHash && new Date(latest.expiresAt).getTime() > now.getTime() ? "LINK_ISSUED" : "REQUESTED",
+        requestedAt: latest.requestedAt,
+        expiresAt: latest.tokenHash ? latest.expiresAt : null,
+      } : { state: "NONE", requestedAt: null, expiresAt: null },
+    };
+  }
   const pendingInvites = (state.activationInvites ?? []).filter((invite) => invite.userId === user.id && !invite.usedAt);
   const invite = pendingInvites[0];
   const expiryTime = invite ? new Date(invite.expiresAt).getTime() : Number.NaN;
@@ -486,6 +498,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     employeeDirectorySource: null,
     sessions: [],
     loginAttempts: {},
+    passwordResetRequests: [],
     orders: [],
     associations: structuredClone(SPORTPALEIS_ASSOCIATIONS),
     configurationVersion: SPORTPALEIS_CONFIGURATION_VERSION,
@@ -695,6 +708,7 @@ export function migrateSportpaleisPilotState(input) {
   }
   state.configurationVersion = SPORTPALEIS_CONFIGURATION_VERSION;
   state.activationInvites ??= [];
+  state.passwordResetRequests ??= [];
   state.mailbatches ??= [];
   state.websiteSync = { ...createSportpaleisWebsiteSyncState(), ...(state.websiteSync ?? {}) };
   state.webshopIntake = { ...createSportpaleisWebshopIntakeState(), ...(state.webshopIntake ?? {}) };
@@ -851,6 +865,7 @@ export function validateSportpaleisPilotState(input) {
   state.associations ??= structuredClone(SPORTPALEIS_ASSOCIATIONS);
   state.configurationVersion ??= SPORTPALEIS_CONFIGURATION_VERSION;
   state.activationInvites ??= [];
+  state.passwordResetRequests ??= [];
   state.mailbatches ??= [];
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
@@ -1549,6 +1564,76 @@ export class SportpaleisPilotService {
       return { state: next, value: undefined };
     });
     return { token, csrfToken, user: publicUser(user), expiresAt: session.expiresAt, deviceMode: normalizedDeviceMode, cookieMaxAgeSeconds: Math.floor(ttlMs / 1000) };
+  }
+
+  async requestPasswordReset({ email, remoteAddress = "unknown", now = new Date() }) {
+    const requestedEmail = normalizedEmail(email);
+    const attemptKey = sha256(`account-recovery:${remoteAddress}:${requestedEmail}`);
+    await this.store.mutate(async (state) => {
+      const recent = (state.loginAttempts[attemptKey] ?? []).filter((value) => now.getTime() - new Date(value).getTime() < LOGIN_WINDOW_MS);
+      if (recent.length >= 4) return { state, value: undefined };
+      state.loginAttempts[attemptKey] = [...recent, iso(now)];
+      const matches = state.users.filter((candidate) => candidate.status === "Actief" && normalizedEmail(candidate.email) === requestedEmail);
+      if (matches.length === 1) {
+        const target = matches[0];
+        state.passwordResetRequests = (state.passwordResetRequests ?? []).filter((request) => request.userId !== target.id || request.usedAt);
+        state.passwordResetRequests.push({
+          id: `recovery-${randomBytes(8).toString("hex")}`,
+          userId: target.id,
+          requestedAt: iso(now),
+          requestedFromHash: sha256(String(remoteAddress ?? "unknown")),
+          tokenHash: null,
+          issuedAt: null,
+          expiresAt: null,
+          usedAt: null,
+          issuedBy: null,
+        });
+        audit(state, target.id, "Wachtwoordherstel aangevraagd", "Authenticatie");
+      } else {
+        audit(state, "unknown", "Wachtwoordherstel aangevraagd", "Authenticatie");
+      }
+      return { state, value: undefined };
+    });
+    return { accepted: true, message: "Als dit e-mailadres bij een actief account hoort, staat de veilige herstelstap klaar voor de beheerder." };
+  }
+
+  async issuePasswordReset(token, csrfToken, targetUserId, now = new Date()) {
+    const { user } = await this.authenticate(token, now);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin"]);
+    let rawToken = "";
+    let expiresAt = "";
+    await this.store.mutate(async (state) => {
+      const target = state.users.find(({ id, status, seatType }) => id === targetUserId && status === "Actief" && seatType === "customer");
+      if (!target) throw Object.assign(new Error("Actieve gebruiker niet gevonden."), { statusCode: 404, code: "USER_NOT_FOUND" });
+      const pending = (state.passwordResetRequests ?? []).filter((request) => request.userId === target.id && !request.usedAt);
+      if (!pending.length) throw Object.assign(new Error("Deze gebruiker heeft geen openstaand herstelverzoek."), { statusCode: 409, code: "RECOVERY_NOT_REQUESTED" });
+      rawToken = randomBytes(32).toString("base64url");
+      expiresAt = new Date(now.getTime() + PASSWORD_RESET_TTL_MS).toISOString();
+      state.passwordResetRequests = (state.passwordResetRequests ?? []).filter((request) => request.userId !== target.id || request.usedAt);
+      state.passwordResetRequests.push({ ...pending.sort((left, right) => String(right.requestedAt).localeCompare(String(left.requestedAt)))[0], tokenHash: sha256(rawToken), issuedAt: iso(now), expiresAt, issuedBy: user.id });
+      audit(state, user.id, "Eenmalige wachtwoordherstellink gemaakt", target.id, { expiresAt });
+      return { state, value: undefined };
+    });
+    return { resetPath: `/workspace/sportpaleis/wachtwoord-herstellen#token=${rawToken}`, expiresAt, delivery: "LOCAL_HANDOFF_ONLY" };
+  }
+
+  async completePasswordReset(payload, now = new Date()) {
+    const rawToken = requiredText(payload.token, "Herstelcode", 200);
+    const nextPassword = await passwordRecord(String(payload.password ?? ""));
+    const result = await this.store.mutate(async (state) => {
+      const request = (state.passwordResetRequests ?? []).find((candidate) => candidate.tokenHash && !candidate.usedAt && safeEqualHex(candidate.tokenHash, sha256(rawToken)));
+      if (!request || !request.expiresAt || new Date(request.expiresAt).getTime() <= now.getTime()) throw Object.assign(new Error("Deze herstellink is ongeldig of verlopen."), { statusCode: 400, code: "RECOVERY_INVALID" });
+      const target = state.users.find(({ id, status }) => id === request.userId && status === "Actief" && id !== "donovan-support");
+      if (!target) throw Object.assign(new Error("Deze gebruiker kan niet worden hersteld."), { statusCode: 409, code: "RECOVERY_STATE_INVALID" });
+      target.password = nextPassword;
+      request.usedAt = iso(now);
+      state.sessions = state.sessions.filter((session) => session.userId !== target.id);
+      for (const candidate of state.passwordResetRequests ?? []) if (candidate.userId === target.id && candidate.id !== request.id && !candidate.usedAt) candidate.usedAt = iso(now);
+      audit(state, target.id, "Wachtwoord veilig hersteld", target.id, { sessionsInvalidated: true });
+      return { state, value: publicUser(target) };
+    });
+    return { user: result.value, reset: true };
   }
 
   async demoLogin(view, now = new Date()) {
@@ -5749,6 +5834,14 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.activateInvitedUser(await readJson(request)));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/auth/recovery/request" && method === "POST") {
+        json(response, 202, await service.requestPasswordReset({ ...(await readJson(request)), remoteAddress: request.socket.remoteAddress }));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/auth/recovery/complete" && method === "POST") {
+        json(response, 200, await service.completePasswordReset(await readJson(request)));
+        return true;
+      }
       if (route === "/api/sportpaleis/v1/auth/login" && method === "POST") {
         const result = await service.loginWithPersistedCsrf({ ...(await readJson(request)), remoteAddress: request.socket.remoteAddress });
         response.setHeader("Set-Cookie", cookieHeader(result.token, service.secureCookies, false, result.cookieMaxAgeSeconds));
@@ -5872,6 +5965,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/barcode/resolve" && method === "POST") {
         json(response, 200, await service.resolveBarcode(token, await readJson(request)));
+        return true;
+      }
+      const accountRecoveryIssueMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/users\/([^/]+)\/account-recovery$/);
+      if (accountRecoveryIssueMatch && method === "POST") {
+        json(response, 200, await service.issuePasswordReset(token, csrf, decodeURIComponent(accountRecoveryIssueMatch[1])));
         return true;
       }
       if (route === "/api/sportpaleis/v1/orders" && method === "GET") {

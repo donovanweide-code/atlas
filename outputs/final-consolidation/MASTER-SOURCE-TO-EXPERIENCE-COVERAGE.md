@@ -1,6 +1,6 @@
 # Sportpaleis Master Source-to-Experience Coverage
 
-Canonical coverage combines the recovered 97-point Final Consolidation source with all 83 recovered Teamwear/Teamkit source requirements. The total is deliberately not capped at 97.
+Canonical coverage combines the recovered 97-point Final Consolidation source, all 83 recovered Teamwear/Teamkit source requirements and six explicit Premium Human Experience requirements recovered in this three-part final. The total is deliberately not capped at 97.
 
 ## Final accounting
 
@@ -8,7 +8,8 @@ Canonical coverage combines the recovered 97-point Final Consolidation source wi
 |---|---:|---:|---:|---:|
 | Full Consolidation reconciliation | 97 | 97 | 0 | 0 |
 | Recovered Teamwear source | 83 | 81 | 2 | 0 |
-| **Total** | **180** | **178** | **2** | **0** |
+| Premium identity and customer experience | 6 | 6 | 0 | 0 |
+| **Total** | **186** | **184** | **2** | **0** |
 
 The two Teamwear rows are one real external decision: the authoritative supplier catalog feed/access agreement and its credentials/contract. They do not represent missing internal implementation and are never replaced with guessed data.
 
@@ -18,6 +19,7 @@ The two Teamwear rows are one real external decision: the authoritative supplier
 |---|---|---|---|---|---|---|---|---|
 | Final Consolidation 97 | C01–C97 | Associations, articles, profiles, sources, assets, order and production snapshots remain authoritative | Existing R1 foundation plus bounded history/order working set, Guided Setup and final interaction wiring | Guided Setup exposes ready/restored/action with concrete routes | Today, Orders, Webshop, Search, Production, Library, History and Teamwear keep their state-driven tasks | Immutable orders, CutJobs, PlotJobs, SVG, proposal compositions and audit remain reproducible | `FULL-CONSOLIDATION-RECONCILIATION.md`; 802/805 repository tests with only three pre-existing WBD mail fixture failures; Sportpaleis targets PASS | DONE / ALREADY CORRECT |
 | Teamwear recovery 83 | TW-001–TW-083 | Relationship Context, CatalogArticle, Production Assets and approved composition remain the single truth | Context carry, minimal intake, guided flow, focused Studio, scoped assets, surface projection, proposal/PDF/handling | Existing context/assets/catalog sources are reused; no Teamwear copy | Context → Collectie → Studio → Maten & aantallen → Voorstel → Afhandeling | One immutable approved composition feeds PDF, deterministic imagery and proven downstream handoff | `TEAMWEAR-SOURCE-RECOVERY.md`; first-day and proposal/convergence tests; performance evidence | DONE / ALREADY CORRECT, except TW-028/TW-083 HUMAN INPUT REQUIRED |
+| Premium Human Experience | PHE-001–PHE-006 | Existing user identity, sessions and immutable proposal composition remain authoritative | PIN is only requested when enrolled; secure one-time recovery uses hash-only token state, 30-minute expiry and session revocation; public proposal gets the Sportpaleis tenant layer | Admin can issue a recovery handoff after the user's generic request; no hidden/default PIN | User switch and forgotten-password paths have no dead end; customer proposal uses the same brand language | New login session after reset; proposal/PDF content remains composition-identical | `sportpaleis-premium-identity-recovery.test.mjs`; auth lifecycle; first-day; workspace build | DONE |
 
 ## Evidence indexes
 
@@ -33,4 +35,4 @@ The regular Sportpaleis Workspace URL is browser-accessible. The in-app automati
 
 ## Gate
 
-**FULL CONSOLIDATION EXECUTION COVERAGE — 180/180 ACCOUNTED — 178 DONE/ALREADY CORRECT — 2 HUMAN INPUT REQUIRED — 0 BLOCKED.**
+**FULL CONSOLIDATION EXECUTION COVERAGE — 186/186 ACCOUNTED — 184 DONE/ALREADY CORRECT — 2 HUMAN INPUT REQUIRED — 0 BLOCKED.**

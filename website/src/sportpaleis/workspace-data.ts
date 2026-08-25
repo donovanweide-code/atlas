@@ -102,6 +102,7 @@ export interface SportpaleisUser {
   workContexts?: SportpaleisWorkContext[];
   defaultContext?: SportpaleisWorkContext;
   quickAuth?: { mode: "PASSWORD" | "PIN"; pinEnrolled: boolean };
+  recovery?: { state: "NONE" | "REQUESTED" | "LINK_ISSUED"; requestedAt: string | null; expiresAt: string | null };
   /** Server-authoritative, per-principal exposure. Never inferred from a URL or client role. */
   featureExposure?: { teamwearExperiencePilot?: boolean };
   invitation?: {

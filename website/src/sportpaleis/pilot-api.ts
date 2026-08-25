@@ -214,6 +214,18 @@ export class SportpaleisPilotApi {
     return responseBody(await fetch(`${API}/auth/activate`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) }));
   }
 
+  async requestPasswordReset(email: string): Promise<{ accepted: true; message: string }> {
+    return responseBody(await fetch(`${API}/auth/recovery/request`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }));
+  }
+
+  async completePasswordReset(token: string, password: string): Promise<{ user: SportpaleisUser; reset: true }> {
+    return responseBody(await fetch(`${API}/auth/recovery/complete`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password }) }));
+  }
+
+  async issuePasswordReset(userId: string): Promise<{ resetPath: string; expiresAt: string; delivery: "LOCAL_HANDOFF_ONLY" }> {
+    return responseBody(await this.#mutatingFetch(`${API}/admin/users/${encodeURIComponent(userId)}/account-recovery`, { method: "POST" }));
+  }
+
   async demoOptions(): Promise<{ enabled: boolean }> {
     return responseBody(await fetch(`${API}/auth/demo-options`, { credentials: "same-origin", headers: { Accept: "application/json" } }));
   }
