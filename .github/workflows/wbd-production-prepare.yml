@@ -53,7 +53,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ "$RELEASE_ID" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
-          [[ "$EXPECTED_CURRENT" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$EXPECTED_CURRENT" =~ ^(SPW|WBD)-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
           [[ "$ARTIFACT_SHA256" =~ ^[a-f0-9]{64}$ ]]
           [[ "$MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]]
           [[ -z "$EXISTING_PLAN_SHA256" || "$EXISTING_PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]

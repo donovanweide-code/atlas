@@ -45,7 +45,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ "$RELEASE_ID" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
-          [[ "$EXPECTED_CURRENT" =~ ^SPW-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
+          [[ "$EXPECTED_CURRENT" =~ ^(SPW|WBD)-[A-Z0-9][A-Z0-9._-]{0,123}$ ]]
           [[ "$PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
           [[ "$HUMAN_GO" == "$RELEASE_ID" ]]
 
