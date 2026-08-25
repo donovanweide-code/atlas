@@ -145,19 +145,32 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     async mutate() { throw new Error("not used"); },
     async close() {},
   };
-  const wbdOwnerState = createInitialWbdOwnerState({
+  let wbdOwnerState = createInitialWbdOwnerState({
     passwordRecord: await createSportpaleisPasswordRecord("Test-WBD-Owner-Production!"),
   });
   const wbdOwnerStore = {
     async initialize() { calls.push("wbd-owner"); },
     async read() { return structuredClone(wbdOwnerState); },
-    async mutate() { throw new Error("not used"); },
+    async mutate(mutator) {
+      const draft = structuredClone(wbdOwnerState);
+      const result = await mutator(draft);
+      wbdOwnerState = draft;
+      return { state: structuredClone(wbdOwnerState), result, revision: wbdOwnerState.revision };
+    },
     async close() {},
   };
   await createWorkspaceRuntimeServer({
     config,
     sportpaleisStore: store,
     wbdOwnerStore,
+    releaseManifest: {
+      schemaVersion: 2,
+      releaseId: config.releaseId,
+      commit: "1".repeat(40),
+      tag: config.releaseId,
+      sourceDate: "2026-08-25",
+      files: [{ path: "app/scripts/workspace-runtime.mjs", sha256: "2".repeat(64) }],
+    },
     verifyAtlasBoundary: async () => { calls.push("atlas"); },
   });
   assert.deepEqual(calls, ["atlas", "workspace", "wbd-owner"]);

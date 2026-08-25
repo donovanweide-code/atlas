@@ -67,6 +67,18 @@ const workspaceRootAssets = new Set([
   "/sportpaleis-pwa-icon.svg",
 ]);
 
+async function currentReleaseManifest(releaseId, requiredInProduction) {
+  const manifestPath = path.resolve(websiteRoot, "..", "RELEASE-MANIFEST.json");
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (manifest?.releaseId !== releaseId || !manifest?.commit || !manifest?.tag || !Array.isArray(manifest?.files)) throw new Error("Actief releasemanifest komt niet overeen met RELEASE_ID.");
+    return manifest;
+  } catch (cause) {
+    if (requiredInProduction) throw cause;
+    return null;
+  }
+}
+
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
   workspaceAttention,
@@ -326,6 +338,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
         const service = new WbdOwnerService({
           store,
           releaseId: config.releaseId,
+          releaseManifest: options.releaseManifest ?? await currentReleaseManifest(config.releaseId, config.nodeEnv === "production"),
           secureCookies: config.nodeEnv === "production",
           allowedOrigin: new URL(config.wbdWorkspaceBaseUrl).origin,
         });

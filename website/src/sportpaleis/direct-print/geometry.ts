@@ -216,6 +216,46 @@ function boundsSeparated(left: BoundsMm, right: BoundsMm, gapMm: number): boolea
     || right.maxY + gapMm <= left.minY + GEOMETRY_EPSILON_MM;
 }
 
+interface CompiledSegmentGeometry {
+  start: PointMm;
+  end: PointMm;
+  bounds: BoundsMm;
+}
+
+interface CompiledContourGeometry {
+  contour: VectorContour;
+  bounds: BoundsMm;
+  segments: readonly CompiledSegmentGeometry[];
+}
+
+interface CompiledContourSetGeometry {
+  bounds: BoundsMm;
+  contours: readonly CompiledContourGeometry[];
+}
+
+// Transformed contour arrays are immutable value objects throughout the cut-job
+// pipeline. A WeakMap avoids recomputing their bounds and segment envelopes for
+// every placement candidate, while allowing unused job geometry to be collected.
+const compiledContourSetCache = new WeakMap<readonly VectorContour[], CompiledContourSetGeometry>();
+
+function compileContourSet(contours: readonly VectorContour[]): CompiledContourSetGeometry {
+  const cached = compiledContourSetCache.get(contours);
+  if (cached) return cached;
+  const compiled = {
+    bounds: boundsForContours(contours),
+    contours: contours.map((contour) => ({
+      contour,
+      bounds: boundsForContours([contour]),
+      segments: contour.points.slice(0, -1).map((start, index) => {
+        const end = contour.points[index + 1];
+        return { start, end, bounds: boundsForPoints([start, end]) };
+      }),
+    })),
+  } satisfies CompiledContourSetGeometry;
+  compiledContourSetCache.set(contours, compiled);
+  return compiled;
+}
+
 /**
  * Conservatieve contourtest voor onafhankelijke objecten. Elke contour wordt
  * als massieve polygoon behandeld; compound-path-gaten leveren dus nooit een
@@ -226,24 +266,23 @@ export function contourSetsConflict(
   rightContours: readonly VectorContour[],
   minimumGapMm: number,
 ): boolean {
-  const leftBounds = boundsForContours(leftContours);
-  const rightBounds = boundsForContours(rightContours);
-  if (boundsSeparated(leftBounds, rightBounds, minimumGapMm)) return false;
+  const leftSet = compileContourSet(leftContours);
+  const rightSet = compileContourSet(rightContours);
+  if (boundsSeparated(leftSet.bounds, rightSet.bounds, minimumGapMm)) return false;
 
-  for (const left of leftContours) {
-    const leftContourBounds = boundsForContours([left]);
-    for (const right of rightContours) {
-      const rightContourBounds = boundsForContours([right]);
-      if (boundsSeparated(leftContourBounds, rightContourBounds, minimumGapMm)) continue;
-      if (pointInPolygon(left.points[0], right.points)
-        || pointInPolygon(right.points[0], left.points)) return true;
-      for (let leftIndex = 0; leftIndex < left.points.length - 1; leftIndex += 1) {
-        for (let rightIndex = 0; rightIndex < right.points.length - 1; rightIndex += 1) {
+  for (const left of leftSet.contours) {
+    for (const right of rightSet.contours) {
+      if (boundsSeparated(left.bounds, right.bounds, minimumGapMm)) continue;
+      if (pointInPolygon(left.contour.points[0], right.contour.points)
+        || pointInPolygon(right.contour.points[0], left.contour.points)) return true;
+      for (const leftSegment of left.segments) {
+        for (const rightSegment of right.segments) {
+          if (boundsSeparated(leftSegment.bounds, rightSegment.bounds, minimumGapMm)) continue;
           const distance = segmentDistanceMm(
-            left.points[leftIndex],
-            left.points[leftIndex + 1],
-            right.points[rightIndex],
-            right.points[rightIndex + 1],
+            leftSegment.start,
+            leftSegment.end,
+            rightSegment.start,
+            rightSegment.end,
           );
           if (distance + GEOMETRY_EPSILON_MM < minimumGapMm
             || minimumGapMm === 0 && distance <= GEOMETRY_EPSILON_MM) return true;

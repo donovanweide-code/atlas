@@ -291,6 +291,165 @@ export function ingestConnectorSnapshot(inputPlane, snapshot, now = new Date()) 
   return plane;
 }
 
+function upsertProductPreparedAction(plane, attention, draft, now) {
+  const id = `prepared-product-${sha256(attention.situationKey).slice(0, 24)}`;
+  const action = {
+    id,
+    attentionId: attention.id,
+    objective: draft.objective,
+    reason: draft.reason,
+    evidenceRefs: unique(draft.evidenceRefs),
+    impact: draft.impact,
+    risk: draft.risk ?? "LOW",
+    dependencies: draft.dependencies ?? [],
+    rollbackOrRecovery: draft.rollbackOrRecovery ?? "Geen externe wijziging; afwijzen bewaart Product Truth en evidence ongewijzigd.",
+    goRequirement: draft.goRequirement ?? "REQUIRED",
+    executionPolicy: "PREPARE_ONLY",
+    status: "READY",
+    createdAt: plane.preparedActions.find((item) => item.id === id)?.createdAt ?? iso(now),
+  };
+  const index = plane.preparedActions.findIndex((item) => item.id === id);
+  if (index >= 0) plane.preparedActions[index] = action; else plane.preparedActions.push(action);
+  return action;
+}
+
+export function ingestProductTruthEvents(inputPlane, { events = [], issues = [] } = {}, now = new Date()) {
+  const plane = validateAtlasControlPlane(inputPlane);
+  for (const event of events) {
+    if (event?.type !== "RELEASE_INGESTED" || !event.release || !event.candidate) continue;
+    const { release, candidate } = event;
+    const evidenceId = candidate.evidenceRefs[0];
+    if (!plane.evidence.some(({ id }) => id === evidenceId)) {
+      plane.evidence.push(validateEvidence({
+        id: evidenceId,
+        organizationId: "we-build-and-design",
+        source: `RELEASE-MANIFEST.json#${release.id}`,
+        sourceType: "IMMUTABLE_RELEASE",
+        sourceIdentity: `${release.tag}:${release.commit}`,
+        observedAt: release.observedAt,
+        fetchedAt: iso(now),
+        rawReference: { kind: "release-manifest", locator: release.id, immutable: true, contentHash: release.manifestHash },
+        normalized: {
+          summary: `Release ${release.id} is verwerkt tot herleidbare Product Truth-evidence.`,
+          commit: release.commit,
+          moduleIds: release.moduleIds,
+          capabilityIds: release.capabilityIds,
+          inferenceConfidence: release.inferenceConfidence,
+        },
+        provenance: { ingestion: "IMMUTABLE_RELEASE_HARVEST", schemaVersion: 1, contentHash: release.manifestHash, validationStatus: release.validationStatus },
+        freshness: evidenceFreshness(release.observedAt, now),
+        confidence: "HIGH",
+        reliability: "IMMUTABLE_MANIFEST",
+        relatedEntityRefs: [release.id, ...release.moduleIds],
+        capabilityRefs: release.capabilityIds,
+      }));
+      appendAudit(plane, "EVIDENCE_INGESTED", evidenceId, now, { sourceType: "IMMUTABLE_RELEASE", releaseId: release.id });
+    }
+    if (!plane.harvestCandidates.some(({ id }) => id === candidate.id)) {
+      plane.harvestCandidates.push({
+        id: candidate.id,
+        sourceAttentionId: null,
+        organizationId: "we-build-and-design",
+        pattern: candidate.summary,
+        proposedScopeClass: "UNRESOLVED",
+        candidateType: "RELEASE_PRODUCT_TRUTH",
+        evidenceRefs: candidate.evidenceRefs,
+        capabilityIds: candidate.capabilityIds,
+        moduleIds: candidate.moduleIds,
+        confidence: candidate.confidence,
+        status: "CANDIDATE",
+        promotionRequiresHumanDecision: true,
+        createdAt: candidate.createdAt,
+      });
+      appendAudit(plane, "HARVEST_CANDIDATE_CREATED", candidate.id, now, { sourceType: "IMMUTABLE_RELEASE", releaseId: release.id, confidence: candidate.confidence });
+    }
+    const attention = upsertAttention(plane, {
+      situationKey: `release-harvest:${release.id}`,
+      organizationId: "we-build-and-design",
+      source: "immutable-release-harvest",
+      type: "PRODUCT_LEARNING",
+      title: "Nieuwe release-evidence verwerkt",
+      summary: `${release.id} is automatisch opgenomen; ${release.moduleIds.length || "geen"} productgebied${release.moduleIds.length === 1 ? "" : "en"} zijn als Harvest candidate gekoppeld.`,
+      severity: "LOW",
+      urgency: "LOW",
+      confidence: release.inferenceConfidence,
+      evidenceRefs: [evidenceId],
+      goRequirement: "NONE",
+      atlasInterpretation: "De release is een feit. Welke gewijzigde onderdelen productbewijs zijn blijft een traceerbare kandidaat totdat gerichte evidence dit bevestigt.",
+    }, now);
+    upsertNextBestAction(plane, attention, {
+      recommendation: "Laat Atlas deze release-evidence koppelen aan volgend klantgebruik.",
+      why: "Een live release bewijst levering, maar niet automatisch generieke productwaarde of commerciele herbruikbaarheid.",
+      evidenceRefs: [evidenceId],
+      confidence: release.inferenceConfidence,
+      expectedImpact: "Product Truth groeit zonder dat een release stilletjes een productclaim wordt.",
+      estimatedHumanEffortMinutes: 0,
+      risk: "LOW",
+      dependencies: [release.id],
+      atlasCanPrepare: ["release dedupliceren", "componenten vergelijken", "Harvest candidate bijwerken"],
+      goRequirement: "NONE",
+    }, now);
+  }
+
+  for (const issue of issues.filter(({ status, materialDecision }) => status === "NEEDS_OWNER_CONFIRMATION" && materialDecision === true)) {
+    const evidenceId = `evidence-product-issue-${sha256(issue.id).slice(0, 24)}`;
+    if (!plane.evidence.some(({ id }) => id === evidenceId)) {
+      plane.evidence.push(validateEvidence({
+        id: evidenceId,
+        organizationId: "we-build-and-design",
+        source: "central-wbd-product-truth",
+        sourceType: "PRODUCT_TRUTH_ISSUE",
+        sourceIdentity: issue.id,
+        observedAt: issue.createdAt,
+        fetchedAt: iso(now),
+        rawReference: { kind: "central-state", locator: issue.id, immutable: false },
+        normalized: { summary: issue.summary, issueType: issue.type },
+        provenance: { ingestion: "PRODUCT_TRUTH_BOOTSTRAP", schemaVersion: 1, contentHash: sha256(stableJson(issue)) },
+        freshness: "RECENT",
+        confidence: "HIGH",
+        reliability: "CENTRAL_VALIDATED_STATE",
+        relatedEntityRefs: [issue.id],
+        capabilityRefs: [],
+      }));
+    }
+    const attention = upsertAttention(plane, {
+      situationKey: `product-truth-issue:${issue.id}`,
+      organizationId: "we-build-and-design",
+      source: "central-wbd-product-truth",
+      type: issue.type === "PRICING_CONFIRMATION" ? "COMMERCIAL_OPPORTUNITY" : "PRODUCT_LEARNING",
+      title: issue.title,
+      summary: issue.summary,
+      severity: "MEDIUM",
+      urgency: "LOW",
+      confidence: "HIGH",
+      evidenceRefs: [evidenceId],
+      goRequirement: "REQUIRED",
+      atlasInterpretation: "De beschikbare bronnen zijn veilig gesynchroniseerd, maar een materiele product- of prijsbeslissing mag niet autonoom worden genomen.",
+    }, now);
+    const prepared = upsertProductPreparedAction(plane, attention, {
+      objective: "Bevestig of corrigeer de productbeslissing zonder brononderzoek opnieuw te doen.",
+      reason: "Atlas heeft bronstatus, autoriteit en onzekerheid al naast elkaar gezet.",
+      evidenceRefs: [evidenceId],
+      impact: "Maakt de centrale Product Truth bruikbaar zonder een hypothese als definitief te presenteren.",
+      goRequirement: "REQUIRED",
+    }, now);
+    upsertNextBestAction(plane, attention, {
+      recommendation: "Beoordeel de voorbereide Product Truth-beslissing.",
+      why: "Alleen Donovan kan een commercieel consequente prijs of productclaim definitief maken.",
+      evidenceRefs: [evidenceId],
+      confidence: "HIGH",
+      expectedImpact: "Verwijdert een expliciet productconflict en maakt volgende surfaces consistent.",
+      estimatedHumanEffortMinutes: 5,
+      risk: "MEDIUM",
+      dependencies: [issue.id],
+      atlasCanPrepare: ["bronnen samenvatten", "historie bewaren", "definitief versus hypothese valideren"],
+      goRequirement: "REQUIRED",
+      preparedActionId: prepared.id,
+    }, now);
+  }
+  return plane;
+}
+
 export function resolveAttention(inputPlane, attentionId, resolution, actor, now = new Date()) {
   const plane = validateAtlasControlPlane(inputPlane);
   const item = plane.attention.find(({ id }) => id === attentionId);
@@ -311,7 +470,7 @@ export function resolveAttention(inputPlane, attentionId, resolution, actor, now
 
 const priorityScore = (item) => ({ CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }[item.severity] * 4 + { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }[item.urgency] * 3 + { HIGH: 3, MEDIUM: 2, LOW: 1, INSUFFICIENT_EVIDENCE: 0 }[item.confidence]);
 
-export function projectOwnerAtlasWorkspace(inputPlane, { controlPlane, capabilities, promotionView, releaseId, revision, now = new Date() }) {
+export function projectOwnerAtlasWorkspace(inputPlane, { controlPlane, capabilities, promotionView, productTruthView = null, releaseId, revision, now = new Date() }) {
   const plane = validateAtlasControlPlane(inputPlane);
   const active = plane.attention.filter((item) => new Set(["OPEN", "WAITING"]).has(item.status)).sort((left, right) => priorityScore(right) - priorityScore(left));
   const since = plane.lastVisitedAt ?? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000).toISOString();
@@ -342,12 +501,12 @@ export function projectOwnerAtlasWorkspace(inputPlane, { controlPlane, capabilit
     canWait: active.filter((item) => item.urgency === "LOW" || item.status === "WAITING").slice(0, 8),
     attention: active, evidence: plane.evidence.slice().sort((left, right) => right.fetchedAt.localeCompare(left.fetchedAt)),
     nextBestActions: plane.nextBestActions, preparedActions: plane.preparedActions, harvestCandidates: plane.harvestCandidates,
-    connectors: Object.values(plane.connectorStates), capabilityRegistry,
+    connectors: Object.values(plane.connectorStates), capabilityRegistry, productTruth: productTruthView,
     organizations: controlPlane?.organizations ?? [], autonomyPolicy: { observeAnalyzePrepare: "AUTONOMOUS", execute: "POLICY_BOUND", unknownRisk: "FAIL_CLOSED" },
   };
 }
 
-export function searchOwnerReality(inputPlane, { query, controlPlane, capabilities, promotionView, now = new Date() }) {
+export function searchOwnerReality(inputPlane, { query, controlPlane, capabilities, promotionView, productTruthView = null, now = new Date() }) {
   const plane = validateAtlasControlPlane(inputPlane);
   const normalized = required(query, "Zoekvraag", 240).toLocaleLowerCase("nl-NL");
   const stopWords = new Set(["aan", "afgelopen", "als", "bij", "de", "dit", "een", "en", "er", "hebben", "het", "is", "maar", "mijn", "niet", "nog", "of", "over", "te", "van", "wat", "we", "welke", "wie", "zijn"]);
@@ -359,13 +518,16 @@ export function searchOwnerReality(inputPlane, { query, controlPlane, capabiliti
     ...(promotionView?.proposals ?? []).filter((item) => item.status === "READY").map((item) => ({ type: "HUMAN_GO", id: item.id, title: item.title, summary: `GO vereist · ${item.summary} · onzekerheid: ${item.uncertainty}`, href: "/workspace/wbd/beheer", source: "HUMAN_PROMOTION_BOUNDARY" })),
     ...plane.attention.map((item) => ({ type: "ATTENTION", id: item.id, title: item.title, summary: `${item.type} · ${item.summary} · ${item.status}`, href: `/workspace/wbd/attention#${item.id}`, source: item.source })),
     ...plane.evidence.map((item) => ({ type: "EVIDENCE", id: item.id, title: item.normalized?.summary ?? item.normalized?.title ?? item.sourceType, summary: `${item.source} · ${item.organizationId} · ${item.freshness}`, href: `/workspace/wbd/attention#${item.id}`, source: item.source })),
+    ...(productTruthView?.modules ?? []).map((item) => ({ type: "PRODUCT_MODULE", id: item.id, title: item.name, summary: `${item.boundary} · ${item.maturity} · roadmap ${item.roadmap} · ${item.description}`, href: "/workspace/wbd/capabilities", source: "CENTRAL_PRODUCT_TRUTH" })),
+    ...(productTruthView?.releases ?? []).map((item) => ({ type: "RELEASE", id: item.id, title: item.id, summary: `${item.commit} · ${item.validationStatus} · ${(item.moduleIds ?? []).join(" · ")}`, href: "/workspace/wbd/capabilities", source: "IMMUTABLE_RELEASE_HARVEST" })),
+    ...(productTruthView?.issues ?? []).map((item) => ({ type: "PRODUCT_TRUTH_ISSUE", id: item.id, title: item.title, summary: `${item.type} · ${item.status} · ${item.summary}`, href: "/workspace/wbd/beheer", source: "CENTRAL_PRODUCT_TRUTH" })),
   ];
   const results = candidates.map((item) => {
     const text = `${item.title} ${item.summary} ${item.type}`.toLocaleLowerCase("nl-NL");
     const score = tokens.reduce((total, token) => total + (text.includes(token) ? token.length : 0), 0);
     return { ...item, score };
   }).filter(({ score }) => score > 0).sort((left, right) => right.score - left.score || left.title.localeCompare(right.title, "nl")).slice(0, 40);
-  return { query, generatedAt: iso(now), results, total: results.length, scope: ["organizations", "capabilities", "attention", "evidence", "owner-actions", "human-go"] };
+  return { query, generatedAt: iso(now), results, total: results.length, scope: ["organizations", "capabilities", "attention", "evidence", "owner-actions", "human-go", "product-modules", "releases", "product-truth-issues"] };
 }
 
 export const wbdAtlasControlPlaneContract = Object.freeze({

@@ -33,11 +33,18 @@ import {
 import {
   createInitialAtlasControlPlane,
   ingestConnectorSnapshot,
+  ingestProductTruthEvents,
   projectOwnerAtlasWorkspace,
   resolveAttention,
   searchOwnerReality,
   validateAtlasControlPlane,
 } from "./wbd-atlas-control-plane.mjs";
+import {
+  createInitialProductTruth,
+  projectProductTruth,
+  synchronizeProductTruth,
+  validateProductTruth,
+} from "./wbd-product-truth.mjs";
 
 const SESSION_COOKIE = "wbd_owner_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -88,6 +95,7 @@ export function createInitialWbdOwnerState({ passwordRecord, now = new Date() })
     sessions: [],
     loginAttempts: {},
     capabilities: structuredClone(WBD_CAPABILITY_SEED),
+    productTruth: createInitialProductTruth({ now }),
     controlPlane: createInitialControlPlane({ ownerId: "wbd-owner-donovan", now }),
     atlasControlPlane: createInitialAtlasControlPlane({ capabilities: WBD_CAPABILITY_SEED, now }),
     promotionBoundary: createInitialPromotionBoundary(),
@@ -123,6 +131,7 @@ export function validateWbdOwnerState(input) {
   })) : [];
   state.loginAttempts = state.loginAttempts && typeof state.loginAttempts === "object" ? state.loginAttempts : {};
   state.capabilities = validateWbdCapabilityCatalog(state.capabilities);
+  state.productTruth = validateProductTruth(state.productTruth ?? createInitialProductTruth({ now: new Date(state.owner.createdAt) }));
   if (state.controlPlane !== undefined) state.controlPlane = validateControlPlane(state.controlPlane);
   state.atlasControlPlane = validateAtlasControlPlane(state.atlasControlPlane ?? createInitialAtlasControlPlane({
     capabilities: state.capabilities,
@@ -195,9 +204,10 @@ export class WbdOwnerFileStore {
 }
 
 export class WbdOwnerService {
-  constructor({ store, releaseId, allowedOrigin, secureCookies = false, sessionTtlMs = SESSION_TTL_MS }) {
+  constructor({ store, releaseId, releaseManifest = null, allowedOrigin, secureCookies = false, sessionTtlMs = SESSION_TTL_MS }) {
     this.store = store;
     this.releaseId = releaseId;
+    this.releaseManifest = releaseManifest;
     this.allowedOrigin = allowedOrigin;
     this.secureCookies = secureCookies;
     this.sessionTtlMs = sessionTtlMs;
@@ -206,10 +216,28 @@ export class WbdOwnerService {
   async initialize() {
     await this.store.initialize();
     const current = await this.store.read();
-    if (current.controlPlane === undefined) {
+    const missingCapabilitySeeds = WBD_CAPABILITY_SEED.filter((seed) => !current.capabilities.some(({ id }) => id === seed.id));
+    const releaseMissing = this.releaseManifest && !current.productTruth.releases.some(({ id }) => id === this.releaseManifest.releaseId);
+    const productTruthIssueMissing = current.productTruth.issues.some(({ id, status, materialDecision }) => status === "NEEDS_OWNER_CONFIRMATION"
+      && materialDecision === true
+      && !current.atlasControlPlane.attention.some(({ situationKey }) => situationKey === `product-truth-issue:${id}`));
+    if (current.controlPlane === undefined || missingCapabilitySeeds.length || releaseMissing || productTruthIssueMissing) {
       await this.store.mutate(async (state) => {
-        ensureControlPlane(state);
-        appendAudit(state, state.owner.id, "Control Plane geinitialiseerd", state.organizationId);
+        if (state.controlPlane === undefined) {
+          ensureControlPlane(state);
+          appendAudit(state, state.owner.id, "Control Plane geinitialiseerd", state.organizationId);
+        }
+        if (missingCapabilitySeeds.length) {
+          state.capabilities = validateWbdCapabilityCatalog([...state.capabilities, ...missingCapabilitySeeds]);
+          appendAudit(state, "atlas-product-truth", "Capability Registry gesynchroniseerd", `${missingCapabilitySeeds.length} nieuwe capabilityrecords`);
+        }
+        const synchronized = synchronizeProductTruth(state.productTruth, { capabilities: state.capabilities, releaseManifest: this.releaseManifest });
+        state.productTruth = synchronized.truth;
+        state.atlasControlPlane = ingestProductTruthEvents(state.atlasControlPlane, {
+          events: synchronized.events,
+          issues: productTruthIssueMissing ? state.productTruth.issues : [],
+        });
+        if (synchronized.events.length || productTruthIssueMissing) appendAudit(state, "atlas-product-truth", "Product Truth gesynchroniseerd", this.releaseId);
         return { state, value: undefined };
       });
     }
@@ -296,6 +324,7 @@ export class WbdOwnerService {
       organization: { id: state.organizationId, name: "We Build And Design" },
       revision: state.revision,
       capabilities: state.capabilities,
+      productTruth: projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }),
       enums: WBD_CAPABILITY_ENUMS,
       source: "central-wbd-owner-state",
       releaseId: this.releaseId,
@@ -342,6 +371,7 @@ export class WbdOwnerService {
       controlPlane: state.controlPlane,
       capabilities: state.capabilities,
       promotionView: publicPromotionView(state, { releaseId: this.releaseId }),
+      productTruthView: projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }),
       releaseId: this.releaseId,
       revision: state.revision,
       now,
@@ -352,10 +382,16 @@ export class WbdOwnerService {
     const { state, owner } = await this.authenticate(token, now);
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
     try {
-      return searchOwnerReality(state.atlasControlPlane, { query, controlPlane: state.controlPlane, capabilities: state.capabilities, promotionView: publicPromotionView(state, { releaseId: this.releaseId }), now });
+      return searchOwnerReality(state.atlasControlPlane, { query, controlPlane: state.controlPlane, capabilities: state.capabilities, promotionView: publicPromotionView(state, { releaseId: this.releaseId }), productTruthView: projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }), now });
     } catch (cause) {
       throw error(cause.message, 400, "VALIDATION_ERROR");
     }
+  }
+
+  async productTruth(token, now = new Date()) {
+    const { state, owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    return { revision: state.revision, releaseId: this.releaseId, source: "central-wbd-owner-state", ...projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }) };
   }
 
   async markAtlasVisited(token, csrfToken, now = new Date()) {
@@ -474,13 +510,13 @@ export class WbdOwnerService {
 
   async health() {
     const state = await this.store.read();
-    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
-    return { status: "ok", releaseId: this.releaseId, persistence: (await this.store.storageStatus()).engine, datastoreRevision: state.revision };
+    if (!state.controlPlane || !state.productTruth) throw error("Control Plane of Product Truth ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
+    return { status: "ok", releaseId: this.releaseId, persistence: (await this.store.storageStatus()).engine, datastoreRevision: state.revision, productTruthRevision: state.productTruth.audit.length };
   }
 
   async ready() {
     const state = await this.store.read();
-    if (!state.controlPlane) throw error("Control Plane ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
+    if (!state.controlPlane || !state.productTruth) throw error("Control Plane of Product Truth ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
     return { status: "ready", releaseId: this.releaseId };
   }
 
@@ -560,6 +596,7 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
         return true;
       }
       if (route === "/api/wbd/v1/capabilities" && method === "GET") return json(response, 200, await service.capabilityCatalog(token)) ?? true;
+      if (route === "/api/wbd/v1/product-truth" && method === "GET") return json(response, 200, await service.productTruth(token)) ?? true;
       if (route === "/api/wbd/v1/atlas" && method === "GET") return json(response, 200, await service.atlasWorkspace(token)) ?? true;
       if (route === "/api/wbd/v1/atlas/search" && method === "GET") return json(response, 200, await service.search(token, requestUrl.searchParams.get("q"))) ?? true;
       if (route === "/api/wbd/v1/atlas/visited" && method === "POST") return json(response, 200, await service.markAtlasVisited(token, csrfToken)) ?? true;

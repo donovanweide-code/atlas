@@ -117,15 +117,30 @@ function matchesFilter(capability: Capability, filter: FilterId): boolean {
   return true;
 }
 
+function productPriceLabel(pricing: NonNullable<AtlasWorkspaceView["productTruth"]>["pricing"][number]): string {
+  const amounts = [
+    pricing.oneTime !== null ? `${new Intl.NumberFormat("nl-NL", { style: "currency", currency: pricing.currency }).format(pricing.oneTime)} eenmalig` : "",
+    pricing.monthly !== null ? `${new Intl.NumberFormat("nl-NL", { style: "currency", currency: pricing.currency }).format(pricing.monthly)} per maand` : "",
+  ].filter(Boolean).join(" · ");
+  if (pricing.status === "DEFINITIVE") return `${pricing.internalCost ? "Interne kosten" : "Definitief"}: ${amounts || "vastgelegd zonder bedrag"}`;
+  if (pricing.status === "HYPOTHESIS") return `Prijsindicatie · nog niet definitief: ${amounts || "bedrag ontbreekt"}`;
+  if (pricing.status === "NEEDS_OWNER_CONFIRMATION") return "Prijs vraagt bevestiging";
+  return "Prijs nog niet vastgesteld";
+}
+
 function capabilityCard(capability: Capability, atlas?: AtlasWorkspaceView): string {
   const proof = capability.provenAt.length ? capability.provenAt.join(" · ") : "Nog nergens bewezen";
   const registry = atlas?.capabilityRegistry.find(({ id }) => id === capability.id);
+  const productContext = atlas?.productTruth?.capabilityContext.find(({ capabilityId }) => capabilityId === capability.id);
+  const pricing = productContext?.pricing.filter(({ internalCost }) => !internalCost) ?? [];
+  const latestRelease = productContext?.recentReleases[0];
   return `<article class="wbd-capability" data-capability-id="${escapeHtml(capability.id)}" data-status="${escapeHtml(capability.status)}">
     <header><div><p>${escapeHtml(capability.category)}</p><h2>${escapeHtml(capability.name)}</h2></div><span class="wbd-capability__sell" data-sell="${capability.sellNow}">${capability.sellNow ? "Nu verkoopbaar" : "Nog niet verkopen"}</span></header>
     <div class="wbd-capability__status"><span>${escapeHtml(statusLabels[capability.status])}</span><span>${escapeHtml(judgementLabels[capability.strategicJudgement])}</span></div>
     <p class="wbd-capability__guidance">${escapeHtml(capability.guidance)}</p>
-    <dl><div><dt>Volwassenheid</dt><dd>${escapeHtml(({ CONCEPT: "Concept", BUILT: "Gebouwd", PROVEN: "Bewezen", REUSABLE: "Herbruikbaar" } as Record<string, string>)[registry?.maturity ?? ""] ?? "Onbekend")}</dd></div><div><dt>Bewezen bij</dt><dd>${escapeHtml(proof)}</dd></div><div><dt>Evidence</dt><dd>${registry?.evidenceRefs.length ?? capability.evidence.length} gekoppeld</dd></div><div><dt>Hergebruik</dt><dd>${escapeHtml(registry?.reusable ?? levelLabels[capability.reusability])}</dd></div></dl>
-    <details><summary>Bewijs en grenzen</summary><div class="wbd-capability__evidence">${capability.evidence.map((item) => `<article><time datetime="${escapeHtml(item.date)}">${escapeHtml(item.date)}</time><strong>${escapeHtml(item.provenAt)}</strong><p>${escapeHtml(item.summary)}</p><small>${escapeHtml(item.type)} · ${escapeHtml(item.source)}</small></article>`).join("")}<footer><span>Statuscode: ${escapeHtml(capability.status)}</span><span>Klantspecifiek: ${escapeHtml(levelLabels[capability.customerSpecificShare])}</span><span>Demo: ${capability.demoReady ? "Ja" : "Nee"}</span></footer></div></details>
+    <dl><div><dt>Volwassenheid</dt><dd>${escapeHtml(({ CONCEPT: "Concept", BUILT: "Gebouwd", FIRST_REAL_USE: "Eerste echte inzet", PROVEN: "Bewezen", REUSABLE: "Herbruikbaar" } as Record<string, string>)[productContext?.maturity ?? registry?.maturity ?? ""] ?? "Onbekend")}</dd></div><div><dt>Bewezen bij</dt><dd>${escapeHtml(proof)}</dd></div><div><dt>Roadmap</dt><dd>${escapeHtml(productContext?.roadmap ?? "Later")}</dd></div><div><dt>Productgrens</dt><dd>${escapeHtml((productContext?.scopeClass ?? registry?.scopeClass ?? "UNRESOLVED").replaceAll("_", " "))}</dd></div><div><dt>Evidence</dt><dd>${registry?.evidenceRefs.length ?? capability.evidence.length} gekoppeld</dd></div><div><dt>Hergebruik</dt><dd>${escapeHtml(registry?.reusable ?? levelLabels[capability.reusability])}</dd></div></dl>
+    ${pricing.length ? `<div class="wbd-capability__pricing"><strong>Prijscontext</strong>${pricing.map((item) => `<span data-pricing-status="${escapeHtml(item.status)}">${escapeHtml(productPriceLabel(item))}</span>`).join("")}</div>` : ""}
+    <details><summary>Bewijs, releases en grenzen</summary><div class="wbd-capability__evidence">${latestRelease ? `<article><time datetime="${escapeHtml(latestRelease.observedAt)}">Recente release</time><strong>${escapeHtml(latestRelease.id)}</strong><p>Automatisch gekoppelde release-evidence · ${escapeHtml(latestRelease.inferenceConfidence.toLowerCase())} confidence.</p><small>Immutable release Harvest</small></article>` : ""}${capability.evidence.map((item) => `<article><time datetime="${escapeHtml(item.date)}">${escapeHtml(item.date)}</time><strong>${escapeHtml(item.provenAt)}</strong><p>${escapeHtml(item.summary)}</p><small>${escapeHtml(item.type)} · ${escapeHtml(item.source)}</small></article>`).join("")}<footer><span>Statuscode: ${escapeHtml(capability.status)}</span><span>Klantspecifiek: ${escapeHtml(levelLabels[capability.customerSpecificShare])}</span><span>Demo: ${capability.demoReady ? "Ja" : "Nee"}</span></footer></div></details>
   </article>`;
 }
 

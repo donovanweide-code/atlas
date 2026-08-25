@@ -151,7 +151,8 @@ test("Owner-service toont dezelfde centrale Atlas-waarheid op desktop en iPhone 
   const desktopView = await service.atlasWorkspace(login.token, now);
   const mobileView = await service.atlasWorkspace(mobile.token, now);
   assert.deepEqual(mobileView, desktopView);
-  assert.equal(desktopView.importantNow.length, 1);
+  assert.ok(desktopView.importantNow.some(({ situationKey }) => situationKey.startsWith("website-metadata-change:")));
+  assert.ok(desktopView.importantNow.some(({ situationKey }) => situationKey === "product-truth-issue:issue-workspace-market-price"));
   assert.ok(desktopView.capabilityRegistry.find(({ id }) => id === "connectors-snapshot-diff").evidenceRefs.length > 0);
   const search = await service.search(login.token, "homepage positionering", now);
   assert.ok(search.results.some(({ type }) => type === "ATTENTION"));
