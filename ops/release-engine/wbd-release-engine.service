@@ -1,0 +1,38 @@
+[Unit]
+Description=WBD central release and recovery engine
+After=network-online.target mariadb.service wbd-mariadb-backup.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wbd-release
+Group=wbd-release
+SupplementaryGroups=wbd-release-operator
+WorkingDirectory=/srv/wbd/release-engine/website
+Environment=NODE_ENV=production
+Environment=WBD_RELEASE_ENGINE_STATE_ROOT=/srv/wbd/shared/release-engine
+Environment=WBD_RELEASE_ENGINE_CONTRACT_ROOT=/srv/wbd/release-engine/contracts
+Environment=WBD_RELEASE_ENGINE_SOCKET=/run/wbd-release-engine/engine.sock
+ExecStart=/usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-service.mjs
+Restart=on-failure
+RestartSec=5s
+RuntimeDirectory=wbd-release-engine
+RuntimeDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadOnlyPaths=/srv/wbd/releases /srv/wbd/release-engine /etc/wbd /var/backups/wbd-mariadb
+ReadWritePaths=/srv/wbd/shared/release-engine /run/wbd-release-engine
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,3 @@
+# Installed root-owned as /etc/sudoers.d/wbd-release-engine after visudo validation.
+# No shell, editor, systemctl or arbitrary path is granted to the runner identity.
+wbd-release ALL=(root) NOPASSWD: /usr/local/libexec/wbd-release-engine-operation

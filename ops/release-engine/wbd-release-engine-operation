@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly WBD_ROOT=/srv/wbd
+readonly ENGINE_ROOT=/srv/wbd/shared/release-engine
+readonly INBOX_ROOT=/srv/wbd/shared/release-inbox
+readonly ENV_FILE=/etc/wbd/production.env
+readonly SERVICE=wbd-workspace.service
+readonly LEGACY_RELEASE_HELPER=/usr/local/sbin/spw-immutable-release
+
+fail() { printf '{"status":"BLOCKED","code":"%s"}\n' "$1" >&2; exit 1; }
+valid_id() { [[ ${1:-} =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || fail INVALID_ID; }
+valid_hash() { [[ ${1:-} =~ ^[a-f0-9]{64}$ ]] || fail INVALID_HASH; }
+require_runner() { [[ $(id -u) -eq 0 && ${SUDO_USER:-} == wbd-release ]] || fail CALLER_NOT_RUNNER; }
+plan_file() { printf '%s/plans/%s.json\n' "$ENGINE_ROOT" "$1"; }
+verify_plan() {
+  local release_id=$1 expected_hash=$2 file
+  file=$(plan_file "$release_id")
+  [[ -f $file ]] || fail PLAN_MISSING
+  node - "$file" "$release_id" "$expected_hash" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const [file, releaseId, expectedHash] = process.argv.slice(2);
+const plan = JSON.parse(fs.readFileSync(file, "utf8"));
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+const { planHash, ...unsigned } = plan;
+const actual = crypto.createHash("sha256").update(canonical(unsigned)).digest("hex");
+if (plan.releaseId !== releaseId || planHash !== expectedHash || actual !== expectedHash) process.exit(42);
+NODE
+}
+verify_contract_hash() {
+  local release_id=$1 expected_hash=$2 contract="/srv/wbd/release-engine/contracts/${release_id}.release-contract.json"
+  [[ -f $contract ]] || fail CONTRACT_MISSING
+  node --input-type=module - "$contract" "$expected_hash" <<'NODE'
+import fs from "node:fs";
+import { validateReleaseContract } from "/srv/wbd/release-engine/website/scripts/release-engine-core.mjs";
+const [file, expected] = process.argv.slice(2);
+const contract = validateReleaseContract(JSON.parse(fs.readFileSync(file, "utf8")));
+if (contract.contractHash !== expected) process.exit(43);
+NODE
+}
+
+require_runner
+operation=${1:-}; shift || true
+case "$operation" in
+  inspect-env|inspect-recovery|push-counters)
+    release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
+    verify_contract_hash "$release_id" "$contract_hash"
+    mode=${operation#inspect-}; [[ $operation == push-counters ]] && mode=push-counters
+    exec /usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-privileged-inspect.mjs "$release_id" "$contract_hash" "$mode"
+    ;;
+  inspect-db)
+    release_id=${1:-}; contract_hash=${2:-}; database=${3:-}; valid_id "$release_id"; valid_hash "$contract_hash"; valid_id "$database"
+    verify_contract_hash "$release_id" "$contract_hash"
+    exec /usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-privileged-inspect.mjs "$release_id" "$contract_hash" database "$database"
+    ;;
+  backup)
+    release_id=${1:-}; valid_id "$release_id"
+    systemctl start wbd-mariadb-backup.service
+    [[ -x /usr/local/sbin/wbd-mariadb-restore-verify ]] || fail RESTORE_VERIFY_ENTRYPOINT_MISSING
+    /usr/local/sbin/wbd-mariadb-restore-verify >/dev/null
+    printf '{"status":"PASS","operation":"backup"}\n'
+    ;;
+  stage)
+    release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
+    verify_contract_hash "$release_id" "$contract_hash"
+    artifact="$INBOX_ROOT/${release_id}.tar.gz"; manifest="$INBOX_ROOT/${release_id}.manifest.json"
+    [[ -f $artifact && -f $manifest ]] || fail INBOX_ARTIFACT_MISSING
+    if [[ ! -d "$WBD_ROOT/releases/$release_id" ]]; then
+      "$LEGACY_RELEASE_HELPER" prepare --artifact "$artifact" --manifest "$manifest" --expected-current "$(basename "$(readlink -f "$WBD_ROOT/current")")" >/dev/null
+    else
+      node - "$manifest" "$WBD_ROOT/releases/$release_id/RELEASE-MANIFEST.json" "$release_id" <<'NODE'
+const fs = require("fs");
+const [externalPath, embeddedPath, releaseId] = process.argv.slice(2);
+const external = JSON.parse(fs.readFileSync(externalPath, "utf8"));
+const embedded = JSON.parse(fs.readFileSync(embeddedPath, "utf8"));
+if (external.releaseId !== releaseId || embedded.releaseId !== releaseId || external.commit !== embedded.commit || external.tag !== embedded.tag) process.exit(45);
+for (const file of embedded.files ?? []) {
+  const relative = file.path.startsWith("app/") ? `website/${file.path.slice(4)}` : file.path;
+  const absolute = require("path").join(require("path").dirname(embeddedPath), relative);
+  const actual = require("crypto").createHash("sha256").update(fs.readFileSync(absolute)).digest("hex");
+  if (actual !== file.sha256) process.exit(46);
+}
+NODE
+    fi
+    [[ -d "$WBD_ROOT/releases/$release_id" ]] || fail STAGING_FAILED
+    printf '{"releasePath":"%s","verified":true}\n' "$WBD_ROOT/releases/$release_id"
+    ;;
+  rollback-set)
+    release_id=${1:-}; target=${2:-}; valid_id "$release_id"; valid_id "$target"
+    rollback="$WBD_ROOT/shared/deploy-rollbacks/${release_id}-prechange.tar.gz"
+    env_snapshot="$WBD_ROOT/shared/deploy-rollbacks/${release_id}-prechange-production.env"
+    [[ -d "$WBD_ROOT/releases/$target" && -f $rollback && -f ${rollback}.sha256 && -f $env_snapshot && -f ${env_snapshot}.sha256 ]] || fail ROLLBACK_SET_MISSING
+    (cd "$(dirname "$rollback")" && sha256sum --check "$(basename "${rollback}.sha256")" >/dev/null) || fail ROLLBACK_CHECKSUM_FAIL
+    (cd "$(dirname "$env_snapshot")" && sha256sum --check "$(basename "${env_snapshot}.sha256")" >/dev/null) || fail ROLLBACK_ENV_CHECKSUM_FAIL
+    printf '{"targetReleaseId":"%s","verified":true}\n' "$target"
+    ;;
+  migrate)
+    release_id=${1:-}; plan_hash=${2:-}; database=${3:-}; migration=${4:-}; checksum=${5:-}
+    valid_id "$release_id"; valid_hash "$plan_hash"; valid_id "$database"; valid_id "$migration"; valid_hash "$checksum"; verify_plan "$release_id" "$plan_hash"
+    [[ $database == workspace || $database == atlas ]] || fail DATABASE_NOT_ALLOWLISTED
+    [[ -f "/srv/wbd/release-engine/website/scripts/release-engine-migrate-one.mjs" ]] || fail MIGRATION_RUNNER_MISSING
+    contract_hash=$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.contractHash)' "$(plan_file "$release_id")")
+    valid_hash "$contract_hash"
+    exec /usr/bin/node "/srv/wbd/release-engine/website/scripts/release-engine-migrate-one.mjs" "$release_id" "$contract_hash" "$database" "$migration" "$checksum"
+    ;;
+  switch)
+    release_id=${1:-}; plan_hash=${2:-}; valid_id "$release_id"; valid_hash "$plan_hash"; verify_plan "$release_id" "$plan_hash"
+    [[ -d "$WBD_ROOT/releases/$release_id" ]] || fail RELEASE_NOT_STAGED
+    previous_path=$(readlink -f "$WBD_ROOT/current")
+    env_restore="$ENGINE_ROOT/.switch-env-${release_id}.restore"
+    install -o root -g root -m 0600 "$ENV_FILE" "$env_restore"
+    switch_complete=0
+    restore_partial_switch() {
+      if [[ $switch_complete -eq 0 ]]; then
+        install -o root -g root -m 0600 "$env_restore" "$ENV_FILE.rollback"
+        mv -Tf "$ENV_FILE.rollback" "$ENV_FILE"
+        ln -sfn "$previous_path" "$WBD_ROOT/current.rollback"
+        mv -Tf "$WBD_ROOT/current.rollback" "$WBD_ROOT/current"
+      fi
+      rm -f "$env_restore" "$ENV_FILE.next" "$WBD_ROOT/current.next"
+    }
+    trap restore_partial_switch ERR
+    awk -v release_id="$release_id" 'BEGIN{found=0} /^RELEASE_ID=/{print "RELEASE_ID=" release_id; found=1; next} {print} END{if(!found) exit 46}' "$ENV_FILE" >"$ENV_FILE.next"
+    chown --reference="$ENV_FILE" "$ENV_FILE.next"
+    chmod --reference="$ENV_FILE" "$ENV_FILE.next"
+    mv -Tf "$ENV_FILE.next" "$ENV_FILE"
+    ln -sfn "$WBD_ROOT/releases/$release_id" "$WBD_ROOT/current.next"
+    mv -Tf "$WBD_ROOT/current.next" "$WBD_ROOT/current"
+    switch_complete=1
+    trap - ERR
+    rm -f "$env_restore"
+    printf '{"status":"PASS","operation":"switch"}\n'
+    ;;
+  restart)
+    release_id=${1:-}; plan_hash=${2:-}; service=${3:-}; valid_id "$release_id"; valid_hash "$plan_hash"; verify_plan "$release_id" "$plan_hash"
+    [[ $service == "$SERVICE" ]] || fail SERVICE_NOT_ALLOWLISTED
+    systemctl restart "$SERVICE"
+    printf '{"status":"PASS","operation":"restart"}\n'
+    ;;
+  rollback)
+    release_id=${1:-}; plan_hash=${2:-}; target=${3:-}; valid_id "$release_id"; valid_hash "$plan_hash"; valid_id "$target"; verify_plan "$release_id" "$plan_hash"
+    [[ -d "$WBD_ROOT/releases/$target" ]] || fail ROLLBACK_TARGET_MISSING
+    env_snapshot="$WBD_ROOT/shared/deploy-rollbacks/${release_id}-prechange-production.env"
+    [[ -f $env_snapshot && -f ${env_snapshot}.sha256 ]] || fail ROLLBACK_ENV_MISSING
+    (cd "$(dirname "$env_snapshot")" && sha256sum --check "$(basename "${env_snapshot}.sha256")" >/dev/null) || fail ROLLBACK_ENV_CHECKSUM_FAIL
+    install -o root -g root -m 0600 "$env_snapshot" "$ENV_FILE.next"
+    mv -Tf "$ENV_FILE.next" "$ENV_FILE"
+    ln -sfn "$WBD_ROOT/releases/$target" "$WBD_ROOT/current.next"
+    mv -Tf "$WBD_ROOT/current.next" "$WBD_ROOT/current"
+    printf '{"status":"PASS","operation":"rollback"}\n'
+    ;;
+  smoke)
+    release_id=${1:-}; adapter=${2:-}; phase=${3:-}; valid_id "$release_id"; valid_id "$adapter"; valid_id "$phase"
+    set -a; . "$ENV_FILE"; set +a
+    exec /usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-smoke-adapters.mjs "$release_id" "$adapter" "$phase"
+    ;;
+  evidence)
+    release_id=${1:-}; plan_hash=${2:-}; valid_id "$release_id"; valid_hash "$plan_hash"; verify_plan "$release_id" "$plan_hash"
+    evidence_dir="$ENGINE_ROOT/evidence"; evidence_file="$evidence_dir/${release_id}.json"
+    install -d -o wbd-release -g wbd-release -m 0750 "$evidence_dir"
+    [[ ! -e $evidence_file ]] || fail EVIDENCE_EXISTS
+    node - "$(plan_file "$release_id")" "$evidence_file.tmp" "$release_id" "$plan_hash" "$WBD_ROOT/current" "$ENGINE_ROOT/events" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const [planFile, out, releaseId, planHash, currentLink, eventsRoot] = process.argv.slice(2);
+const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
+const current = fs.realpathSync(currentLink);
+if (path.basename(current) !== releaseId || plan.planHash !== planHash) process.exit(47);
+const eventName = `${plan.tenant}--${plan.application}--${releaseId}.jsonl`;
+const eventFile = path.join(eventsRoot, eventName);
+const eventHash = crypto.createHash("sha256").update(fs.readFileSync(eventFile)).digest("hex");
+const evidence = { schemaVersion: 1, releaseId, planHash, currentReleasePath: current, eventChainFile: eventName, eventChainSha256: eventHash, recordedAt: new Date().toISOString() };
+fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o640, flag: "wx" });
+NODE
+    chown wbd-release:wbd-release "$evidence_file.tmp"
+    mv -Tf "$evidence_file.tmp" "$evidence_file"
+    printf '{"status":"PASS","releaseId":"%s","evidence":"%s"}\n' "$release_id" "$evidence_file"
+    ;;
+  *) fail OPERATION_NOT_ALLOWLISTED ;;
+esac
