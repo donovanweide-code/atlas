@@ -83,10 +83,12 @@ export class WbdImapMailboxConnector {
       try {
         const uidValidity = String(client.mailbox?.uidValidity ?? "");
         if (!uidValidity) throw Object.assign(new Error("UIDVALIDITY ontbreekt."), { code: "UIDVALIDITY_MISSING" });
-        const reset = checkpoint?.uidValidity && String(checkpoint.uidValidity) !== uidValidity;
-        const startUid = reset ? 1 : Math.max(1, Number(checkpoint?.highestUid ?? 0) + 1);
-        const matched = await client.search({ uid: `${startUid}:*` }, { uid: true });
-        const uids = matched.filter((uid) => Number(uid) >= startUid).sort((a, b) => a - b).slice(0, boundedLimit);
+        const reset = Boolean(checkpoint?.uidValidity && String(checkpoint.uidValidity) !== uidValidity);
+        const continuing = Boolean(checkpoint?.uidValidity && !reset && Number(checkpoint?.highestUid) >= 0);
+        const startUid = continuing ? Math.max(1, Number(checkpoint.highestUid) + 1) : 1;
+        const matched = await client.search(continuing ? { uid: `${startUid}:*` } : { all: true }, { uid: true });
+        const available = matched.filter((uid) => Number(uid) >= startUid).sort((a, b) => a - b);
+        const uids = continuing ? available.slice(0, boundedLimit) : available.slice(-boundedLimit);
         const messages = [];
         if (uids.length) {
           for await (const item of client.fetch(uids, { uid: true, source: { maxLength: MAX_SOURCE_BYTES }, flags: true, internalDate: true, size: true }, { uid: true })) {

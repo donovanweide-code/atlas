@@ -29,3 +29,29 @@ test("incremental connector uses UIDVALIDITY/UID and returns normalized source i
   assert.equal(snapshot.messages[0].uid, 42);
   assert.equal(snapshot.messages[0].from.address, "customer@example.com");
 });
+
+test("first connection ingests the bounded most recent window instead of the oldest mail", async () => {
+  class Client extends EventEmitter {
+    mailbox = { uidValidity: 31n };
+    async connect() {}
+    async logout() {}
+    async getMailboxLock() { return { release() {} }; }
+    async search(query, options) {
+      assert.deepEqual(query, { all: true });
+      assert.deepEqual(options, { uid: true });
+      return Array.from({ length: 500 }, (_, index) => index + 1);
+    }
+    async *fetch(uids) {
+      assert.equal(uids.length, 250);
+      assert.equal(uids[0], 251);
+      assert.equal(uids.at(-1), 500);
+    }
+  }
+  const connector = new WbdImapMailboxConnector({
+    mailbox: { id: "wbd-info", address: "info@webuildanddesign.nl", configured: true, host: "imap.example.com", port: 993, secure: true, user: "info", secret: "not-logged" },
+    clientFactory: () => new Client(),
+  });
+  const snapshot = await connector.fetchIncremental();
+  assert.equal(snapshot.status, "SUCCEEDED");
+  assert.equal(snapshot.highestUid, 500);
+});
