@@ -60,3 +60,18 @@ test("Premium Shell centraliseert tokens en bewaakt desktop, mobile, focus en re
   assert.match(styles, /\.sp-mobile-nav\{position:fixed/u);
   assert.match(styles, /\.sp-production-select-all\{position:absolute/u);
 });
+
+test("Sportpaleis visual final polish gebruikt merkcontrols en één City-artworkkolom op mobiel", async () => {
+  const styles = await readFile(stylesUrl, "utf8");
+  assert.match(styles, /--sp-control-radius:6px/u);
+  assert.match(styles, /--sp-focus:#b9162b/u);
+  assert.match(styles, /\.sp-topbar\{border-bottom-color:#292929;background:#090909;color:#fff/u);
+  assert.match(styles, /\.sp-production-context-nav \.sp-button::after\{content:"›"/u);
+  assert.match(styles, /\.sp-asset-library-tabs button\.is-active\{border-color:#181818;background:#181818;color:#fff/u);
+  assert.match(styles, /\.sp-asset-candidate input\[type=checkbox\]\{accent-color:var\(--sp-accent\)\}/u);
+  assert.match(styles, /input\[type=checkbox\],input\[type=radio\]\{accent-color:var\(--sp-accent\)\}/u);
+  assert.match(styles, /\.sp-mobile-nav \.sp-nav__item\.is-active\{background:#181818;color:#fff/u);
+  assert.match(styles, /\.sp-catalog-card\.is-selected\{border-color:var\(--sp-accent\);background:#fff7f8/u);
+  assert.match(styles, /@media\(max-width:600px\)\{[\s\S]*\.sp-asset-source \.sp-asset-candidate-grid\{grid-template-columns:1fr/u);
+  assert.match(styles, /\.sp-asset-source \.sp-asset-split-card__choice input\{width:24px;height:24px/u);
+});
