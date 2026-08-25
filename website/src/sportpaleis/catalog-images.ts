@@ -22,6 +22,12 @@ const images: Record<string, string> = {
   "asc-reserve-shirt": keeper,
   "asc-training-shirt": trainingShirt,
   "sp-live-placeholder": livePlaceholder,
+  "teamwear-fixture-shirt-red": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-shirt-red.svg",
+  "teamwear-fixture-shirt-black": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-shirt-black.svg",
+  "teamwear-fixture-shorts-black": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-shorts-black.svg",
+  "teamwear-fixture-jacket-navy": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-jacket-navy.svg",
+  "teamwear-fixture-jacket-black": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-jacket-black.svg",
+  "teamwear-fixture-bag-black": "/assets/organizations/sportpaleis/teamwear-fixtures/teamwear-fixture-bag-black.svg",
 };
 
 const liveImages = import.meta.glob<string>("../assets/images/sportpaleis/live-catalog/*.webp", {

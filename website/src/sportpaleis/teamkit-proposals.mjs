@@ -138,7 +138,21 @@ function normalizePlacement(input) {
     xPercent: boundedNumber(input.visualPosition?.xPercent ?? defaultX, "Visuele X-positie", 0, 100),
     yPercent: boundedNumber(input.visualPosition?.yPercent ?? defaultY, "Visuele Y-positie", 0, 100),
   };
-  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), visualPosition, physicalSizeOverride, route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
+  const colorOverride = /^#[0-9a-f]{6}$/iu.test(String(input.colorOverride ?? "")) ? String(input.colorOverride).toLowerCase() : null;
+  return { id: input.id || `placement-${randomUUID()}`, kind, label: text(input.label ?? kind, "Bedrukking", 120), side: input.side === "BACK" ? "BACK" : "FRONT", preset, sourceId, productionAssetId, assetVersion: nullableText(input.assetVersion, "Assetversie", 120), text: nullableText(input.text, "Opdruktekst", 120), colorOverride, widthPercent: boundedNumber(input.widthPercent ?? 24, "Breedte", 5, 80), visualPosition, physicalSizeOverride, route, supplierName: route === "EXTERNE_BEDRUKKER" ? nullableText(input.supplierName, "Externe bedrukker", 160) : null, note: nullableText(input.note, "Opmerking", 500) };
+}
+
+function normalizeCatalogSnapshot(input) {
+  if (!input || typeof input !== "object") return undefined;
+  const money = (value) => value == null || value === "" ? null : boundedNumber(value, "Prijs", 0, 1_000_000);
+  return {
+    catalogProductId: text(input.catalogProductId, "Catalogusproduct", 180), brand: text(input.brand, "Merk", 120), supplierName: text(input.supplierName || input.brand, "Leverancier", 160),
+    supplierArticleName: text(input.supplierArticleName, "Leverancier-artikelnaam", 180), supplierArticleNumber: text(input.supplierArticleNumber, "Leverancier-artikelnummer", 120), category: text(input.category, "Categorie", 120),
+    collection: nullableText(input.collection, "Collectie", 120), audience: Array.isArray(input.audience) ? [...new Set(input.audience.map((value) => text(value, "Doelgroep", 40)))].slice(0, 8) : [],
+    colorLabel: text(input.colorLabel || "Nog te bepalen", "Kleur", 120), imageKey: text(input.imageKey, "Productbeeld", 240), advicePriceEur: money(input.advicePriceEur), effectivePriceEur: money(input.effectivePriceEur),
+    priceLabel: ["Teamprijs", "Jullie prijs"].includes(input.priceLabel) ? input.priceLabel : null, minimumQuantity: input.minimumQuantity == null ? null : boundedNumber(input.minimumQuantity, "Minimumaantal", 1, 100_000),
+    pricingPolicyRef: nullableText(input.pricingPolicyRef, "Prijsregel", 180), sourceAdapterId: text(input.sourceAdapterId, "Catalogusbron", 180), sourceStatus: ["AUTHORITATIVE", "CONTROLLED_FIXTURE", "DATA_GAP"].includes(input.sourceStatus) ? input.sourceStatus : "DATA_GAP",
+  };
 }
 
 export function normalizeProposalItems(items) {
@@ -147,12 +161,20 @@ export function normalizeProposalItems(items) {
     id: item.id || `proposal-item-${randomUUID()}`, articleId: nullableText(item.articleId, "Artikel", 160), articleNumber: nullableText(item.articleNumber, "Artikelnummer", 120),
     productName: text(item.productName, "Artikelnaam", 180), color: text(item.color || "Nog te bepalen", "Kleur", 120), quantity: boundedNumber(item.quantity, "Aantal", 1, 10_000, true),
     sizes: Array.isArray(item.sizes) ? [...new Set(item.sizes.map((value) => text(value, "Maat", 40)).filter(Boolean))].slice(0, 60) : [],
-    team: nullableText(item.team, "Team", 120), notes: nullableText(item.notes, "Artikelopmerking", 800), placements: Array.isArray(item.placements) ? item.placements.slice(0, 30).map(normalizePlacement) : [],
+    team: nullableText(item.team, "Team", 120), notes: nullableText(item.notes, "Artikelopmerking", 800), catalogSnapshot: normalizeCatalogSnapshot(item.catalogSnapshot), placements: Array.isArray(item.placements) ? item.placements.slice(0, 30).map(normalizePlacement) : [],
   }));
 }
 
 function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 const PRESET_POSITION = Object.freeze({ LINKERBORST: [33, 28], RECHTERBORST: [67, 28], MIDDENBORST: [50, 39], RUG_BOVEN: [50, 24], RUG_MIDDEN: [50, 48], MOUW_LINKS: [16, 35], MOUW_RECHTS: [84, 35], SHORT_LINKS: [38, 64], SHORT_RECHTS: [62, 64], BROEK: [50, 64], TAS: [50, 50] });
+function visualSurface(preset) {
+  if (preset === "MOUW_LINKS") return "LEFT_SLEEVE";
+  if (preset === "MOUW_RECHTS") return "RIGHT_SLEEVE";
+  if (["RUG_BOVEN", "RUG_MIDDEN"].includes(preset)) return "BACK_TORSO";
+  if (["SHORT_LINKS", "SHORT_RECHTS", "BROEK"].includes(preset)) return "LOWER_GARMENT";
+  if (preset === "TAS") return "ACCESSORY";
+  return "FRONT_TORSO";
+}
 
 function garment(item, side) {
   const placements = item.placements.filter((placement) => placement.side === side).map((placement) => {
@@ -160,7 +182,7 @@ function garment(item, side) {
     const x = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.xPercent : fallbackX;
     const y = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.yPercent : fallbackY;
     const label = placement.text || placement.label;
-    return `<span class="tk-mark tk-mark--${placement.kind.toLowerCase()}" style="left:${x}%;top:${y}%;width:${placement.widthPercent}%" title="${esc(placement.label)}">${esc(label)}</span>`;
+    return `<span class="tk-mark tk-mark--${placement.kind.toLowerCase()}" data-visual-surface="${visualSurface(placement.preset)}" style="left:${x}%;top:${y}%;width:${placement.widthPercent}%" title="${esc(placement.label)}">${esc(label)}</span>`;
   }).join("");
   return `<figure class="tk-garment"><div class="tk-shirt" style="--kit-color:${esc(item.color)}"><i></i>${placements}</div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"}</figcaption></figure>`;
 }
@@ -184,37 +206,48 @@ export function createProposalRevision(proposal, actor, reason, feedbackIds = []
   return { number: proposal.currentRevision, createdAt: now.toISOString(), createdBy: { id: actor.id, name: actor.name, role: actor.role }, reason: text(reason || "Voorstel bijgewerkt", "Reden", 500), feedbackIds: [...new Set(feedbackIds)], snapshot, snapshotHash: proposalSha256(body), previewHtml, previewSha256: proposalSha256(previewHtml) };
 }
 
-function pdfSafe(value) { return String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").replace(/[€]/gu, "EUR ").replace(/[^\x20-\x7e]/gu, "?").replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)"); }
+function pdfSafe(value) { return String(value ?? "").replace(/[·•]/gu, " - ").replace(/[–—]/gu, "-").normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").replace(/[€]/gu, "EUR ").replace(/[^\x20-\x7e]/gu, "").replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)"); }
 function pdfText(x, y, size, value, bold = false) { return `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${pdfSafe(value)}) Tj ET`; }
+function pdfShort(value, limit = 48) { const result = String(value ?? ""); return result.length > limit ? `${result.slice(0, Math.max(1, limit - 1))}…` : result; }
+function pdfEuro(value) { return Number.isFinite(Number(value)) ? `EUR ${Number(value).toFixed(2).replace(".", ",")}` : null; }
+function pdfGarmentColor(item) { const value = `${item.color ?? ""} ${item.catalogSnapshot?.colorLabel ?? ""}`.toLocaleLowerCase("nl-NL"); if (/rood|red/iu.test(value)) return "0.69 0.08 0.10"; if (/zwart|black/iu.test(value)) return "0.06 0.07 0.08"; if (/wit|white/iu.test(value)) return "0.88 0.90 0.91"; return "0.035 0.10 0.20"; }
+function pdfGarment(commands, item, side, x, y, width = 78, height = 112) {
+  commands.push(`0.95 0.96 0.96 rg ${x} ${y} ${width} ${height} re f`);
+  const left = x + 13; const right = x + width - 13; const bottom = y + 10; const top = y + height - 13; const shoulder = y + height - 28;
+  commands.push(`${pdfGarmentColor(item)} rg ${left + 12} ${top} m ${right - 12} ${top} l ${right} ${shoulder} l ${right - 7} ${shoulder - 26} l ${right - 16} ${shoulder - 18} l ${right - 16} ${bottom} l ${left + 16} ${bottom} l ${left + 16} ${shoulder - 18} l ${left + 7} ${shoulder - 26} l ${left} ${shoulder} l h f`);
+  const relevant = item.placements.filter((placement) => placement.side === side).slice(0, 5);
+  for (const placement of relevant) {
+    const fallback = placement.preset.includes("RECHTS") ? [65, 30] : placement.preset.includes("MIDDEN") ? [50, 48] : placement.preset.includes("RUG") ? [50, 42] : [35, 30];
+    const px = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.xPercent : fallback[0];
+    const py = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.yPercent : fallback[1];
+    const markWidth = Math.max(8, Math.min(width * .48, width * Number(placement.widthPercent ?? 18) / 100));
+    const markX = x + width * .18 + width * .64 * px / 100 - markWidth / 2; const markY = y + height * .17 + height * .66 * (100 - py) / 100;
+    commands.push(`${placement.colorOverride === "#101419" ? "0.04 0.05 0.06" : placement.colorOverride === "#d3172f" ? "0.82 0.05 0.08" : "0.96 0.97 0.97"} rg ${markX.toFixed(1)} ${markY.toFixed(1)} ${markWidth.toFixed(1)} 4 re f`);
+  }
+  commands.push("0.34 0.39 0.37 rg", pdfText(x + 16, y + 3, 6, side === "FRONT" ? "VOORZIJDE" : "ACHTERZIJDE", true));
+}
 
 export function generateProposalPdf(snapshot, approved = false) {
-  const lines = [];
-  lines.push({ text: snapshot.title, size: 20, bold: true }, { text: `${snapshot.proposalNumber}  |  V${snapshot.revision}${approved ? "  |  AKKOORD" : ""}`, size: 10 }, { text: `${snapshot.customer.name}${snapshot.association.name ? `  |  ${snapshot.association.name}` : ""}`, size: 11, bold: true });
-  if (snapshot.team || snapshot.season) lines.push({ text: [snapshot.team, snapshot.season].filter(Boolean).join("  |  "), size: 10 });
-  for (const [index, item] of snapshot.items.entries()) {
-    lines.push({ text: `${index + 1}. ${item.productName}${item.articleNumber ? ` (${item.articleNumber})` : ""}`, size: 13, bold: true });
-    lines.push({ text: `Kleur: ${item.color}  |  Aantal: ${item.quantity ?? "volgt"}  |  Maten: ${item.sizes.join(", ") || "volgen"}`, size: 9 });
-    for (const placement of item.placements) lines.push({ text: `- ${placement.label}: ${placement.preset.replaceAll("_", " ").toLowerCase()}${placement.text ? ` - ${placement.text}` : ""}`, size: 9 });
-    if (item.notes) lines.push({ text: `Opmerking: ${item.notes}`, size: 9 });
-  }
-  if (snapshot.notes) lines.push({ text: `Algemeen: ${snapshot.notes}`, size: 9 });
-  const pages = []; let current = [];
-  for (const line of lines) { if (current.length >= 30) { pages.push(current); current = []; } current.push(line); }
-  if (current.length || !pages.length) pages.push(current);
+  const pages = snapshot.items.length ? Array.from({ length: Math.ceil(snapshot.items.length / 4) }, (_, index) => snapshot.items.slice(index * 4, index * 4 + 4)) : [[]];
   const objects = [null]; const add = (value) => { objects.push(value); return objects.length - 1; };
   const catalogId = add(""); const pagesId = add(""); const fontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"); const boldId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
   const pageIds = [];
   for (const [pageIndex, page] of pages.entries()) {
-    const commands = ["0.035 0.075 0.09 rg 0 760 595 82 re f", pdfText(42, 808, 9, "SPORT 2000 SPORTPALEIS", true), pdfText(42, 785, 15, snapshot.title, true), "0.82 0.09 0.12 rg 42 748 82 4 re f"];
-    if (pageIndex === 0 && snapshot.items[0]) {
-      const visualItem = snapshot.items[0]; commands.push("0.94 0.95 0.96 rg 365 560 86 142 re f 465 560 86 142 re f", "0.12 0.15 0.17 RG 1.2 w 379 590 58 82 re S 479 590 58 82 re S", pdfText(382, 682, 8, "VOORZIJDE", true), pdfText(485, 682, 8, "ACHTERZIJDE", true));
-      for (const placement of visualItem.placements.slice(0, 8)) { const front = placement.side !== "BACK"; const x = (front ? 384 : 484) + (placement.preset.includes("RECHTS") ? 25 : placement.preset.includes("MIDDEN") ? 13 : 0); const y = placement.preset.includes("RUG") ? 620 : placement.preset.includes("MOUW") ? 640 : 648; commands.push("0.82 0.09 0.12 rg", `${x} ${y} 22 5 re f`, "0.08 0.09 0.1 rg", pdfText(front ? 365 : 465, 575 - visualItem.placements.indexOf(placement) * 10, 6, placement.label)); }
+    const commands = ["0.955 0.965 0.96 rg 0 0 842 595 re f", "0.025 0.075 0.065 rg 0 515 842 80 re f", "0.85 0.05 0.08 rg 34 493 92 5 re f", "1 1 1 rg", pdfText(34, 566, 10, "SPORT 2000 SPORTPALEIS", true), pdfText(34, 538, 20, pdfShort(snapshot.title, 62), true), pdfText(618, 561, 10, `${snapshot.proposalNumber}  |  V${snapshot.revision}${approved ? "  |  AKKOORD" : ""}`, true), pdfText(618, 540, 8, pdfShort(snapshot.association.name ?? snapshot.customer.name, 34))];
+    for (const [cardIndex, item] of page.entries()) {
+      const col = cardIndex % 2; const row = Math.floor(cardIndex / 2); const x = 34 + col * 390; const top = 482 - row * 218; const bottom = top - 202;
+      commands.push(`1 1 1 rg ${x} ${bottom} 374 202 re f`, "0.86 0.89 0.87 RG 0.8 w", `${x} ${bottom} 374 202 re S`, "0.07 0.10 0.09 rg", pdfText(x + 16, top - 23, 12, pdfShort(item.productName, 38), true), "0.35 0.40 0.38 rg", pdfText(x + 16, top - 40, 7, pdfShort(`${item.catalogSnapshot?.brand ?? "TEAMWEAR"}  |  ${item.catalogSnapshot?.supplierArticleNumber ?? item.articleNumber ?? "Artikel volgt"}  |  ${item.color}`, 58)));
+      pdfGarment(commands, item, "FRONT", x + 14, bottom + 18); pdfGarment(commands, item, "BACK", x + 100, bottom + 18);
+      const detailsX = x + 196; let detailsY = top - 68; const advice = item.catalogSnapshot?.advicePriceEur; const effective = item.catalogSnapshot?.effectivePriceEur;
+      if (advice != null) { commands.push("0.39 0.44 0.42 rg", pdfText(detailsX, detailsY, 8, `Adviesprijs ${pdfEuro(advice)}`)); detailsY -= 18; }
+      if (effective != null) { commands.push("0.03 0.36 0.23 rg", pdfText(detailsX, detailsY, 11, `${item.catalogSnapshot?.priceLabel ?? "Teamprijs"} ${pdfEuro(effective)}`, true)); detailsY -= 22; }
+      commands.push("0.18 0.22 0.20 rg", pdfText(detailsX, detailsY, 8, `Beschikbaarheid: ${item.sizes.join(", ") || "maten volgen"}`)); detailsY -= 17;
+      for (const placement of item.placements.slice(0, 4)) { commands.push("0.25 0.29 0.27 rg", pdfText(detailsX, detailsY, 7, pdfShort(`${placement.label}${placement.text ? ` - ${placement.text}` : ""}  |  ${placement.side === "BACK" ? "achter" : "voor"}`, 42))); detailsY -= 14; }
+      if (!item.placements.length) commands.push("0.45 0.49 0.47 rg", pdfText(detailsX, detailsY, 7, "Nog geen bedrukking toegevoegd."));
     }
-    let y = 724;
-    for (const line of page) { commands.push("0.08 0.09 0.1 rg", pdfText(42, y, line.size, line.text, line.bold)); y -= line.size >= 13 ? 24 : 17; }
-    commands.push("0.35 0.37 0.38 rg", pdfText(42, 28, 8, `${snapshot.proposalNumber} - V${snapshot.revision} - pagina ${pageIndex + 1}/${pages.length}`));
+    commands.push("0.32 0.37 0.35 rg", pdfText(34, 19, 7, `${snapshot.customer.name}${snapshot.team ? `  |  ${snapshot.team}` : ""}  |  Definitieve productiecontrole door Sportpaleis.`), pdfText(706, 19, 7, `Pagina ${pageIndex + 1}/${pages.length}`));
     const stream = commands.join("\n"); const streamId = add(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
-    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >> >> /Contents ${streamId} 0 R >>`));
+    pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >> >> /Contents ${streamId} 0 R >>`));
   }
   objects[catalogId] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`; objects[pagesId] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
   let body = "%PDF-1.7\n%SPTK\n"; const offsets = [0];

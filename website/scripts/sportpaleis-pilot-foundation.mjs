@@ -525,6 +525,8 @@ export function migrateSportpaleisPilotState(input) {
     user.personType ??= "HUMAN";
     user.workContexts ??= workContextsForRole(user.role);
     user.defaultContext = user.workContexts.includes(user.defaultContext) ? user.defaultContext : user.workContexts[0];
+    user.featureExposure ??= {};
+    user.featureExposure.teamwearExperiencePilot ??= false;
     delete user.quickAuth;
   }
   state.employees = Array.isArray(state.employees) ? state.employees : [];
@@ -1168,6 +1170,23 @@ function audit(state, userId, action, subject, details = {}) {
   state.audit = state.audit.slice(0, 2_000);
 }
 
+export function setSportpaleisTeamwearPilotExposure(state, principalId, enabled, actorId = "system:pilot-control") {
+  const target = state.users.find(({ id }) => id === principalId);
+  if (!target || target.status !== "Actief" || target.seatType !== "customer" || target.role !== "admin") {
+    throw Object.assign(new Error("Teamwear-pilot vereist een exact actief klantbeheeraccount."), { statusCode: 409, code: "TEAMWEAR_PILOT_PRINCIPAL_INVALID" });
+  }
+  target.featureExposure ??= {};
+  const previous = target.featureExposure.teamwearExperiencePilot === true;
+  target.featureExposure.teamwearExperiencePilot = enabled === true;
+  audit(state, actorId, enabled ? "Teamwear pilot ingeschakeld" : "Teamwear pilot uitgeschakeld", target.id, {
+    previous,
+    enabled: enabled === true,
+    enforcement: "SERVER_PRINCIPAL_ALLOWLIST",
+    defaultExposure: false,
+  });
+  return { principalId: target.id, email: target.email, role: target.role, previous, enabled: enabled === true };
+}
+
 function idempotent(state, key, userId, operation, valueFactory) {
   if (!key || key.length < 12 || key.length > 160) throw Object.assign(new Error("Ongeldige idempotency key."), { statusCode: 400, code: "INVALID_IDEMPOTENCY_KEY" });
   const identity = `${userId}:${operation}:${key}`;
@@ -1661,7 +1680,7 @@ export class SportpaleisPilotService {
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
       productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
-      teamkitProposals: ["admin", "operator", "store"].includes(user.role) ? state.teamkitProposals.map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
@@ -1687,9 +1706,17 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
+  }
+
+  async assertTeamwearPilotAccess(token) {
+    const { user } = await this.authenticate(token);
+    if (user.featureExposure?.teamwearExperiencePilot !== true) {
+      throw Object.assign(new Error("Deze Teamwear-pilot is niet voor dit account vrijgegeven."), { statusCode: 403, code: "TEAMWEAR_PILOT_NOT_ENABLED" });
+    }
+    return { principalId: user.id, enabled: true };
   }
 
   async currentRevision(token) {
@@ -1709,7 +1736,7 @@ export class SportpaleisPilotService {
       const proposal = {
         id, proposalNumber: `PV-${year}-${String(highest + 1).padStart(4, "0")}`, aggregateRevision: 1, currentRevision: 1, status: "DRAFT",
         title: requiredText(payload.title, "Interne titel", 180), type: optional(payload.type, 120) || "Teamkit",
-        customer: { id: optional(payload.customerId, 160) || null, name: requiredText(payload.customerName, "Klant", 160), contactName: requiredText(payload.contactName ?? payload.customerName, "Contactpersoon", 160), email: validEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
+        customer: { id: optional(payload.customerId, 160) || null, name: optional(payload.customerName, 160) || requiredText(payload.title, "Werkreferentie", 180), contactName: optional(payload.contactName, 160) || "", email: optionalEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
         association: { id: association?.id ?? (optional(payload.associationId, 160) || null), name: association?.name ?? associationName },
         team: optional(payload.team, 120) || null, season: optional(payload.season, 80) || null, category: optional(payload.category, 80) || null, deadline: payload.deadline ? new Date(payload.deadline).toISOString() : null,
         notes: optional(payload.notes, 1_500) || null, items: [], sources: [], intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
@@ -1731,7 +1758,7 @@ export class SportpaleisPilotService {
       if (proposal.status === "APPROVED" && proposal.approval) { proposal.approvalHistory ??= []; if (!proposal.approvalHistory.some(({ revision }) => revision === proposal.approval.revision)) proposal.approvalHistory.push(structuredClone(proposal.approval)); proposal.approval = null; }
       proposal.title = payload.title === undefined ? proposal.title : requiredText(payload.title, "Titel", 180);
       proposal.type = payload.type === undefined ? proposal.type : requiredText(payload.type, "Voorsteltype", 120);
-      if (payload.customer) proposal.customer = { id: optional(payload.customer.id, 160) || null, name: requiredText(payload.customer.name, "Klant", 160), contactName: requiredText(payload.customer.contactName, "Contactpersoon", 160), email: validEmail(payload.customer.email), phone: optional(payload.customer.phone, 40) || null };
+      if (payload.customer) proposal.customer = { id: optional(payload.customer.id, 160) || null, name: requiredText(payload.customer.name, "Klant", 160), contactName: optional(payload.customer.contactName, 160) || "", email: optionalEmail(payload.customer.email), phone: optional(payload.customer.phone, 40) || null };
       if (payload.association) { const match = state.associations.find(({ id, name }) => id === payload.association.id || name === payload.association.name); proposal.association = { id: match?.id ?? (optional(payload.association.id, 160) || null), name: match?.name ?? (optional(payload.association.name, 160) || null) }; }
       for (const key of ["team", "season", "category", "notes"]) if (Object.hasOwn(payload, key)) proposal[key] = optional(payload[key], key === "notes" ? 1_500 : 160) || null;
       if (Object.hasOwn(payload, "deadline")) proposal.deadline = payload.deadline ? new Date(payload.deadline).toISOString() : null;
@@ -1739,6 +1766,24 @@ export class SportpaleisPilotService {
         const items = structuredClone(payload.items);
         const association = state.associations.find(({ id, name }) => id === proposal.association.id || name === proposal.association.name);
         for (const item of items) for (const placement of item.placements ?? []) {
+          const sharedMatch = String(placement.sourceId ?? "").match(/^shared-source:([^:]+):(.+)$/u);
+          if (sharedMatch) {
+            const [, originProposalId, originSourceId] = sharedMatch;
+            const origin = state.teamkitProposals?.find(({ id }) => id === originProposalId);
+            const originSource = origin?.sources.find(({ id }) => id === originSourceId);
+            const sameAssociation = Boolean(proposal.association.id && origin?.association.id === proposal.association.id);
+            const sameCustomer = Boolean(!proposal.association.id && !origin?.association.id && (proposal.customer.id && origin?.customer.id === proposal.customer.id || proposal.customer.email && origin?.customer.email === proposal.customer.email || proposal.customer.name === origin?.customer.name));
+            if (!origin || !originSource?.dataBase64 || (!sameAssociation && !sameCustomer)) throw Object.assign(new Error("Dit asset hoort niet bij deze klant- of verenigingscontext."), { statusCode: 403, code: "TEAMWEAR_SHARED_ASSET_FORBIDDEN" });
+            let source = proposal.sources.find(({ sha256 }) => sha256 === originSource.sha256);
+            if (!source) {
+              source = inspectTeamkitProposalSource({ filename: originSource.filename, mimeType: originSource.mimeType, dataBase64: originSource.dataBase64 }, { proposalId, associationName: proposal.association.name, uploaderKind: "EMPLOYEE", uploaderId: user.id, uploaderName: user.name });
+              source.libraryOrigin = { proposalId: origin.id, sourceId: originSource.id, sha256: originSource.sha256 };
+              proposal.sources.push(source);
+              audit(state, user.id, "Gedeeld contextasset in voorstel hergebruikt", proposal.id, { sourceId: source.id, originProposalId: origin.id, originSourceId: originSource.id, sha256: source.sha256 });
+            }
+            placement.sourceId = source.id;
+            continue;
+          }
           const match = String(placement.sourceId ?? "").match(/^association-logo:([^:]+):([A-Fa-f0-9]{64})$/u);
           if (!match) continue;
           const [, associationId, expectedSha256] = match;
@@ -5664,6 +5709,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (route === "/api/sportpaleis/v1/state-revision" && method === "GET") {
         json(response, 200, await service.currentRevision(token));
         return true;
+      }
+      // One server-side boundary protects every authenticated Teamwear endpoint.
+      // Public customer links remain separately scoped by their unguessable proposal token.
+      if (route === "/api/sportpaleis/v1/teamkit-proposals" || route.startsWith("/api/sportpaleis/v1/teamkit-proposals/")) {
+        await service.assertTeamwearPilotAccess(token);
       }
       if (route === "/api/sportpaleis/v1/teamkit-proposals" && method === "POST") { json(response, 201, await service.createTeamkitProposal(token, csrf, await readJson(request))); return true; }
       const teamkitProposalMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)$/);

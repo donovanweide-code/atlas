@@ -102,6 +102,8 @@ export interface SportpaleisUser {
   workContexts?: SportpaleisWorkContext[];
   defaultContext?: SportpaleisWorkContext;
   quickAuth?: { mode: "PASSWORD" | "PIN"; pinEnrolled: boolean };
+  /** Server-authoritative, per-principal exposure. Never inferred from a URL or client role. */
+  featureExposure?: { teamwearExperiencePilot?: boolean };
   invitation?: {
     state: "VALID" | "EXPIRED" | "MISSING" | "AMBIGUOUS";
     expiresAt: string | null;
@@ -793,6 +795,8 @@ export interface TeamkitProposalSource {
     message: string;
   };
   promotedProductionSourceId?: string | null;
+  /** Reuse provenance when an immutable source is selected from the shared context library. */
+  libraryOrigin?: { proposalId: string; sourceId: string; sha256: string } | null;
 }
 
 export interface TeamkitProposalPlacement {
@@ -805,6 +809,8 @@ export interface TeamkitProposalPlacement {
   productionAssetId: string | null;
   assetVersion: string | null;
   text: string | null;
+  /** Non-destructive visual variant. The immutable source is never overwritten. */
+  colorOverride?: string | null;
   widthPercent: number;
   /**
    * Conceptuele plaatsing binnen een expliciet garment-/printvlak. De percentages
@@ -832,6 +838,26 @@ export interface TeamkitProposalItem {
   sizes: string[];
   team: string | null;
   notes: string | null;
+  /** Immutable discovery/commercial snapshot; the product master remains CatalogArticle/Catalog Foundation. */
+  catalogSnapshot?: {
+    catalogProductId: string;
+    brand: string;
+    supplierName: string;
+    supplierArticleName: string;
+    supplierArticleNumber: string;
+    category: string;
+    collection: string | null;
+    audience: string[];
+    colorLabel: string;
+    imageKey: string;
+    advicePriceEur: number | null;
+    effectivePriceEur: number | null;
+    priceLabel: "Teamprijs" | "Jullie prijs" | null;
+    minimumQuantity: number | null;
+    pricingPolicyRef: string | null;
+    sourceAdapterId: string;
+    sourceStatus: "AUTHORITATIVE" | "CONTROLLED_FIXTURE" | "DATA_GAP";
+  };
   placements: TeamkitProposalPlacement[];
 }
 

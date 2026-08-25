@@ -59,7 +59,7 @@ export async function createSportpaleisDevelopmentSeed(seedPasswords, now = new 
   ];
   const users = [];
   for (const definition of definitions) {
-    users.push({ ...definition, password: await createSportpaleisPasswordRecord(seedPasswords[definition.id]) });
+    users.push({ ...definition, featureExposure: { teamwearExperiencePilot: definition.seatType === "customer" }, password: await createSportpaleisPasswordRecord(seedPasswords[definition.id]) });
   }
   const state = createSportpaleisProductionBootstrap(now);
   state.revision = 1;

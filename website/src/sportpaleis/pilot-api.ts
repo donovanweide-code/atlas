@@ -75,6 +75,8 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     deviceMode: "SHARED" | "PERSONAL";
     authMethod: "PASSWORD" | "PIN" | "DEMO";
     quickPinEnabled: boolean;
+    /** Exact per-principal server decision; defaults false for every account. */
+    teamwearExperiencePilot: boolean;
   };
   productionInventory: SportpaleisProductionInventoryView[];
   releaseId: string;
@@ -517,7 +519,7 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async createTeamkitProposal(input: { title: string; type?: string; customerId?: string; customerName: string; contactName: string; customerEmail: string; customerPhone?: string; associationId?: string; associationName?: string; team?: string; season?: string; category?: string; deadline?: string; notes?: string }): Promise<TeamkitProposal> {
+  async createTeamkitProposal(input: { title: string; type?: string; customerId?: string; customerName?: string; contactName?: string; customerEmail?: string; customerPhone?: string; associationId?: string; associationName?: string; team?: string; season?: string; category?: string; deadline?: string; notes?: string }): Promise<TeamkitProposal> {
     return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
