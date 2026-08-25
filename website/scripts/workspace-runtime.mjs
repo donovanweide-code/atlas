@@ -27,6 +27,9 @@ import {
   createWbdOwnerRequestHandler,
 } from "./wbd-owner-foundation.mjs";
 import { WbdOwnerMariaDbStore } from "./wbd-owner-mariadb-store.mjs";
+import { MemoryWbdMailStore, WbdMailControlService } from "./wbd-mail-control.mjs";
+import { WbdMailMariaDbStore } from "./wbd-mail-mariadb-store.mjs";
+import { WbdImapMailboxConnector, WbdMailConnectorScheduler, parseWbdImapConfiguration } from "./wbd-imap-connector.mjs";
 import {
   WBD_HOMEPAGE_CONNECTOR_ID,
   WBD_HOMEPAGE_SOURCE_URL,
@@ -40,6 +43,7 @@ const sportpaleisBoundary = "/workspace/sportpaleis";
 export const SPORTPALEIS_RUNTIME_ARTIFACT_ROOT = "/srv/wbd/shared";
 const workspaceBoundaries = [workspaceBoundary, sportpaleisBoundary];
 const workspaceHome = `${workspaceBoundary}/home`;
+const workspaceMail = `${workspaceBoundary}/mail`;
 const workspaceAttention = `${workspaceBoundary}/attention`;
 const workspaceSearch = `${workspaceBoundary}/zoeken`;
 const workspaceManagement = `${workspaceBoundary}/beheer`;
@@ -47,7 +51,7 @@ const workspaceCapabilities = `${workspaceBoundary}/capabilities`;
 const workspaceOrganizations = `${workspaceBoundary}/organisaties`;
 const workspaceOpportunities = `${workspaceBoundary}/kansen`;
 const workspaceWorkContext = `${workspaceBoundary}/werkcontext`;
-const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceAttention, workspaceSearch, workspaceManagement, workspaceCapabilities, workspaceOrganizations, workspaceOpportunities, workspaceWorkContext]);
+const ownerWorkspaceRoutes = new Set([workspaceHome, workspaceMail, workspaceAttention, workspaceSearch, workspaceManagement, workspaceCapabilities, workspaceOrganizations, workspaceOpportunities, workspaceWorkContext]);
 const ownerOrganizationRoute = /^\/workspace\/wbd\/organisaties\/[a-z0-9][a-z0-9-]*$/u;
 const isOwnerWorkspaceRoute = (pathname) => ownerWorkspaceRoutes.has(pathname) || ownerOrganizationRoute.test(pathname);
 const sportpaleisHome = `${sportpaleisBoundary}/overzicht`;
@@ -81,6 +85,7 @@ async function currentReleaseManifest(releaseId, requiredInProduction) {
 
 const exactWorkspaceRoutes = new Set([
   workspaceHome,
+  workspaceMail,
   workspaceAttention,
   workspaceSearch,
   workspaceCapabilities,
@@ -281,8 +286,10 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   let activeSportpaleisStore;
   let wbdOwnerHandlerPromise;
   let activeWbdOwnerStore;
+  let activeWbdMailStore;
   let activeWbdOwnerService;
   let wbdConnectorScheduler = options.wbdConnectorScheduler ?? null;
+  let wbdMailConnectorScheduler = options.wbdMailConnectorScheduler ?? null;
   const sportpaleisHandler = () => {
     if (!sportpaleisHandlerPromise) {
       sportpaleisHandlerPromise = (async () => {
@@ -346,8 +353,16 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           ? new WbdOwnerMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace, bootstrap })
           : new WbdOwnerFileStore({ filePath: process.env.WBD_OWNER_DATA_FILE ?? path.join(websiteRoot, "data", "wbd-owner", `${config.appEnv}-state.json`), bootstrap }));
         activeWbdOwnerStore = store;
+        const mailStore = options.wbdMailStore ?? (options.wbdOwnerStore
+          ? new MemoryWbdMailStore()
+          : config.nodeEnv === "production"
+            ? new WbdMailMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace })
+            : new MemoryWbdMailStore());
+        activeWbdMailStore = mailStore;
+        const mailControl = options.wbdMailControl ?? new WbdMailControlService({ store: mailStore });
         const service = new WbdOwnerService({
           store,
+          mailControl,
           releaseId: config.releaseId,
           releaseManifest: options.releaseManifest ?? await currentReleaseManifest(config.releaseId, config.nodeEnv === "production"),
           secureCookies: config.nodeEnv === "production",
@@ -355,6 +370,19 @@ export async function createWorkspaceRuntimeServer(options = {}) {
         });
         await service.initialize();
         activeWbdOwnerService = service;
+        if (!wbdMailConnectorScheduler) {
+          const connectors = parseWbdImapConfiguration(process.env).map((mailbox) => new WbdImapMailboxConnector({ mailbox }));
+          wbdMailConnectorScheduler = new WbdMailConnectorScheduler({
+            service: {
+              workspaceView: (...args) => mailControl.workspaceView(...args),
+              ingestMailboxSnapshot: (snapshot) => activeWbdOwnerService.ingestMailSnapshot(snapshot),
+            },
+            connectors,
+            intervalMs: Number(process.env.WBD_MAIL_IMAP_INTERVAL_MS || 2 * 60 * 1_000),
+            onResult: (result) => log(config, "info", "wbd-mail-connector-refreshed", { mailboxId: result.mailbox.id, ingested: result.ingested, duplicates: result.duplicates }),
+            onError: (error) => log(config, "warn", "wbd-mail-connector-refresh-failed", { errorCode: String(error?.code ?? "IMAP_REFRESH_FAILED") }),
+          });
+        }
         return createWbdOwnerRequestHandler(service, {
           onError: ({ error, method, route, statusCode }) => log(config, statusCode >= 500 ? "error" : "warn", "wbd-owner-api-error", {
             method, route, statusCode, errorCode: String(error?.code ?? "INTERNAL_ERROR"), errorType: String(error?.name ?? typeof error),
@@ -502,14 +530,22 @@ export async function createWorkspaceRuntimeServer(options = {}) {
         wbdConnectorScheduler.start();
       })().catch((error) => log(config, "error", "atlas-connector-scheduler-start-failed", { errorCode: String(error?.code ?? "INTERNAL_ERROR") }));
     }
+    if (parseWbdImapConfiguration(process.env).some(({ configured }) => configured)) {
+      void wbdOwnerHandler().then(() => wbdMailConnectorScheduler?.start())
+        .catch((error) => log(config, "error", "wbd-mail-connector-scheduler-start-failed", { errorCode: String(error?.code ?? "INTERNAL_ERROR") }));
+    }
   });
   server.on("close", () => {
     wbdConnectorScheduler?.stop?.();
+    wbdMailConnectorScheduler?.stop?.();
     if (typeof activeSportpaleisStore?.close === "function") {
       void activeSportpaleisStore.close().catch(() => undefined);
     }
     if (typeof activeWbdOwnerStore?.close === "function") {
       void activeWbdOwnerStore.close().catch(() => undefined);
+    }
+    if (typeof activeWbdMailStore?.close === "function") {
+      void activeWbdMailStore.close().catch(() => undefined);
     }
   });
   return server;

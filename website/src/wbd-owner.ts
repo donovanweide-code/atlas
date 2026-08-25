@@ -8,6 +8,7 @@ import {
   type AtlasSearchView,
   type AtlasWorkspaceView,
 } from "./wbd-atlas-owner.ts";
+import { bindMailWorkspace, renderMailWorkspace, type MailThreadView, type MailWorkspaceView } from "./wbd-mail-workspace.ts";
 
 type CapabilityStatus = "PROVEN_REUSABLE" | "PROVEN_PRODUCT_SPECIFIC" | "PARTIAL" | "DESIGN_ONLY" | "EXTERNAL_SOLUTION_PREFERRED" | "LEGACY" | "UNKNOWN";
 type StrategicJudgement = "INVEST" | "INTEGRATE" | "MAINTAIN" | "WATCH" | "RETIRE";
@@ -38,6 +39,7 @@ const filters: { id: FilterId; label: string }[] = [
 ];
 const capabilitiesPath = "/workspace/wbd/capabilities";
 const homePath = "/workspace/wbd/home";
+const mailPath = "/workspace/wbd/mail";
 const attentionPath = "/workspace/wbd/attention";
 const searchPath = "/workspace/wbd/zoeken";
 const managementPath = "/workspace/wbd/beheer";
@@ -144,7 +146,7 @@ function capabilityCard(capability: Capability, atlas?: AtlasWorkspaceView): str
   </article>`;
 }
 
-type OwnerSection = "home" | "attention" | "organizations" | "search" | "management" | "opportunities" | "capabilities" | "workcontext";
+type OwnerSection = "home" | "mail" | "attention" | "organizations" | "search" | "management" | "opportunities" | "capabilities" | "workcontext";
 
 function ownerMoreLinks(active: OwnerSection, atlas: AtlasWorkspaceView, includeAttention: boolean): string {
   const attention = includeAttention ? `<a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}">${navigationIcon("attention")}<span>Attention</span><small>${atlas.attention.length || "Rustig"}</small></a>` : "";
@@ -159,13 +161,13 @@ function ownerTopbar(session: SessionView, active: OwnerSection, atlas: AtlasWor
   const decisionCount = atlas.decisionsNeeded.length;
   return `<header class="wbd-owner-topbar">
     <a class="wbd-owner-brand" href="${homePath}" aria-label="WBD Owner Workspace">${brandMark()}<span><strong>Owner Workspace</strong><small>Think big, show small.</small></span></a>
-    <nav class="wbd-owner-primary" aria-label="Primaire WBD-navigatie"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">${navigationIcon("today")}<span>Today</span></a><span class="wbd-owner-sections__unavailable" aria-disabled="true" title="Mail Foundation is behouden; de echte inbox is nog niet aangesloten">${navigationIcon("mail")}<span>Mail</span><small>Voorbereid</small></span><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">${navigationIcon("search")}<span>Search</span></a><span class="wbd-owner-sections__unavailable" aria-disabled="true" title="GA4 en Search Console zijn nog niet als live Owner-feed aangesloten">${navigationIcon("growth")}<span>Growth</span><small>Voorbereid</small></span><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">${navigationIcon("clients")}<span>Klanten</span></a></nav>
+    <nav class="wbd-owner-primary" aria-label="Primaire WBD-navigatie"><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">${navigationIcon("today")}<span>Today</span></a><a href="${mailPath}" aria-current="${active === "mail" ? "page" : "false"}">${navigationIcon("mail")}<span>Mail</span><small>Foundation</small></a><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">${navigationIcon("search")}<span>Search</span></a><span class="wbd-owner-sections__unavailable" aria-disabled="true" title="GA4 en Search Console zijn nog niet als live Owner-feed aangesloten">${navigationIcon("growth")}<span>Growth</span><small>Voorbereid</small></span><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">${navigationIcon("clients")}<span>Klanten</span></a></nav>
     <div class="wbd-owner-actions">${decisionCount ? `<a class="wbd-owner-go-status" href="${managementPath}">${decisionCount} te controleren</a>` : ""}<details class="wbd-owner-more wbd-owner-more--desktop" data-owner-more><summary aria-current="${secondaryActive ? "page" : "false"}">${navigationIcon("more")}<span>Meer</span></summary><div class="wbd-owner-more-panel">${ownerMoreLinks(active, atlas, true)}</div></details><div class="wbd-owner-profile"><span class="wbd-owner-avatar" aria-hidden="true">DW</span><span><strong>${escapeHtml(session.owner.name)}</strong><small>Owner</small></span><button type="button" data-logout>Uitloggen</button></div></div>
     <div class="wbd-owner-mobile-header"><a href="${homePath}" aria-label="WBD Owner Workspace">${brandMark("wbd-owner-brandmark--mobile")}</a>${atlas.importantNow.length || decisionCount ? `<span class="wbd-owner-mobile-attention" aria-label="${atlas.importantNow.length + decisionCount} ${atlas.importantNow.length + decisionCount === 1 ? "punt vraagt" : "punten vragen"} aandacht">${atlas.importantNow.length + decisionCount}</span>` : ""}<button type="button" class="wbd-owner-menu-button" data-owner-drawer-toggle aria-controls="wbd-owner-drawer" aria-expanded="false" aria-label="Navigatie openen"><span></span><span></span><span></span></button></div>
     <div class="wbd-owner-drawer-backdrop" data-owner-drawer-backdrop hidden></div>
     <aside class="wbd-owner-drawer" id="wbd-owner-drawer" aria-hidden="true" aria-label="WBD-navigatie">
       <header>${brandMark("wbd-owner-brandmark--drawer")}<button type="button" data-owner-drawer-close aria-label="Navigatie sluiten"><span aria-hidden="true">×</span></button></header>
-      <nav><section><h2>Dagelijks</h2><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">${navigationIcon("today")}<span>Today</span></a><span class="wbd-owner-drawer-prepared" aria-disabled="true">${navigationIcon("mail")}<span>Mail<small>Voorbereid</small></span></span><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">${navigationIcon("search")}<span>Search</span></a></section><section><h2>Werk &amp; groei</h2><a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}">${navigationIcon("attention")}<span>Attention</span>${atlas.attention.length ? `<small>${atlas.attention.length}</small>` : ""}</a><span class="wbd-owner-drawer-prepared" aria-disabled="true">${navigationIcon("growth")}<span>Growth<small>Voorbereid</small></span></span><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">${navigationIcon("clients")}<span>Klanten</span></a></section><section><h2>Verdieping</h2>${ownerMoreLinks(active, atlas, false)}</section></nav>
+      <nav><section><h2>Dagelijks</h2><a href="${homePath}" aria-current="${active === "home" ? "page" : "false"}">${navigationIcon("today")}<span>Today</span></a><a href="${mailPath}" aria-current="${active === "mail" ? "page" : "false"}">${navigationIcon("mail")}<span>Mail<small>Foundation</small></span></a><a href="${searchPath}" aria-current="${active === "search" ? "page" : "false"}">${navigationIcon("search")}<span>Search</span></a></section><section><h2>Werk &amp; groei</h2><a href="${attentionPath}" aria-current="${active === "attention" ? "page" : "false"}">${navigationIcon("attention")}<span>Attention</span>${atlas.attention.length ? `<small>${atlas.attention.length}</small>` : ""}</a><span class="wbd-owner-drawer-prepared" aria-disabled="true">${navigationIcon("growth")}<span>Growth<small>Voorbereid</small></span></span><a href="${organizationsPath}" aria-current="${active === "organizations" ? "page" : "false"}">${navigationIcon("clients")}<span>Klanten</span></a></section><section><h2>Verdieping</h2>${ownerMoreLinks(active, atlas, false)}</section></nav>
       <footer><div><span class="wbd-owner-avatar" aria-hidden="true">DW</span><span><strong>${escapeHtml(session.owner.name)}</strong><small>Owner</small></span></div><button type="button" data-logout>Uitloggen</button></footer>
     </aside>
   </header>`;
@@ -290,6 +292,8 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
   let promotions: PromotionView | undefined;
   let atlas: AtlasWorkspaceView | undefined;
   let searchView: AtlasSearchView | undefined;
+  let mailView: MailWorkspaceView | undefined;
+  let mailThreadView: MailThreadView | undefined;
   let activeFilter: FilterId = "all";
   let visitRecorded = false;
 
@@ -309,6 +313,13 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     searchView = query ? await api<AtlasSearchView>(`/api/wbd/v1/atlas/search?q=${encodeURIComponent(query)}`) : undefined;
   };
 
+  const loadMailFromRoute = async (): Promise<void> => {
+    if (window.location.pathname !== mailPath) return;
+    mailView = await api<MailWorkspaceView>("/api/wbd/v1/mail");
+    const threadId = new URLSearchParams(window.location.search).get("thread")?.trim();
+    mailThreadView = threadId ? await api<MailThreadView>(`/api/wbd/v1/mail/threads/${encodeURIComponent(threadId)}`) : undefined;
+  };
+
   const bindLogin = (): void => {
     app.querySelector<HTMLFormElement>("[data-owner-login]")?.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -320,6 +331,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
         session = await api<SessionView>("/api/wbd/v1/auth/login", { method: "POST", headers: { "Content-Type": "application/json", Origin: window.location.origin }, body: JSON.stringify({ email: fields.get("email"), password: fields.get("password"), deviceMode: fields.get("personal") ? "PERSONAL" : "SHARED" }) });
         await loadOwnerTruth();
         await loadSearchFromRoute();
+        await loadMailFromRoute();
         renderWorkspace();
       } catch (cause) {
         app.innerHTML = loginView(cause instanceof Error ? cause.message : "Inloggen is mislukt.");
@@ -333,6 +345,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     const pathname = window.location.pathname;
     const workContextActive = pathname === workContextPath;
     const homeActive = pathname === homePath;
+    const mailActive = pathname === mailPath;
     const attentionActive = pathname === attentionPath;
     const searchActive = pathname === searchPath;
     const managementActive = pathname === managementPath;
@@ -340,9 +353,10 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     const organizationId = organizationIdFromPath(pathname);
     const opportunitiesActive = pathname === opportunitiesPath;
     const capabilitiesActive = pathname === capabilitiesPath;
-    const pageTitle = homeActive ? "Today" : attentionActive ? "Attention" : searchActive ? "Search" : managementActive ? "Beheer" : organizationDirectoryActive ? "Organisaties" : organizationId ? control.organizations.find(({ id }) => id === organizationId)?.name ?? "Organization" : opportunitiesActive ? "Kansen" : workContextActive ? "Bestaande werkcontext" : "Capabilities";
+    const pageTitle = homeActive ? "Today" : mailActive ? "Mail" : attentionActive ? "Attention" : searchActive ? "Search" : managementActive ? "Beheer" : organizationDirectoryActive ? "Organisaties" : organizationId ? control.organizations.find(({ id }) => id === organizationId)?.name ?? "Organization" : opportunitiesActive ? "Kansen" : workContextActive ? "Bestaande werkcontext" : "Capabilities";
     document.title = `${pageTitle} — WBD Workspace`;
     if (homeActive) app.innerHTML = renderAtlasToday(ownerTopbar(session, "home", atlas), atlas, session.owner.name);
+    else if (mailActive && mailView) app.innerHTML = renderMailWorkspace(ownerTopbar(session, "mail", atlas), mailView, mailThreadView);
     else if (attentionActive) app.innerHTML = renderAtlasAttention(ownerTopbar(session, "attention", atlas), atlas);
     else if (searchActive) app.innerHTML = renderAtlasSearch(ownerTopbar(session, "search", atlas), searchView);
     else if (managementActive) app.innerHTML = renderControlHome(ownerTopbar(session, "management", atlas), control, overview, promotions);
@@ -360,6 +374,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
       searchView = await api<AtlasSearchView>(`/api/wbd/v1/atlas/search?q=${encodeURIComponent(query)}`);
       return searchView;
     });
+    if (mailActive) bindMailWorkspace(app, session.csrfToken, async () => { await loadMailFromRoute(); renderWorkspace(); });
     if (managementActive) bindControlHome(app, control, promotions, {
       create: async (recordType: ControlRecordType, payload: Record<string, unknown>) => {
         await api(`/api/wbd/v1/control/${recordType}`, { method: "POST", headers: { "Content-Type": "application/json", Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken }, body: JSON.stringify({ ...payload, expectedRevision: control!.revision }) });
@@ -378,7 +393,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     if (capabilitiesActive) app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((button) => button.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
-      session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; atlas = undefined; searchView = undefined; app.innerHTML = loginView(); bindLogin();
+      session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; atlas = undefined; searchView = undefined; mailView = undefined; mailThreadView = undefined; app.innerHTML = loginView(); bindLogin();
     }));
   };
 
@@ -388,6 +403,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
       session = await api<SessionView>("/api/wbd/v1/auth/session");
       await loadOwnerTruth();
       await loadSearchFromRoute();
+      await loadMailFromRoute();
       renderWorkspace();
     } catch { app.innerHTML = loginView(); bindLogin(); }
   };

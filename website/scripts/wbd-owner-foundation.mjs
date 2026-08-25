@@ -33,6 +33,7 @@ import {
 import {
   createInitialAtlasControlPlane,
   ingestConnectorSnapshot,
+  ingestMailEvents,
   ingestProductTruthEvents,
   projectOwnerAtlasWorkspace,
   resolveAttention,
@@ -204,8 +205,9 @@ export class WbdOwnerFileStore {
 }
 
 export class WbdOwnerService {
-  constructor({ store, releaseId, releaseManifest = null, allowedOrigin, secureCookies = false, sessionTtlMs = SESSION_TTL_MS }) {
+  constructor({ store, mailControl = null, releaseId, releaseManifest = null, allowedOrigin, secureCookies = false, sessionTtlMs = SESSION_TTL_MS }) {
     this.store = store;
+    this.mailControl = mailControl;
     this.releaseId = releaseId;
     this.releaseManifest = releaseManifest;
     this.allowedOrigin = allowedOrigin;
@@ -215,6 +217,7 @@ export class WbdOwnerService {
 
   async initialize() {
     await this.store.initialize();
+    await this.mailControl?.initialize();
     const current = await this.store.read();
     const missingCapabilitySeeds = WBD_CAPABILITY_SEED.filter((seed) => !current.capabilities.some(({ id }) => id === seed.id));
     const releaseMissing = this.releaseManifest && !current.productTruth.releases.some(({ id }) => id === this.releaseManifest.releaseId);
@@ -382,7 +385,11 @@ export class WbdOwnerService {
     const { state, owner } = await this.authenticate(token, now);
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
     try {
-      return searchOwnerReality(state.atlasControlPlane, { query, controlPlane: state.controlPlane, capabilities: state.capabilities, promotionView: publicPromotionView(state, { releaseId: this.releaseId }), productTruthView: projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }), now });
+      const reality = searchOwnerReality(state.atlasControlPlane, { query, controlPlane: state.controlPlane, capabilities: state.capabilities, promotionView: publicPromotionView(state, { releaseId: this.releaseId }), productTruthView: projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }), now });
+      if (!this.mailControl) return reality;
+      const mailResults = await this.mailControl.search(query, { limit: 20 });
+      const results = [...reality.results, ...mailResults].slice(0, 60);
+      return { ...reality, results, total: results.length, scope: [...reality.scope, "mail"] };
     } catch (cause) {
       throw error(cause.message, 400, "VALIDATION_ERROR");
     }
@@ -392,6 +399,46 @@ export class WbdOwnerService {
     const { state, owner } = await this.authenticate(token, now);
     if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
     return { revision: state.revision, releaseId: this.releaseId, source: "central-wbd-owner-state", ...projectProductTruth(state.productTruth, { capabilities: state.capabilities, now }) };
+  }
+
+  async mailWorkspace(token, options = {}, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    return this.mailControl.workspaceView(options);
+  }
+
+  async mailThread(token, threadId, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    return this.mailControl.thread(threadId);
+  }
+
+  async prepareMailDraft(token, csrfToken, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    try {
+      return await this.mailControl.prepareDraft(payload);
+    } catch (cause) {
+      if (cause?.statusCode) throw cause;
+      throw error(cause?.message || "Concept kon niet worden voorbereid.", 400, "MAIL_DRAFT_INVALID");
+    }
+  }
+
+  async ingestMailSnapshot(snapshot, now = new Date()) {
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    const ingested = await this.mailControl.ingestMailboxSnapshot(snapshot);
+    if (ingested.events.length) {
+      await this.store.mutate(async (state) => {
+        state.atlasControlPlane = ingestMailEvents(state.atlasControlPlane, ingested.events, now);
+        appendAudit(state, "atlas-mail-connector", "Mail evidence ingested", `${snapshot.mailboxId}:${ingested.ingested}`, now);
+        return { state, value: undefined };
+      });
+    }
+    return ingested;
   }
 
   async markAtlasVisited(token, csrfToken, now = new Date()) {
@@ -511,7 +558,8 @@ export class WbdOwnerService {
   async health() {
     const state = await this.store.read();
     if (!state.controlPlane || !state.productTruth) throw error("Control Plane of Product Truth ontbreekt.", 503, "CONTROL_PLANE_UNAVAILABLE");
-    return { status: "ok", releaseId: this.releaseId, persistence: (await this.store.storageStatus()).engine, datastoreRevision: state.revision, productTruthRevision: state.productTruth.audit.length };
+    const mail = this.mailControl ? await this.mailControl.workspaceView({ limit: 1 }) : null;
+    return { status: "ok", releaseId: this.releaseId, persistence: (await this.store.storageStatus()).engine, datastoreRevision: state.revision, productTruthRevision: state.productTruth.audit.length, mail: mail ? { status: "available", connectedMailboxes: mail.mailboxes.filter(({ connectionState }) => connectionState === "HEALTHY").length, connectorCallsDuringRender: mail.performance.connectorCallsDuringRender } : { status: "not-configured" } };
   }
 
   async ready() {
@@ -597,6 +645,10 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
       }
       if (route === "/api/wbd/v1/capabilities" && method === "GET") return json(response, 200, await service.capabilityCatalog(token)) ?? true;
       if (route === "/api/wbd/v1/product-truth" && method === "GET") return json(response, 200, await service.productTruth(token)) ?? true;
+      if (route === "/api/wbd/v1/mail" && method === "GET") return json(response, 200, await service.mailWorkspace(token, { mailboxId: requestUrl.searchParams.get("mailbox") })) ?? true;
+      const mailThreadMatch = route.match(/^\/api\/wbd\/v1\/mail\/threads\/([^/]+)$/u);
+      if (mailThreadMatch && method === "GET") return json(response, 200, await service.mailThread(token, decodeURIComponent(mailThreadMatch[1]))) ?? true;
+      if (route === "/api/wbd/v1/mail/drafts" && method === "POST") return json(response, 200, await service.prepareMailDraft(token, csrfToken, await readJson(request))) ?? true;
       if (route === "/api/wbd/v1/atlas" && method === "GET") return json(response, 200, await service.atlasWorkspace(token)) ?? true;
       if (route === "/api/wbd/v1/atlas/search" && method === "GET") return json(response, 200, await service.search(token, requestUrl.searchParams.get("q"))) ?? true;
       if (route === "/api/wbd/v1/atlas/visited" && method === "POST") return json(response, 200, await service.markAtlasVisited(token, csrfToken)) ?? true;

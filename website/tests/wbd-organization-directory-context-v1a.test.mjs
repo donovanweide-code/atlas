@@ -126,10 +126,10 @@ test("Owner-navigatie houdt Today dominant en plaatst secundaire werkgebieden on
   const runtime = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
   assert.match(owner, /Primaire WBD-navigatie[\s\S]*Today[\s\S]*Mail[\s\S]*Search/u);
   assert.match(owner, /wbd-owner-drawer[\s\S]*Dagelijks[\s\S]*Today[\s\S]*Mail[\s\S]*Search[\s\S]*Werk &amp; groei[\s\S]*Attention[\s\S]*Growth[\s\S]*Klanten[\s\S]*Verdieping/u);
-  assert.match(owner, /<span>Mail<\/span><small>Voorbereid<\/small>/u);
+  assert.match(owner, /href="\$\{mailPath\}"[\s\S]*<span>Mail<\/span><small>Foundation<\/small>/u);
   assert.match(owner, /<span>Growth<\/span><small>Voorbereid<\/small>/u);
   assert.match(owner, /Klanten/u);
-  assert.doesNotMatch(owner, /href="\/workspace\/wbd\/mail"/u);
+  assert.match(owner, /const mailPath = "\/workspace\/wbd\/mail"/u);
   assert.match(owner, /capabilitiesPath[\s\S]*opportunitiesPath[\s\S]*\/workspace\/experience[\s\S]*workContextPath/u);
   assert.doesNotMatch(owner + context, /localStorage|indexedDB|wbd-dossier-store|wbd-invoices|\/api\/wbd\/v1\/organization-context/u);
   assert.match(runtime, /ownerOrganizationRoute/u);

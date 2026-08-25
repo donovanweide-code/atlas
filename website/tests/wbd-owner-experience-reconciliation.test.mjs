@@ -29,8 +29,8 @@ test("Owner Experience houdt de cockpit licht, begrensd en progressive", async (
   assert.match(owner, /document\.body\.classList\.add\("wbd-owner-drawer-open"\)/u);
   assert.match(owner, /event\.key !== "Escape"/u);
   assert.doesNotMatch(owner, /wbd-owner-mobile-sections/u);
-  assert.match(owner, /aria-disabled="true"[\s\S]*Mail/u);
-  assert.doesNotMatch(owner, /workspace\/wbd\/mail/u);
+  assert.match(owner, /const mailPath = "\/workspace\/wbd\/mail"/u);
+  assert.match(owner, /renderMailWorkspace/u);
   for (const source of [owner, today, organizations, build]) assert.match(source, /wbd-logo-light-candidate\.svg/u);
   assert.doesNotMatch(owner, /<span class="wbd-owner-mark"[^>]*>W<\/span>/u);
 
@@ -43,10 +43,12 @@ test("Owner Experience houdt de cockpit licht, begrensd en progressive", async (
   assert.match(css, /:focus-visible/u);
 });
 
-test("Mail blijft een eerlijke gereserveerde positie zonder capability theatre", async () => {
-  const owner = await readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8");
-  assert.match(owner, /aria-disabled="true"[^>]*title="Mail Foundation is behouden; de echte inbox is nog niet aangesloten"/u);
-  assert.match(owner, /<span>Mail<\/span><small>Voorbereid<\/small>/u);
-  assert.doesNotMatch(owner, /href="\/workspace\/wbd\/mail"/u);
+test("Mail heeft een echte route maar presenteert een niet-gekoppelde mailbox niet als live", async () => {
+  const [owner, mail] = await Promise.all([readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8"), readFile(new URL("../src/wbd-mail-workspace.ts", import.meta.url), "utf8")]);
+  assert.match(owner, /href="\$\{mailPath\}"/u);
+  assert.match(owner, /<span>Mail<\/span><small>Foundation<\/small>/u);
+  assert.match(mail, /er is nog geen mailbox gekoppeld/u);
+  assert.match(mail, /geen connectorcall tijdens render/iu);
+  assert.doesNotMatch(mail, /dummy inbox/iu);
   assert.match(owner, /<span>Growth<\/span><small>Voorbereid<\/small>/u);
 });

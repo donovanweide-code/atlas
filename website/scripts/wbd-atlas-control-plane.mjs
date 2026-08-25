@@ -291,6 +291,98 @@ export function ingestConnectorSnapshot(inputPlane, snapshot, now = new Date()) 
   return plane;
 }
 
+const mailAttentionType = (classification) => ({
+  STORING: "STORING",
+  VRAAG_UITLEG: "VRAAG_UITLEG",
+  FRICTIE: "FRICTIE",
+  NIEUWE_SCOPE: "NIEUWE_SCOPE",
+  IDEE_KANS: "IDEE_KANS",
+  COMMERCIAL_OPPORTUNITY: "COMMERCIAL_OPPORTUNITY",
+  PRODUCT_LEARNING: "PRODUCT_LEARNING",
+}[classification] ?? "VRAAG_UITLEG");
+
+const mailAttentionRequired = (event) => event.securityStatus === "REVIEW_REQUIRED"
+  || event.priority === "HIGH"
+  || new Set(["VRAAG_UITLEG", "STORING", "FRICTIE", "NIEUWE_SCOPE", "COMMERCIAL_OPPORTUNITY", "AFSPRAAK", "FOLLOW_UP", "FINANCIEEL", "JURIDISCH"]).has(event.classification);
+
+export function ingestMailEvents(inputPlane, events, now = new Date()) {
+  const plane = validateAtlasControlPlane(inputPlane);
+  for (const event of events ?? []) {
+    const evidenceId = `evidence-${required(event.id, "Mail-event-ID", 200)}`;
+    if (!plane.evidence.some(({ id }) => id === evidenceId)) {
+      plane.evidence.push(validateEvidence({
+        id: evidenceId,
+        organizationId: required(event.organizationId, "Mailorganisatie", 160),
+        source: `Mailbox ${required(event.mailboxId, "Mailbox-ID", 120)}`,
+        sourceType: "MAIL_MESSAGE",
+        sourceIdentity: required(event.sourceIdentity, "Mailbronidentiteit", 1_000),
+        observedAt: event.receivedAt,
+        fetchedAt: event.provenance?.fetchedAt ?? now,
+        rawReference: { kind: "central-mail-message", locator: event.messageId, immutable: false },
+        normalized: { summary: event.summary, title: event.subject, classification: event.classification, securityStatus: event.securityStatus },
+        provenance: event.provenance,
+        freshness: evidenceFreshness(event.receivedAt, now),
+        confidence: CONFIDENCE.has(event.confidence) ? event.confidence : "INSUFFICIENT_EVIDENCE",
+        reliability: "DIRECT_MAILBOX_READ",
+        relatedEntityRefs: unique([event.threadId, event.organizationId]),
+        capabilityRefs: ["mail-incoming-context"],
+      }));
+      plane.capabilityEvidenceLinks.push({ evidenceId, capabilityId: "mail-incoming-context", linkedAt: iso(now), source: event.mailboxId });
+      appendAudit(plane, "MAIL_EVIDENCE_INGESTED", evidenceId, now, { mailboxId: event.mailboxId, classification: event.classification });
+    }
+    if (!mailAttentionRequired(event)) continue;
+    const situationKey = `mail-thread:${event.threadId}`;
+    const goRequirement = "REQUIRED";
+    const attention = upsertAttention(plane, {
+      situationKey,
+      organizationId: event.organizationId,
+      source: event.mailboxId,
+      type: event.securityStatus === "REVIEW_REQUIRED" ? "TECHNICAL_VERIFICATION" : mailAttentionType(event.classification),
+      title: event.subject,
+      summary: event.securityStatus === "REVIEW_REQUIRED" ? "Dit bericht vraagt eerst een veilige inhoudscontrole." : event.summary,
+      severity: event.priority === "HIGH" ? "HIGH" : "MEDIUM",
+      urgency: event.priority === "HIGH" ? "HIGH" : "MEDIUM",
+      confidence: CONFIDENCE.has(event.confidence) ? event.confidence : "INSUFFICIENT_EVIDENCE",
+      evidenceRefs: [evidenceId],
+      goRequirement,
+      atlasInterpretation: `Atlas classificeerde dit bericht deterministisch als ${event.classification.replaceAll("_", " ").toLowerCase()}. Externe verzending blijft geblokkeerd tot menselijke controle.`,
+    }, now);
+    const preparedId = `prepared-mail-${sha256(situationKey).slice(0, 24)}`;
+    const prepared = {
+      id: preparedId,
+      attentionId: attention.id,
+      objective: "Bereid een passend antwoord of vervolg voor zonder het extern te verzenden.",
+      reason: "Het bronbericht, de gesprekcontext, classificatie en herkomst zijn centraal verzameld.",
+      evidenceRefs: unique(attention.evidenceRefs),
+      impact: "Donovan kan de externe actie beoordelen zonder opnieuw de context bijeen te zoeken.",
+      risk: event.securityStatus === "REVIEW_REQUIRED" ? "HIGH" : "MEDIUM",
+      dependencies: ["menselijke inhoudscontrole", "geselecteerde afzenderidentiteit"],
+      rollbackOrRecovery: "Een concept kan veilig worden verworpen; er wordt niets extern verzonden.",
+      goRequirement: "REQUIRED",
+      executionPolicy: "HUMAN_GO_BEFORE_EXTERNAL_SEND",
+      status: "READY",
+      createdAt: plane.preparedActions.find(({ id }) => id === preparedId)?.createdAt ?? iso(now),
+      updatedAt: iso(now),
+    };
+    const preparedIndex = plane.preparedActions.findIndex(({ id }) => id === preparedId);
+    if (preparedIndex >= 0) plane.preparedActions[preparedIndex] = prepared; else plane.preparedActions.push(prepared);
+    upsertNextBestAction(plane, attention, {
+      recommendation: event.securityStatus === "REVIEW_REQUIRED" ? "Controleer afzender, links en bijlagen voordat je inhoudelijk handelt." : "Beoordeel het voorbereide vervolg en reageer alleen na controle.",
+      why: `Dit bericht is als ${event.classification.replaceAll("_", " ").toLowerCase()} herkend en vraagt mogelijk een externe reactie.`,
+      evidenceRefs: attention.evidenceRefs,
+      confidence: attention.confidence,
+      expectedImpact: "Een snelle, traceerbare reactie met behoud van volledige gesprekcontext.",
+      estimatedHumanEffortMinutes: 3,
+      risk: prepared.risk,
+      dependencies: prepared.dependencies,
+      atlasCanPrepare: ["gesprek samenvatten", "conceptantwoord voorbereiden", "open afspraak of vervolgstap signaleren"],
+      goRequirement,
+      preparedActionId: preparedId,
+    }, now);
+  }
+  return plane;
+}
+
 function upsertProductPreparedAction(plane, attention, draft, now) {
   const id = `prepared-product-${sha256(attention.situationKey).slice(0, 24)}`;
   const action = {
