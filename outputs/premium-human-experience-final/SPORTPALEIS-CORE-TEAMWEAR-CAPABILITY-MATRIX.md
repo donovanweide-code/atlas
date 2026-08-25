@@ -44,8 +44,8 @@ Bijsturing gereconcilieerd op 26 augustus 2026 tegen kandidaatbranch `codex/spw-
 | 15 | Historiegroei maakte dagelijkse bootstrap onbegrensd | 2.000 orders + 2.000 PlotJobs performance fixture |
 | 16 | Directe create-URL werd als orderdetail geladen | special-route source regression |
 
-**KNOWN HISTORICAL DEFECT CLASSES RECOVERED: 16**  
-**KNOWN HISTORICAL DEFECT CLASSES GUARDED: 16/16**  
+**KNOWN HISTORICAL DEFECT CLASSES RECOVERED: 16**
+**KNOWN HISTORICAL DEFECT CLASSES GUARDED: 16/16**
 **GOLDEN INVARIANTS HARVESTED: 16**
 
 ## Current gate state
@@ -54,4 +54,3 @@ Bijsturing gereconcilieerd op 26 augustus 2026 tegen kandidaatbranch `codex/spw-
 - Live core routes: desktop PASS, except the still-live R1 direct create-route fallback documented above.
 - Mobile live evidence: browser-tool viewport limitation; this is not reclassified as a product failure.
 - Consequential actions: no order, mail, production proposal, PlotJob, status or inventory mutation performed.
-

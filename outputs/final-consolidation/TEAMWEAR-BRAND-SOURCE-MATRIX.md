@@ -19,4 +19,3 @@ Verified against primary brand sources on 26 August 2026. These records are disc
 - Every route ends in the same **Onze collectie**. No brand-specific copy, cart or second catalogue is created.
 - Reliable supplier data can only enter through the existing bounded source-adapter seam with provenance, idempotency and explicit access/rights confirmation.
 - Brand imagery is referenced or imported only when technically and legally supported; upload remains the safe fallback.
-
