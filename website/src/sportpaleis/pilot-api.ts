@@ -79,9 +79,30 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     teamwearExperiencePilot: boolean;
   };
   productionInventory: SportpaleisProductionInventoryView[];
+  productionHistory?: { total: number; loaded: number; pageSize: number; bounded: true };
+  productionHistoryPage?: ProductionJobHistoryPage;
+  orderHistory?: { total: number; loaded: number; pageSize: number; bounded: true };
   releaseId: string;
   commercialAdministration?: CommercialAdministration;
   readOnlyFallback?: boolean;
+}
+
+export interface ProductionJobHistoryPage {
+  items: ProductionJob[];
+  total: number;
+  pageSize: number;
+  query: string;
+  nextCursor: string | null;
+  bounded: true;
+}
+
+export interface OrderHistoryPage {
+  items: WorkspaceOrder[];
+  total: number;
+  pageSize: number;
+  query: string;
+  nextCursor: string | null;
+  bounded: true;
 }
 
 export interface MailPreview {
@@ -481,6 +502,30 @@ export class SportpaleisPilotApi {
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("replot") },
       body: JSON.stringify({ reason }),
     }));
+  }
+
+  async orderHistory(input: { query?: string; cursor?: string; limit?: number } = {}): Promise<OrderHistoryPage> {
+    const parameters = new URLSearchParams();
+    if (input.query) parameters.set("q", input.query);
+    if (input.cursor) parameters.set("cursor", input.cursor);
+    if (input.limit) parameters.set("limit", String(input.limit));
+    return responseBody(await fetch(`${API}/orders?${parameters}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }));
+  }
+
+  async order(orderId: string): Promise<WorkspaceOrder> {
+    return responseBody(await fetch(`${API}/orders/${encodeURIComponent(orderId)}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }));
+  }
+
+  async productionJobHistory(input: { query?: string; cursor?: string; limit?: number } = {}): Promise<ProductionJobHistoryPage> {
+    const parameters = new URLSearchParams();
+    if (input.query) parameters.set("q", input.query);
+    if (input.cursor) parameters.set("cursor", input.cursor);
+    if (input.limit) parameters.set("limit", String(input.limit));
+    return responseBody(await fetch(`${API}/production-jobs?${parameters}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }));
+  }
+
+  async productionJob(productionJobId: string): Promise<ProductionJob> {
+    return responseBody(await fetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }));
   }
 
   async completeProductionJob(productionJobId: string): Promise<{ duplicate: boolean; value: ProductionJob }> {

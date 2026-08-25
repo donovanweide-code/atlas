@@ -82,6 +82,12 @@ const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
 const PILOT_SCHEMA_VERSION = 13;
+const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
+const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
+const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
+const BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT = 120;
+const ORDER_HISTORY_PAGE_LIMIT = 40;
+const ORDER_HISTORY_PAGE_LIMIT_MAX = 80;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
@@ -1660,10 +1666,19 @@ export class SportpaleisPilotService {
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
-    const operationalOrders = state.orders.filter((order) => !finalCleanStartOrder(order));
-    const operationalOrderIds = new Set(operationalOrders.map(({ id }) => id));
+    const allOperationalOrders = state.orders.filter((order) => !finalCleanStartOrder(order));
+    const operationalOrderIds = new Set(allOperationalOrders.map(({ id }) => id));
+    const terminalOrder = (order) => order.deletion
+      || (order.stage === "DONE" && ["PICKED_UP", "DELIVERED"].includes(order.fulfillment?.status));
+    const sortedOperationalOrders = [...allOperationalOrders].sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || right.id.localeCompare(left.id));
+    const activeOrders = sortedOperationalOrders.filter((order) => !terminalOrder(order));
+    const activeOrderIds = new Set(activeOrders.map(({ id }) => id));
+    const bootstrapOrders = sortedOperationalOrders.filter((order, index) => activeOrderIds.has(order.id) || index < BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT);
     const knownOrderIds = new Set(state.orders.map(({ id }) => id));
     const operationalJobs = state.productionJobs.filter(({ snapshot }) => snapshot.orderIds.some((id) => operationalOrderIds.has(id)) || snapshot.orderIds.every((id) => !knownOrderIds.has(id)));
+    const sortedOperationalJobs = [...operationalJobs].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber));
+    const activeProductionJobIds = new Set(sortedOperationalJobs.filter(({ status }) => status === "AWAITING_HUMAN_CHECK").map(({ id }) => id));
+    const bootstrapJobs = sortedOperationalJobs.filter((job, index) => activeProductionJobIds.has(job.id) || index < BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT);
     const operationalProposals = state.productionProposals.filter((proposal) => proposal.orders?.some(({ id }) => operationalOrderIds.has(id)));
     return {
       schemaVersion: PILOT_SCHEMA_VERSION,
@@ -1673,7 +1688,8 @@ export class SportpaleisPilotService {
       users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: structuredClone(operationalOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
+      orders: structuredClone(bootstrapOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
+      orderHistory: { total: sortedOperationalOrders.length, loaded: bootstrapOrders.length, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
@@ -1685,7 +1701,8 @@ export class SportpaleisPilotService {
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElementRequirements) : [],
       productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
-      productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(operationalJobs).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber)) : [],
+      productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(bootstrapJobs) : [],
+      productionHistory: ["admin", "operator"].includes(user.role) ? { total: sortedOperationalJobs.length, loaded: bootstrapJobs.length, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true } : { total: 0, loaded: 0, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true },
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
@@ -1716,6 +1733,62 @@ export class SportpaleisPilotService {
       capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
+  }
+
+  async productionJobHistory(token, input = {}) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
+      || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
+    const operationalOrderIds = new Set(state.orders.filter((order) => !finalCleanStartOrder(order)).map(({ id }) => id));
+    const knownOrderIds = new Set(state.orders.map(({ id }) => id));
+    const query = String(input.query ?? "").trim().toLocaleLowerCase("nl-NL").slice(0, 160);
+    const limit = Math.min(PRODUCTION_HISTORY_PAGE_LIMIT_MAX, Math.max(1, Number(input.limit) || PRODUCTION_HISTORY_PAGE_LIMIT));
+    const sorted = state.productionJobs
+      .filter(({ snapshot }) => snapshot.orderIds.some((id) => operationalOrderIds.has(id)) || snapshot.orderIds.every((id) => !knownOrderIds.has(id)))
+      .filter((job) => !query || [job.jobNumber, job.snapshot.association, job.initiatedBy.name, job.status, job.proofStatus, job.snapshot.productionGroup?.foilColor, ...job.snapshot.orderIds, ...job.snapshot.elements.flatMap(({ type, value }) => [type, value])].join(" ").toLocaleLowerCase("nl-NL").includes(query))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber));
+    const cursorIndex = input.cursor ? sorted.findIndex(({ id }) => id === input.cursor) : -1;
+    const offset = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+    const items = sorted.slice(offset, offset + limit);
+    return { items: structuredClone(items), total: sorted.length, pageSize: limit, query, nextCursor: offset + items.length < sorted.length ? items.at(-1)?.id ?? null : null, bounded: true };
+  }
+
+  async orderHistory(token, input = {}) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
+    const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
+      || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
+    const query = String(input.query ?? "").trim().toLocaleLowerCase("nl-NL").slice(0, 160);
+    const limit = Math.min(ORDER_HISTORY_PAGE_LIMIT_MAX, Math.max(1, Number(input.limit) || ORDER_HISTORY_PAGE_LIMIT));
+    const searchable = (order) => [
+      order.id, order.externalReference, order.sourceContext?.externalReference, order.customer, order.customerEmail,
+      order.customerPhone, order.association, ...(order.associations ?? []), order.teamContext,
+      ...(order.items ?? []).flatMap(({ product, articleNumber, personalization, size }) => [product, articleNumber, personalization, size]),
+    ].filter(Boolean).join(" ").toLocaleLowerCase("nl-NL");
+    const sorted = state.orders
+      .filter((order) => !finalCleanStartOrder(order))
+      .filter((order) => !query || searchable(order).includes(query))
+      .sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || right.id.localeCompare(left.id));
+    const cursorIndex = input.cursor ? sorted.findIndex(({ id }) => id === input.cursor) : -1;
+    const offset = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+    const items = sorted.slice(offset, offset + limit).map((order) => ({ ...order, ...productionStatusForOrder(state, order) }));
+    return { items: structuredClone(items), total: sorted.length, pageSize: limit, query, nextCursor: offset + items.length < sorted.length ? items.at(-1)?.id ?? null : null, bounded: true };
+  }
+
+  async order(token, orderId) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
+    const order = state.orders.find((candidate) => candidate.id === orderId
+      && candidate.deletion?.byUserId !== "system:final-clean-start"
+      && !(candidate.eventHistory ?? []).some((event) => event.source === "final-clean-start"));
+    if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+    return structuredClone({ ...order, ...productionStatusForOrder(state, order) });
+  }
+
+  async productionJob(token, productionJobId) {
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
+    const cleanStartOrderIds = new Set(state.orders.filter((order) => order.deletion?.byUserId === "system:final-clean-start" || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start")).map(({ id }) => id));
+    const job = state.productionJobs.find(({ id, snapshot }) => id === productionJobId && !snapshot.orderIds.some((orderId) => cleanStartOrderIds.has(orderId)));
+    if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+    return structuredClone(job);
   }
 
   async assertTeamwearPilotAccess(token) {
@@ -5801,7 +5874,15 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.resolveBarcode(token, await readJson(request)));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/orders" && method === "GET") {
+        json(response, 200, await service.orderHistory(token, Object.fromEntries(requestUrl.searchParams)));
+        return true;
+      }
       const orderUpdateMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)$/);
+      if (orderUpdateMatch && method === "GET") {
+        json(response, 200, await service.order(token, decodeURIComponent(orderUpdateMatch[1])));
+        return true;
+      }
       if (orderUpdateMatch && method === "PATCH") {
         const payload = await readJson(request);
         json(response, 200, await service.updateOrder(token, csrf, decodeURIComponent(orderUpdateMatch[1]), payload, Number(payload.expectedRevision)));
@@ -5928,6 +6009,15 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/production-element-requirements" && method === "POST") {
         json(response, 200, await service.setProductionElementRequirement(token, csrf, await readJson(request)));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/production-jobs" && method === "GET") {
+        json(response, 200, await service.productionJobHistory(token, { query: requestUrl.searchParams.get("q") ?? "", cursor: requestUrl.searchParams.get("cursor") ?? "", limit: requestUrl.searchParams.get("limit") ?? "" }));
+        return true;
+      }
+      const productionJobDetailMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)$/);
+      if (productionJobDetailMatch && method === "GET") {
+        json(response, 200, await service.productionJob(token, decodeURIComponent(productionJobDetailMatch[1])));
         return true;
       }
       const productionJobReplotMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/replot$/);
