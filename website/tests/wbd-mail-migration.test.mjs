@@ -41,3 +41,14 @@ test("100k-message productieprojectie blijft bounded en doet geen connectorwerk 
   assert.ok(calls.find(({ sql }) => /LIMIT \?/u.test(sql))?.values.at(-1) === 40);
   assert.ok(duration < 250, `Projectorfixture duurde ${duration.toFixed(1)}ms`);
 });
+
+test("notification preferences projecteren alleen controlstate en materialiseren geen mailhotwindow", async () => {
+  const state = createInitialWbdMailControl({ now: new Date("2026-08-25T08:00:00Z") });
+  const calls = [];
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return [{ state_json: JSON.stringify({ ...state, messages: [], threads: [], audit: [] }) }]; } };
+  const store = new WbdMailMariaDbStore({ pool, migrationFile: wbdMailMariaDbMigrationContract.file });
+  const projection = await store.notificationState();
+  assert.equal(projection.notificationPreferences[0].userId, "wbd-owner-donovan");
+  assert.equal(calls.length, 1);
+  assert.doesNotMatch(calls[0].sql, /wbd_mail_messages|wbd_mail_threads|wbd_mail_audit/u);
+});

@@ -69,6 +69,9 @@ const workspaceRootAssets = new Set([
   "/sportpaleis.webmanifest",
   "/sportpaleis-sw.js",
   "/sportpaleis-pwa-icon.svg",
+  "/wbd-owner.webmanifest",
+  "/wbd-owner-sw.js",
+  "/wbd-owner-icon.svg",
 ]);
 
 async function currentReleaseManifest(releaseId, requiredInProduction) {

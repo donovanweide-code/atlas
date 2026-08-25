@@ -18,3 +18,12 @@ test("mail UI states do not claim live data before credentials exist", async () 
   assert.match(source, /capture-only/iu);
   assert.doesNotMatch(source, /dummy inbox|demo inbox/iu);
 });
+
+test("Mail push UI is explicit opt-in, private by default and iPhone-PWA aware", async () => {
+  const source = await readFile(new URL("../src/wbd-mail-workspace.ts", import.meta.url), "utf8");
+  assert.match(source, /Alleen als mail echt aandacht verdient/u);
+  assert.match(source, /geen onderwerp, mailtekst of e-mailadres/u);
+  assert.match(source, /data-mail-push-enable/u);
+  assert.match(source, /Zet op beginscherm/u);
+  assert.match(source, /minimumPriority/u);
+});

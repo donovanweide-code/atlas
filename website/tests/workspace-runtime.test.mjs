@@ -50,6 +50,8 @@ test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resul
   assert.doesNotMatch(JSON.stringify(config), /do-not-return|postgres:/);
   assert.equal(workspaceRuntimeEnvironmentSchema.DATABASE_URL.secret, true);
   assert.equal(workspaceRuntimeEnvironmentSchema.IDENTITY_CLIENT_SECRET.phase, "WS.2");
+  assert.equal(workspaceRuntimeEnvironmentSchema.WBD_PUSH_VAPID_PRIVATE_KEY.secret, true);
+  assert.equal(workspaceRuntimeEnvironmentSchema.WBD_PUSH_VAPID_PUBLIC_KEY.secret, false);
 });
 
 test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct", async (context) => {
@@ -61,6 +63,8 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   await writeFile(path.join(temporary, "assets", "workspace-test.js"), "export const ok=true;\n");
   await writeFile(path.join(temporary, "robots.txt"), "User-agent: *\nDisallow: /\n");
   await writeFile(path.join(temporary, "sportpaleis-sw.js"), "self.addEventListener('install', () => self.skipWaiting());\n");
+  await writeFile(path.join(temporary, "wbd-owner-sw.js"), "self.addEventListener(\"push\", (event) => event.waitUntil(self.registration.showNotification('WBD')));\n");
+  await writeFile(path.join(temporary, "wbd-owner.webmanifest"), JSON.stringify({ start_url: "/workspace/wbd/home" }));
 
   const config = parseWorkspaceRuntimeConfig({
     NODE_ENV: "test",
@@ -166,6 +170,16 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.equal(serviceWorker.headers.get("content-type"), "text/javascript; charset=utf-8");
   assert.equal(serviceWorker.headers.get("cache-control"), "no-cache");
   assert.match(await serviceWorker.text(), /addEventListener/);
+
+  const wbdServiceWorker = await fetch(`${origin}/wbd-owner-sw.js`);
+  assert.equal(wbdServiceWorker.status, 200);
+  assert.equal(wbdServiceWorker.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assert.equal(wbdServiceWorker.headers.get("cache-control"), "no-cache");
+  assert.match(await wbdServiceWorker.text(), /addEventListener\("push"/u);
+
+  const wbdManifest = await fetch(`${origin}/wbd-owner.webmanifest`);
+  assert.equal(wbdManifest.status, 200);
+  assert.equal((await wbdManifest.json()).start_url, "/workspace/wbd/home");
 
   const sitemap = await fetch(`${origin}/sitemap.xml`);
   assert.equal(sitemap.status, 404);

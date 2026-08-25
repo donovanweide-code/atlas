@@ -8,7 +8,7 @@ import {
   type AtlasSearchView,
   type AtlasWorkspaceView,
 } from "./wbd-atlas-owner.ts";
-import { bindMailWorkspace, renderMailWorkspace, type MailThreadView, type MailWorkspaceView } from "./wbd-mail-workspace.ts";
+import { bindMailWorkspace, renderMailWorkspace, type MailNotificationView, type MailThreadView, type MailWorkspaceView } from "./wbd-mail-workspace.ts";
 
 type CapabilityStatus = "PROVEN_REUSABLE" | "PROVEN_PRODUCT_SPECIFIC" | "PARTIAL" | "DESIGN_ONLY" | "EXTERNAL_SOLUTION_PREFERRED" | "LEGACY" | "UNKNOWN";
 type StrategicJudgement = "INVEST" | "INTEGRATE" | "MAINTAIN" | "WATCH" | "RETIRE";
@@ -294,6 +294,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
   let searchView: AtlasSearchView | undefined;
   let mailView: MailWorkspaceView | undefined;
   let mailThreadView: MailThreadView | undefined;
+  let mailNotificationView: MailNotificationView | undefined;
   let activeFilter: FilterId = "all";
   let visitRecorded = false;
 
@@ -315,7 +316,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
 
   const loadMailFromRoute = async (): Promise<void> => {
     if (window.location.pathname !== mailPath) return;
-    mailView = await api<MailWorkspaceView>("/api/wbd/v1/mail");
+    [mailView, mailNotificationView] = await Promise.all([api<MailWorkspaceView>("/api/wbd/v1/mail"), api<MailNotificationView>("/api/wbd/v1/mail/notifications")]);
     const threadId = new URLSearchParams(window.location.search).get("thread")?.trim();
     mailThreadView = threadId ? await api<MailThreadView>(`/api/wbd/v1/mail/threads/${encodeURIComponent(threadId)}`) : undefined;
   };
@@ -356,7 +357,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     const pageTitle = homeActive ? "Today" : mailActive ? "Mail" : attentionActive ? "Attention" : searchActive ? "Search" : managementActive ? "Beheer" : organizationDirectoryActive ? "Organisaties" : organizationId ? control.organizations.find(({ id }) => id === organizationId)?.name ?? "Organization" : opportunitiesActive ? "Kansen" : workContextActive ? "Bestaande werkcontext" : "Capabilities";
     document.title = `${pageTitle} — WBD Workspace`;
     if (homeActive) app.innerHTML = renderAtlasToday(ownerTopbar(session, "home", atlas), atlas, session.owner.name);
-    else if (mailActive && mailView) app.innerHTML = renderMailWorkspace(ownerTopbar(session, "mail", atlas), mailView, mailThreadView);
+    else if (mailActive && mailView && mailNotificationView) app.innerHTML = renderMailWorkspace(ownerTopbar(session, "mail", atlas), mailView, mailThreadView, mailNotificationView);
     else if (attentionActive) app.innerHTML = renderAtlasAttention(ownerTopbar(session, "attention", atlas), atlas);
     else if (searchActive) app.innerHTML = renderAtlasSearch(ownerTopbar(session, "search", atlas), searchView);
     else if (managementActive) app.innerHTML = renderControlHome(ownerTopbar(session, "management", atlas), control, overview, promotions);
@@ -393,7 +394,7 @@ export function mountWbdOwnerWorkspace(app: HTMLDivElement): void {
     if (capabilitiesActive) app.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) => button.addEventListener("click", () => { activeFilter = button.dataset.filter as FilterId; renderWorkspace(); }));
     app.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((button) => button.addEventListener("click", async () => {
       try { await api("/api/wbd/v1/auth/logout", { method: "POST", headers: { Origin: window.location.origin, "X-CSRF-Token": session!.csrfToken } }); } catch { /* local view still closes */ }
-      session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; atlas = undefined; searchView = undefined; mailView = undefined; mailThreadView = undefined; app.innerHTML = loginView(); bindLogin();
+      session = undefined; catalog = undefined; control = undefined; overview = undefined; promotions = undefined; atlas = undefined; searchView = undefined; mailView = undefined; mailThreadView = undefined; mailNotificationView = undefined; app.innerHTML = loginView(); bindLogin();
     }));
   };
 

@@ -16,6 +16,8 @@ Nieuw is een centrale inbound/control-laag voor WBD Owner:
 - een snelle centrale read projection zonder live connectorcall tijdens render;
 - contact/consent/suppression/segment/campaign/journey/bulk-contracten;
 - bestaande Sportpaleis bedrukmail-readiness zichtbaar als capture-only, zonder de productieflow te wijzigen.
+- providerloze PWA/Web Push voor desktop en iPhone, met expliciete opt-in, Atlas-prioriteit, deduplicatie, retry/recovery en voorkeuren per gebruiker/mailbox;
+- privacy-by-default notificaties zonder onderwerp, mailtekst of e-mailadres op het lockscreen.
 
 ## Activation boundary
 
@@ -29,6 +31,10 @@ Provisioning gebruikt uitsluitend server-side environment references:
 
 De connector publiceert nooit passwords. Partial configuration is `NOT_CONNECTED` en niet half-actief.
 
+Web Push gebruikt de open browserstandaard en geen betaalde notificatieprovider. De signing boundary bestaat uit `WBD_PUSH_VAPID_PUBLIC_KEY`, `WBD_PUSH_VAPID_PRIVATE_KEY` en `WBD_PUSH_VAPID_SUBJECT`. Geen of gedeeltelijke configuratie blijft respectievelijk `PREPARED` of `MISCONFIGURED`; de private key verschijnt nooit in clientcode, API-view of audit. Provisioning is een security/accesshandeling en valt buiten stille activatie.
+
+Een gebruiker schakelt meldingen altijd zelf in. Desktop gebruikt de browser-PushManager. Op iPhone vereist Web Push iOS/iPadOS 16.4 of nieuwer en een via Safari op het beginscherm geïnstalleerde Workspace. De service worker cachet geen operationele mailstate.
+
 ## Autonomy en Human GO
 
 Autonoom toegestaan: lezen, ophalen, normaliseren, dedupliceren, threaden, classificeren, evidence vastleggen, Attention/NBA maken en een concept voorbereiden.
@@ -38,6 +44,8 @@ Altijd Human GO/policy-bound: ieder extern antwoord, campagne/bulk-send, sender-
 ## Performance
 
 De UI leest centrale projecties. MariaDB gebruikt recent-, mailbox-, thread-, attention- en full-text indexes. Connectorwerk draait in de achtergrond. UI-renders doen exact nul IMAP-calls. De huidige hot windows zijn begrensd op 10.000 messages en 5.000 threads voor mutatie/recovery; workspaceweergaven zijn maximaal 100 threads.
+
+Pushdelivery gebruikt een centrale begrensde outbox, maximaal acht deliveries per dispatch, een timeout van vijf seconden, maximaal vier pogingen en herclaim van een onderbroken delivery na tien minuten. Spam, informatieve mail, oude bootstrapmail en onvoldoende bewezen relevantie worden niet gepusht. Alleen mail met herleidbare bronfreshness van maximaal dertig minuten is pushbaar. De standaarddrempel is `MEDIUM`; mailboxselectie en quiet hours zijn per gebruiker instelbaar.
 
 ## Recovery en failure
 
@@ -50,5 +58,6 @@ Migraties `003` t/m `006` zijn additief, één statement per release-migratie, e
 - bulkprovider, tracking of live journeys;
 - externe Sportpaleis bedrukmail;
 - automatische contactimport.
+- productie-VAPID signing key en daadwerkelijke browser-subscriptions.
 
 Dit zijn bewuste activation boundaries, geen verborgen live claims.

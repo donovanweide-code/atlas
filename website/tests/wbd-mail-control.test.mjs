@@ -110,5 +110,10 @@ test("centrale Mail API blijft owner-only en conceptmutaties vereisen CSRF", asy
   const login = await service.login({ email: "donovanweide@gmail.com", password: "Mail-Owner-Test-2026!", now: fixedNow });
   const view = await service.mailWorkspace(login.token, {}, fixedNow);
   assert.equal(view.mailboxes.length, 2);
+  const notifications = await service.mailNotificationView(login.token, fixedNow);
+  assert.equal(notifications.status, "PREPARED");
+  assert.equal(notifications.privacy, "PRIVATE_BY_DEFAULT");
+  assert.equal(notifications.publicKey, null);
+  await assert.rejects(service.updateMailNotificationPreferences(login.token, "wrong", { enabled: true }, fixedNow), (cause) => cause.code === "CSRF_INVALID");
   await assert.rejects(service.prepareMailDraft(login.token, "wrong", {}, fixedNow), (cause) => cause.code === "CSRF_INVALID");
 });

@@ -1,4 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  createWebPushTransportFromEnvironment,
+  disablePushSubscription,
+  enqueueMailNotifications,
+  ensurePushNotificationState,
+  publicNotificationView,
+  registerPushSubscription,
+  updateNotificationPreference,
+  validatePushNotificationState,
+} from "./wbd-push-notifications.mjs";
 
 const EMAIL_PATTERN = /^[^\s@<>\r\n,;]+@[^\s@<>\r\n,;]+\.[^\s@<>\r\n,;]+$/u;
 const MAILBOX_KINDS = new Set(["PERSONAL", "SHARED", "TRANSACTIONAL"]);
@@ -279,6 +289,9 @@ export function createInitialWbdMailControl({ now = new Date() } = {}) {
     segments: [],
     campaigns: [],
     journeys: [],
+    notificationPreferences: [],
+    pushSubscriptions: [],
+    notificationOutbox: [],
     audit: [],
     templates: [
       { id: "wbd-general", key: "WBD_GENERAL_SMTP_TEST", name: "Persoonlijk WBD-bericht", version: 3, status: "PUBLISHED", channel: "ONE_TO_ONE", organizationId: "we-build-and-design", transport: "MAILBOX", humanGoRequired: true, createdAt, updatedAt: createdAt },
@@ -334,6 +347,7 @@ export function validateWbdMailControl(input) {
   state.segments = Array.isArray(state.segments) ? state.segments : [];
   state.campaigns = Array.isArray(state.campaigns) ? state.campaigns : [];
   state.journeys = Array.isArray(state.journeys) ? state.journeys : [];
+  validatePushNotificationState(state);
   state.templates = (state.templates ?? []).map(validateTemplate);
   state.audit = Array.isArray(state.audit) ? state.audit.slice(-5_000) : [];
   state.communicationFoundation = clone(state.communicationFoundation ?? {});
@@ -406,11 +420,13 @@ function audit(state, eventType, subjectId, details = {}, now = new Date()) {
 }
 
 export class WbdMailControlService {
-  constructor({ store, now = () => new Date() }) {
+  constructor({ store, now = () => new Date(), pushTransport = createWebPushTransportFromEnvironment() }) {
     this.store = store;
     this.now = now;
+    this.pushTransport = pushTransport;
   }
   async initialize() { await this.store.initialize(); }
+  async notificationMutate(mutator) { return typeof this.store.mutateNotificationState === "function" ? this.store.mutateNotificationState(mutator) : this.store.mutate(mutator); }
   async workspaceView({ mailboxId = null, limit = 40 } = {}) {
     if (typeof this.store.workspaceView === "function") return this.store.workspaceView({ mailboxId, limit, now: this.now() });
     const started = performance.now();
@@ -436,6 +452,69 @@ export class WbdMailControlService {
       performance: { source: "CENTRAL_NORMALIZED_STATE", connectorCallsDuringRender: 0, queryDurationMs: Math.round((performance.now() - started) * 100) / 100 },
     };
   }
+  async notificationView(userId) {
+    const state = typeof this.store.notificationState === "function" ? await this.store.notificationState() : await this.store.read();
+    return publicNotificationView(state, userId, this.pushTransport);
+  }
+  async saveNotificationPreference(userId, payload) {
+    const now = this.now();
+    return this.notificationMutate(async (state) => {
+      const preference = updateNotificationPreference(state, userId, payload, now);
+      audit(state, "NOTIFICATION_PREFERENCES_UPDATED", userId, { enabled: preference.enabled, mailboxIds: preference.mailboxIds, minimumPriority: preference.minimumPriority, lockScreenDetail: preference.lockScreenDetail }, now);
+      return preference;
+    });
+  }
+  async registerNotificationSubscription(userId, payload) {
+    if (this.pushTransport.status !== "LIVE") throw Object.assign(new Error("Pushmeldingen zijn nog niet geactiveerd."), { statusCode: 409, code: "PUSH_NOT_CONFIGURED" });
+    const now = this.now();
+    return this.notificationMutate(async (state) => {
+      const subscription = registerPushSubscription(state, userId, payload, now);
+      audit(state, "PUSH_SUBSCRIPTION_REGISTERED", subscription.id, { userId, platform: subscription.platform, deviceLabel: subscription.deviceLabel }, now);
+      return subscription;
+    });
+  }
+  async disableNotificationSubscription(userId, subscriptionId) {
+    const now = this.now();
+    return this.notificationMutate(async (state) => {
+      const subscription = disablePushSubscription(state, userId, subscriptionId, now);
+      audit(state, "PUSH_SUBSCRIPTION_DISABLED", subscription.id, { userId }, now);
+      return subscription;
+    });
+  }
+  async dispatchPendingNotifications({ limit = 8 } = {}) {
+    if (this.pushTransport.status !== "LIVE") return { status: this.pushTransport.status, attempted: 0, delivered: 0, failed: 0 };
+    const now = this.now();
+    const claimed = await this.notificationMutate(async (state) => {
+      ensurePushNotificationState(state, now);
+      const staleClaimBefore = now.getTime() - 10 * 60 * 1_000;
+      const selected = state.notificationOutbox.filter(({ status, attempts, updatedAt }) => (status === "PENDING" || (status === "SENDING" && new Date(updatedAt).getTime() < staleClaimBefore)) && attempts < 4).slice(0, Math.max(1, Math.min(20, limit)));
+      for (const item of selected) { item.status = "SENDING"; item.attempts += 1; item.updatedAt = iso(now); }
+      return selected.map((item) => ({ item: clone(item), subscription: clone(state.pushSubscriptions.find(({ id }) => id === item.subscriptionId)) }));
+    });
+    const outcomes = await Promise.all(claimed.filter(({ subscription }) => subscription?.status === "ACTIVE").map(async ({ item, subscription }) => ({ item, result: await this.pushTransport.send(subscription, item.payload) })));
+    if (outcomes.length || claimed.length) await this.notificationMutate(async (state) => {
+      for (const { item, result } of outcomes) {
+        const active = state.notificationOutbox.find(({ id }) => id === item.id);
+        if (!active) continue;
+        active.status = result.status === "DELIVERED" ? "DELIVERED" : active.attempts >= 4 ? "FAILED" : "PENDING";
+        active.deliveredAt = result.status === "DELIVERED" ? iso(this.now()) : null;
+        active.updatedAt = iso(this.now());
+        active.lastFailureCode = result.status === "DELIVERED" ? null : String(result.errorCode ?? result.statusCode ?? result.status);
+        if (result.status === "GONE") {
+          const subscription = state.pushSubscriptions.find(({ id }) => id === item.subscriptionId);
+          if (subscription) { subscription.status = "DISABLED"; subscription.disabledAt = iso(this.now()); }
+          active.status = "FAILED";
+        }
+        audit(state, result.status === "DELIVERED" ? "PUSH_DELIVERED" : "PUSH_DELIVERY_FAILED", active.id, { status: result.status, statusCode: result.statusCode ?? null, subscriptionId: active.subscriptionId, messageId: active.messageId }, this.now());
+      }
+      for (const { item } of claimed.filter(({ subscription }) => !subscription || subscription.status !== "ACTIVE")) {
+        const active = state.notificationOutbox.find(({ id }) => id === item.id);
+        if (active) { active.status = "FAILED"; active.lastFailureCode = "SUBSCRIPTION_UNAVAILABLE"; active.updatedAt = iso(this.now()); }
+      }
+      return undefined;
+    });
+    return { status: "LIVE", attempted: outcomes.length, delivered: outcomes.filter(({ result }) => result.status === "DELIVERED").length, failed: outcomes.filter(({ result }) => result.status !== "DELIVERED").length };
+  }
   async thread(threadId) {
     if (typeof this.store.thread === "function") return this.store.thread(threadId);
     const state = await this.store.read();
@@ -459,7 +538,7 @@ export class WbdMailControlService {
   }
   async ingestMailboxSnapshot(snapshot) {
     const now = this.now();
-    return this.store.mutate(async (state) => {
+    const ingestedResult = await this.store.mutate(async (state) => {
       const mailbox = state.mailboxes.find(({ id }) => id === snapshot.mailboxId);
       if (!mailbox) throw new Error("Mailbox is niet geregistreerd.");
       if (mailbox.organizationId !== "we-build-and-design") throw new Error("Mailbox valt buiten de WBD-tenantboundary.");
@@ -508,6 +587,8 @@ export class WbdMailControlService {
           securityStatus: message.security.status,
           sourceIdentity: message.sourceKey,
           provenance: message.provenance,
+          direction: message.direction,
+          safeSenderLabel: message.from?.name || null,
         });
         audit(state, "MESSAGE_INGESTED", message.id, { mailboxId: mailbox.id, classification: message.classification.classification, contentHash: message.contentHash }, now);
       }
@@ -524,8 +605,12 @@ export class WbdMailControlService {
       };
       mailbox.updatedAt = iso(now);
       audit(state, "CONNECTOR_REFRESHED", mailbox.id, { ingested, duplicates, malformed, checkpoint: mailbox.checkpoint }, now);
+      const notificationCandidates = enqueueMailNotifications(state, events, now);
+      if (notificationCandidates.length) audit(state, "PUSH_NOTIFICATIONS_QUEUED", mailbox.id, { count: notificationCandidates.length, messageIds: [...new Set(notificationCandidates.map(({ messageId }) => messageId))] }, now);
       return { mailbox: clone(mailbox), ingested, duplicates, malformed, events };
     });
+    ingestedResult.push = await this.dispatchPendingNotifications();
+    return ingestedResult;
   }
   async prepareDraft({ threadId, mailboxId, to, subject, text, templateKey = "WBD_GENERAL_SMTP_TEST" }) {
     const now = this.now();
@@ -553,6 +638,6 @@ export class WbdMailControlService {
 export const wbdMailControlContract = Object.freeze({
   schemaVersion: 1,
   organizationId: "we-build-and-design",
-  capabilities: Object.freeze({ multiMailbox: "PREPARED", imapInbound: "PREPARED", smtpOutbound: "HUMAN_GO", bulkTransport: "NOT_CONNECTED", sportpaleisBedrukmail: "READY_CAPTURE_ONLY" }),
+  capabilities: Object.freeze({ multiMailbox: "PREPARED", imapInbound: "PREPARED", smtpOutbound: "HUMAN_GO", webPush: "PREPARED_REQUIRES_VAPID", bulkTransport: "NOT_CONNECTED", sportpaleisBedrukmail: "READY_CAPTURE_ONLY" }),
   performance: Object.freeze({ renderConnectorCalls: 0, recentFirstSync: true, incrementalCheckpoints: true, boundedViews: true }),
 });

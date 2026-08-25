@@ -54,6 +54,11 @@ if (files.some((file) => file.endsWith(".map"))) fail("source maps horen niet in
 const serviceWorkerPath = path.join(outputRoot, "sportpaleis-sw.js");
 if (!files.includes(serviceWorkerPath)) fail("Sportpaleis service worker ontbreekt");
 if (!(await readFile(serviceWorkerPath, "utf8")).includes("self.addEventListener")) fail("Sportpaleis service worker bevat geen registratiehandlers");
+const wbdServiceWorkerPath = path.join(outputRoot, "wbd-owner-sw.js");
+if (!files.includes(wbdServiceWorkerPath)) fail("WBD Owner service worker ontbreekt");
+const wbdServiceWorker = await readFile(wbdServiceWorkerPath, "utf8");
+if (!wbdServiceWorker.includes('addEventListener("push"') || !wbdServiceWorker.includes("showNotification")) fail("WBD Owner pushhandlers ontbreken");
+if (!files.includes(path.join(outputRoot, "wbd-owner.webmanifest"))) fail("WBD Owner webmanifest ontbreekt");
 const rasterFiles = files.filter((file) => /\.(?:jpe?g|png|webp)$/i.test(file));
 const associationLogoRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "association-logos");
 const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS).map((logo) => [path.join(associationLogoRoot, logo.filename), logo]));

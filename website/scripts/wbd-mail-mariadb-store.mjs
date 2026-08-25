@@ -106,6 +106,35 @@ export class WbdMailMariaDbStore {
     };
   }
 
+  async notificationState() {
+    const rows = await this.pool.query("SELECT state_json FROM wbd_mail_control_state WHERE organization_id = ?", [ORGANIZATION_ID]);
+    if (rows.length !== 1) throw new WbdMailMariaDbStoreError("WBD Mail-controlstate ontbreekt.", "DATABASE_STATE_MISSING");
+    return validateWbdMailControl({ ...jsonValue(rows[0].state_json), messages: [], threads: [], audit: [] });
+  }
+
+  async mutateNotificationState(mutator) {
+    const connection = await this.#connection();
+    try {
+      await connection.beginTransaction();
+      const rows = await connection.query("SELECT revision, state_json FROM wbd_mail_control_state WHERE organization_id = ? FOR UPDATE", [ORGANIZATION_ID]);
+      if (rows.length !== 1) throw new WbdMailMariaDbStoreError("WBD Mail-controlstate ontbreekt.", "DATABASE_STATE_MISSING");
+      const current = validateWbdMailControl({ ...jsonValue(rows[0].state_json), messages: [], threads: [], audit: [] });
+      const value = await mutator(current);
+      const next = validateWbdMailControl(current);
+      const revision = Number(rows[0].revision) + 1;
+      const compact = { ...next, messages: [], threads: [], audit: [] };
+      const update = await connection.query("UPDATE wbd_mail_control_state SET revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?", [revision, JSON.stringify(compact), ORGANIZATION_ID, Number(rows[0].revision)]);
+      if (Number(update.affectedRows) !== 1) throw new WbdMailMariaDbStoreError("Gelijktijdige WBD Mail-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
+      for (const event of next.audit) await connection.query("INSERT IGNORE INTO wbd_mail_audit (id, organization_id, event_type, subject_id, actor, occurred_at, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)", [event.id, ORGANIZATION_ID, event.eventType, event.subjectId, event.actor, event.occurredAt, JSON.stringify(event.details ?? {})]);
+      await connection.commit();
+      return structuredClone(value);
+    } catch (cause) {
+      await connection.rollback().catch(() => undefined);
+      if (cause?.statusCode || cause instanceof WbdMailMariaDbStoreError) throw cause;
+      throw new WbdMailMariaDbStoreError("WBD Mail notificationtransactie is mislukt.", "DATABASE_TRANSACTION_FAILED", cause);
+    } finally { connection.release(); }
+  }
+
   async thread(threadId) {
     const threadRows = await this.pool.query("SELECT thread_json FROM wbd_mail_threads WHERE id = ? AND organization_id = ?", [threadId, ORGANIZATION_ID]);
     if (threadRows.length !== 1) throw Object.assign(new Error("Mailgesprek niet gevonden."), { statusCode: 404, code: "NOT_FOUND" });

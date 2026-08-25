@@ -428,6 +428,42 @@ export class WbdOwnerService {
     }
   }
 
+  async mailNotificationView(token, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    return this.mailControl.notificationView(owner.id);
+  }
+
+  async updateMailNotificationPreferences(token, csrfToken, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    try { return await this.mailControl.saveNotificationPreference(owner.id, payload); }
+    catch (cause) { throw error(cause?.message || "Meldingsvoorkeuren konden niet worden opgeslagen.", 400, "NOTIFICATION_PREFERENCES_INVALID"); }
+  }
+
+  async registerMailPushSubscription(token, csrfToken, payload, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    try { return await this.mailControl.registerNotificationSubscription(owner.id, payload); }
+    catch (cause) {
+      if (cause?.statusCode) throw cause;
+      throw error(cause?.message || "Pushapparaat kon niet worden geregistreerd.", 400, "PUSH_SUBSCRIPTION_INVALID");
+    }
+  }
+
+  async disableMailPushSubscription(token, csrfToken, subscriptionId, now = new Date()) {
+    const { owner } = await this.authenticate(token, now);
+    if (owner.role !== "OWNER") throw error("Onvoldoende rechten.", 403, "FORBIDDEN");
+    await this.#assertCsrf(token, csrfToken, now);
+    if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
+    return this.mailControl.disableNotificationSubscription(owner.id, subscriptionId);
+  }
+
   async ingestMailSnapshot(snapshot, now = new Date()) {
     if (!this.mailControl) throw error("Mail Foundation is niet beschikbaar.", 503, "MAIL_UNAVAILABLE");
     const ingested = await this.mailControl.ingestMailboxSnapshot(snapshot);
@@ -646,6 +682,11 @@ export function createWbdOwnerRequestHandler(service, { onError } = {}) {
       if (route === "/api/wbd/v1/capabilities" && method === "GET") return json(response, 200, await service.capabilityCatalog(token)) ?? true;
       if (route === "/api/wbd/v1/product-truth" && method === "GET") return json(response, 200, await service.productTruth(token)) ?? true;
       if (route === "/api/wbd/v1/mail" && method === "GET") return json(response, 200, await service.mailWorkspace(token, { mailboxId: requestUrl.searchParams.get("mailbox") })) ?? true;
+      if (route === "/api/wbd/v1/mail/notifications" && method === "GET") return json(response, 200, await service.mailNotificationView(token)) ?? true;
+      if (route === "/api/wbd/v1/mail/notifications/preferences" && method === "PUT") return json(response, 200, await service.updateMailNotificationPreferences(token, csrfToken, await readJson(request))) ?? true;
+      if (route === "/api/wbd/v1/mail/notifications/subscriptions" && method === "POST") return json(response, 200, await service.registerMailPushSubscription(token, csrfToken, await readJson(request))) ?? true;
+      const pushSubscriptionMatch = route.match(/^\/api\/wbd\/v1\/mail\/notifications\/subscriptions\/([^/]+)$/u);
+      if (pushSubscriptionMatch && method === "DELETE") return json(response, 200, await service.disableMailPushSubscription(token, csrfToken, decodeURIComponent(pushSubscriptionMatch[1]))) ?? true;
       const mailThreadMatch = route.match(/^\/api\/wbd\/v1\/mail\/threads\/([^/]+)$/u);
       if (mailThreadMatch && method === "GET") return json(response, 200, await service.mailThread(token, decodeURIComponent(mailThreadMatch[1]))) ?? true;
       if (route === "/api/wbd/v1/mail/drafts" && method === "POST") return json(response, 200, await service.prepareMailDraft(token, csrfToken, await readJson(request))) ?? true;
