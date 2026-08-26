@@ -6,14 +6,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  ReleaseEngineError, canonicalJson, createAuditEvent, normalizeAuditActor, sanitizeDiagnostic, validateReleaseContract, verifyAuditChain,
+  ReleaseEngineError, canonicalJson, createAuditEvent, normalizeAuditActor, sanitizeDiagnostic, validateReleaseContract, validateSideEffectCounters, verifyAuditChain,
 } from "../scripts/release-engine-core.mjs";
 import {
   assertPureReadOnlyInspectionQueries, buildMigrationPlan, createPureSchemaInspectionQueries,
   inspectEnvironmentContract, inspectMigrationState, inspectRecoveryReadiness, schemaObjectMatches,
 } from "../scripts/release-engine-inspection.mjs";
-import { InMemoryReleasePlatform, LinuxReleasePlatform } from "../scripts/release-engine-platform.mjs";
-import { privilegedInspect } from "../scripts/release-engine-privileged-inspect.mjs";
+import { InMemoryReleasePlatform, LinuxReleasePlatform, parseBrokerJsonOutput } from "../scripts/release-engine-platform.mjs";
+import { decodeMailControlState, privilegedInspect } from "../scripts/release-engine-privileged-inspect.mjs";
 import { WbdReleaseEngine } from "../scripts/release-engine-runner.mjs";
 import { FileReleaseStateStore, InMemoryReleaseStateStore } from "../scripts/release-engine-state-store.mjs";
 import { createReleaseEngineRequestHandler } from "../scripts/release-engine-service.mjs";
@@ -65,6 +65,27 @@ test("audit actor fails closed for missing or display-text machine identities", 
   assert.throws(() => normalizeAuditActor({ actorId: "Donovan van de Weide", actorDisplayName: "Donovan van de Weide" }), /actorId/u);
   assert.throws(() => normalizeAuditActor({ actorId: "dónovan", actorDisplayName: "Donovan" }), /actorId/u);
   assert.throws(() => normalizeAuditActor({ actorId: "donovan_van_de_weide", actorDisplayName: "Donovan\nOwner" }), /actorDisplayName/u);
+});
+
+test("side-effect counter boundary accepteert uitsluitend deterministische serialized JSON en exact schema", () => {
+  const valid = { activeSubscriptions: 0, delivered: 0, pending: 0, schemaPresent: true };
+  assert.deepEqual(validateSideEffectCounters(parseBrokerJsonOutput(JSON.stringify(valid))), valid);
+  assert.throws(() => parseBrokerJsonOutput("[object Object]"), (error) => error.code === "BROKER_OUTPUT_MALFORMED");
+  assert.throws(() => parseBrokerJsonOutput({ ...valid }), (error) => error.code === "BROKER_OUTPUT_NOT_SERIALIZED");
+  assert.throws(() => parseBrokerJsonOutput("{"), (error) => error.code === "BROKER_OUTPUT_MALFORMED");
+  assert.throws(() => validateSideEffectCounters({ activeSubscriptions: 0, delivered: 0, schemaPresent: true }), (error) => error.code === "SIDE_EFFECT_COUNTERS_SCHEMA_INVALID");
+  assert.throws(() => validateSideEffectCounters({ ...valid, delivered: -1 }), (error) => error.code === "SIDE_EFFECT_COUNTERS_VALUE_INVALID");
+  assert.throws(() => validateSideEffectCounters({ ...valid, extra: 1 }), (error) => error.code === "SIDE_EFFECT_COUNTERS_SCHEMA_INVALID");
+  assert.throws(() => validateSideEffectCounters({ ...valid, schemaPresent: false, pending: 1 }), (error) => error.code === "SIDE_EFFECT_COUNTERS_SCHEMA_INVALID");
+});
+
+test("Mail control state normaliseert driver-object en serialized JSON zonder object-string coercion", () => {
+  const state = { pushSubscriptions: [{ status: "ACTIVE" }], notificationOutbox: [{ status: "DELIVERED" }] };
+  assert.deepEqual(decodeMailControlState(state), state);
+  assert.deepEqual(decodeMailControlState(JSON.stringify(state)), state);
+  assert.deepEqual(decodeMailControlState(Buffer.from(JSON.stringify(state))), state);
+  assert.throws(() => decodeMailControlState("{"), (error) => error.code === "SIDE_EFFECT_STATE_MALFORMED");
+  assert.throws(() => decodeMailControlState([]), (error) => error.code === "SIDE_EFFECT_STATE_SCHEMA_INVALID");
 });
 
 test("release contract locks Web Push identity, forward-only baseline and four additive migrations", () => {
@@ -394,6 +415,31 @@ test("privileged current inspection vergelijkt symlink, manifest en env zonder s
     assert.equal(inspected.readiness, "PASS");
     assert.doesNotMatch(JSON.stringify(inspected), /never-return-this/u);
   } finally { server.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("privileged push-counter inspectie levert hetzelfde gevalideerde contract voor DB-object en serialized state", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "release-push-counter-inspect-"));
+  try {
+    const value = contract();
+    const contractRoot = path.join(root, "contracts");
+    await mkdir(contractRoot, { recursive: true });
+    await writeFile(path.join(contractRoot, `${value.releaseId}.release-contract.json`), `${JSON.stringify(rawContract)}\n`);
+    const environmentFile = path.join(root, "production.env");
+    await writeFile(environmentFile, "WORKSPACE_DB_HOST=db.internal\nWORKSPACE_DB_NAME=wbd_workspace\nWORKSPACE_DB_USER=inspector\nWORKSPACE_DB_PASSWORD=not-logged\n");
+    const state = { pushSubscriptions: [{ status: "ACTIVE" }, { status: "DISABLED" }], notificationOutbox: [{ status: "DELIVERED" }, { status: "PENDING" }] };
+    for (const stateJson of [state, JSON.stringify(state)]) {
+      let query = 0;
+      const counters = await privilegedInspect({ releaseId: value.releaseId, contractHash: value.contractHash, mode: "push-counters", roots: {
+        contractRoot,
+        environmentFile,
+        poolFactory: () => ({
+          async query() { query += 1; return query === 1 ? [{ count: 1 }] : [{ state_json: stateJson }]; },
+          async end() {},
+        }),
+      } });
+      assert.deepEqual(counters, { activeSubscriptions: 1, delivered: 1, pending: 1, schemaPresent: true });
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("legacy staging krijgt de gedeelde lock zonder self-deadlock en drift daarna blokkeert", async () => {

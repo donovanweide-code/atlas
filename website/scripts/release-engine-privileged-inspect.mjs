@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import mariadb from "mariadb";
-import { validateReleaseContract } from "./release-engine-core.mjs";
+import { validateReleaseContract, validateSideEffectCounters } from "./release-engine-core.mjs";
 import { inspectEnvironmentContract } from "./release-engine-inspection.mjs";
 import { LinuxReleasePlatform } from "./release-engine-platform.mjs";
 
@@ -13,6 +13,20 @@ function parseEnvironment(text) {
   }));
 }
 function modeString(mode) { return `0${(mode & 0o777).toString(8)}`; }
+
+export function decodeMailControlState(value) {
+  let decoded = value;
+  try {
+    if (typeof value === "string") decoded = JSON.parse(value);
+    else if (Buffer.isBuffer(value)) decoded = JSON.parse(value.toString("utf8"));
+  } catch {
+    throw Object.assign(new Error("Mail control state bevat malformed JSON."), { code: "SIDE_EFFECT_STATE_MALFORMED" });
+  }
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw Object.assign(new Error("Mail control state is geen geldig object."), { code: "SIDE_EFFECT_STATE_SCHEMA_INVALID" });
+  }
+  return decoded;
+}
 
 export async function privilegedInspect({ releaseId, contractHash, mode, databaseId, roots = {} }) {
   const contractRoot = roots.contractRoot ?? "/srv/wbd/release-engine/contracts";
@@ -67,15 +81,15 @@ export async function privilegedInspect({ releaseId, contractHash, mode, databas
   if (mode === "push-counters") {
     const prefix = "WORKSPACE";
     const config = { host: environment[`${prefix}_DB_HOST`], port: Number(environment[`${prefix}_DB_PORT`] || 3306), database: environment[`${prefix}_DB_NAME`], user: environment[`${prefix}_DB_USER`], password: environment[`${prefix}_DB_PASSWORD`], connectionLimit: 1, connectTimeout: 5_000, acquireTimeout: 5_000, multipleStatements: false };
-    const pool = mariadb.createPool(config);
+    const pool = (roots.poolFactory ?? mariadb.createPool)(config);
     try {
       const exists = await pool.query("SELECT COUNT(*) AS count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'wbd_mail_control_state'", [config.database]);
-      if (Number(exists[0]?.count ?? 0) === 0) return { activeSubscriptions: 0, delivered: 0, pending: 0, schemaPresent: false };
+      if (Number(exists[0]?.count ?? 0) === 0) return validateSideEffectCounters({ activeSubscriptions: 0, delivered: 0, pending: 0, schemaPresent: false });
       const rows = await pool.query("SELECT state_json FROM wbd_mail_control_state WHERE organization_id = 'we-build-and-design'");
-      const state = rows.length ? JSON.parse(String(rows[0].state_json)) : {};
+      const state = rows.length ? decodeMailControlState(rows[0].state_json) : {};
       const subscriptions = Array.isArray(state.pushSubscriptions) ? state.pushSubscriptions : [];
       const outbox = Array.isArray(state.notificationOutbox) ? state.notificationOutbox : [];
-      return { activeSubscriptions: subscriptions.filter((item) => item.status === "ACTIVE").length, delivered: outbox.filter((item) => item.status === "DELIVERED").length, pending: outbox.filter((item) => item.status === "PENDING" || item.status === "SENDING").length, schemaPresent: true };
+      return validateSideEffectCounters({ activeSubscriptions: subscriptions.filter((item) => item.status === "ACTIVE").length, delivered: outbox.filter((item) => item.status === "DELIVERED").length, pending: outbox.filter((item) => item.status === "PENDING" || item.status === "SENDING").length, schemaPresent: true });
     } finally { await pool.end(); }
   }
   throw Object.assign(new Error("Inspectiemode niet geallowlist."), { code: "INSPECTION_NOT_ALLOWLISTED" });

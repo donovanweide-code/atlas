@@ -4,10 +4,21 @@ import { access, mkdir, readFile, readdir, realpath, rename, stat, writeFile } f
 import path from "node:path";
 import { promisify } from "node:util";
 import mariadb from "mariadb";
-import { canonicalJson } from "./release-engine-core.mjs";
+import { canonicalJson, validateSideEffectCounters } from "./release-engine-core.mjs";
 import { assertPureReadOnlyInspectionQueries, createPureSchemaInspectionQueries, inspectMigrationState } from "./release-engine-inspection.mjs";
 
 const execFileAsync = promisify(execFile);
+
+export function parseBrokerJsonOutput(stdout) {
+  if (typeof stdout !== "string" && !Buffer.isBuffer(stdout)) {
+    throw Object.assign(new Error("Brokeroutput is niet als serialized JSON aangeleverd."), { code: "BROKER_OUTPUT_NOT_SERIALIZED" });
+  }
+  try {
+    return JSON.parse(String(stdout).trim() || "{}");
+  } catch {
+    throw Object.assign(new Error("Brokeroutput bevat malformed JSON."), { code: "BROKER_OUTPUT_MALFORMED" });
+  }
+}
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -222,10 +233,11 @@ export class LinuxReleasePlatform {
     if (this.brokerImpl) return this.brokerImpl(operation, [...args]);
     try {
       const result = await execFileAsync("sudo", ["--non-interactive", this.broker, operation, ...args], { timeout: 300_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
-      return JSON.parse(String(result.stdout).trim() || "{}");
+      return parseBrokerJsonOutput(result.stdout);
     } catch (error) {
       const safeStderr = String(error?.stderr ?? "").replace(/(password|secret|token|private[_-]?key)\s*[=:]\s*\S+/giu, "$1=[REDACTED]").slice(0, 4_000);
-      throw Object.assign(new Error(`Release broker ${operation} faalde: ${safeStderr || "geen veilige stderr"}`), { code: "BROKER_FAILURE", exitCode: error?.code });
+      const safeMessage = String(error?.message ?? "").replace(/(password|secret|token|private[_-]?key)\s*[=:]\s*\S+/giu, "$1=[REDACTED]").slice(0, 1_000);
+      throw Object.assign(new Error(`Release broker ${operation} faalde: ${safeStderr || safeMessage || "geen veilige stderr"}`), { code: "BROKER_FAILURE", exitCode: error?.code });
     }
   }
 
@@ -328,7 +340,9 @@ export class LinuxReleasePlatform {
     if (!allowed.has(smoke)) throw new Error(`Smoke adapter ${smoke} is niet contractueel geallowlist.`);
     return this.#broker("smoke", [contract.releaseId, smoke, context.phase]);
   }
-  async captureSideEffectCounters(contract) { return this.#broker("push-counters", [contract.releaseId, contract.contractHash]); }
+  async captureSideEffectCounters(contract) {
+    return validateSideEffectCounters(await this.#broker("push-counters", [contract.releaseId, contract.contractHash]));
+  }
   async reconcileInterruptedRun(contract) {
     const active = await this.inspectCurrent(contract);
     return { action: active.releaseId === contract.releaseId ? "ROLLBACK_REQUIRED_UNCERTAIN_RESTART_STATE" : "RESUME_PRE_SWITCH", active };
@@ -410,7 +424,10 @@ export class InMemoryReleasePlatform {
   async restartService() { this.maybeFail("restartService"); this.restartCount += 1; }
   async runReadiness(_contract, readiness, _plan, context = {}) { this.maybeFail(`readiness:${readiness}:${context.rollback ? "rollback" : "candidate"}`); return { passed: true }; }
   async writeReleaseEvidence(contract, plan) { this.maybeFail("writeEvidence"); return { id: `evidence-${contract.releaseId}`, planHash: plan.planHash, unexpectedPushes: this.unexpectedPushes }; }
-  async captureSideEffectCounters() { this.maybeFail("pushCounters"); return { activeSubscriptions: 0, delivered: this.unexpectedPushes, pending: 0 }; }
+  async captureSideEffectCounters() {
+    this.maybeFail("pushCounters");
+    return validateSideEffectCounters({ activeSubscriptions: 0, delivered: this.unexpectedPushes, pending: 0, schemaPresent: true });
+  }
   async rollback(contract) { this.maybeFail("rollback"); this.current = { ...this.current, releaseId: contract.rollback.targetReleaseId, commit: contract.expectedBaseline.commit }; }
   async restartRollbackTarget() { this.maybeFail("restartRollback"); this.restartCount += 1; }
   async reconcileInterruptedRun(contract) { this.maybeFail("reconcile"); return { action: this.current.releaseId === contract.releaseId ? "ROLLBACK_REQUIRED_UNCERTAIN_RESTART_STATE" : "RESUME_PRE_SWITCH", active: structuredClone(this.current) }; }

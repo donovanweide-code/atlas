@@ -59,6 +59,23 @@ function requireString(value, name, pattern) {
   return result;
 }
 
+export function validateSideEffectCounters(value) {
+  const keys = ["activeSubscriptions", "delivered", "pending", "schemaPresent"];
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).sort().join(",") !== [...keys].sort().join(",")) {
+    throw Object.assign(new Error("Side-effect counters voldoen niet aan het vaste schema."), { code: "SIDE_EFFECT_COUNTERS_SCHEMA_INVALID" });
+  }
+  for (const key of keys.slice(0, 3)) {
+    if (!Number.isSafeInteger(value[key]) || value[key] < 0) {
+      throw Object.assign(new Error(`Side-effect counter ${key} is geen niet-negatief geheel getal.`), { code: "SIDE_EFFECT_COUNTERS_VALUE_INVALID" });
+    }
+  }
+  if (typeof value.schemaPresent !== "boolean" || (!value.schemaPresent && keys.slice(0, 3).some((key) => value[key] !== 0))) {
+    throw Object.assign(new Error("Side-effect schema-status en counters zijn niet consistent."), { code: "SIDE_EFFECT_COUNTERS_SCHEMA_INVALID" });
+  }
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, value[key]])));
+}
+
 export function normalizeAuditActor({ actorId, actorDisplayName } = {}) {
   const id = requireString(actorId, "actorId", actorIdPattern);
   if (actorDisplayName === undefined || actorDisplayName === null) return Object.freeze({ id, displayName: null });
