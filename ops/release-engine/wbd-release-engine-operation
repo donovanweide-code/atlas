@@ -165,10 +165,12 @@ NODE
     printf '{"status":"PASS","operation":"switch"}\n'
     ;;
   restart)
-    release_id=${1:-}; plan_hash=${2:-}; service=${3:-}; valid_id "$release_id"; valid_hash "$plan_hash"; verify_plan "$release_id" "$plan_hash"
+    plan_release_id=${1:-}; plan_hash=${2:-}; service=${3:-}; runtime_target=${4:-}
+    valid_id "$plan_release_id"; valid_hash "$plan_hash"; valid_id "$runtime_target"; verify_plan "$plan_release_id" "$plan_hash"
     [[ $service == "$SERVICE" ]] || fail SERVICE_NOT_ALLOWLISTED
+    [[ $(basename "$(readlink -f "$WBD_ROOT/current")") == "$runtime_target" ]] || fail RUNTIME_TARGET_MISMATCH
     systemctl restart "$SERVICE"
-    printf '{"status":"PASS","operation":"restart"}\n'
+    printf '{"status":"PASS","operation":"restart","planReleaseId":"%s","runtimeTarget":"%s"}\n' "$plan_release_id" "$runtime_target"
     ;;
   rollback)
     release_id=${1:-}; plan_hash=${2:-}; target=${3:-}; valid_id "$release_id"; valid_hash "$plan_hash"; valid_id "$target"; verify_plan "$release_id" "$plan_hash"

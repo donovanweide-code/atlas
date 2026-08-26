@@ -440,6 +440,44 @@ test("database unavailable is classified with component and safe retry", async (
   await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "DATABASE_CONNECTIVITY" && error.diagnostic.retrySafe === true);
 });
 
+test("restart readiness verdraagt begrensd connection-refused tijdens startup en wordt daarna PASS", async () => {
+  let probes = 0;
+  const platform = new LinuxReleasePlatform({
+    readinessAttempts: 4,
+    readinessPollIntervalMs: 0,
+    sleepImpl: async () => {},
+    fetchImpl: async () => {
+      probes += 1;
+      if (probes < 3) throw Object.assign(new Error("fetch failed"), { code: "ECONNREFUSED" });
+      return { ok: true };
+    },
+  });
+  assert.deepEqual(await platform.runReadiness(), { status: "PASS", attempts: 3 });
+});
+
+test("restart readiness blijft fail-closed na de begrensde startupperiode", async () => {
+  const platform = new LinuxReleasePlatform({
+    readinessAttempts: 3,
+    readinessPollIntervalMs: 0,
+    sleepImpl: async () => {},
+    fetchImpl: async () => { throw Object.assign(new Error("fetch failed"), { code: "ECONNREFUSED" }); },
+  });
+  await assert.rejects(platform.runReadiness(), (error) => error.code === "READINESS_TIMEOUT" && error.attempts === 3);
+});
+
+test("rollback restart bewaart authorized plan identity en scheidt de runtime target identity", async () => {
+  const calls = [];
+  const platform = new LinuxReleasePlatform({ brokerImpl: async (operation, args) => { calls.push({ operation, args }); return { status: "PASS" }; } });
+  const value = contract();
+  const plan = { planHash: "9".repeat(64) };
+  await platform.restartService(value, plan);
+  await platform.restartRollbackTarget(value, plan);
+  assert.deepEqual(calls, [
+    { operation: "restart", args: [value.releaseId, plan.planHash, value.activation.restart.service, value.releaseId] },
+    { operation: "restart", args: [value.releaseId, plan.planHash, value.activation.restart.service, value.rollback.targetReleaseId] },
+  ]);
+});
+
 test("production post-migration verifier uses only the privileged read-only inspector", async () => {
   const releaseContract = contract();
   const database = releaseContract.databases.find(({ id }) => id === "workspace");
@@ -544,6 +582,24 @@ for (const [label, operation, expectedClass] of [
     assert.equal((await result.engine.state(result.contract)).state, "ROLLED_BACK");
   });
 }
+
+test("automatic rollback na readiness failure voltooit restart, readiness en rollback-smokes", async () => {
+  const result = await prepared();
+  result.platform.fail("readiness:workspace-readiness:candidate", Object.assign(new Error("candidate startup bleef unavailable"), { code: "READINESS_TIMEOUT" }));
+  const outcome = await activate(result);
+  assert.equal(outcome.state, "ROLLED_BACK");
+  assert.equal(result.platform.restartCount, 2);
+  assert.equal(result.platform.current.releaseId, result.contract.rollback.targetReleaseId);
+  for (const requiredCall of [
+    "rollback",
+    "restartRollback",
+    "readiness:workspace-readiness:rollback",
+    "smoke:workspace-health:rollback",
+    "smoke:mail-r2-compatibility:rollback",
+    "smoke:sportpaleis-critical-flow:rollback",
+  ]) assert.ok(result.platform.calls.includes(requiredCall), `${requiredCall} ontbreekt`);
+  assert.equal((await result.engine.state(result.contract)).state, "ROLLED_BACK");
+});
 
 test("unexpected push/subscription side effect triggers rollback", async () => {
   const result = await prepared();
@@ -717,6 +773,9 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.match(broker, /--setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1/u);
   assert.match(broker, /DELEGATED_CALLER_INVALID/u);
   assert.match(broker, /"operation":"verify-host-context","delegated":true/u);
+  assert.match(broker, /plan_release_id=.*runtime_target=/u);
+  assert.match(broker, /verify_plan "\$plan_release_id" "\$plan_hash"/u);
+  assert.match(broker, /RUNTIME_TARGET_MISMATCH/u);
   assert.match(installation, /transient root-owned systemd execution unit[\s\S]*ProtectSystem=strict/u);
   assert.doesNotMatch(unit, /ReadWritePaths=.*\/srv\/wbd\/releases/u);
   assert.doesNotMatch(unit, /ReadWritePaths=.*\/etc\/wbd/u);

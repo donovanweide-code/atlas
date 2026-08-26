@@ -249,7 +249,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
   assert.ok([...packaged].every((archive) => !archive.includes("/tests/") && !archive.includes(".codex-tmp")));
 });
 
-test("production package installeert de gelockte PDF-runtime dependency", async () => {
+test("production package installeert alle gelockte runtime dependencies", async () => {
   const productionPackage = JSON.parse(await readFile(new URL("../package.production.json", import.meta.url), "utf8"));
   const developmentPackage = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const packageLock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
@@ -261,6 +261,12 @@ test("production package installeert de gelockte PDF-runtime dependency", async 
   assert.equal(productionPackage.dependencies["pdfjs-dist"], packageLock.packages[""].dependencies["pdfjs-dist"]);
   assert.ok(packageLock.packages["node_modules/pdfjs-dist"]);
   assert.notEqual(packageLock.packages["node_modules/pdfjs-dist"].dev, true);
+  for (const dependency of ["imapflow", "mailparser"]) {
+    assert.equal(productionPackage.dependencies[dependency], developmentPackage.dependencies[dependency]);
+    assert.equal(productionPackage.dependencies[dependency], packageLock.packages[""].dependencies[dependency]);
+    assert.ok(packageLock.packages[`node_modules/${dependency}`]);
+    assert.notEqual(packageLock.packages[`node_modules/${dependency}`].dev, true);
+  }
 });
 
 test("productiebootstrap bevat alleen goedgekeurde referentieconfiguratie en nul accounts/orders", () => {

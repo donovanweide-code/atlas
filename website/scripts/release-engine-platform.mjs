@@ -55,6 +55,8 @@ export class LinuxReleasePlatform {
     stateRoot = "/srv/wbd/shared/release-engine", inboxRoot = "/srv/wbd/shared/release-inbox",
     broker = "/usr/local/libexec/wbd-release-engine-operation", healthUrl = "http://127.0.0.1:3000/health",
     readinessUrl = "http://127.0.0.1:3000/ready", deploymentLockFile = "/srv/wbd/shared/.spw-release-deploy.lock", fetchImpl = fetch,
+    readinessAttempts = 30, readinessPollIntervalMs = 500, readinessProbeTimeoutMs = 2_000,
+    sleepImpl = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)), brokerImpl = null,
   } = {}) {
     this.root = root;
     this.environmentFile = environmentFile;
@@ -66,6 +68,11 @@ export class LinuxReleasePlatform {
     this.healthUrl = healthUrl;
     this.readinessUrl = readinessUrl;
     this.fetchImpl = fetchImpl;
+    this.readinessAttempts = readinessAttempts;
+    this.readinessPollIntervalMs = readinessPollIntervalMs;
+    this.readinessProbeTimeoutMs = readinessProbeTimeoutMs;
+    this.sleepImpl = sleepImpl;
+    this.brokerImpl = brokerImpl;
   }
 
   async acquireEnvironmentLock(_contract, purpose) {
@@ -104,7 +111,7 @@ export class LinuxReleasePlatform {
   }
 
   async #probe(url) {
-    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(5_000), headers: { Accept: "application/json" } });
+    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(this.readinessProbeTimeoutMs), headers: { Accept: "application/json" } });
     return response.ok ? "PASS" : "FAIL";
   }
 
@@ -212,6 +219,7 @@ export class LinuxReleasePlatform {
   async #broker(operation, args = []) {
     const allowed = new Set(["inspect-current", "inspect-env", "inspect-db", "inspect-recovery", "push-counters", "backup", "stage", "rollback-set", "migrate", "switch", "restart", "rollback", "smoke", "evidence"]);
     if (!allowed.has(operation) || args.some((argument) => typeof argument !== "string" || argument.includes("\0") || argument.includes("\n"))) throw new Error("Niet-geallowliste brokeroperatie geweigerd.");
+    if (this.brokerImpl) return this.brokerImpl(operation, [...args]);
     try {
       const result = await execFileAsync("sudo", ["--non-interactive", this.broker, operation, ...args], { timeout: 300_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
       return JSON.parse(String(result.stdout).trim() || "{}");
@@ -294,11 +302,27 @@ export class LinuxReleasePlatform {
   }
 
   async atomicSwitch(contract, plan) { return this.#broker("switch", [contract.releaseId, plan.planHash]); }
-  async restartService(contract, plan) { return this.#broker("restart", [contract.releaseId, plan.planHash, contract.activation.restart.service]); }
-  async restartRollbackTarget(contract, plan) { return this.#broker("restart", [contract.rollback.targetReleaseId, plan.planHash, contract.activation.restart.service]); }
+  async restartService(contract, plan) { return this.#broker("restart", [contract.releaseId, plan.planHash, contract.activation.restart.service, contract.releaseId]); }
+  async restartRollbackTarget(contract, plan) { return this.#broker("restart", [contract.releaseId, plan.planHash, contract.activation.restart.service, contract.rollback.targetReleaseId]); }
   async rollback(contract, plan) { return this.#broker("rollback", [contract.releaseId, plan.planHash, contract.rollback.targetReleaseId]); }
   async writeReleaseEvidence(contract, plan) { return this.#broker("evidence", [contract.releaseId, plan.planHash]); }
-  async runReadiness() { if (await this.#probe(this.readinessUrl) !== "PASS") throw Object.assign(new Error("Readiness check faalde."), { code: "READINESS_FAIL" }); }
+  async runReadiness() {
+    let lastError = null;
+    for (let attempt = 1; attempt <= this.readinessAttempts; attempt += 1) {
+      try {
+        if (await this.#probe(this.readinessUrl) === "PASS") return { status: "PASS", attempts: attempt };
+        lastError = Object.assign(new Error("Readiness endpoint gaf geen succesvolle HTTP-status."), { code: "READINESS_HTTP_FAIL" });
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < this.readinessAttempts) await this.sleepImpl(this.readinessPollIntervalMs);
+    }
+    throw Object.assign(new Error(`Readiness bleef na ${this.readinessAttempts} begrensde pogingen unavailable.`), {
+      code: "READINESS_TIMEOUT",
+      cause: lastError,
+      attempts: this.readinessAttempts,
+    });
+  }
   async runSmoke(contract, smoke, context) {
     const allowed = new Set([...contract.activation.smokeSuite, ...contract.activation.oldReleasePostMigrationSmokes, ...contract.rollback.smokeSuite]);
     if (!allowed.has(smoke)) throw new Error(`Smoke adapter ${smoke} is niet contractueel geallowlist.`);
