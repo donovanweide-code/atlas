@@ -280,6 +280,7 @@ test("legacy undefined audit mismatch is recovered only with checksum and immuta
   assert.equal(verifyAuditChain(recovered).valid, true);
   assert.equal(recovered.at(-1).type, "audit_chain_recovered");
   assert.equal(createHash("sha256").update(await readFile(path.join(root, "audit-recovery", result.backup))).digest("hex"), expectedFileSha256);
+  assert.equal((await recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256, at: fixedNow.toISOString() })).idempotent, true);
   await assert.rejects(recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256: "0".repeat(64) }), /checksum/u);
   await rm(root, { recursive: true, force: true });
 });

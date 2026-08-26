@@ -32,8 +32,16 @@ export async function recoverLegacyUndefinedAuditChain({ stateRoot, tenant, appl
   const file = path.join(root, "events", name);
   if (!file.startsWith(`${root}${path.sep}`)) throw new Error("Audit recovery pad verlaat state root.");
   const original = await readFile(file);
-  if (sha256(original) !== expectedFileSha256) throw new Error("Audit recovery source checksum wijkt af.");
   const events = original.toString("utf8").split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
+  const backupDirectory = path.join(root, "audit-recovery");
+  const backup = path.join(backupDirectory, `${name}.${expectedFileSha256}.original`);
+  if (sha256(original) !== expectedFileSha256) {
+    const verified = verifyAuditChain(events);
+    const recovery = verified.current;
+    const preserved = await readFile(backup);
+    if (recovery?.type !== "audit_chain_recovered" || recovery.details?.originalFileSha256 !== expectedFileSha256 || sha256(preserved) !== expectedFileSha256) throw new Error("Audit recovery source checksum wijkt af.");
+    return { status: "PASS", releaseId, originalFileSha256: expectedFileSha256, repairedEvents: recovery.details.repairedEvents, recoveryEventHash: recovery.eventHash, backup: path.basename(backup), idempotent: true };
+  }
   let previous = null;
   let repairedEvents = 0;
   for (const event of events) {
@@ -51,9 +59,7 @@ export async function recoverLegacyUndefinedAuditChain({ stateRoot, tenant, appl
     delete normalized.eventHash;
     repaired.push({ ...normalized, eventHash: sha256(canonicalJson(normalized)) });
   }
-  const backupDirectory = path.join(root, "audit-recovery");
   await mkdir(backupDirectory, { recursive: true, mode: 0o750 });
-  const backup = path.join(backupDirectory, `${name}.${expectedFileSha256}.original`);
   await copyFile(file, backup, constants.COPYFILE_EXCL);
   const recovery = createAuditEvent({
     previous: repaired.at(-1), state: repaired.at(-1).state, type: "audit_chain_recovered",
