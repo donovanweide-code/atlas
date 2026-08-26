@@ -508,6 +508,8 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.doesNotMatch(broker, /\beval\b|ssh|scp|sftp|powershell/iu);
   assert.match(broker, /OPERATION_NOT_ALLOWLISTED/u);
   assert.match(broker, /inspect-current/u);
+  assert.match(broker, /inspect-env\) mode=environment/u);
+  assert.match(broker, /inspect-recovery\) mode=recovery/u);
   assert.match(platform, /#broker\("inspect-current"/u);
   assert.match(broker, /\/usr\/local\/libexec\/wbd-deployment\/spw-immutable-release\.sh/u);
   assert.match(broker, /-prechange-production\.env/u);

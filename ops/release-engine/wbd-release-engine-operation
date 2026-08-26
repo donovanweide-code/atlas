@@ -55,7 +55,11 @@ case "$operation" in
   inspect-env|inspect-recovery|push-counters)
     release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
     verify_contract_hash "$release_id" "$contract_hash"
-    mode=${operation#inspect-}; [[ $operation == push-counters ]] && mode=push-counters
+    case "$operation" in
+      inspect-env) mode=environment ;;
+      inspect-recovery) mode=recovery ;;
+      push-counters) mode=push-counters ;;
+    esac
     exec /usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-privileged-inspect.mjs "$release_id" "$contract_hash" "$mode"
     ;;
   inspect-db)
