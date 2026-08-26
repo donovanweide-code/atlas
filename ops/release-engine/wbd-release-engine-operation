@@ -53,7 +53,7 @@ else
   require_runner
   operation=${1:-}; shift || true
   case "$operation" in
-    backup|stage|rollback-set|migrate|switch|restart|rollback)
+    verify-host-context|backup|stage|rollback-set|migrate|switch|restart|rollback)
       unit="wbd-release-engine-op-$(date +%s%N)-$$"
       exec systemd-run --quiet --wait --pipe --collect --service-type=exec \
         --unit="$unit" --setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1 \
@@ -62,6 +62,10 @@ else
   esac
 fi
 case "$operation" in
+  verify-host-context)
+    [[ $# -eq 0 ]] || fail UNEXPECTED_ARGUMENT
+    printf '{"status":"PASS","operation":"verify-host-context","delegated":true}\n'
+    ;;
   inspect-current)
     release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
     verify_contract_hash "$release_id" "$contract_hash"

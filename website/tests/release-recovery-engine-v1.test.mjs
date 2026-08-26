@@ -513,10 +513,11 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.match(broker, /inspect-recovery\) mode=recovery/u);
   assert.match(platform, /#broker\("inspect-current"/u);
   assert.match(installation, /traverse-only ACL \(`--x`\)[\s\S]*do not grant directory listing/u);
-  assert.match(broker, /backup\|stage\|rollback-set\|migrate\|switch\|restart\|rollback/u);
+  assert.match(broker, /verify-host-context\|backup\|stage\|rollback-set\|migrate\|switch\|restart\|rollback/u);
   assert.match(broker, /systemd-run --quiet --wait --pipe --collect --service-type=exec/u);
   assert.match(broker, /--setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1/u);
   assert.match(broker, /DELEGATED_CALLER_INVALID/u);
+  assert.match(broker, /"operation":"verify-host-context","delegated":true/u);
   assert.match(installation, /transient root-owned systemd execution unit[\s\S]*ProtectSystem=strict/u);
   assert.doesNotMatch(unit, /ReadWritePaths=.*\/srv\/wbd\/releases/u);
   assert.doesNotMatch(unit, /ReadWritePaths=.*\/etc\/wbd/u);
