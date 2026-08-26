@@ -24,7 +24,7 @@
 | Wachtwoord vergeten | Niet-enumererende aanvraag; admin-issued eenmalige 30-minutenroute; hash-only opslag; sessie-intrekking | premium identity + auth lifecycle tests | PASS |
 | Sportpaleis brand/mobile | Shared black/white/anthracite/red controls and 390px contracts retained | premium shell + responsive source tests | PASS |
 | Parallel Mail Foundation | Geen wijziging aan `mail-foundation.mjs` | empty git diff for that file | PASS |
-| Directe Bedrukken/Vrije-opdruk URL | Create-routes `nieuw`, `team` en `eigen-artikel` worden vóór de orderdetail-fetch uitgesloten | live Chrome-reproductie + `sportpaleis-first-day-employee-acceptance.test.mjs` | PASS IN CANDIDATE; LIVE R1 toont nog het defect |
+| Directe Bedrukken/Vrije-opdruk URL | Create-routes `nieuw`, `team` en `eigen-artikel` worden vóór de orderdetail-fetch uitgesloten | `sportpaleis-first-day-employee-acceptance.test.mjs` + live Chrome R2 | PASS LIVE; beide directe routes renderen de volledige composer zonder recoveryweergave |
 
 ## Resultaat
 
@@ -33,7 +33,7 @@
 - Alle sequentieel uitgevoerde Sportpaleis-tests: exit `0`.
 - Repositorybreed blijven uitsluitend drie WBD Mail-fixtures buiten deze Sportpaleis-delta falen. Een parallelle full-suite-run belastte één Teamorder-timingfixture boven de grens; dezelfde fixture sequentieel/isolated PASS en alle production-shaped timings bleven binnen de bestaande norm.
 - Performance: 2.000 orders + 2.000 PlotJobs blijft bounded (`120` orders, `24` PlotJobs, historypages `40`); payload `86,8%` kleiner dan het onbegrensde model. De 23-elementenproposal blijft `2230,8 ms` met output-equivalentiehash `8D3FF8E…11EF8`.
-- Live Chrome desktop: Today, Orders, Webshop, Search, Production, History, Library en Guided Setup renderen op release R1. De direct-create defecten zijn live gereproduceerd, niet verborgen.
+- Live Chrome desktop: Today, Orders, Webshop, Search, Production, History, Library, Guided Setup, Bedrukken en Vrije opdruk renderen op release R2. De eerder gereproduceerde direct-create defecten zijn live gesloten.
 - De gekoppelde externe Chrome-tab biedt geen werkende viewport-emulatie. 390/320 blijft bron-/regressiebewijs en een expliciete tooling-evidencebeperking.
 
 **SPORTPALEIS PREMIUM DAILY EXPERIENCE — PART 1 PASS — READY FOR TEAMWEAR FINAL**

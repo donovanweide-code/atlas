@@ -39,6 +39,6 @@ The canonical source recovery contains 89 previously approved Teamwear requireme
 - Geen feed, toegang of merkrecht wordt verzonnen: alle externe data-adapters blijven `DISCOVERY_REQUIRED` / `NOT_CONNECTED` totdat de echte leverancierstoegang is bevestigd.
 - De Collectie ondersteunt drie routes naar exact dezelfde `Onze collectie`: officiële merkcollectie bekijken, direct zoeken op merk/model/artikelnummer en bekende clubartikelen hergebruiken.
 - De Studio-runtime blijft catalogusvrij en garment-first; de legacy markup wordt vóór render verwijderd en de regressie bewaakt dit contract.
-- Live Chrome R1 bewijst de volledige stepper, 103 bounded modellen, exact zoeken op `BV6708`, één gekozen garment, de ontwerpacties, front/back en klantpreview. Candidate-live bewijs voor de zes merklinks volgt na release.
+- Live Chrome R2 bewijst de volledige stepper, 103 bounded modellen, exact zoeken op `BV6708`, één gekozen garment, de ontwerpacties, front/back, klantpreview en alle zes gecontroleerde merklinks.
 - Centrale contextassets, cross-proposal reuse, immutable source, surface projection, klantreview/PDF/approval en de 1200×1200 render seam blijven regressiegroen.
 - Desktop live: PASS. 390/320 live viewportcapture: tooling limitation van de gekoppelde externe Chrome-tab; responsive productcontract blijft regressiegroen.
