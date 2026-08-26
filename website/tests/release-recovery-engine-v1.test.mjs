@@ -20,7 +20,7 @@ import { createReleaseEngineRequestHandler } from "../scripts/release-engine-ser
 import { applyOneMigration, assertMigrationSqlMatchesClassification } from "../scripts/release-engine-migrate-one.mjs";
 import { recoverLegacyUndefinedAuditChain } from "../scripts/release-engine-audit-recovery.mjs";
 
-const contractFile = new URL("../../ops/release-engine/contracts/WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826.release-contract.json", import.meta.url);
+const contractFile = new URL("../../ops/release-engine/contracts/WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.release-contract.json", import.meta.url);
 const rawContract = JSON.parse(await readFile(contractFile, "utf8"));
 const fixedNow = new Date("2026-08-25T22:00:00.000Z");
 
@@ -69,7 +69,7 @@ test("audit actor fails closed for missing or display-text machine identities", 
 
 test("release contract locks Web Push identity, forward-only baseline and four additive migrations", () => {
   const value = contract();
-  assert.equal(value.releaseId, "WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826");
+  assert.equal(value.releaseId, "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826");
   assert.equal(value.compatibilityPolicy.mode, "forward-only");
   assert.equal(value.compatibilityPolicy.proof.baselineCommit, value.expectedBaseline.commit);
   assert.deepEqual(value.databases[0].migrations.map((migration) => migration.id), ["003", "004", "005", "006"]);

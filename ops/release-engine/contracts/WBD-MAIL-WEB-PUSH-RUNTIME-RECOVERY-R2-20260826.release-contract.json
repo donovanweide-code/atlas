@@ -1,0 +1,527 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826",
+  "tenant": "wbd",
+  "application": "workspace",
+  "changeScope": {
+    "components": [
+      "mail-foundation",
+      "web-push-runtime",
+      "owner-workspace-pwa"
+    ],
+    "otherTenantImpact": "NONE"
+  },
+  "commit": "69437f64f27ba08954e0bc6232ef6945cc2a48fa",
+  "tag": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826",
+  "artifact": {
+    "path": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.tar.gz",
+    "sha256": "a0a4b4a1f9ace38920fbb91a261f2008e43b66f348b343f69ed72a40c5141e29",
+    "manifestPath": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.manifest.json",
+    "manifestSha256": "d66fdbda0489631e96367ad48075b3e1771bf0e6f6f990e422c75f207cc3eba1"
+  },
+  "expectedBaseline": {
+    "releaseId": "SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-MOBILE-NAV-HOTFIX-20260826",
+    "commit": "bff77acd108212c8d0062c549cccc63f53ccf932"
+  },
+  "compatibilityPolicy": {
+    "mode": "forward-only",
+    "baselineMustBeAncestor": true,
+    "proof": {
+      "type": "immutable-manifest-base-freeze",
+      "baselineCommit": "bff77acd108212c8d0062c549cccc63f53ccf932"
+    }
+  },
+  "requiredRuntimeVersion": ">=22.12.0 <25",
+  "environment": {
+    "required": [
+      {
+        "key": "WORKSPACE_DB_HOST"
+      },
+      {
+        "key": "WORKSPACE_DB_PORT",
+        "required": false
+      },
+      {
+        "key": "WORKSPACE_DB_NAME"
+      },
+      {
+        "key": "WORKSPACE_DB_USER"
+      },
+      {
+        "key": "WORKSPACE_DB_PASSWORD",
+        "secret": true
+      },
+      {
+        "key": "ATLAS_DB_HOST"
+      },
+      {
+        "key": "ATLAS_DB_PORT",
+        "required": false
+      },
+      {
+        "key": "ATLAS_DB_NAME"
+      },
+      {
+        "key": "ATLAS_DB_USER"
+      },
+      {
+        "key": "ATLAS_DB_PASSWORD",
+        "secret": true
+      },
+      {
+        "key": "WBD_MIGRATOR_USER",
+        "aliases": [
+          "MIGRATOR_DB_USER"
+        ]
+      },
+      {
+        "key": "WBD_MIGRATOR_PASSWORD",
+        "aliases": [
+          "MIGRATOR_DB_PASSWORD"
+        ],
+        "secret": true
+      },
+      {
+        "key": "WBD_PUSH_VAPID_PUBLIC_KEY"
+      },
+      {
+        "key": "WBD_PUSH_VAPID_PRIVATE_KEY",
+        "secret": true
+      },
+      {
+        "key": "WBD_PUSH_VAPID_SUBJECT"
+      }
+    ],
+    "secretBindings": [
+      {
+        "key": "WORKSPACE_DB_PASSWORD",
+        "binding": "env-file:/etc/wbd/production.env#WORKSPACE_DB_PASSWORD",
+        "owner": "0",
+        "mode": "0600"
+      },
+      {
+        "key": "ATLAS_DB_PASSWORD",
+        "binding": "env-file:/etc/wbd/production.env#ATLAS_DB_PASSWORD",
+        "owner": "0",
+        "mode": "0600"
+      },
+      {
+        "key": "WBD_MIGRATOR_PASSWORD",
+        "binding": "env-file:/etc/wbd/production.env#MIGRATOR_DB_PASSWORD",
+        "owner": "0",
+        "mode": "0600"
+      },
+      {
+        "key": "WBD_PUSH_VAPID_PRIVATE_KEY",
+        "binding": "env-file:/etc/wbd/production.env#WBD_PUSH_VAPID_PRIVATE_KEY",
+        "owner": "0",
+        "mode": "0600"
+      }
+    ]
+  },
+  "databases": [
+    {
+      "id": "workspace",
+      "environmentPrefix": "WORKSPACE",
+      "migrationComponent": "sportpaleis-runtime-state",
+      "requirements": [],
+      "migrations": [
+        {
+          "id": "003",
+          "file": "website/sportpaleis-server/production-migrations/workspace/003-wbd-mail-control.sql",
+          "checksum": "e4520be02571816de5f099357c5336e691ef4021432da72ed52fa1e8d0651596",
+          "classification": "ADDITIVE",
+          "compatibleWithActive": true,
+          "idempotent": true,
+          "transactional": false,
+          "lockRisk": "LOW_CREATE_NEW_TABLE",
+          "expectedPriorState": [],
+          "targetState": [
+            {
+              "name": "wbd_mail_control_state",
+              "columns": [
+                {
+                  "name": "organization_id",
+                  "type": "varchar(64)"
+                },
+                {
+                  "name": "schema_version",
+                  "type": "int unsigned"
+                },
+                {
+                  "name": "revision",
+                  "type": "bigint unsigned"
+                },
+                {
+                  "name": "state_json",
+                  "type": "longtext"
+                },
+                {
+                  "name": "created_at",
+                  "type": "datetime(3)"
+                },
+                {
+                  "name": "updated_at",
+                  "type": "datetime(3)"
+                }
+              ],
+              "primaryKey": [
+                "organization_id"
+              ],
+              "indexes": [],
+              "checks": [
+                "organization_id = 'we-build-and-design'",
+                "revision > 0"
+              ],
+              "engine": "INNODB",
+              "charset": "utf8mb4",
+              "collation": "utf8mb4_unicode_ci"
+            }
+          ],
+          "verificationQueries": [
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbd_mail_control_state'"
+          ],
+          "recoveryPolicy": "BACKUP_AND_SCHEMA_SNAPSHOT_NO_AUTOMATIC_DOWN_MIGRATION"
+        },
+        {
+          "id": "004",
+          "file": "website/sportpaleis-server/production-migrations/workspace/004-wbd-mail-messages.sql",
+          "checksum": "4281ead6451155b05c05259a1220e914cf8ca8cf87fc0bed28da976328f61a6a",
+          "classification": "ADDITIVE",
+          "compatibleWithActive": true,
+          "idempotent": true,
+          "transactional": false,
+          "lockRisk": "LOW_CREATE_NEW_TABLE",
+          "expectedPriorState": [],
+          "targetState": [
+            {
+              "name": "wbd_mail_messages",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "varchar(80)"
+                },
+                {
+                  "name": "organization_id",
+                  "type": "varchar(64)"
+                },
+                {
+                  "name": "mailbox_id",
+                  "type": "varchar(120)"
+                },
+                {
+                  "name": "thread_id",
+                  "type": "varchar(80)"
+                },
+                {
+                  "name": "source_key",
+                  "type": "varchar(900)"
+                },
+                {
+                  "name": "message_id",
+                  "type": "varchar(998)",
+                  "nullable": true
+                },
+                {
+                  "name": "subject",
+                  "type": "varchar(998)"
+                },
+                {
+                  "name": "snippet",
+                  "type": "varchar(320)"
+                },
+                {
+                  "name": "body_text",
+                  "type": "mediumtext"
+                },
+                {
+                  "name": "classification",
+                  "type": "varchar(80)"
+                },
+                {
+                  "name": "priority",
+                  "type": "varchar(20)"
+                },
+                {
+                  "name": "received_at",
+                  "type": "datetime(3)"
+                },
+                {
+                  "name": "content_hash",
+                  "type": "char(64)"
+                },
+                {
+                  "name": "message_json",
+                  "type": "longtext"
+                },
+                {
+                  "name": "created_at",
+                  "type": "datetime(3)"
+                }
+              ],
+              "primaryKey": [
+                "id"
+              ],
+              "indexes": [
+                {
+                  "name": "ft_wbd_mail_text",
+                  "fulltext": true,
+                  "columns": [
+                    "subject",
+                    "snippet",
+                    "body_text"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_attention",
+                  "columns": [
+                    "organization_id",
+                    "priority",
+                    "received_at"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_mailbox",
+                  "columns": [
+                    "mailbox_id",
+                    "received_at"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_message_id",
+                  "columns": [
+                    "message_id(255)"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_recent",
+                  "columns": [
+                    "organization_id",
+                    "received_at"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_thread",
+                  "columns": [
+                    "thread_id",
+                    "received_at"
+                  ]
+                },
+                {
+                  "name": "uq_wbd_mail_source",
+                  "unique": true,
+                  "columns": [
+                    "source_key(700)"
+                  ]
+                }
+              ],
+              "checks": [],
+              "engine": "INNODB",
+              "charset": "utf8mb4",
+              "collation": "utf8mb4_unicode_ci"
+            }
+          ],
+          "verificationQueries": [
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbd_mail_messages' AND INDEX_NAME = 'ft_wbd_mail_text' AND INDEX_TYPE = 'FULLTEXT'"
+          ],
+          "recoveryPolicy": "BACKUP_AND_SCHEMA_SNAPSHOT_NO_AUTOMATIC_DOWN_MIGRATION"
+        },
+        {
+          "id": "005",
+          "file": "website/sportpaleis-server/production-migrations/workspace/005-wbd-mail-threads.sql",
+          "checksum": "04adbdbb7b70d99ab6e15bbb9d819f073db557c1988fa889d7f659ab268322f8",
+          "classification": "ADDITIVE",
+          "compatibleWithActive": true,
+          "idempotent": true,
+          "transactional": false,
+          "lockRisk": "LOW_CREATE_NEW_TABLE",
+          "expectedPriorState": [],
+          "targetState": [
+            {
+              "name": "wbd_mail_threads",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "varchar(80)"
+                },
+                {
+                  "name": "organization_id",
+                  "type": "varchar(64)"
+                },
+                {
+                  "name": "priority",
+                  "type": "varchar(20)"
+                },
+                {
+                  "name": "status",
+                  "type": "varchar(30)"
+                },
+                {
+                  "name": "last_activity_at",
+                  "type": "datetime(3)"
+                },
+                {
+                  "name": "thread_json",
+                  "type": "longtext"
+                },
+                {
+                  "name": "updated_at",
+                  "type": "datetime(3)"
+                }
+              ],
+              "primaryKey": [
+                "id"
+              ],
+              "indexes": [
+                {
+                  "name": "idx_wbd_mail_thread_attention",
+                  "columns": [
+                    "organization_id",
+                    "status",
+                    "priority",
+                    "last_activity_at"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_thread_recent",
+                  "columns": [
+                    "organization_id",
+                    "last_activity_at"
+                  ]
+                }
+              ],
+              "checks": [],
+              "engine": "INNODB",
+              "charset": "utf8mb4",
+              "collation": "utf8mb4_unicode_ci"
+            }
+          ],
+          "verificationQueries": [
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbd_mail_threads'"
+          ],
+          "recoveryPolicy": "BACKUP_AND_SCHEMA_SNAPSHOT_NO_AUTOMATIC_DOWN_MIGRATION"
+        },
+        {
+          "id": "006",
+          "file": "website/sportpaleis-server/production-migrations/workspace/006-wbd-mail-audit.sql",
+          "checksum": "a1f1a91794a8cdff59987083124878fcff34044a91a7607b8f53f9453b4db3e9",
+          "classification": "ADDITIVE",
+          "compatibleWithActive": true,
+          "idempotent": true,
+          "transactional": false,
+          "lockRisk": "LOW_CREATE_NEW_TABLE",
+          "expectedPriorState": [],
+          "targetState": [
+            {
+              "name": "wbd_mail_audit",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "varchar(80)"
+                },
+                {
+                  "name": "organization_id",
+                  "type": "varchar(64)"
+                },
+                {
+                  "name": "event_type",
+                  "type": "varchar(100)"
+                },
+                {
+                  "name": "subject_id",
+                  "type": "varchar(160)"
+                },
+                {
+                  "name": "actor",
+                  "type": "varchar(120)"
+                },
+                {
+                  "name": "occurred_at",
+                  "type": "datetime(3)"
+                },
+                {
+                  "name": "details_json",
+                  "type": "longtext"
+                }
+              ],
+              "primaryKey": [
+                "id"
+              ],
+              "indexes": [
+                {
+                  "name": "idx_wbd_mail_audit_recent",
+                  "columns": [
+                    "organization_id",
+                    "occurred_at"
+                  ]
+                },
+                {
+                  "name": "idx_wbd_mail_audit_subject",
+                  "columns": [
+                    "organization_id",
+                    "subject_id",
+                    "occurred_at"
+                  ]
+                }
+              ],
+              "checks": [],
+              "engine": "INNODB",
+              "charset": "utf8mb4",
+              "collation": "utf8mb4_unicode_ci"
+            }
+          ],
+          "verificationQueries": [
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbd_mail_audit'"
+          ],
+          "recoveryPolicy": "BACKUP_AND_SCHEMA_SNAPSHOT_NO_AUTOMATIC_DOWN_MIGRATION"
+        }
+      ]
+    }
+  ],
+  "prepare": {
+    "autoBackup": true,
+    "backupMaxAgeSeconds": 90000,
+    "restoreEvidenceMaxAgeSeconds": 2678400,
+    "schemaSnapshot": true
+  },
+  "activation": {
+    "switchStrategy": "atomic-symlink",
+    "restart": {
+      "strategy": "single",
+      "service": "wbd-workspace.service"
+    },
+    "readinessChecks": [
+      "workspace-readiness"
+    ],
+    "oldReleasePostMigrationSmokes": [
+      "workspace-health",
+      "mail-r2-compatibility"
+    ],
+    "smokeSuite": [
+      "workspace-health",
+      "owner-login",
+      "mail-runtime",
+      "web-push-runtime-non-delivering",
+      "sportpaleis-critical-flow"
+    ]
+  },
+  "rollback": {
+    "targetReleaseId": "SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-MOBILE-NAV-HOTFIX-20260826",
+    "automaticAfterSwitch": true,
+    "smokeSuite": [
+      "workspace-health",
+      "mail-r2-compatibility",
+      "sportpaleis-critical-flow"
+    ]
+  },
+  "postDeployEvidence": [
+    "release-audit",
+    "schema-evidence",
+    "smoke-evidence",
+    "push-delivery-counter"
+  ],
+  "featureExposure": {
+    "default": "OFF",
+    "killSwitch": "WBD_PUSH_USER_OPT_IN"
+  }
+}
