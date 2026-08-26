@@ -36,8 +36,8 @@ export async function recoverLegacyUndefinedAuditChain({ stateRoot, tenant, appl
   const backupDirectory = path.join(root, "audit-recovery");
   const backup = path.join(backupDirectory, `${name}.${expectedFileSha256}.original`);
   if (sha256(original) !== expectedFileSha256) {
-    const verified = verifyAuditChain(events);
-    const recovery = verified.current;
+    verifyAuditChain(events);
+    const recovery = [...events].reverse().find((event) => event.type === "audit_chain_recovered" && event.details?.originalFileSha256 === expectedFileSha256);
     const preserved = await readFile(backup).catch(() => null);
     if (recovery?.type !== "audit_chain_recovered" || recovery.details?.originalFileSha256 !== expectedFileSha256 || !preserved || sha256(preserved) !== expectedFileSha256) throw new Error("Audit recovery source checksum wijkt af.");
     return { status: "PASS", releaseId, originalFileSha256: expectedFileSha256, repairedEvents: recovery.details.repairedEvents, recoveryEventHash: recovery.eventHash, backup: path.basename(backup), idempotent: true };
