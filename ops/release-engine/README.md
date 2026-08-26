@@ -17,7 +17,7 @@ Every prepare, activation, and automatic recovery holds the shared production de
 
 - `release-engine-service.mjs` is the durable server-side runner. It uses a protected Unix socket; it has no SSH, PowerShell, arbitrary-command, or artifact-build endpoint.
 - `wbd-release` is a dedicated non-login machine identity. The service itself cannot mutate `/srv/wbd`, `/etc/wbd`, systemd, or databases.
-- `wbd-release-engine-operation` is the root-owned allowlisted broker. It accepts only fixed verbs and validates IDs, hashes, plan hashes, paths, services, migrations, and smoke adapters.
+- `wbd-release-engine-operation` is the root-owned allowlisted broker. It accepts only fixed verbs and validates IDs, hashes, plan hashes, paths, services, migrations, and smoke adapters. Mutating verbs are handed to an ephemeral root-owned systemd execution unit so the unprivileged engine service can remain under `ProtectSystem=strict`; the runner never receives direct write access to releases, runtime configuration, or service control.
 - Human break-glass access remains independent. It is not granted to `wbd-release` and is not part of the normal release path.
 - Contracts and artifacts arrive in the central server-side release inbox through the existing candidate/build boundary. A personal laptop or SSH identity is not a runtime dependency.
 

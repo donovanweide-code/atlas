@@ -7,6 +7,7 @@ readonly INBOX_ROOT=/srv/wbd/shared/release-inbox
 readonly ENV_FILE=/etc/wbd/production.env
 readonly SERVICE=wbd-workspace.service
 readonly LEGACY_RELEASE_HELPER=/usr/local/libexec/wbd-deployment/spw-immutable-release.sh
+readonly BROKER_PATH=/usr/local/libexec/wbd-release-engine-operation
 
 fail() { printf '{"status":"BLOCKED","code":"%s"}\n' "$1" >&2; exit 1; }
 valid_id() { [[ ${1:-} =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || fail INVALID_ID; }
@@ -44,8 +45,22 @@ if (contract.contractHash !== expected) process.exit(43);
 NODE
 }
 
-require_runner
-operation=${1:-}; shift || true
+if [[ ${1:-} == --delegated ]]; then
+  shift
+  [[ $(id -u) -eq 0 && -z ${SUDO_USER:-} && ${WBD_RELEASE_ENGINE_HOST_CONTEXT:-} == 1 && -n ${INVOCATION_ID:-} ]] || fail DELEGATED_CALLER_INVALID
+  operation=${1:-}; shift || true
+else
+  require_runner
+  operation=${1:-}; shift || true
+  case "$operation" in
+    backup|stage|rollback-set|migrate|switch|restart|rollback)
+      unit="wbd-release-engine-op-$(date +%s%N)-$$"
+      exec systemd-run --quiet --wait --pipe --collect --service-type=exec \
+        --unit="$unit" --setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1 \
+        "$BROKER_PATH" --delegated "$operation" "$@"
+      ;;
+  esac
+fi
 case "$operation" in
   inspect-current)
     release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
