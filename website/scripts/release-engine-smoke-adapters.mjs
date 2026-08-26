@@ -1,3 +1,4 @@
+import { request as httpRequest } from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -7,9 +8,49 @@ const adapterIds = new Set([
 ]);
 
 async function getJson(url, { host } = {}) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { Accept: "application/json", ...(host ? { Host: host } : {}) } });
-  if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} voor smoke endpoint.`), { code: "SMOKE_HTTP_FAIL" });
-  return response.json();
+  const target = new URL(url);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      callback(value);
+    };
+    const request = httpRequest({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port,
+      path: `${target.pathname}${target.search}`,
+      method: "GET",
+      headers: { Accept: "application/json", ...(host ? { Host: host } : {}) },
+    }, (response) => {
+      const chunks = [];
+      let size = 0;
+      response.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > 1_000_000) {
+          request.destroy(Object.assign(new Error("Smoke response is groter dan toegestaan."), { code: "SMOKE_RESPONSE_TOO_LARGE" }));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => {
+        const status = response.statusCode ?? 500;
+        if (status < 200 || status >= 300) {
+          finish(reject, Object.assign(new Error(`HTTP ${status} voor smoke endpoint.`), { code: "SMOKE_HTTP_FAIL" }));
+          return;
+        }
+        try {
+          finish(resolve, JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch {
+          finish(reject, Object.assign(new Error("Smoke endpoint gaf geen geldige JSON."), { code: "SMOKE_JSON_INVALID" }));
+        }
+      });
+    });
+    request.setTimeout(10_000, () => request.destroy(Object.assign(new Error("Smoke endpoint timeout."), { code: "SMOKE_TIMEOUT" })));
+    request.on("error", (error) => finish(reject, error));
+    request.end();
+  });
 }
 
 export async function runReleaseSmoke({ releaseId, adapterId, phase, roots = {}, environment = process.env }) {
@@ -25,7 +66,10 @@ export async function runReleaseSmoke({ releaseId, adapterId, phase, roots = {},
   } else if (adapterId === "owner-login") {
     const ready = await getJson(`${base}/ready/wbd`, { host: "workspace.webuildanddesign.nl" });
     if (!new Set(["ready", "ok"]).has(ready.status)) throw Object.assign(new Error("Owner auth/runtime-boundary is niet ready."), { code: "OWNER_BOUNDARY_FAIL" });
-  } else if (adapterId === "mail-runtime" || adapterId === "mail-r2-compatibility") {
+  } else if (adapterId === "mail-r2-compatibility") {
+    const health = await getJson(`${base}/health/wbd`, { host: "workspace.webuildanddesign.nl" });
+    if (health.status !== "ok" || health.persistence !== "mariadb" || !Number.isInteger(health.datastoreRevision)) throw Object.assign(new Error("Actieve Mail R2-runtime is niet compatibel met de additieve schemawijzigingen."), { code: "MAIL_R2_COMPATIBILITY_FAIL" });
+  } else if (adapterId === "mail-runtime") {
     const health = await getJson(`${base}/health/wbd`, { host: "workspace.webuildanddesign.nl" });
     if (health.status !== "ok" || health.persistence !== "mariadb" || health.mail?.status !== "available" || health.mail?.connectorCallsDuringRender !== 0) throw Object.assign(new Error("Mail runtime smoke faalde."), { code: "MAIL_SMOKE_FAIL" });
   } else if (adapterId === "web-push-runtime-non-delivering") {
