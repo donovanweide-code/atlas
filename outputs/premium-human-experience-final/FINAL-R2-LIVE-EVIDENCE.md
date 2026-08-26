@@ -1,5 +1,9 @@
 # Sportpaleis Premium Human Experience Final R2 — live evidence
 
+## Proven successor baseline
+
+The bounded mobile-navigation successor `SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-MOBILE-NAV-HOTFIX-20260826` is now the current proven Sportpaleis baseline. On 26 August 2026 Donovan confirmed on a real iPhone that the live 390 px navigation passes, the hamburger opens and the navigation is usable. The earlier Mobile Navigation Human Acceptance failure is CLOSED. Exact release and acceptance evidence is recorded in `MOBILE-NAV-HOTFIX-HUMAN-ACCEPTANCE.md`.
+
 ## Immutable release
 
 - Release: `SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-20260826`
@@ -56,4 +60,4 @@ The GitHub wrapper then expected only the newer literal `LIVE_SWITCH=PASS` and m
 
 ## Evidence boundary
 
-Desktop live Chrome acceptance is PASS. The externally linked Chrome tab does not expose a working 390/320 viewport override; responsive source contracts and regressions remain green. This is an automated viewport-evidence limitation, not a hidden product-functionality failure.
+Desktop live Chrome acceptance is PASS. Live 390 px mobile navigation is Human Acceptance PASS on a real iPhone for the proven successor baseline. Automated 320 px viewport evidence remains limited by the external Chrome binding; responsive source contracts and regressions remain green. The non-pilot-principal check remains a separate evidence limitation and does not reopen this release.
