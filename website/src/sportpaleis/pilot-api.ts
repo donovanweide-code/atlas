@@ -77,6 +77,8 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     quickPinEnabled: boolean;
     /** Exact per-principal server decision; defaults false for every account. */
     teamwearExperiencePilot: boolean;
+    /** Exact server-side principal decision. Candidate code is lazy and has no production mutation authority. */
+    reviewMode: boolean;
   };
   productionInventory: SportpaleisProductionInventoryView[];
   productionHistory?: { total: number; loaded: number; pageSize: number; bounded: true };

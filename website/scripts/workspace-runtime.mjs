@@ -117,6 +117,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/orders/nieuw`,
   `${sportpaleisBoundary}/voorstellen`,
   `${sportpaleisBoundary}/voorstellen/nieuw`,
+  `${sportpaleisBoundary}/reviews/library-teamkit`,
   `${sportpaleisBoundary}/zoeken`,
   `${sportpaleisBoundary}/productie`,
   `${sportpaleisBoundary}/context`,
@@ -177,7 +178,7 @@ export function isKnownWorkspaceRoute(pathname) {
 
 function isCanonicalSportpaleisRoute(pathname) {
   const normalized = normalizePathname(pathname);
-  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/voorstellen", "/voorstel", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren"]
+  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/voorstellen", "/voorstel", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren", "/reviews"]
     .some((root) => normalized === root || normalized.startsWith(`${root}/`));
 }
 
@@ -322,6 +323,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
+          reviewPrincipalIds: config.reviewPrincipalIds,
         });
         await service.initialize();
         return createSportpaleisPilotRequestHandler(service, {

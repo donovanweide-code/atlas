@@ -30,6 +30,8 @@ const LEGACY_BASE = "/workspace/sportpaleis";
 // The dedicated customer host uses concise routes. Local/shared-host review keeps
 // the legacy boundary so WBD and Sportpaleis can still coexist safely.
 const BASE = location.pathname === LEGACY_BASE || location.pathname.startsWith(`${LEGACY_BASE}/`) ? LEGACY_BASE : "";
+const REVIEW_ROUTE = `${BASE}/reviews/library-teamkit`;
+const LIVE_TEAMKIT_ROUTE = `${BASE}/voorstellen`;
 const referenceBatch = createCutJobBatch({
   organizationId: "sport-2000-sportpaleis-bv", orderId: "SNIJTEST-001", revision: 1,
   attemptIdPrefix: "workspace-preview", createdAt: "2026-08-07T08:00:00.000Z",
@@ -200,8 +202,9 @@ function shell(html: string, state: PilotBootstrap, current: string, title: stri
   const adminNav = user.role === "admin" ? `${nav(`${BASE}/beheer`, "Beheer", current)}` : user.role === "operator" ? `${nav(`${BASE}/beheer/artikelen`, "Artikelvolgorde", current)}` : "";
   const switchable = (state.switchableUsers ?? []).filter(({ id, status }) => id !== user.id && status === "Actief");
   const previewAccountAction = activeRolePreview ? `<button type="button" data-action="exit-role-preview">Terug naar Beheerder</button>` : user.role === "admin" ? `<a data-link href="${BASE}/beheer/rollen">Bekijk Workspace als…</a>` : "";
-  const userMenu = `<details class="sp-user-menu"><summary><span class="sp-user__avatar">${esc(user.initials)}</span><span><strong>${esc(user.name)}</strong><small>${roleLabel} · ${state.capabilities.deviceMode === "PERSONAL" ? "persoonlijk" : "gedeeld"}</small></span></summary><div class="sp-user-menu__panel"><div class="sp-user-menu__identity"><span class="sp-user__avatar">${esc(user.initials)}</span><div><strong>${esc(user.name)}</strong><span>${roleLabel}${user.salesNumber ? ` · verkoopnummer ${esc(user.salesNumber)}` : ""}</span></div></div><nav class="sp-user-menu__actions" aria-label="Account"><a data-link href="${BASE}/overzicht">Mijn werk</a><a data-link href="${BASE}/voorkeuren">Mijn weergave</a>${user.role === "admin" ? `<a data-link href="${BASE}/beheer/gebruikers">Gebruikers beheren</a>` : ""}${previewAccountAction}</nav>${switchable.length && !activeRolePreview ? `<details class="sp-user-switch"><summary>Andere gebruiker</summary><form data-fast-switch-form><label>Gebruiker<select name="targetUserId" data-switch-user>${switchable.map((candidate) => `<option value="${esc(candidate.id)}" data-pin-enrolled="${candidate.quickAuth?.pinEnrolled === true}" data-user-role="${esc(candidate.role)}">${esc(candidate.name)}${candidate.salesNumber ? ` · ${esc(candidate.salesNumber)}` : ""}</option>`).join("")}</select></label>${fastSwitchAuthentication(switchable[0], state.capabilities.deviceMode === "SHARED")}</form></details>` : ""}<button class="sp-user-menu__logout" type="button" data-action="logout">${state.capabilities.deviceMode === "SHARED" ? "Vergrendelen" : "Uitloggen"}</button></div></details>`;
-  const previewBanner = activeRolePreview ? `<div class="sp-role-preview-banner" role="status"><span><strong>Preview als ${esc(roleName(activeRolePreview))}</strong> · navigatie en werkgebieden volgen deze rol; je beheerdersaccount blijft ongewijzigd.</span><button type="button" data-action="exit-role-preview">Terug naar Beheerder</button></div>` : "";
+  const reviewMenuAction = state.capabilities.reviewMode ? `<a data-link href="${REVIEW_ROUTE}">Review nieuwe versie</a>` : "";
+  const userMenu = `<details class="sp-user-menu"><summary><span class="sp-user__avatar">${esc(user.initials)}</span><span><strong>${esc(user.name)}</strong><small>${roleLabel} · ${state.capabilities.deviceMode === "PERSONAL" ? "persoonlijk" : "gedeeld"}</small></span></summary><div class="sp-user-menu__panel"><div class="sp-user-menu__identity"><span class="sp-user__avatar">${esc(user.initials)}</span><div><strong>${esc(user.name)}</strong><span>${roleLabel}${user.salesNumber ? ` · verkoopnummer ${esc(user.salesNumber)}` : ""}</span></div></div><nav class="sp-user-menu__actions" aria-label="Account"><a data-link href="${BASE}/overzicht">Mijn werk</a><a data-link href="${BASE}/voorkeuren">Mijn weergave</a>${reviewMenuAction}${user.role === "admin" ? `<a data-link href="${BASE}/beheer/gebruikers">Gebruikers beheren</a>` : ""}${previewAccountAction}</nav>${switchable.length && !activeRolePreview ? `<details class="sp-user-switch"><summary>Andere gebruiker</summary><form data-fast-switch-form><label>Gebruiker<select name="targetUserId" data-switch-user>${switchable.map((candidate) => `<option value="${esc(candidate.id)}" data-pin-enrolled="${candidate.quickAuth?.pinEnrolled === true}" data-user-role="${esc(candidate.role)}">${esc(candidate.name)}${candidate.salesNumber ? ` · ${esc(candidate.salesNumber)}` : ""}</option>`).join("")}</select></label>${fastSwitchAuthentication(switchable[0], state.capabilities.deviceMode === "SHARED")}</form></details>` : ""}<button class="sp-user-menu__logout" type="button" data-action="logout">${state.capabilities.deviceMode === "SHARED" ? "Vergrendelen" : "Uitloggen"}</button></div></details>`;
+  const previewBanner = activeRolePreview ? `<div class="sp-role-preview-banner" role="status"><span><strong>Preview als ${esc(roleName(activeRolePreview))}</strong> · navigatie en werkgebieden volgen deze rol; je beheerdersaccount blijft ongewijzigd.</span><button type="button" data-action="exit-role-preview">Terug naar Beheerder</button></div>` : current === REVIEW_ROUTE ? `<div class="sp-review-mode-banner" role="status"><span><strong>CANDIDATE · REVIEW</strong><small>Alleen zichtbaar voor jou · alle handelingen blijven binnen tijdelijke reviewstate</small></span><a data-link href="${LIVE_TEAMKIT_ROUTE}">Terug naar LIVE</a></div>` : "";
   const mobilePrimary = contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : nav(`${BASE}/orders/nieuw`, "Bedrukken", current);
   return `<div class="sp-workspace sp-density--${pref.density} sp-role--${user.role}${captureClass}" data-premium-shell="v1" data-integration-ready="mail proposals" data-readonly="${Boolean(state.readOnlyFallback)}" data-role-preview="${activeRolePreview ?? ""}" data-previous-build="${PREVIOUS_BUILD_ID}" data-polish-build="${PREVIOUS_POLISH_BUILD_ID}" data-previous-release="${PREVIOUS_RELEASE_ID}">
     <header class="sp-topbar"><button class="sp-icon-button sp-menu-button" data-action="toggle-nav" aria-label="Volledig menu" aria-expanded="false">☰</button><a class="sp-brand" data-link href="${BASE}/overzicht">${logo()}</a><div class="sp-topbar__meta"><span class="sp-env">${state.capabilities.demo ? "LOKALE REVIEW" : "PILOT"}</span><span class="sp-visually-hidden">Release ${esc(state.releaseId || BUILD_ID)} · foundation ${BASELINE_BUILD_ID}</span></div>${userMenu}</header>
@@ -1376,6 +1379,10 @@ void customOrder;
 
 function page(state: PilotBootstrap, current: string): { title: string; html: string } {
   const contexts = new Set(state.capabilities.workContexts ?? state.currentUser.workContexts ?? []);
+  if (current === REVIEW_ROUTE) return state.capabilities.reviewMode
+    ? { title: "Review nieuwe versie", html: `<section class="sp-review-mode-page"><header class="sp-page-head"><div><p class="sp-eyebrow">REVIEW MODE</p><h1>Library + Teamkit</h1><p>Vergelijk de bestaande Workspace met een geïsoleerde candidate. Bekijken is niet publiceren.</p></div></header><nav class="sp-review-live-switch" aria-label="Versie bekijken"><a data-link href="${BASE}/voorstellen">LIVE</a><a aria-current="page" data-link href="${REVIEW_ROUTE}">CANDIDATE</a></nav><div class="sp-review-candidate-root" data-review-candidate-root aria-live="polite"><p>Candidate laden…</p></div></section>` }
+    : { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
+  if (current.startsWith(`${BASE}/reviews/`)) return { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (state.currentUser.role === "store" && (current.startsWith(`${BASE}/productie`) || current.startsWith(`${BASE}/beheer`) || current === `${BASE}/context` || current === `${BASE}/feedback` || current === `${BASE}/voorkeuren`)) return { title: "Geen toegang", html: empty("Deze pagina hoort niet bij de winkelrol") };
   if (current === `${BASE}/overzicht`) return { title: "Overzicht", html: overview(state) };
   if (current === `${BASE}/zoeken`) return { title: "Zoeken", html: workspaceSearch(state) };
@@ -1473,6 +1480,8 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", "#071216");
   if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol === "https:") void navigator.serviceWorker.register("/sportpaleis-sw.js", { scope: `${BASE}/` });
   const api = new SportpaleisPilotApi(); let state: PilotBootstrap | undefined; let searchIndex: WorkspaceSearchItem[] = []; let notice = ""; let activationNotice = ""; let demoEnabled = false;
+  let reviewCandidateCleanup: (() => void) | null = null;
+  let reviewCandidateLoadSequence = 0;
   let orderSearchSequence = 0;
   let sharedSyncInFlight = false; let sharedSyncFormDirty = false; let deferredSharedRevision: number | null = null;
   const isSharedStatusRoute = (): boolean => {
@@ -1506,10 +1515,21 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     } catch (error) { container.textContent = message(error); }
   };
   const render = (options: { preserveScroll?: boolean; focusArticleId?: string } = {}): void => {
+    reviewCandidateCleanup?.(); reviewCandidateCleanup = null; const reviewLoadSequence = ++reviewCandidateLoadSequence;
     const savedScroll = options.preserveScroll ? { x: scrollX, y: scrollY } : undefined;
     if (!state) { const current = path(); app.innerHTML = current === `${BASE}/activeren` ? activationPage(activationNotice) : current === `${BASE}/wachtwoord-vergeten` ? recoveryRequestPage(activationNotice) : current === `${BASE}/wachtwoord-herstellen` ? recoveryCompletePage(activationNotice) : login(notice, demoEnabled); return; }
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
+    if (current === REVIEW_ROUTE && viewState.capabilities.reviewMode) {
+      const root = app.querySelector<HTMLElement>("[data-review-candidate-root]");
+      if (root) void import("./sportpaleis/review-candidates/library-teamkit-v1.ts").then(({ mountLibraryTeamkitCandidate }) => {
+        if (reviewLoadSequence !== reviewCandidateLoadSequence || !root.isConnected) return;
+        reviewCandidateCleanup = mountLibraryTeamkitCandidate(root, viewState);
+      }).catch(() => {
+        if (reviewLoadSequence !== reviewCandidateLoadSequence || !root.isConnected) return;
+        root.innerHTML = `<section class="sp-panel sp-review-candidate-unavailable"><h2>Candidate tijdelijk niet beschikbaar</h2><p>LIVE blijft normaal werken en is niet afhankelijk van deze review.</p><a class="sp-button sp-button--primary" data-link href="${BASE}/voorstellen">Terug naar LIVE</a></section>`;
+      });
+    }
     if (viewState.capabilities.teamwearExperiencePilot && current.startsWith(`${BASE}/voorstellen/`) && new URLSearchParams(location.search).get("mode") !== "beheer") activateTeamkitExperience(app, viewState);
     if (current === `${BASE}/productie`) app.querySelector(".sp-page-head")?.insertAdjacentHTML("afterend", `<details class="sp-panel sp-quick-intake-entry sp-context-details"><summary>Order uit document</summary><div><p>Verwerk een PDF, tekstexport of e-mail via dezelfde centrale orderflow.</p><a class="sp-button sp-button--secondary" data-link href="${BASE}/productie/intake">Document kiezen</a></div></details>`);
     if (current === `${BASE}/zoeken`) {

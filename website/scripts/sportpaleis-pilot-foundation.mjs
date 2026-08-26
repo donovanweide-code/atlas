@@ -1502,8 +1502,32 @@ function assertRole(user, allowed) {
   }
 }
 
+const SPORTPALEIS_REVIEW_CANDIDATES = Object.freeze([Object.freeze({
+  id: "library-teamkit-v1",
+  title: "Bibliotheek + bestaande Teamkit",
+  status: "CANDIDATE",
+  stateBoundary: "DISPOSABLE_SESSION_ONLY",
+  capabilities: Object.freeze({
+    library: "READ_SAFE",
+    teamkitDraft: "CANDIDATE_STATE_ONLY",
+    proof: "SIMULATED",
+    uploads: "DISABLED",
+    orders: "FORBIDDEN",
+    production: "FORBIDDEN",
+    mail: "FORBIDDEN",
+    externalApis: "FORBIDDEN",
+  }),
+})]);
+
+function reviewModeAllowed(user, principalIds) {
+  return user.role === "admin"
+    && user.seatType === "customer"
+    && user.featureExposure?.teamwearExperiencePilot === true
+    && principalIds.has(user.id);
+}
+
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [] }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -1518,10 +1542,25 @@ export class SportpaleisPilotService {
     this.mailMode = mailMode;
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
+    this.reviewPrincipalIds = new Set(reviewPrincipalIds);
   }
 
   async initialize() {
     await this.store.initialize();
+  }
+
+  async reviewManifest(token) {
+    const { user } = await this.authenticate(token);
+    if (!reviewModeAllowed(user, this.reviewPrincipalIds)) {
+      throw Object.assign(new Error("Review Mode is niet beschikbaar voor dit account."), { statusCode: 403, code: "REVIEW_MODE_FORBIDDEN" });
+    }
+    return {
+      mode: "CANDIDATE",
+      principalId: user.id,
+      candidateStateAuthority: "CANDIDATE_ONLY",
+      productionMutationAuthority: false,
+      candidates: SPORTPALEIS_REVIEW_CANDIDATES,
+    };
   }
 
   async login({ email, password, deviceMode = "SHARED", remoteAddress = "unknown", now = new Date() }) {
@@ -1815,7 +1854,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -5878,6 +5917,14 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (route === "/api/sportpaleis/v1/bootstrap" && method === "GET") {
         json(response, 200, await service.bootstrap(token));
         return true;
+      }
+      if (route === "/api/sportpaleis/v1/reviews" && method === "GET") {
+        json(response, 200, await service.reviewManifest(token));
+        return true;
+      }
+      if (route.startsWith("/api/sportpaleis/v1/reviews")) {
+        await service.reviewManifest(token);
+        throw Object.assign(new Error("Candidate mag productie of externe systemen niet wijzigen."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
       }
       if (route === "/api/sportpaleis/v1/state-revision" && method === "GET") {
         json(response, 200, await service.currentRevision(token));

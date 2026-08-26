@@ -15,6 +15,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   workspaceBaseUrl: string,
  *   wbdWorkspaceBaseUrl: string,
  *   releaseId: string,
+ *   reviewPrincipalIds: readonly string[],
  *   distDir: string,
  *   logLevel: LogLevel,
  *   productionDatabases: Readonly<{
@@ -57,6 +58,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   WORKSPACE_BASE_URL: { phase: "WS.1", requiredInProduction: true, secret: false },
   WBD_WORKSPACE_BASE_URL: { phase: "WBD Owner V1", requiredInProduction: true, secret: false },
   RELEASE_ID: { phase: "WS.1", requiredInProduction: true, secret: false },
+  SPORTPALEIS_REVIEW_PRINCIPAL_IDS: { phase: "Sportpaleis Review Mode V1", requiredInProduction: false, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
   WORKSPACE_DB_HOST: { phase: "production persistence", requiredInProduction: true, secret: false },
@@ -192,6 +194,13 @@ export function parseWorkspaceRuntimeConfig(env) {
   if (!releaseIdPattern.test(releaseId)) {
     throw new WorkspaceRuntimeConfigError("RELEASE_ID moet een opaque identifier van maximaal 128 veilige tekens zijn.");
   }
+  const reviewPrincipalIds = Object.freeze(value(env, "SPORTPALEIS_REVIEW_PRINCIPAL_IDS")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean));
+  if (reviewPrincipalIds.some((entry) => !/^user-[a-f0-9]{16}$/u.test(entry))) {
+    throw new WorkspaceRuntimeConfigError("SPORTPALEIS_REVIEW_PRINCIPAL_IDS bevat een ongeldige canonical principal ID.");
+  }
 
   const logLevel = value(env, "LOG_LEVEL") || "info";
   if (!new Set(["debug", "info", "warn", "error"]).has(logLevel)) {
@@ -228,6 +237,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     workspaceBaseUrl,
     wbdWorkspaceBaseUrl,
     releaseId,
+    reviewPrincipalIds,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,
     productionDatabases,
