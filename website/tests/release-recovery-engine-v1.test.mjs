@@ -13,6 +13,7 @@ import {
   inspectEnvironmentContract, inspectMigrationState, inspectRecoveryReadiness, schemaObjectMatches,
 } from "../scripts/release-engine-inspection.mjs";
 import { InMemoryReleasePlatform } from "../scripts/release-engine-platform.mjs";
+import { privilegedInspect } from "../scripts/release-engine-privileged-inspect.mjs";
 import { WbdReleaseEngine } from "../scripts/release-engine-runner.mjs";
 import { FileReleaseStateStore, InMemoryReleaseStateStore } from "../scripts/release-engine-state-store.mjs";
 import { createReleaseEngineRequestHandler } from "../scripts/release-engine-service.mjs";
@@ -241,6 +242,48 @@ test("happy prepare ends at one compact AWAITING_HUMAN_GO boundary", async () =>
   assert.equal(summary.risk, "LOW_ADDITIVE");
   assert.equal(summary.expectedDowntime, "one-controlled-restart");
   assert.equal(summary.featureExposure.default, "OFF");
+  assert.ok(result.platform.calls.indexOf("environmentUnlock:prepare") < result.platform.calls.indexOf("stageArtifact"));
+  assert.ok(result.platform.calls.indexOf("stageArtifact") < result.platform.calls.indexOf("environmentLock:prepare-finalize"));
+});
+
+test("privileged current inspection vergelijkt symlink, manifest en env zonder secretoutput", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "release-current-inspect-"));
+  const server = createServer((_request, response) => { response.writeHead(200, { "Content-Type": "application/json" }); response.end('{"status":"ok"}'); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const value = contract();
+    const contractRoot = path.join(root, "contracts");
+    const releaseRoot = path.join(root, value.expectedBaseline.releaseId);
+    await mkdir(contractRoot, { recursive: true });
+    await mkdir(releaseRoot, { recursive: true });
+    await writeFile(path.join(contractRoot, `${value.releaseId}.release-contract.json`), `${JSON.stringify(rawContract)}\n`);
+    await writeFile(path.join(releaseRoot, "RELEASE-MANIFEST.json"), `${JSON.stringify({ releaseId: value.expectedBaseline.releaseId, commit: value.expectedBaseline.commit })}\n`);
+    const environmentFile = path.join(root, "production.env");
+    await writeFile(environmentFile, `RELEASE_ID=${value.expectedBaseline.releaseId}\nPRIVATE_VALUE=never-return-this\n`);
+    const address = server.address();
+    const inspected = await privilegedInspect({ releaseId: value.releaseId, contractHash: value.contractHash, mode: "current", roots: {
+      contractRoot, environmentFile, currentLink: releaseRoot,
+      healthUrl: `http://127.0.0.1:${address.port}/health`, readinessUrl: `http://127.0.0.1:${address.port}/ready`,
+    } });
+    assert.equal(inspected.releaseId, value.expectedBaseline.releaseId);
+    assert.equal(inspected.commit, value.expectedBaseline.commit);
+    assert.equal(inspected.health, "PASS");
+    assert.equal(inspected.readiness, "PASS");
+    assert.doesNotMatch(JSON.stringify(inspected), /never-return-this/u);
+  } finally { server.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("legacy staging krijgt de gedeelde lock zonder self-deadlock en drift daarna blokkeert", async () => {
+  const result = fixture();
+  const stage = result.platform.stageArtifact.bind(result.platform);
+  result.platform.stageArtifact = async (...args) => {
+    const staged = await stage(...args);
+    result.platform.current.commit = "f".repeat(40);
+    return staged;
+  };
+  await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "BASELINE_DRIFT");
+  assert.equal(result.platform.plan, null);
+  assert.equal((await result.engine.state(result.contract)).state, "BLOCKED");
 });
 
 test("baseline drift blocks before staging", async () => {
@@ -454,12 +497,16 @@ test("machine identity service is hardened and break-glass is not granted to run
   const unit = await readFile(new URL("../../ops/release-engine/wbd-release-engine.service", import.meta.url), "utf8");
   const sudoers = await readFile(new URL("../../ops/release-engine/wbd-release-engine.sudoers", import.meta.url), "utf8");
   const broker = await readFile(new URL("../../ops/release-engine/wbd-release-engine-operation", import.meta.url), "utf8");
-  assert.match(unit, /User=wbd-release[\s\S]*NoNewPrivileges=true[\s\S]*ProtectSystem=strict/u);
+  const platform = await readFile(new URL("../scripts/release-engine-platform.mjs", import.meta.url), "utf8");
+  assert.match(unit, /User=wbd-release[\s\S]*ProtectSystem=strict/u);
+  assert.doesNotMatch(unit, /NoNewPrivileges=true/u);
   assert.match(unit, /ReadWritePaths=.*\.spw-release-deploy\.lock/u);
   const sudoRules = sudoers.split(/\r?\n/u).filter((line) => line.trim() && !line.trim().startsWith("#")).join("\n");
   assert.doesNotMatch(sudoRules, /\/bin\/(ba)?sh|systemctl|NOPASSWD:\s*ALL/u);
   assert.doesNotMatch(broker, /\beval\b|ssh|scp|sftp|powershell/iu);
   assert.match(broker, /OPERATION_NOT_ALLOWLISTED/u);
+  assert.match(broker, /inspect-current/u);
+  assert.match(platform, /#broker\("inspect-current"/u);
   assert.match(broker, /\/usr\/local\/libexec\/wbd-deployment\/spw-immutable-release\.sh/u);
   assert.match(broker, /-prechange-production\.env/u);
   assert.doesNotMatch(broker, /snapshot\)\s*[\s\S]{0,200}\/dev\/null/u);

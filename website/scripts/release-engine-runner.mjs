@@ -70,24 +70,40 @@ export class WbdReleaseEngine {
 
   async acquireOperationLocks(contract, purpose) {
     let releaseEnvironment;
-    try {
-      releaseEnvironment = this.platform.acquireEnvironmentLock
-        ? await this.platform.acquireEnvironmentLock(contract, purpose)
-        : async () => {};
-    } catch (error) {
-      throw classifyReleaseError(error, {
-        stage: "LOCKING", className: "ENVIRONMENT_LOCK", component: "production-environment",
-        candidate: contract.releaseId, nextAction: "Wacht tot de actieve production release-run klaar is; lees daarna baseline en health opnieuw.", retrySafe: true,
-      });
-    }
+    let environmentHeld = false;
+    const acquireEnvironment = async (lockPurpose = purpose) => {
+      try {
+        releaseEnvironment = this.platform.acquireEnvironmentLock
+          ? await this.platform.acquireEnvironmentLock(contract, lockPurpose)
+          : async () => {};
+        environmentHeld = true;
+      } catch (error) {
+        throw classifyReleaseError(error, {
+          stage: "LOCKING", className: "ENVIRONMENT_LOCK", component: "production-environment",
+          candidate: contract.releaseId, nextAction: "Wacht tot de actieve production release-run klaar is; lees daarna baseline en health opnieuw.", retrySafe: true,
+        });
+      }
+    };
+    const releaseEnvironmentLock = async () => {
+      if (!environmentHeld) return;
+      environmentHeld = false;
+      await releaseEnvironment();
+    };
+    await acquireEnvironment();
     try {
       const releaseApplication = await this.stateStore.lock(identity(contract), purpose);
-      return async () => {
+      const unlock = async () => {
         await releaseApplication();
-        await releaseEnvironment();
+        await releaseEnvironmentLock();
       };
+      unlock.releaseEnvironment = releaseEnvironmentLock;
+      unlock.reacquireEnvironment = async (lockPurpose) => {
+        if (environmentHeld) return;
+        await acquireEnvironment(lockPurpose);
+      };
+      return unlock;
     } catch (error) {
-      await releaseEnvironment();
+      await releaseEnvironmentLock();
       throw classifyReleaseError(error, {
         stage: "LOCKING", className: "CONCURRENT_RELEASE", component: `${contract.tenant}:${contract.application}`,
         candidate: contract.releaseId, nextAction: "Laat de bestaande release-run eindigen en herhaal daarna vanaf een verse read-only baseline.", retrySafe: true,
@@ -145,7 +161,14 @@ export class WbdReleaseEngine {
         const schemaSnapshot = contract.prepare.schemaSnapshot
           ? await this.platform.createSchemaSnapshot(contract, { actualSchemas, evaluatedState: databaseInspections })
           : { sha256: "0".repeat(64) };
+        await unlock.releaseEnvironment();
         const staged = await guarded(() => this.platform.stageArtifact(contract, artifact), { stage: "PREPARED", component: "artifact-staging", candidate: contract.releaseId, className: "ARTIFACT", nextAction: "Herstel uitsluitend de centrale immutable artifact-staging boundary.", retrySafe: true });
+        await unlock.reacquireEnvironment("prepare-finalize");
+        const finalBaseline = await this.platform.inspectCurrent(contract);
+        if (finalBaseline.health !== "PASS" || finalBaseline.readiness !== "PASS"
+          || finalBaseline.releaseId !== active.releaseId || finalBaseline.commit !== active.commit) {
+          throw Object.assign(new Error(`Production baseline drift tijdens prepare: ${finalBaseline.releaseId}/${finalBaseline.commit}.`), { code: "BASELINE_DRIFT" });
+        }
         const rollback = await guarded(() => this.platform.prepareRollback(contract, active, recovery), { stage: "PREPARED", component: "rollback-set", candidate: contract.releaseId, className: "ROLLBACK", nextAction: "Maak en verifieer de immutable rollbackset opnieuw.", retrySafe: true });
         if (rollback.verified !== true || rollback.targetReleaseId !== contract.rollback.targetReleaseId) throw Object.assign(new Error("Rollbackset kon niet worden geverifieerd."), { code: "ROLLBACK_NOT_READY" });
         const safetyCounters = this.platform.captureSideEffectCounters ? await this.platform.captureSideEffectCounters(contract) : null;

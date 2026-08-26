@@ -6,5 +6,7 @@ ops/production/test/run-immutable-release-foundation.sh text eol=lf
 ops/production/test/verify-immutable-candidate-dry-run.sh text eol=lf
 website/tests/fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg -whitespace
 ops/release-engine/README.md text eol=lf
+ops/release-engine/* text eol=lf
 ops/release-engine/contracts/*.json text eol=lf
+website/scripts/release-engine-*.mjs text eol=lf
 website/tests/release-recovery-engine-v1.test.mjs text eol=lf

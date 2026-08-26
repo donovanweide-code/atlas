@@ -107,12 +107,8 @@ export class LinuxReleasePlatform {
     return response.ok ? "PASS" : "FAIL";
   }
 
-  async inspectCurrent() {
-    const currentPath = await realpath(path.join(this.root, "current"));
-    const manifest = JSON.parse(await readFile(path.join(currentPath, "RELEASE-MANIFEST.json"), "utf8"));
-    const environment = parseEnvironment(await readFile(this.environmentFile, "utf8"));
-    if (environment.RELEASE_ID !== manifest.releaseId || path.basename(currentPath) !== manifest.releaseId) throw Object.assign(new Error("Current symlink, environment en manifest wijken af."), { code: "BASELINE_DRIFT" });
-    return { releaseId: manifest.releaseId, commit: manifest.commit, health: await this.#probe(this.healthUrl), readiness: await this.#probe(this.readinessUrl), currentPath, runtimeVersion: process.version };
+  async inspectCurrent(contract) {
+    return this.#broker("inspect-current", [contract.releaseId, contract.contractHash]);
   }
 
   async inspectArtifact(contract) {
@@ -213,7 +209,7 @@ export class LinuxReleasePlatform {
   }
 
   async #broker(operation, args = []) {
-    const allowed = new Set(["inspect-env", "inspect-db", "inspect-recovery", "push-counters", "backup", "stage", "rollback-set", "migrate", "switch", "restart", "rollback", "smoke", "evidence"]);
+    const allowed = new Set(["inspect-current", "inspect-env", "inspect-db", "inspect-recovery", "push-counters", "backup", "stage", "rollback-set", "migrate", "switch", "restart", "rollback", "smoke", "evidence"]);
     if (!allowed.has(operation) || args.some((argument) => typeof argument !== "string" || argument.includes("\0") || argument.includes("\n"))) throw new Error("Niet-geallowliste brokeroperatie geweigerd.");
     try {
       const result = await execFileAsync("sudo", ["--non-interactive", this.broker, operation, ...args], { timeout: 300_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
@@ -315,7 +311,7 @@ export class InMemoryReleasePlatform {
     this.maybeFail(`environmentLock:${purpose}`);
     if (this.environmentLocked || this.environmentLeaseHeld) throw Object.assign(new Error("Production environment lock is bezet."), { code: "ENVIRONMENT_LOCKED" });
     this.environmentLeaseHeld = true;
-    return async () => { this.environmentLeaseHeld = false; };
+    return async () => { this.calls.push(`environmentUnlock:${purpose}`); this.environmentLeaseHeld = false; };
   }
   async inspectCurrent() { this.maybeFail("inspectCurrent"); return structuredClone(this.current); }
   async inspectArtifact() { this.maybeFail("inspectArtifact"); return structuredClone(this.artifact); }
@@ -325,7 +321,11 @@ export class InMemoryReleasePlatform {
   async inspectRecovery() { this.maybeFail("inspectRecovery"); return structuredClone(this.recovery); }
   async createAndVerifyBackup() { this.maybeFail("createBackup"); this.recovery.backup.createdAt = this.now; this.recovery.backup.checksumValid = true; return structuredClone(this.recovery); }
   async createSchemaSnapshot() { this.maybeFail("schemaSnapshot"); return { sha256: "c".repeat(64) }; }
-  async stageArtifact(contract) { this.maybeFail("stageArtifact"); return { releasePath: `/srv/wbd/releases/${contract.releaseId}`, verified: true }; }
+  async stageArtifact(contract) {
+    this.maybeFail("stageArtifact");
+    if (this.environmentLeaseHeld) throw Object.assign(new Error("Legacy stage-helper kan de gedeelde lock niet overnemen."), { code: "ENVIRONMENT_LOCKED" });
+    return { releasePath: `/srv/wbd/releases/${contract.releaseId}`, verified: true };
+  }
   async prepareRollback(contract) { this.maybeFail("prepareRollback"); return { targetReleaseId: contract.rollback.targetReleaseId, verified: true }; }
   async persistPlan(_contract, plan) { this.maybeFail("persistPlan"); this.plan = structuredClone(plan); return { planHash: plan.planHash }; }
   async loadPlan() { this.maybeFail("loadPlan"); return structuredClone(this.plan); }

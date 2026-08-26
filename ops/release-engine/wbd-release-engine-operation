@@ -47,6 +47,11 @@ NODE
 require_runner
 operation=${1:-}; shift || true
 case "$operation" in
+  inspect-current)
+    release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
+    verify_contract_hash "$release_id" "$contract_hash"
+    exec /usr/bin/node /srv/wbd/release-engine/website/scripts/release-engine-privileged-inspect.mjs "$release_id" "$contract_hash" current
+    ;;
   inspect-env|inspect-recovery|push-counters)
     release_id=${1:-}; contract_hash=${2:-}; valid_id "$release_id"; valid_hash "$contract_hash"
     verify_contract_hash "$release_id" "$contract_hash"

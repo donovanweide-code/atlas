@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import mariadb from "mariadb";
@@ -22,6 +22,25 @@ export async function privilegedInspect({ releaseId, contractHash, mode, databas
   const contract = validateReleaseContract(JSON.parse(await readFile(path.join(contractRoot, `${releaseId}.release-contract.json`), "utf8")));
   if (contract.contractHash !== contractHash) throw Object.assign(new Error("Privileged inspect contracthash wijkt af."), { code: "CONTRACT_HASH_MISMATCH" });
   const platform = new LinuxReleasePlatform({ stateRoot, environmentFile });
+  if (mode === "current") {
+    const currentPath = await realpath(roots.currentLink ?? "/srv/wbd/current");
+    const manifest = JSON.parse(await readFile(path.join(currentPath, "RELEASE-MANIFEST.json"), "utf8"));
+    if (environment.RELEASE_ID !== manifest.releaseId || path.basename(currentPath) !== manifest.releaseId) {
+      throw Object.assign(new Error("Current symlink, environment en manifest wijken af."), { code: "BASELINE_DRIFT" });
+    }
+    const probe = async (url) => {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5_000), headers: { Accept: "application/json" } });
+      return response.ok ? "PASS" : "FAIL";
+    };
+    return {
+      releaseId: manifest.releaseId,
+      commit: manifest.commit,
+      health: await probe(roots.healthUrl ?? "http://127.0.0.1:3000/health"),
+      readiness: await probe(roots.readinessUrl ?? "http://127.0.0.1:3000/ready"),
+      currentPath,
+      runtimeVersion: process.version,
+    };
+  }
   if (mode === "environment") {
     const secretInspection = {};
     for (const binding of contract.environment.secretBindings) {
