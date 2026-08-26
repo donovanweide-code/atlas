@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  ReleaseEngineError, canonicalJson, createAuditEvent, sanitizeDiagnostic, validateReleaseContract, verifyAuditChain,
+  ReleaseEngineError, canonicalJson, createAuditEvent, normalizeAuditActor, sanitizeDiagnostic, validateReleaseContract, verifyAuditChain,
 } from "../scripts/release-engine-core.mjs";
 import {
   assertPureReadOnlyInspectionQueries, buildMigrationPlan, createPureSchemaInspectionQueries,
@@ -43,8 +43,29 @@ async function prepared() {
 }
 
 async function activate(result) {
-  return result.engine.approveAndActivate(result.contract, { decision: "GO", releaseId: result.contract.releaseId, planHash: result.plan.planHash, actor: "donovan-owner", requestId: "go-1" });
+  return result.engine.approveAndActivate(result.contract, { decision: "GO", releaseId: result.contract.releaseId, planHash: result.plan.planHash, actorId: "donovan_van_de_weide", actorDisplayName: "Donovan van de Weide", requestId: "go-1" });
 }
+
+test("audit actor separates canonical machine identity from human Unicode display name", () => {
+  assert.deepEqual(normalizeAuditActor({ actorId: "donovan_van_de_weide", actorDisplayName: "  Donován van de Weide  " }), {
+    id: "donovan_van_de_weide", displayName: "Donován van de Weide",
+  });
+  const event = createAuditEvent({
+    state: "CANDIDATE", type: "candidate_registered", releaseId: "ACTOR-FIXTURE", tenant: "wbd", application: "workspace",
+    actorId: "donovan_van_de_weide", actorDisplayName: "Donován van de Weide", idempotencyKey: "actor-fixture", details: {}, at: fixedNow.toISOString(),
+  });
+  assert.equal(event.actorId, "donovan_van_de_weide");
+  assert.equal(event.actorDisplayName, "Donován van de Weide");
+  assert.equal("actor" in event, false);
+  assert.equal(verifyAuditChain([event]).valid, true);
+});
+
+test("audit actor fails closed for missing or display-text machine identities", () => {
+  assert.throws(() => normalizeAuditActor({ actorDisplayName: "Donovan van de Weide" }), /actorId/u);
+  assert.throws(() => normalizeAuditActor({ actorId: "Donovan van de Weide", actorDisplayName: "Donovan van de Weide" }), /actorId/u);
+  assert.throws(() => normalizeAuditActor({ actorId: "dónovan", actorDisplayName: "Donovan" }), /actorId/u);
+  assert.throws(() => normalizeAuditActor({ actorId: "donovan_van_de_weide", actorDisplayName: "Donovan\nOwner" }), /actorDisplayName/u);
+});
 
 test("release contract locks Web Push identity, forward-only baseline and four additive migrations", () => {
   const value = contract();
@@ -260,6 +281,40 @@ test("resolved prepare diagnostics remain in audit but not as current Owner bloc
   assert.equal((await result.engine.events(result.contract)).some((event) => event.type === "release_blocked"), true);
 });
 
+test("blocked immutable plan is preserved and superseded by a freshly locked prepare", async () => {
+  const releaseContract = contract();
+  const platform = new InMemoryReleasePlatform({ contract: releaseContract, now: fixedNow.toISOString() });
+  const store = new InMemoryReleaseStateStore();
+  let clock = fixedNow;
+  const engine = new WbdReleaseEngine({ stateStore: store, platform, clock: () => clock });
+  const first = await engine.inspectAndPrepare(releaseContract);
+  const eventsBefore = await engine.events(releaseContract);
+  await engine.transition(releaseContract, "BLOCKED", "activation_blocked_before_switch", { code: "INVALID_ACTOR_ID", planHash: first.planHash }, "actor-request-blocked");
+  clock = new Date(fixedNow.getTime() + 1_000);
+  const second = await engine.inspectAndPrepare(releaseContract);
+  assert.notEqual(second.planHash, first.planHash);
+  assert.equal(platform.supersededPlan.planHash, first.planHash);
+  assert.equal((await engine.state(releaseContract)).state, "AWAITING_HUMAN_GO");
+  assert.deepEqual((await engine.events(releaseContract)).slice(0, eventsBefore.length), eventsBefore);
+  assert.equal(verifyAuditChain(await engine.events(releaseContract)).valid, true);
+});
+
+test("filesystem plan supersession archives exact prior bytes without rewriting them", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "wbd-release-plan-supersession-"));
+  const releaseContract = contract();
+  const platform = new LinuxReleasePlatform({ stateRoot: root });
+  const first = { schemaVersion: 1, releaseId: releaseContract.releaseId, planHash: "a".repeat(64), createdAt: fixedNow.toISOString() };
+  const second = { ...first, planHash: "b".repeat(64), createdAt: new Date(fixedNow.getTime() + 1_000).toISOString() };
+  await platform.persistPlan(releaseContract, first);
+  const originalBytes = await readFile(path.join(root, "plans", `${releaseContract.releaseId}.json`));
+  await platform.persistPlan(releaseContract, second, { supersedesPlanHash: first.planHash });
+  const archivedBytes = await readFile(path.join(root, "plans", "superseded", `${releaseContract.releaseId}--${first.planHash}.json`));
+  assert.equal(archivedBytes.equals(originalBytes), true);
+  assert.equal(JSON.parse(await readFile(path.join(root, "plans", `${releaseContract.releaseId}.json`), "utf8")).planHash, second.planHash);
+  await assert.rejects(platform.persistPlan(releaseContract, { ...second, planHash: "c".repeat(64) }, { supersedesPlanHash: first.planHash }), (error) => error.code === "DEPLOY_PLAN_COLLISION");
+  await rm(root, { recursive: true, force: true });
+});
+
 test("audit diagnostics with undefined metadata remain verifiable after JSON persistence", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "wbd-release-audit-persistence-"));
   const store = new FileReleaseStateStore({ root });
@@ -293,7 +348,7 @@ test("legacy undefined audit mismatch is recovered only with checksum and immuta
   await mkdir(eventsDirectory, { recursive: true });
   const releaseContract = contract();
   const identity = { tenant: releaseContract.tenant, application: releaseContract.application, releaseId: releaseContract.releaseId };
-  const first = createAuditEvent({ ...identity, state: "CANDIDATE", type: "candidate_registered", actor: "wbd-release-runner", idempotencyKey: "legacy-candidate", details: {}, at: fixedNow.toISOString() });
+  const first = createAuditEvent({ ...identity, state: "CANDIDATE", type: "candidate_registered", actorId: "wbd-release-runner", idempotencyKey: "legacy-candidate", details: {}, at: fixedNow.toISOString() });
   const legacyUnsigned = { sequence: 2, at: fixedNow.toISOString(), state: "BLOCKED", type: "release_blocked", ...identity, actor: "wbd-release-runner", idempotencyKey: "legacy-blocked", details: { class: "RUNTIME", activeRelease: undefined, metadata: { name: "Error", errno: undefined, sqlState: undefined } }, previousHash: first.eventHash };
   const legacy = { ...legacyUnsigned, eventHash: createHash("sha256").update(canonicalJson(legacyUnsigned)).digest("hex") };
   const file = path.join(eventsDirectory, `${identity.tenant}--${identity.application}--${identity.releaseId}.jsonl`);
@@ -308,7 +363,7 @@ test("legacy undefined audit mismatch is recovered only with checksum and immuta
   assert.equal(createHash("sha256").update(await readFile(path.join(root, "audit-recovery", result.backup))).digest("hex"), expectedFileSha256);
   const store = new FileReleaseStateStore({ root });
   const previous = (await store.events(identity)).at(-1);
-  await store.append(identity, createAuditEvent({ previous, ...identity, state: previous.state, type: "release_blocked", actor: "wbd-release-runner", idempotencyKey: "post-recovery-blocked", details: { code: "SCHEMA_SNAPSHOT_COLLISION" }, at: fixedNow.toISOString() }));
+  await store.append(identity, createAuditEvent({ previous, ...identity, state: previous.state, type: "release_blocked", actorId: "wbd-release-runner", idempotencyKey: "post-recovery-blocked", details: { code: "SCHEMA_SNAPSHOT_COLLISION" }, at: fixedNow.toISOString() }));
   assert.equal((await recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256, at: fixedNow.toISOString() })).idempotent, true);
   await assert.rejects(recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256: "0".repeat(64) }), /checksum/u);
   await rm(root, { recursive: true, force: true });
@@ -559,8 +614,18 @@ test("Owner Workspace seam exposes summary and requires exact contract hash", as
     const preparedResponse = await fetch(`http://127.0.0.1:${address.port}/v1/releases/${result.contract.releaseId}/prepare`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contractHash: result.contract.contractHash }) });
     assert.equal(preparedResponse.status, 200);
     assert.equal((await preparedResponse.json()).state, "AWAITING_HUMAN_GO");
+    const eventsBeforeInvalidGo = await result.engine.events(result.contract);
+    const invalidActor = await fetch(`http://127.0.0.1:${address.port}/v1/releases/${result.contract.releaseId}/go`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "GO", releaseId: result.contract.releaseId, planHash: result.platform.plan.planHash, actorId: "Donovan van de Weide", actorDisplayName: "Donovan van de Weide", requestId: "invalid-actor" }) });
+    assert.equal(invalidActor.status, 400);
+    assert.equal((await result.engine.state(result.contract)).state, "AWAITING_HUMAN_GO");
+    assert.deepEqual(await result.engine.events(result.contract), eventsBeforeInvalidGo);
     const summary = await (await fetch(`http://127.0.0.1:${address.port}/v1/releases/${result.contract.releaseId}`)).json();
     assert.equal(summary.humanAction, "REVIEW_AND_GO");
+    const validActor = await fetch(`http://127.0.0.1:${address.port}/v1/releases/${result.contract.releaseId}/go`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "GO", releaseId: result.contract.releaseId, planHash: result.platform.plan.planHash, actorId: "donovan_van_de_weide", actorDisplayName: "Donován van de Weide", requestId: "valid-actor" }) });
+    assert.equal(validActor.status, 200);
+    const approvalEvent = (await result.engine.events(result.contract)).find((event) => event.type === "human_go_approved");
+    assert.equal(approvalEvent.actorId, "donovan_van_de_weide");
+    assert.equal(approvalEvent.actorDisplayName, "Donován van de Weide");
   } finally { server.close(); await rm(root, { recursive: true, force: true }); }
 });
 

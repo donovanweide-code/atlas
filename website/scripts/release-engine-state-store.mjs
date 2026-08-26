@@ -121,10 +121,10 @@ export async function currentReleaseState(store, identity) {
   return verifyAuditChain(await store.events(identity)).current;
 }
 
-export async function appendReleaseTransition(store, identity, { to, type, actor, details, idempotencyKey, at }) {
+export async function appendReleaseTransition(store, identity, { to, type, actorId, actorDisplayName, details, idempotencyKey, at }) {
   const previous = await currentReleaseState(store, identity);
   if (previous) assertTransition(previous.state, to);
   else if (to !== "CANDIDATE") throw new Error("Eerste release-event moet CANDIDATE zijn.");
-  const event = createAuditEvent({ previous, state: to, type, ...identity, actor, details, idempotencyKey, at });
+  const event = createAuditEvent({ previous, state: to, type, ...identity, actorId, actorDisplayName, details, idempotencyKey, at });
   return store.append(identity, event);
 }

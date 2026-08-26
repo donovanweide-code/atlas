@@ -33,6 +33,7 @@ const transitionTargets = Object.freeze({
 });
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+const actorIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
 const shaPattern = /^[a-f0-9]{64}$/u;
 const allowedSwitchStrategies = new Set(["atomic-symlink"]);
@@ -56,6 +57,16 @@ function requireString(value, name, pattern) {
   const result = String(value ?? "").trim();
   if (!result || (pattern && !pattern.test(result))) throw new Error(`${name} ontbreekt of is ongeldig.`);
   return result;
+}
+
+export function normalizeAuditActor({ actorId, actorDisplayName } = {}) {
+  const id = requireString(actorId, "actorId", actorIdPattern);
+  if (actorDisplayName === undefined || actorDisplayName === null) return Object.freeze({ id, displayName: null });
+  const displayName = String(actorDisplayName).normalize("NFC").trim();
+  if (!displayName || displayName.length > 160 || /\p{C}/u.test(displayName)) {
+    throw new Error("actorDisplayName ontbreekt of is ongeldig.");
+  }
+  return Object.freeze({ id, displayName });
 }
 
 function requireArray(value, name) {
@@ -285,8 +296,9 @@ export function assertTransition(from, to) {
   }
 }
 
-export function createAuditEvent({ previous = null, state, type, releaseId, tenant, application, actor, details = {}, idempotencyKey, at = new Date().toISOString() }) {
+export function createAuditEvent({ previous = null, state, type, releaseId, tenant, application, actorId, actorDisplayName, details = {}, idempotencyKey, at = new Date().toISOString() }) {
   if (!RELEASE_STATES.includes(state)) throw new Error("Ongeldige audit-state.");
+  const actor = normalizeAuditActor({ actorId, actorDisplayName });
   const event = {
     sequence: Number(previous?.sequence ?? 0) + 1,
     at,
@@ -295,7 +307,8 @@ export function createAuditEvent({ previous = null, state, type, releaseId, tena
     releaseId: requireString(releaseId, "event.releaseId", idPattern),
     tenant: requireString(tenant, "event.tenant", idPattern),
     application: requireString(application, "event.application", idPattern),
-    actor: requireString(actor, "event.actor", idPattern),
+    actorId: actor.id,
+    ...(actor.displayName ? { actorDisplayName: actor.displayName } : {}),
     idempotencyKey: requireString(idempotencyKey, "event.idempotencyKey", idPattern),
     details: sanitizeDiagnostic(details),
     previousHash: previous?.eventHash ?? null,

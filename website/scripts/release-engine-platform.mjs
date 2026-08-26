@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import mariadb from "mariadb";
@@ -245,14 +245,28 @@ export class LinuxReleasePlatform {
   async stageArtifact(contract) { return this.#broker("stage", [contract.releaseId, contract.contractHash]); }
   async prepareRollback(contract) { return this.#broker("rollback-set", [contract.releaseId, contract.rollback.targetReleaseId]); }
 
-  async persistPlan(contract, plan) {
+  async persistPlan(contract, plan, { supersedesPlanHash = null } = {}) {
     const file = path.join(this.stateRoot, "plans", `${contract.releaseId}.json`);
+    await mkdir(path.dirname(file), { recursive: true, mode: 0o750 });
     try {
       await writeFile(file, `${JSON.stringify(plan, null, 2)}\n`, { encoding: "utf8", mode: 0o640, flag: "wx" });
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
-      const existing = JSON.parse(await readFile(file, "utf8"));
-      if (existing.planHash !== plan.planHash) throw Object.assign(new Error("Bestaand immutable deployplan wijkt af."), { code: "DEPLOY_PLAN_COLLISION" });
+      const existingBytes = await readFile(file);
+      const existing = JSON.parse(existingBytes.toString("utf8"));
+      if (existing.planHash === plan.planHash) return { file, planHash: plan.planHash, reused: true };
+      if (!supersedesPlanHash || existing.planHash !== supersedesPlanHash) throw Object.assign(new Error("Bestaand immutable deployplan wijkt af."), { code: "DEPLOY_PLAN_COLLISION" });
+      const archiveDirectory = path.join(this.stateRoot, "plans", "superseded");
+      const archive = path.join(archiveDirectory, `${contract.releaseId}--${existing.planHash}.json`);
+      await mkdir(archiveDirectory, { recursive: true, mode: 0o750 });
+      try { await writeFile(archive, existingBytes, { mode: 0o640, flag: "wx" }); }
+      catch (archiveError) {
+        if (archiveError?.code !== "EEXIST" || !Buffer.from(await readFile(archive)).equals(existingBytes)) throw archiveError;
+      }
+      const temporary = `${file}.${process.pid}.next`;
+      await writeFile(temporary, `${JSON.stringify(plan, null, 2)}\n`, { encoding: "utf8", mode: 0o640, flag: "wx" });
+      await rename(temporary, file);
+      return { file, planHash: plan.planHash, supersededPlanHash: existing.planHash, archive };
     }
     return { file, planHash: plan.planHash };
   }
@@ -340,7 +354,13 @@ export class InMemoryReleasePlatform {
     return { releasePath: `/srv/wbd/releases/${contract.releaseId}`, verified: true };
   }
   async prepareRollback(contract) { this.maybeFail("prepareRollback"); return { targetReleaseId: contract.rollback.targetReleaseId, verified: true }; }
-  async persistPlan(_contract, plan) { this.maybeFail("persistPlan"); this.plan = structuredClone(plan); return { planHash: plan.planHash }; }
+  async persistPlan(_contract, plan, { supersedesPlanHash = null } = {}) {
+    this.maybeFail("persistPlan");
+    if (this.plan && this.plan.planHash !== plan.planHash && this.plan.planHash !== supersedesPlanHash) throw Object.assign(new Error("Bestaand immutable deployplan wijkt af."), { code: "DEPLOY_PLAN_COLLISION" });
+    if (this.plan && this.plan.planHash !== plan.planHash) this.supersededPlan = structuredClone(this.plan);
+    this.plan = structuredClone(plan);
+    return { planHash: plan.planHash, supersededPlanHash: this.supersededPlan?.planHash ?? null };
+  }
   async loadPlan() { this.maybeFail("loadPlan"); return structuredClone(this.plan); }
   async applyMigration(contract, step) {
     this.maybeFail(`applyMigration:${step.migrationId}`);

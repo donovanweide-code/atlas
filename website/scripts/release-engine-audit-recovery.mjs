@@ -63,7 +63,7 @@ export async function recoverLegacyUndefinedAuditChain({ stateRoot, tenant, appl
   await copyFile(file, backup, constants.COPYFILE_EXCL);
   const recovery = createAuditEvent({
     previous: repaired.at(-1), state: repaired.at(-1).state, type: "audit_chain_recovered",
-    releaseId, tenant, application, actor: "wbd-release-recovery",
+    releaseId, tenant, application, actorId: "wbd-release-recovery",
     idempotencyKey: `audit-recovery-${expectedFileSha256.slice(0, 24)}`, at,
     details: { cause: "LEGACY_UNDEFINED_JSON_SERIALIZATION", originalFileSha256: expectedFileSha256, repairedEvents, preservedBackup: path.basename(backup) },
   });

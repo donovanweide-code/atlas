@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { validateReleaseContract } from "./release-engine-core.mjs";
+import { normalizeAuditActor, validateReleaseContract } from "./release-engine-core.mjs";
 import { LinuxReleasePlatform } from "./release-engine-platform.mjs";
 import { WbdReleaseEngine } from "./release-engine-runner.mjs";
 import { FileReleaseStateStore } from "./release-engine-state-store.mjs";
@@ -50,9 +50,12 @@ export function createReleaseEngineRequestHandler({ engine, contractRoot }) {
         return json(response, 200, { state: "AWAITING_HUMAN_GO", summary: engine.approvalSummary(contract, plan) });
       }
       if (action === "go") {
-        const allowed = new Set(["decision", "releaseId", "planHash", "actor", "requestId"]);
+        const allowed = new Set(["decision", "releaseId", "planHash", "actorId", "actorDisplayName", "requestId"]);
         if (Object.keys(body).some((key) => !allowed.has(key)) || body.requestId === undefined) throw Object.assign(new Error("GO-request bevat niet-geallowliste velden."), { statusCode: 400 });
-        return json(response, 200, await engine.approveAndActivate(contract, body));
+        let actor;
+        try { actor = normalizeAuditActor(body); }
+        catch (error) { throw Object.assign(error, { statusCode: 400, code: "INVALID_ACTOR_ID" }); }
+        return json(response, 200, await engine.approveAndActivate(contract, { ...body, actorId: actor.id, actorDisplayName: actor.displayName }));
       }
       if (action === "resume") {
         if (Object.keys(body).length) throw Object.assign(new Error("Resume accepteert geen operationele input."), { statusCode: 400 });

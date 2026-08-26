@@ -67,10 +67,12 @@ The internal socket API exposes:
 
 - `GET /v1/releases/<release-id>` — state, current/candidate release, risk, pending migrations, backup, rollback, diagnostic, and human action;
 - `POST .../prepare` — exact contract-hash only;
-- `POST .../go` — exact release ID, plan hash, owner actor, request ID, and `GO`;
+- `POST .../go` — exact release ID, plan hash, canonical `actorId`, optional Unicode `actorDisplayName`, request ID, and `GO`. Display text is never accepted as machine identity;
 - `POST .../resume` — no operation input.
 
 This is the API/state seam for a later `Owner Workspace -> Releases` view. It does not expose arbitrary commands.
+
+If a pre-switch request is blocked, a fresh prepare preserves the prior plan byte-for-byte under `plans/superseded/`, appends new audit events without rewriting existing hashes, and emits a new checksum-locked plan for a new Human GO.
 
 ## Installation checkpoint
 
