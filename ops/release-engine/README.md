@@ -48,16 +48,18 @@ One contract defines required keys, aliases, secret bindings, owner/mode, and ru
 
 ## Web Push acceptance
 
-`contracts/WBD-MAIL-WEB-PUSH-FOUNDATION-20260825.release-contract.json` binds the existing immutable candidate:
+`contracts/WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826.release-contract.json` binds the reconciled immutable candidate:
 
-- commit `e133b9d0669ffa25e7229ecea6bd69c368929648`;
-- artifact SHA-256 `45fc91ed827031c6b0a09b4bf59f090fdbad617cf758ceb3d3fd246668097e4b`;
-- R2 baseline `bd048e8d5c9482b348733975e1ad1a38e67ef8a6`;
+- commit `8adb34b65186331b23594facf69e94152b50ead1`;
+- artifact SHA-256 `c6466404b70b48c11186dfef235f0a2c32b28948fc1d5ccaa7d34b16db51a581`;
+- current R2 Mobile Navigation baseline `bff77acd108212c8d0062c549cccc63f53ccf932`;
 - migrations 003–006 as additive/backward-compatible, with physical target schemas;
 - Mail, Web Push non-delivering, Workspace, owner-boundary, and Sportpaleis smokes;
 - user opt-in/default OFF and pre/post push-delivery counters.
 
 No Web Push artifact is rebuilt by the engine.
+
+The earlier `WBD-MAIL-WEB-PUSH-FOUNDATION-20260825` contract is retained only as immutable history. Its R2 baseline is stale and it is not eligible for prepare or activation.
 
 ## Owner Workspace seam
 

@@ -18,7 +18,7 @@ import { FileReleaseStateStore, InMemoryReleaseStateStore } from "../scripts/rel
 import { createReleaseEngineRequestHandler } from "../scripts/release-engine-service.mjs";
 import { applyOneMigration, assertMigrationSqlMatchesClassification } from "../scripts/release-engine-migrate-one.mjs";
 
-const contractFile = new URL("../../ops/release-engine/contracts/WBD-MAIL-WEB-PUSH-FOUNDATION-20260825.release-contract.json", import.meta.url);
+const contractFile = new URL("../../ops/release-engine/contracts/WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826.release-contract.json", import.meta.url);
 const rawContract = JSON.parse(await readFile(contractFile, "utf8"));
 const fixedNow = new Date("2026-08-25T22:00:00.000Z");
 
@@ -46,7 +46,7 @@ async function activate(result) {
 
 test("release contract locks Web Push identity, forward-only baseline and four additive migrations", () => {
   const value = contract();
-  assert.equal(value.releaseId, "WBD-MAIL-WEB-PUSH-FOUNDATION-20260825");
+  assert.equal(value.releaseId, "WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826");
   assert.equal(value.compatibilityPolicy.mode, "forward-only");
   assert.equal(value.compatibilityPolicy.proof.baselineCommit, value.expectedBaseline.commit);
   assert.deepEqual(value.databases[0].migrations.map((migration) => migration.id), ["003", "004", "005", "006"]);
