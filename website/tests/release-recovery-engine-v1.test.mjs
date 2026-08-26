@@ -440,6 +440,59 @@ test("database unavailable is classified with component and safe retry", async (
   await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "DATABASE_CONNECTIVITY" && error.diagnostic.retrySafe === true);
 });
 
+test("production post-migration verifier uses only the privileged read-only inspector", async () => {
+  const releaseContract = contract();
+  const database = releaseContract.databases.find(({ id }) => id === "workspace");
+  const migration = database.migrations.find(({ id }) => id === "003");
+  const platform = Object.create(LinuxReleasePlatform.prototype);
+  let inspectedArguments;
+  platform.readEnvironment = async () => { throw Object.assign(new Error("permission denied, open '/etc/wbd/production.env'"), { code: "EACCES" }); };
+  platform.inspectDatabase = async (...args) => {
+    inspectedArguments = args;
+    return {
+      ledgerPresent: true,
+      ledger: [{ id: migration.id, name: migration.file.split("/").at(-1), checksum: migration.checksum }],
+      objects: structuredClone(migration.targetState),
+    };
+  };
+  const verification = await platform.verifyMigration(releaseContract, { database: database.id, migrationId: migration.id, checksum: migration.checksum });
+  assert.equal(verification.passed, true);
+  assert.equal(verification.evidence.readOnlyInspector, "privileged-inspect-db-broker");
+  assert.equal(inspectedArguments.length, 2);
+  assert.equal(inspectedArguments[1], database);
+});
+
+test("production post-migration verifier fails closed on broker permission denial", async () => {
+  const releaseContract = contract();
+  const database = releaseContract.databases.find(({ id }) => id === "workspace");
+  const migration = database.migrations.find(({ id }) => id === "003");
+  const platform = Object.create(LinuxReleasePlatform.prototype);
+  platform.inspectDatabase = async () => { throw Object.assign(new Error("Release broker inspect-db faalde: permission denied"), { code: "BROKER_FAILURE" }); };
+  await assert.rejects(
+    platform.verifyMigration(releaseContract, { database: database.id, migrationId: migration.id, checksum: migration.checksum }),
+    (error) => error.code === "BROKER_FAILURE",
+  );
+});
+
+test("production post-migration verifier distinguishes fully applied and partial migration state", async () => {
+  const releaseContract = contract();
+  const database = releaseContract.databases.find(({ id }) => id === "workspace");
+  const migration = database.migrations.find(({ id }) => id === "003");
+  const platform = Object.create(LinuxReleasePlatform.prototype);
+  const ledger = [{ id: migration.id, name: migration.file.split("/").at(-1), checksum: migration.checksum }];
+  platform.inspectDatabase = async () => ({ ledgerPresent: true, ledger, objects: structuredClone(migration.targetState) });
+  const applied = await platform.verifyMigration(releaseContract, { database: database.id, migrationId: migration.id, checksum: migration.checksum });
+  assert.equal(applied.passed, true);
+  assert.equal(applied.evidence.status, "APPLIED");
+
+  const partial = structuredClone(migration.targetState);
+  partial[0].columns.pop();
+  platform.inspectDatabase = async () => ({ ledgerPresent: true, ledger, objects: partial });
+  const incomplete = await platform.verifyMigration(releaseContract, { database: database.id, migrationId: migration.id, checksum: migration.checksum });
+  assert.equal(incomplete.passed, false);
+  assert.equal(incomplete.evidence.status, "LEDGER_SCHEMA_MISMATCH");
+});
+
 test("schema collision and unavailable backup block prepare", async (context) => {
   await context.test("schema collision", async () => {
     const result = fixture();

@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import mariadb from "mariadb";
 import { canonicalJson } from "./release-engine-core.mjs";
-import { assertPureReadOnlyInspectionQueries, createPureSchemaInspectionQueries } from "./release-engine-inspection.mjs";
+import { assertPureReadOnlyInspectionQueries, createPureSchemaInspectionQueries, inspectMigrationState } from "./release-engine-inspection.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -278,12 +278,19 @@ export class LinuxReleasePlatform {
   async applyMigration(contract, step, plan) { return this.#broker("migrate", [contract.releaseId, plan.planHash, step.database, step.migrationId, step.checksum]); }
   async verifyMigration(contract, step) {
     const database = contract.databases.find((item) => item.id === step.database);
-    const environment = inspectEnvironmentForPlatform(contract, await this.readEnvironment());
-    const actual = await this.inspectDatabase(contract, database, environment);
-    const ledger = actual.ledger.find((entry) => entry.id === step.migrationId);
-    const migration = database.migrations.find((entry) => entry.id === step.migrationId);
-    const objects = new Map(actual.objects.map((object) => [object.name, object]));
-    return { passed: ledger?.checksum === step.checksum && migration.targetState.every((target) => objects.has(target.name)), evidence: { ledgerChecksum: ledger?.checksum ?? null, targets: migration.targetState.map((target) => target.name) } };
+    if (!database) throw Object.assign(new Error(`Databasecontract ${step.database} ontbreekt.`), { code: "DATABASE_CONTRACT_MISSING" });
+    const actual = await this.inspectDatabase(contract, database);
+    const inspection = inspectMigrationState(database, actual);
+    const result = inspection.results.find((entry) => entry.kind === "migration" && entry.id === step.migrationId);
+    return {
+      passed: result?.status === "APPLIED",
+      evidence: {
+        status: result?.status ?? "MIGRATION_NOT_IN_CONTRACT",
+        ledgerChecksum: actual.ledger.find((entry) => entry.id === step.migrationId)?.checksum ?? null,
+        targets: result?.targetMatches ?? [],
+        readOnlyInspector: "privileged-inspect-db-broker",
+      },
+    };
   }
 
   async atomicSwitch(contract, plan) { return this.#broker("switch", [contract.releaseId, plan.planHash]); }
