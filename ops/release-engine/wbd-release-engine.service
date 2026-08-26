@@ -29,7 +29,6 @@ ProtectControlGroups=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 ReadOnlyPaths=/srv/wbd/releases /srv/wbd/release-engine /etc/wbd /var/backups/wbd-mariadb
 ReadWritePaths=/srv/wbd/shared/release-engine /srv/wbd/shared/.spw-release-deploy.lock /run/wbd-release-engine
 

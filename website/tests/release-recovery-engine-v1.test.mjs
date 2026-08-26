@@ -500,6 +500,8 @@ test("machine identity service is hardened and break-glass is not granted to run
   const platform = await readFile(new URL("../scripts/release-engine-platform.mjs", import.meta.url), "utf8");
   assert.match(unit, /User=wbd-release[\s\S]*ProtectSystem=strict/u);
   assert.doesNotMatch(unit, /NoNewPrivileges=true/u);
+  assert.match(unit, /ExecStart=\/usr\/bin\/node [^\n]+release-engine-service\.mjs/u);
+  assert.doesNotMatch(unit, /MemoryDenyWriteExecute=true/u);
   assert.match(unit, /ReadWritePaths=.*\.spw-release-deploy\.lock/u);
   const sudoRules = sudoers.split(/\r?\n/u).filter((line) => line.trim() && !line.trim().startsWith("#")).join("\n");
   assert.doesNotMatch(sudoRules, /\/bin\/(ba)?sh|systemctl|NOPASSWD:\s*ALL/u);
