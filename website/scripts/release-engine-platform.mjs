@@ -4,6 +4,7 @@ import { access, mkdir, readFile, readdir, realpath, stat, writeFile } from "nod
 import path from "node:path";
 import { promisify } from "node:util";
 import mariadb from "mariadb";
+import { canonicalJson } from "./release-engine-core.mjs";
 import { assertPureReadOnlyInspectionQueries, createPureSchemaInspectionQueries } from "./release-engine-inspection.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -225,8 +226,20 @@ export class LinuxReleasePlatform {
     const directory = path.join(this.stateRoot, "schema-snapshots");
     await mkdir(directory, { recursive: true, mode: 0o750 });
     const file = path.join(directory, `${contract.releaseId}.json`);
-    const bytes = Buffer.from(`${JSON.stringify({ schemaVersion: 1, releaseId: contract.releaseId, contractHash: contract.contractHash, capturedAt: new Date().toISOString(), inspections }, null, 2)}\n`);
-    await writeFile(file, bytes, { mode: 0o640, flag: "wx" });
+    const value = { schemaVersion: 1, releaseId: contract.releaseId, contractHash: contract.contractHash, capturedAt: new Date().toISOString(), inspections };
+    const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+    try {
+      await writeFile(file, bytes, { mode: 0o640, flag: "wx" });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const existingBytes = await readFile(file);
+      const existing = JSON.parse(existingBytes.toString("utf8"));
+      if (existing.schemaVersion !== 1 || existing.releaseId !== contract.releaseId || existing.contractHash !== contract.contractHash
+        || canonicalJson(existing.inspections) !== canonicalJson(inspections)) {
+        throw Object.assign(new Error("Bestaande immutable schema-snapshot wijkt inhoudelijk af."), { code: "SCHEMA_SNAPSHOT_COLLISION" });
+      }
+      return { path: file, sha256: sha256(existingBytes), reused: true };
+    }
     return { path: file, sha256: sha256(bytes) };
   }
   async stageArtifact(contract) { return this.#broker("stage", [contract.releaseId, contract.contractHash]); }

@@ -12,7 +12,7 @@ import {
   assertPureReadOnlyInspectionQueries, buildMigrationPlan, createPureSchemaInspectionQueries,
   inspectEnvironmentContract, inspectMigrationState, inspectRecoveryReadiness, schemaObjectMatches,
 } from "../scripts/release-engine-inspection.mjs";
-import { InMemoryReleasePlatform } from "../scripts/release-engine-platform.mjs";
+import { InMemoryReleasePlatform, LinuxReleasePlatform } from "../scripts/release-engine-platform.mjs";
 import { privilegedInspect } from "../scripts/release-engine-privileged-inspect.mjs";
 import { WbdReleaseEngine } from "../scripts/release-engine-runner.mjs";
 import { FileReleaseStateStore, InMemoryReleaseStateStore } from "../scripts/release-engine-state-store.mjs";
@@ -258,6 +258,19 @@ test("audit diagnostics with undefined metadata remain verifiable after JSON per
   const events = await reloaded.events({ tenant: releaseContract.tenant, application: releaseContract.application, releaseId: releaseContract.releaseId });
   assert.equal(verifyAuditChain(events).valid, true);
   assert.deepEqual(events.at(-1).details.metadata, { name: "Error" });
+  await rm(root, { recursive: true, force: true });
+});
+
+test("schema snapshot retry reuses exact evidence and blocks a collision", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "wbd-release-schema-snapshot-"));
+  const releaseContract = contract();
+  const platform = new LinuxReleasePlatform({ stateRoot: root });
+  const inspections = { actualSchemas: [{ database: "workspace", ledger: ["001"] }], evaluatedState: [{ pending: ["003"] }] };
+  const first = await platform.createSchemaSnapshot(releaseContract, inspections);
+  const second = await platform.createSchemaSnapshot(releaseContract, structuredClone(inspections));
+  assert.equal(second.reused, true);
+  assert.equal(second.sha256, first.sha256);
+  await assert.rejects(platform.createSchemaSnapshot(releaseContract, { ...inspections, evaluatedState: [{ pending: ["004"] }] }), (error) => error.code === "SCHEMA_SNAPSHOT_COLLISION");
   await rm(root, { recursive: true, force: true });
 });
 
