@@ -326,7 +326,8 @@ export class WbdReleaseEngine {
       await this.register(contract);
       return this.inspectAndPrepare(contract);
     }
-    if (["CANDIDATE", "BLOCKED"].includes(state.state)) return this.inspectAndPrepare(contract);
+    if (state.state === "CANDIDATE") return this.inspectAndPrepare(contract);
+    if (state.state === "BLOCKED") return { state: state.state, diagnostic: state.details };
     if (state.state === "AWAITING_HUMAN_GO") return { state: state.state, approval: this.approvalSummary(contract, await this.platform.loadPlan(contract)) };
     if (["ACTIVATING", "VERIFYING", "ROLLING_BACK"].includes(state.state)) {
       const unlock = await this.acquireOperationLocks(contract, "automatic-recovery");

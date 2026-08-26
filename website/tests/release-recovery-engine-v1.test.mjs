@@ -467,6 +467,17 @@ test("runner restart after an uncertain switch automatically rolls back without 
   assert.equal(result.platform.restartCount, 1);
 });
 
+test("runner restart preserves BLOCKED without silently retrying prepare", async () => {
+  const result = fixture();
+  await result.engine.register(result.contract);
+  await result.engine.transition(result.contract, "INSPECTING", "inspection_started", {}, "inspect-blocked-fixture");
+  await result.engine.transition(result.contract, "BLOCKED", "release_blocked", { code: "BASELINE_DRIFT" }, "blocked-fixture");
+  result.platform.calls.length = 0;
+  const resumed = await result.engine.resume(result.contract);
+  assert.equal(resumed.state, "BLOCKED");
+  assert.deepEqual(result.platform.calls, []);
+});
+
 test("Owner Workspace seam exposes summary and requires exact contract hash", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "wbd-release-contracts-"));
   const result = fixture();
