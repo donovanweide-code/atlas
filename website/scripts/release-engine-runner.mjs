@@ -93,8 +93,8 @@ export class WbdReleaseEngine {
     try {
       const releaseApplication = await this.stateStore.lock(identity(contract), purpose);
       const unlock = async () => {
-        await releaseApplication();
-        await releaseEnvironmentLock();
+        try { await releaseApplication(); }
+        finally { await releaseEnvironmentLock(); }
       };
       unlock.releaseEnvironment = releaseEnvironmentLock;
       unlock.reacquireEnvironment = async (lockPurpose) => {

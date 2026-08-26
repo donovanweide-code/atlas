@@ -69,7 +69,7 @@ export class LinuxReleasePlatform {
 
   async acquireEnvironmentLock(_contract, purpose) {
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(String(purpose ?? ""))) throw new Error("Ongeldige environment-lock purpose.");
-    const child = spawn("/usr/bin/flock", ["--nonblock", "--exclusive", this.deploymentLockFile, "/usr/bin/sleep", "infinity"], {
+    const child = spawn("/usr/bin/flock", ["--no-fork", "--nonblock", "--exclusive", this.deploymentLockFile, "/usr/bin/sleep", "infinity"], {
       stdio: ["ignore", "ignore", "pipe"], windowsHide: true,
     });
     let stderr = "";

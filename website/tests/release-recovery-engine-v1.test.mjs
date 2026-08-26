@@ -512,6 +512,8 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.match(broker, /inspect-env\) mode=environment/u);
   assert.match(broker, /inspect-recovery\) mode=recovery/u);
   assert.match(platform, /#broker\("inspect-current"/u);
+  assert.match(platform, /spawn\("\/usr\/bin\/flock", \["--no-fork", "--nonblock", "--exclusive"/u);
+  assert.match(await readFile(new URL("../scripts/release-engine-runner.mjs", import.meta.url), "utf8"), /try \{ await releaseApplication\(\); \}[\s\S]*finally \{ await releaseEnvironmentLock\(\); \}/u);
   assert.match(installation, /traverse-only ACL \(`--x`\)[\s\S]*do not grant directory listing/u);
   assert.match(broker, /verify-host-context\|backup\|stage\|rollback-set\|migrate\|switch\|restart\|rollback/u);
   assert.match(broker, /systemd-run --quiet --wait --pipe --collect --service-type=exec/u);
