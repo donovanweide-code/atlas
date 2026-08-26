@@ -395,7 +395,9 @@ export class WbdReleaseEngine {
       lastSmokeResults: smokeEvents.map((event) => ({ at: event.at, type: event.type, smoke: event.details.smoke, status: "PASS" })),
       rollback: current?.state === "ROLLED_BACK" ? { status: "ROLLED_BACK", target: contract.rollback.targetReleaseId } : plan ? { status: "READY", target: contract.rollback.targetReleaseId } : { status: "NOT_PREPARED", target: contract.rollback.targetReleaseId },
       humanAction: current?.state === "AWAITING_HUMAN_GO" ? "REVIEW_AND_GO" : "NONE",
-      latestDiagnostic: [...events].reverse().find((event) => event.type.includes("blocked") || event.type.includes("failed"))?.details ?? null,
+      latestDiagnostic: current?.state === "BLOCKED"
+        ? [...events].reverse().find((event) => event.type.includes("blocked") || event.type.includes("failed"))?.details ?? null
+        : null,
     });
   }
 }

@@ -247,6 +247,19 @@ test("happy prepare ends at one compact AWAITING_HUMAN_GO boundary", async () =>
   assert.ok(result.platform.calls.indexOf("stageArtifact") < result.platform.calls.indexOf("environmentLock:prepare-finalize"));
 });
 
+test("resolved prepare diagnostics remain in audit but not as current Owner blocker", async () => {
+  const result = fixture();
+  result.platform.current = { ...result.platform.current, releaseId: "DRIFTED", commit: "f".repeat(40) };
+  await assert.rejects(result.engine.inspectAndPrepare(result.contract), (error) => error.diagnostic.class === "BASELINE_DRIFT");
+  assert.equal((await result.engine.ownerSummary(result.contract)).latestDiagnostic.class, "BASELINE_DRIFT");
+  result.platform.current = { ...result.platform.current, releaseId: result.contract.expectedBaseline.releaseId, commit: result.contract.expectedBaseline.commit };
+  await result.engine.inspectAndPrepare(result.contract);
+  const summary = await result.engine.ownerSummary(result.contract);
+  assert.equal(summary.state, "AWAITING_HUMAN_GO");
+  assert.equal(summary.latestDiagnostic, null);
+  assert.equal((await result.engine.events(result.contract)).some((event) => event.type === "release_blocked"), true);
+});
+
 test("audit diagnostics with undefined metadata remain verifiable after JSON persistence", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "wbd-release-audit-persistence-"));
   const store = new FileReleaseStateStore({ root });
