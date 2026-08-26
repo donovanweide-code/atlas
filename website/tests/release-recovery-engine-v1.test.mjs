@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  ReleaseEngineError, canonicalJson, sanitizeDiagnostic, validateReleaseContract, verifyAuditChain,
+  ReleaseEngineError, canonicalJson, createAuditEvent, sanitizeDiagnostic, validateReleaseContract, verifyAuditChain,
 } from "../scripts/release-engine-core.mjs";
 import {
   assertPureReadOnlyInspectionQueries, buildMigrationPlan, createPureSchemaInspectionQueries,
@@ -18,6 +18,7 @@ import { WbdReleaseEngine } from "../scripts/release-engine-runner.mjs";
 import { FileReleaseStateStore, InMemoryReleaseStateStore } from "../scripts/release-engine-state-store.mjs";
 import { createReleaseEngineRequestHandler } from "../scripts/release-engine-service.mjs";
 import { applyOneMigration, assertMigrationSqlMatchesClassification } from "../scripts/release-engine-migrate-one.mjs";
+import { recoverLegacyUndefinedAuditChain } from "../scripts/release-engine-audit-recovery.mjs";
 
 const contractFile = new URL("../../ops/release-engine/contracts/WBD-MAIL-WEB-PUSH-FORWARD-R2-MOBILE-20260826.release-contract.json", import.meta.url);
 const rawContract = JSON.parse(await readFile(contractFile, "utf8"));
@@ -244,6 +245,43 @@ test("happy prepare ends at one compact AWAITING_HUMAN_GO boundary", async () =>
   assert.equal(summary.featureExposure.default, "OFF");
   assert.ok(result.platform.calls.indexOf("environmentUnlock:prepare") < result.platform.calls.indexOf("stageArtifact"));
   assert.ok(result.platform.calls.indexOf("stageArtifact") < result.platform.calls.indexOf("environmentLock:prepare-finalize"));
+});
+
+test("audit diagnostics with undefined metadata remain verifiable after JSON persistence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "wbd-release-audit-persistence-"));
+  const store = new FileReleaseStateStore({ root });
+  const releaseContract = contract();
+  const engine = new WbdReleaseEngine({ stateStore: store, platform: new InMemoryReleasePlatform({ contract: releaseContract, now: fixedNow.toISOString() }), clock: () => fixedNow });
+  await engine.register(releaseContract);
+  await engine.transition(releaseContract, "INSPECTING", "inspection_started", { metadata: { name: "Error", errno: undefined, sqlState: undefined } }, "undefined-metadata-fixture");
+  const reloaded = new FileReleaseStateStore({ root });
+  const events = await reloaded.events({ tenant: releaseContract.tenant, application: releaseContract.application, releaseId: releaseContract.releaseId });
+  assert.equal(verifyAuditChain(events).valid, true);
+  assert.deepEqual(events.at(-1).details.metadata, { name: "Error" });
+  await rm(root, { recursive: true, force: true });
+});
+
+test("legacy undefined audit mismatch is recovered only with checksum and immutable source evidence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "wbd-release-audit-recovery-"));
+  const eventsDirectory = path.join(root, "events");
+  await mkdir(eventsDirectory, { recursive: true });
+  const releaseContract = contract();
+  const identity = { tenant: releaseContract.tenant, application: releaseContract.application, releaseId: releaseContract.releaseId };
+  const first = createAuditEvent({ ...identity, state: "CANDIDATE", type: "candidate_registered", actor: "wbd-release-runner", idempotencyKey: "legacy-candidate", details: {}, at: fixedNow.toISOString() });
+  const legacyUnsigned = { sequence: 2, at: fixedNow.toISOString(), state: "BLOCKED", type: "release_blocked", ...identity, actor: "wbd-release-runner", idempotencyKey: "legacy-blocked", details: { class: "RUNTIME", activeRelease: undefined, metadata: { name: "Error", errno: undefined, sqlState: undefined } }, previousHash: first.eventHash };
+  const legacy = { ...legacyUnsigned, eventHash: createHash("sha256").update(canonicalJson(legacyUnsigned)).digest("hex") };
+  const file = path.join(eventsDirectory, `${identity.tenant}--${identity.application}--${identity.releaseId}.jsonl`);
+  const original = Buffer.from(`${JSON.stringify(first)}\n${JSON.stringify(legacy)}\n`);
+  await writeFile(file, original);
+  const expectedFileSha256 = createHash("sha256").update(original).digest("hex");
+  const result = await recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256, at: fixedNow.toISOString() });
+  assert.equal(result.repairedEvents, 1);
+  const recovered = await new FileReleaseStateStore({ root }).events(identity);
+  assert.equal(verifyAuditChain(recovered).valid, true);
+  assert.equal(recovered.at(-1).type, "audit_chain_recovered");
+  assert.equal(createHash("sha256").update(await readFile(path.join(root, "audit-recovery", result.backup))).digest("hex"), expectedFileSha256);
+  await assert.rejects(recoverLegacyUndefinedAuditChain({ stateRoot: root, ...identity, expectedFileSha256: "0".repeat(64) }), /checksum/u);
+  await rm(root, { recursive: true, force: true });
 });
 
 test("privileged current inspection vergelijkt symlink, manifest en env zonder secretoutput", async () => {

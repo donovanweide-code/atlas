@@ -241,8 +241,10 @@ const secretLike = /(mysql|mariadb|postgres(?:ql)?):\/\/[^\s]+|-----BEGIN [^-]+ 
 export function sanitizeDiagnostic(value, key = "") {
   if (sensitiveKey.test(key)) return "[REDACTED]";
   if (typeof value === "string") return value.replace(secretLike, "[REDACTED]").slice(0, 4_000);
-  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeDiagnostic(item));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([childKey, child]) => [childKey, sanitizeDiagnostic(child, childKey)]));
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeDiagnostic(item) ?? null);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value)
+    .map(([childKey, child]) => [childKey, sanitizeDiagnostic(child, childKey)])
+    .filter(([, child]) => child !== undefined));
   return value;
 }
 
