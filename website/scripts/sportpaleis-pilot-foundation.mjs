@@ -1698,14 +1698,14 @@ function assertRole(user, allowed) {
 }
 
 const SPORTPALEIS_REVIEW_CANDIDATES = Object.freeze([Object.freeze({
-  id: "library-teamkit-v1",
-  title: "Bibliotheek + bestaande Teamkit",
+  id: "spw-r20-human-review-20260827",
+  title: "Sportpaleis R20 · Bibliotheek + Teamwear",
   status: "CANDIDATE",
   stateBoundary: "DISPOSABLE_SESSION_ONLY",
   capabilities: Object.freeze({
     library: "READ_SAFE",
-    teamkitDraft: "CANDIDATE_STATE_ONLY",
-    proof: "SIMULATED",
+    teamkitDraft: "CANDIDATE_STATE_ONLY_FROM_LIVE_CONTEXT",
+    proof: "SAME_CANONICAL_COMPOSITION_READ_SAFE",
     uploads: "DISABLED",
     orders: "FORBIDDEN",
     production: "FORBIDDEN",

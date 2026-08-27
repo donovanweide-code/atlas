@@ -1,4 +1,5 @@
 import type { PilotBootstrap } from "../pilot-api.ts";
+import type { TeamkitProposal } from "../workspace-data.ts";
 
 type CandidateView = "library" | "teamkit";
 
@@ -51,16 +52,18 @@ function esc(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+interface ReviewSource { id: string; name: string; type: string; relation: string; image?: string; text?: string; status: string }
+
 const sourceSeed = [
-  { name: "Almerer Pioneers", type: "Verenigingslogo", relation: "Almerer Pioneers · Teamwear", image: PIONEERS_LOGO, status: "Productieklaar" },
+  { name: "Almere Pioneers", type: "Verenigingslogo", relation: "Almere Pioneers · Teamwear", image: PIONEERS_LOGO, status: "Productieklaar" },
   { name: "FC Huizen", type: "Verenigingslogo", relation: "FC Huizen · Teamwear", image: FC_HUIZEN_LOGO, status: "Productieklaar" },
   { name: "ASC Waterwijk", type: "Verenigingslogo", relation: "ASC Waterwijk · Teamwear", image: WATERWIJK_LOGO, status: "Controle nodig" },
-  { name: "Pioneers nummers", type: "Cijferset", relation: "Almerer Pioneers · Rugnummer", text: "09", status: "Productieklaar" },
+  { name: "Pioneers nummers", type: "Cijferset", relation: "Almere Pioneers · Rugnummer", text: "09", status: "Productieklaar" },
   { name: "Liberation Sans Regular", type: "Lettertype", relation: "Sportpaleis · Rugnaam", text: "Aa", status: "Technische fallback" },
   { name: "Sponsor DEMO", type: "Sponsorlogo", relation: "Fictieve reviewbron · Teamkit", text: "DEMO", status: "Productiebron mist" },
 ] as const;
 
-const sources = Array.from({ length: 320 }, (_, index) => {
+const fallbackSources: ReviewSource[] = Array.from({ length: 320 }, (_, index) => {
   const seed = sourceSeed[index % sourceSeed.length];
   if (index < sourceSeed.length) return { id: `source-${index + 1}`, ...seed };
   return {
@@ -73,13 +76,30 @@ const sources = Array.from({ length: 320 }, (_, index) => {
   };
 });
 
-function preview(source: (typeof sources)[number], large = false): string {
-  return "image" in source
+function sourcesFromState(state: PilotBootstrap): ReviewSource[] {
+  const actual = (state.productionElements ?? []).map((asset) => {
+    const candidateId = asset.sourceSelection?.candidateIds?.[0];
+    const application = asset.applications?.[0];
+    const kind = application?.kind === "NUMBER_SET" ? "Cijferset" : application?.kind === "SPONSOR" ? "Sponsorlogo" : application?.kind === "LOGO" ? "Verenigingslogo" : "Productieasset";
+    return {
+      id: asset.id,
+      name: asset.name,
+      type: kind,
+      relation: [asset.ownerName, application?.placement].filter(Boolean).join(" · ") || "Algemene productiecontext",
+      ...(asset.sourceId && candidateId ? { image: `/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(asset.sourceId)}/candidates/${encodeURIComponent(candidateId)}/preview.svg` } : { text: application?.kind === "NUMBER_SET" ? "09" : asset.name.slice(0, 2).toLocaleUpperCase("nl-NL") }),
+      status: asset.lifecycleStatus === "PRODUCTION_READY" ? "Productieklaar" : "Controle nodig",
+    } satisfies ReviewSource;
+  });
+  return actual.length ? actual : fallbackSources;
+}
+
+function preview(source: ReviewSource, large = false): string {
+  return source.image
     ? `<span class="sp-review-source-preview${large ? " is-large" : ""}"><img src="${esc(source.image)}" alt=""></span>`
     : `<span class="sp-review-source-preview${large ? " is-large" : ""}">${esc(source.text)}</span>`;
 }
 
-function libraryView(query: string): string {
+function libraryView(query: string, sources: ReviewSource[]): string {
   const normalized = query.trim().toLocaleLowerCase("nl-NL");
   const filtered = sources.filter((source) => `${source.name} ${source.type} ${source.relation}`.toLocaleLowerCase("nl-NL").includes(normalized));
   const visible = filtered.slice(0, 18);
@@ -94,7 +114,82 @@ function libraryView(query: string): string {
 
 function selectedSource(label: string, source: "pioneers" | "sponsor-demo", removable: boolean): string {
   const isPioneers = source === "pioneers";
-  return `<article class="sp-review-selected-source"><span class="sp-review-source-preview is-large">${isPioneers ? `<img src="${PIONEERS_LOGO}" alt="">` : "DEMO"}</span><span><small>${esc(label)}</small><strong>${isPioneers ? "Almerer Pioneers" : "Sponsor DEMO"}</strong><em>${isPioneers ? "Productiebron bewezen" : "Fictieve reviewbron · controle nodig"}</em></span><button type="button" class="sp-button sp-button--secondary" data-review-${removable ? "remove-logo2" : "replace-logo1"}>${removable ? "Verwijderen" : "Vervangen"}</button></article>`;
+  return `<article class="sp-review-selected-source"><span class="sp-review-source-preview is-large">${isPioneers ? `<img src="${PIONEERS_LOGO}" alt="">` : "DEMO"}</span><span><small>${esc(label)}</small><strong>${isPioneers ? "Almere Pioneers" : "Sponsor DEMO"}</strong><em>${isPioneers ? "Productiebron bewezen" : "Fictieve reviewbron · controle nodig"}</em></span><button type="button" class="sp-button sp-button--secondary" data-review-${removable ? "remove-logo2" : "replace-logo1"}>${removable ? "Verwijderen" : "Vervangen"}</button></article>`;
+}
+
+function reviewProposal(state: PilotBootstrap): TeamkitProposal | null {
+  const article = state.articles.find(({ active, association }) => active && association === "Almere Pioneers") ?? state.articles.find(({ active }) => active);
+  if (!article) return null;
+  const association = state.associations.find(({ name }) => name === article.association);
+  const numberAsset = state.productionElements.find(({ lifecycleStatus, ownerName, applications }) => lifecycleStatus === "PRODUCTION_READY" && ownerName === article.association && applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && /rug senior/iu.test(placement ?? "")))
+    ?? state.productionElements.find(({ lifecycleStatus, applications }) => lifecycleStatus === "PRODUCTION_READY" && applications?.some(({ kind }) => kind === "NUMBER_SET"));
+  const now = "2026-08-27T08:00:00.000Z";
+  return {
+    id: "review-teamwear-r20-canonical",
+    proposalNumber: "REVIEW-R20",
+    aggregateRevision: 1,
+    currentRevision: 1,
+    status: "IN_DESIGN",
+    title: "Wedstrijdcollectie · Human Review",
+    type: "Teamwear",
+    customer: { id: null, name: article.association || "Sportpaleis review", contactName: "Donovan", email: "review@invalid.local", phone: null },
+    association: { id: association?.id ?? null, name: article.association || null },
+    team: "Human Review",
+    season: "2026 / 2027",
+    category: "Wedstrijd",
+    deadline: null,
+    notes: "Deterministische Candidate-context uit bestaande artikel- en productietruth.",
+    items: [{
+      id: "review-item-article",
+      articleId: article.id,
+      articleNumber: article.articleNumber,
+      productName: article.name,
+      color: "Clubkleur",
+      quantity: 1,
+      sizes: [],
+      team: "Human Review",
+      notes: null,
+      placements: [{
+        id: "review-placement-back-number-34",
+        kind: "BACK_NUMBER",
+        label: "Rugnummer 34",
+        side: "BACK",
+        preset: "BACK_LOWER",
+        sourceId: null,
+        productionAssetId: numberAsset?.id ?? null,
+        assetVersion: numberAsset?.version ?? null,
+        text: "34",
+        colorOverride: "#ffffff",
+        widthPercent: 28,
+        visualPosition: { coordinateSpace: "GARMENT_PRINT_AREA_V1", xPercent: 50, yPercent: 53 },
+        physicalSizeOverride: null,
+        route: "INTERN_BEDRUKKEN",
+        supplierName: null,
+        note: "Review Mode gebruikt de bestaande gecontroleerde productiebron en maakt geen LIVE-mutatie.",
+      }],
+    }],
+    sources: [],
+    intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
+    customerAccess: null,
+    feedback: [],
+    revisions: [],
+    approval: null,
+    approvalHistory: [],
+    productionSizing: null,
+    fulfillmentTasks: [],
+    createdAt: now,
+    createdBy: { id: state.currentUser.id, name: state.currentUser.name, role: state.currentUser.role },
+    updatedAt: now,
+    updatedBy: { id: state.currentUser.id, name: state.currentUser.name, role: state.currentUser.role },
+    archivedAt: null,
+    copiedFrom: null,
+  };
+}
+
+function reviewTeamwearState(state: PilotBootstrap): PilotBootstrap {
+  if (state.teamkitProposals?.some(({ items }) => items.length > 0)) return state;
+  const proposal = reviewProposal(state);
+  return proposal ? { ...state, teamkitProposals: [proposal] } : state;
 }
 
 function picker(draft: CandidateDraft): string {
@@ -111,10 +206,10 @@ function proof(draft: CandidateDraft): string {
   return `<section class="sp-panel sp-review-proof"><div><p class="sp-eyebrow">VOORSTEL</p><h2>Wat de klant ziet</h2><p>Veilige simulatie; er wordt niets verzonden of goedgekeurd.</p></div><div class="sp-review-shirt"><span class="sp-review-shirt-logo"><img src="${PIONEERS_LOGO}" alt=""></span>${draft.logo2 ? `<span class="sp-review-shirt-sponsor">DEMO</span>` : ""}<strong>SPORTPALEIS</strong></div></section>`;
 }
 
-function teamkitView(draft: CandidateDraft): string {
+function teamkitFallback(draft: CandidateDraft): string {
   return `<section class="sp-review-candidate-page" aria-labelledby="candidate-teamkit-title">
     <header class="sp-review-candidate-head"><div><p class="sp-eyebrow">BESTAANDE TEAMKIT · CANDIDATE</p><h1 id="candidate-teamkit-title">Teamwear Studio</h1><p>Bekende bronnen komen naar de medewerker toe en blijven in de draft staan.</p></div><span>Alleen zichtbaar voor jou</span></header>
-    <div class="sp-review-teamkit-context"><div><small>Organisatie</small><strong>Almerer Pioneers</strong></div><div><small>Team</small><strong>Heren 1</strong></div><div><small>Kledingstuk</small><strong>Wedstrijdshirt</strong></div><div><small>Seizoen</small><strong>2026 / 2027</strong></div></div>
+    <div class="sp-review-teamkit-context"><div><small>Organisatie</small><strong>Almere Pioneers</strong></div><div><small>Team</small><strong>Heren 1</strong></div><div><small>Kledingstuk</small><strong>Wedstrijdshirt</strong></div><div><small>Seizoen</small><strong>2026 / 2027</strong></div></div>
     <div class="sp-review-teamkit-layout"><section class="sp-panel sp-review-teamkit-work"><div class="sp-panel__head"><div><p class="sp-eyebrow">OPMAAK</p><h2>Logo’s en sponsors</h2></div><span>Draft lokaal bewaard</span></div>
       ${selectedSource("Logo 1 · borst links", "pioneers", false)}
       ${draft.logo2 ? selectedSource("Logo 2 · sponsor middenborst", "sponsor-demo", true) : `<button type="button" class="sp-review-add-source" data-review-open-picker><strong>+ Sponsor / logo 2 toevoegen</strong><span>Workspace toont alleen relevante bronnen.</span></button>`}
@@ -126,12 +221,24 @@ function teamkitView(draft: CandidateDraft): string {
   </section>`;
 }
 
+function teamkitView(draft: CandidateDraft, state: PilotBootstrap): string {
+  const candidateState = reviewTeamwearState(state);
+  const proposal = candidateState.teamkitProposals?.find(({ items }) => items.length > 0) ?? candidateState.teamkitProposals?.[0];
+  if (!proposal) return teamkitFallback(draft);
+  return `<section class="sp-review-real-candidate" data-review-source-revision="${esc(proposal.currentRevision)}">
+    <div class="sp-review-readonly-note" role="status"><strong>Exacte R20 Teamwear-ervaring</strong><span>Je werkt met echte, reeds beschikbare context. Wijzigingen blijven uitsluitend in deze browsersessie en kunnen LIVE, productie, mail of orders niet aanpassen.</span></div>
+    <div data-review-teamwear-mount data-proposal-id="${esc(proposal.id)}"><p class="sp-muted">Teamwear Candidate wordt geladen…</p></div>
+  </section>`;
+}
+
 function styles(): string {
   return `<style data-review-candidate-styles>
   .sp-review-candidate { --review-red:#d10019; max-width:1180px; margin:0 auto; }
   .sp-review-candidate-nav { display:flex; width:max-content; max-width:100%; gap:4px; padding:4px; margin:0 0 16px; border:1px solid #ddd; border-radius:9px; background:#f4f4f4; }
   .sp-review-candidate-nav button { min-height:40px; padding:0 16px; border:0; border-radius:6px; background:transparent; font:inherit; font-weight:700; }
   .sp-review-candidate-nav button[aria-current=page] { background:#fff; color:#111; box-shadow:0 1px 4px #0002; }
+  .sp-review-readonly-note { display:grid; gap:3px; margin-bottom:14px; padding:12px 14px; border:1px solid #e6b7bd; border-left:4px solid var(--review-red); border-radius:8px; background:#fff5f6; }
+  .sp-review-readonly-note span { color:#67484c; font-size:.82rem; line-height:1.45; }
   .sp-review-candidate-page { display:grid; gap:16px; }
   .sp-review-candidate-head { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; }
   .sp-review-candidate-head h1 { margin:.1rem 0 .35rem; }
@@ -168,14 +275,27 @@ function styles(): string {
   </style>`;
 }
 
-export function mountLibraryTeamkitCandidate(root: HTMLElement, _state: PilotBootstrap): () => void {
+export function mountLibraryTeamkitCandidate(root: HTMLElement, state: PilotBootstrap): () => void {
   let draft = loadDraft();
   let query = "";
+  let renderSequence = 0;
+  let disposed = false;
   const render = () => {
-    root.innerHTML = `${styles()}<div class="sp-review-candidate" data-review-no-production-authority><nav class="sp-review-candidate-nav" aria-label="Candidate-onderdelen"><button type="button" data-review-candidate-view="library" aria-current="${draft.view === "library" ? "page" : "false"}">Bibliotheek</button><button type="button" data-review-candidate-view="teamkit" aria-current="${draft.view === "teamkit" ? "page" : "false"}">Teamkit</button></nav>${draft.view === "library" ? libraryView(query) : teamkitView(draft)}</div>`;
+    const sequence = ++renderSequence;
+    root.innerHTML = `${styles()}<div class="sp-review-candidate" data-review-no-production-authority><nav class="sp-review-candidate-nav" aria-label="Candidate-onderdelen"><button type="button" data-review-candidate-view="library" aria-current="${draft.view === "library" ? "page" : "false"}">Bibliotheek</button><button type="button" data-review-candidate-view="teamkit" aria-current="${draft.view === "teamkit" ? "page" : "false"}">Teamwear</button></nav>${draft.view === "library" ? libraryView(query, sourcesFromState(state)) : teamkitView(draft, state)}</div>`;
+    const mount = root.querySelector<HTMLElement>("[data-review-teamwear-mount]");
+    if (mount) void import("../../sportpaleis-teamkit-experience.ts").then(({ activateTeamkitExperience, teamkitProposalExperience }) => {
+      if (disposed || sequence !== renderSequence || !mount.isConnected) return;
+      const candidateState = reviewTeamwearState(state);
+      mount.innerHTML = teamkitProposalExperience(candidateState, mount.dataset.proposalId!, "/workspace/sportpaleis");
+      activateTeamkitExperience(root as HTMLDivElement, candidateState);
+    });
   };
   const click = (event: Event) => {
     const button = (event.target as HTMLElement).closest<HTMLElement>("button");
+    const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("a");
+    if (link && !String(link.getAttribute("href") ?? "").startsWith("#")) event.preventDefault();
+    event.stopPropagation();
     if (!button) return;
     if (button.dataset.reviewCandidateView) draft.view = button.dataset.reviewCandidateView as CandidateView;
     else if (button.hasAttribute("data-review-open-picker") || button.hasAttribute("data-review-replace-logo1")) draft.pickerOpen = true;
@@ -195,10 +315,23 @@ export function mountLibraryTeamkitCandidate(root: HTMLElement, _state: PilotBoo
     query = field.value; render();
     root.querySelector<HTMLInputElement>("[data-review-source-search]")?.focus();
   };
+  const submit = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    let output = root.querySelector<HTMLElement>("[data-review-session-notice]");
+    if (!output) {
+      output = document.createElement("p");
+      output.dataset.reviewSessionNotice = "";
+      output.className = "sp-action-notice";
+      root.prepend(output);
+    }
+    output.textContent = "Review Mode bewaart dit alleen in deze browsersessie. LIVE, productie, mail en orders blijven onaangeraakt.";
+  };
   root.addEventListener("click", click);
   root.addEventListener("input", input);
+  root.addEventListener("submit", submit, true);
   render();
-  return () => { root.removeEventListener("click", click); root.removeEventListener("input", input); root.replaceChildren(); };
+  return () => { disposed = true; root.removeEventListener("click", click); root.removeEventListener("input", input); root.removeEventListener("submit", submit, true); window.onbeforeunload = null; root.replaceChildren(); };
 }
 
 export function setLibraryTeamkitCandidateView(root: HTMLElement, view: CandidateView): void {

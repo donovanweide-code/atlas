@@ -31,7 +31,8 @@ test("Review Mode is default-deny en vereist exact principal, adminrol én besta
   const bootstrap = await allowed.service.bootstrap(allowed.admin.token);
   assert.equal(bootstrap.capabilities.reviewMode, true);
   const manifest = await allowed.service.reviewManifest(allowed.admin.token);
-  assert.equal(manifest.candidates[0].id, "library-teamkit-v1");
+  assert.equal(manifest.candidates[0].id, "spw-r20-human-review-20260827");
+  assert.equal(manifest.candidates[0].capabilities.teamkitDraft, "CANDIDATE_STATE_ONLY_FROM_LIVE_CONTEXT");
   assert.equal(manifest.candidates[0].capabilities.orders, "FORBIDDEN");
   assert.equal(manifest.candidates[0].capabilities.production, "FORBIDDEN");
   assert.equal(manifest.candidates[0].capabilities.mail, "FORBIDDEN");
@@ -53,6 +54,13 @@ test("candidate gebruikt alleen disposable session-state en bevat geen productie
   assert.doesNotMatch(source, /\bfetch\s*\(|\bXMLHttpRequest\b|\.createOrder\(|\.sendMail\(|\.createProduction/u);
   assert.doesNotMatch(source, /BijCees|AquaFlask|Posthopper/iu);
   assert.match(source, /Fictieve reviewbron/u);
+  assert.match(source, /import\("\.\.\/\.\.\/sportpaleis-teamkit-experience\.ts"\)/u);
+  assert.match(source, /reviewTeamwearState\(state\)/u);
+  assert.match(source, /review-teamwear-r20-canonical/u);
+  assert.match(source, /teamkitProposalExperience\(candidateState, mount\.dataset\.proposalId!/u);
+  assert.match(source, /activateTeamkitExperience\(root as HTMLDivElement, candidateState\)/u);
+  assert.match(source, /root\.addEventListener\("submit", submit, true\)/u);
+  assert.match(source, /LIVE, productie, mail en orders blijven onaangeraakt/u);
   assert.match(source, /Logo 1 blijft gekoppeld/u);
   assert.match(source, /alleen na deze expliciete keuze gewist/u);
   assert.match(source, /root\.innerHTML = `\$\{styles\(\)\}/u, "candidate-stijlen blijven na iedere state-transitie aanwezig");
