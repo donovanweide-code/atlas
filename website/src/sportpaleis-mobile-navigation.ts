@@ -30,6 +30,24 @@ export function toggleMobileNavigation(elements: MobileNavigationElements): bool
   return setMobileNavigation(elements, !elements.sidebar?.classList.contains("is-open"));
 }
 
+/**
+ * Own the dismissal click at the backdrop itself. Closing from the delegated
+ * application click handler changes hit-testing beneath the pointer while the
+ * event is still bubbling and allowed the mobile primary action underneath to
+ * receive the same Human tap in Chrome. A direct handler consumes the complete
+ * event before hiding the backdrop.
+ */
+export function bindMobileNavigationBackdrop(backdrop: HTMLButtonElement | null, dismiss: () => void): () => void {
+  if (!backdrop) return () => undefined;
+  const onClick = (event: MouseEvent): void => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dismiss();
+  };
+  backdrop.addEventListener("click", onClick);
+  return () => backdrop.removeEventListener("click", onClick);
+}
+
 export function syncMobileNavigationForViewport(elements: MobileNavigationElements, mobile: boolean): void {
   if (mobile) {
     if (!elements.sidebar?.classList.contains("is-open")) setMobileNavigation(elements, false, false);

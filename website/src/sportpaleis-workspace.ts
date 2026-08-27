@@ -16,7 +16,8 @@ import { openProductionColorContexts, unprintedProductionGroup } from "./sportpa
 import { appendProposalItem, appendProposalPlacement, proposalItemsFromEditor, teamkitProposalCreate, teamkitProposalDetail, teamkitProposalList } from "./sportpaleis-teamkit-workspace.ts";
 import { activateTeamkitExperience, teamkitProposalExperience } from "./sportpaleis-teamkit-experience.ts";
 import { buildTeamwearRelationships } from "./sportpaleis-teamwear-foundations.ts";
-import { setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation, type MobileNavigationElements } from "./sportpaleis-mobile-navigation.ts";
+import { bindMobileNavigationBackdrop, setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation, type MobileNavigationElements } from "./sportpaleis-mobile-navigation.ts";
+import { FRONT_NAME_ARTICLE_TRUTH, FRONT_NAME_DECORATION } from "./sportpaleis/front-name-production-truth.mjs";
 
 const BUILD_ID = "SPW-MINI-PRODUCTION-CORRECTION-006-20260814";
 const PREVIOUS_RELEASE_ID = "SPW-PILOT-PRODUCTION-UX-CLEAN-START-005-20260814";
@@ -31,6 +32,8 @@ const LEGACY_BASE = "/workspace/sportpaleis";
 // the legacy boundary so WBD and Sportpaleis can still coexist safely.
 const BASE = location.pathname === LEGACY_BASE || location.pathname.startsWith(`${LEGACY_BASE}/`) ? LEGACY_BASE : "";
 const REVIEW_ROUTE = `${BASE}/reviews/library-teamkit`;
+const FULL_WORKSPACE_REVIEW_ROUTE = `${BASE}/reviews/full-workspace`;
+const FULL_WORKSPACE_CANDIDATE = "full-workspace-r3";
 const LIVE_TEAMKIT_ROUTE = `${BASE}/voorstellen`;
 const referenceBatch = createCutJobBatch({
   organizationId: "sport-2000-sportpaleis-bv", orderId: "SNIJTEST-001", revision: 1,
@@ -107,7 +110,20 @@ function esc(value: unknown): string { return String(value ?? "").replaceAll("&"
 function safeHttpUrl(value: unknown): string | null { try { const url = new URL(String(value ?? "")); return ["http:", "https:"].includes(url.protocol) ? url.href : null; } catch { return null; } }
 export { parseTeamProductionLines };
 function fileAsBase64(file: File): Promise<string> { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = () => reject(new Error("Afbeelding kon niet worden gelezen.")); reader.readAsDataURL(file); }); }
-function path(): string { const value = location.pathname.replace(/\/+$/, ""); return value === BASE || value === "" ? `${BASE}/overzicht` : value; }
+function fullWorkspaceCandidateActive(): boolean {
+  return location.pathname.replace(/\/+$/, "") === FULL_WORKSPACE_REVIEW_ROUTE
+    || new URLSearchParams(location.search).get("candidate") === FULL_WORKSPACE_CANDIDATE;
+}
+function candidateHref(href: string): string {
+  if (!fullWorkspaceCandidateActive()) return href;
+  const url = new URL(href, location.href);
+  url.searchParams.set("candidate", FULL_WORKSPACE_CANDIDATE);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+function path(): string {
+  const value = location.pathname.replace(/\/+$/, "");
+  return value === BASE || value === "" ? `${BASE}/overzicht` : value;
+}
 function date(value: string | null | undefined): string { return value ? new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "Normale doorlooptijd"; }
 function teamkitMailInput(data: FormData): { templateKey: "PROPOSAL_INTAKE_REQUEST" | "PROPOSAL_REVIEW_REQUEST" | "PROPOSAL_SUPPLIER_HANDOFF"; customerPath?: string; taskId?: string; recipient?: string; supplierName?: string } { return { templateKey: String(data.get("templateKey")) as "PROPOSAL_INTAKE_REQUEST" | "PROPOSAL_REVIEW_REQUEST" | "PROPOSAL_SUPPLIER_HANDOFF", customerPath: String(data.get("customerPath") ?? "") || undefined, taskId: String(data.get("taskId") ?? "") || undefined, recipient: String(data.get("recipient") ?? "") || undefined, supplierName: String(data.get("supplierName") ?? "") || undefined }; }
 function euro(value: number): string { return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value); }
@@ -1160,7 +1176,8 @@ function profileAdmin(state: PilotBootstrap, fromProduction = false): string {
   const associationProfileIds = new Set(state.articles.filter(({ association }) => association === associationContext).map(({ profileId }) => profileId).filter(Boolean));
   const profiles = associationContext ? state.productionProfiles.filter(({ id }) => associationProfileIds.has(id)) : state.productionProfiles;
   const contextNotice = associationContext ? `<section class="sp-panel sp-guided-route-context"><p class="sp-eyebrow">GUIDED SETUP</p><h2>${esc(associationContext)}</h2><p>Alleen de gekoppelde productieprofielen staan hieronder, zodat de open actie direct uitvoerbaar is.</p><a data-link href="${BASE}/beheer/productieprofielen">Alle productieprofielen bekijken</a></section>` : "";
-  return `<a class="sp-back" data-link href="${fromProduction ? `${BASE}/productie` : `${BASE}/beheer`}">← ${fromProduction ? "Productie" : "Beheer"}</a>${head("PRODUCTIEPROFIELEN", "Productieprofielen", "Maat, bedrukoptie, letterprofiel en foliekleur zijn veiligheidskritiek. Positie, afstand, rotatie en spiegeling zijn tijdens deze pilot vakkennis-aandachtspunten en blokkeren niet op zichzelf.")}${contextNotice}<div class="sp-profile-admin">${profiles.map((profile) => {
+  const frontNameAttention = associationContext ? "" : `<details class="sp-panel sp-technical-details"><summary>${esc(FRONT_NAME_DECORATION.label)} · controlepunten</summary><p>Standaard ${FRONT_NAME_DECORATION.physicalHeightMm / 10} cm hoog · hoofdletters. Alleen bewezen artikelkoppelingen mogen worden gebruikt.</p><ul>${FRONT_NAME_ARTICLE_TRUTH.map((entry) => `<li><strong>${esc(entry.articleNumber)} · ${esc(entry.association)}</strong> — ${entry.applicability === "VERIFIED" ? "regel bevestigd" : "cataloguskoppeling controleren"}; ${entry.fontProfile ? esc(entry.fontProfile) : "lettertype nog bevestigen"}. ${esc(entry.attention)}</li>`).join("")}</ul></details>`;
+  return `<a class="sp-back" data-link href="${fromProduction ? `${BASE}/productie` : `${BASE}/beheer`}">← ${fromProduction ? "Productie" : "Beheer"}</a>${head("PRODUCTIEPROFIELEN", "Productieprofielen", "Maat, bedrukoptie, letterprofiel en foliekleur zijn veiligheidskritiek. Positie, afstand, rotatie en spiegeling zijn tijdens deze pilot vakkennis-aandachtspunten en blokkeren niet op zichzelf.")}${frontNameAttention}${contextNotice}<div class="sp-profile-admin">${profiles.map((profile) => {
     const validation = profile.validation;
     const criticalLabels = { size: "fysieke maatvoering", font: "letterprofiel", foilColor: "foliekleur", cutContour: "snijlijnen", physicalCutOutput: "fysieke snijoutput" } as const;
     const advisoryLabels = { placement: "positie", referenceDistance: "referentieafstand", rotation: "rotatie", mirror: "spiegeling" } as const;
@@ -1487,6 +1504,9 @@ void customOrder;
 
 function page(state: PilotBootstrap, current: string): { title: string; html: string } {
   const contexts = new Set(state.capabilities.workContexts ?? state.currentUser.workContexts ?? []);
+  if (current === FULL_WORKSPACE_REVIEW_ROUTE) return state.capabilities.reviewMode
+    ? { title: "Vandaag", html: overview(state) }
+    : { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (current === REVIEW_ROUTE) return state.capabilities.reviewMode
     ? { title: "Review nieuwe versie", html: `<section class="sp-review-mode-page"><header class="sp-page-head"><div><p class="sp-eyebrow">REVIEW MODE</p><h1>Library + Teamkit</h1><p>Vergelijk de bestaande Workspace met een geïsoleerde candidate. Bekijken is niet publiceren.</p></div></header><nav class="sp-review-live-switch" aria-label="Versie bekijken"><a data-link href="${BASE}/voorstellen">LIVE</a><a aria-current="page" data-link href="${REVIEW_ROUTE}">CANDIDATE</a></nav><div class="sp-review-candidate-root" data-review-candidate-root aria-live="polite"><p>Candidate laden…</p></div></section>` }
     : { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
@@ -1650,6 +1670,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
     syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
+    bindMobileNavigationBackdrop(app.querySelector<HTMLButtonElement>(".sp-nav-backdrop"), () => closeMobileNavigation());
     if (current === REVIEW_ROUTE && viewState.capabilities.reviewMode) {
       const root = app.querySelector<HTMLElement>("[data-review-candidate-root]");
       if (root) void import("./sportpaleis/review-candidates/library-teamkit-v1.ts").then(({ mountLibraryTeamkitCandidate }) => {
@@ -1844,7 +1865,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       target.focus({ preventScroll: true });
     });
   };
-  const go = (href: string): void => { const hadDeferredSync = deferredSharedRevision !== null; history.pushState({}, "", href); sharedSyncFormDirty = false; deferredSharedRevision = null; cancellationConfirmationUserId = null; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); if (hadDeferredSync) void checkSharedRevision("safe-boundary"); };
+  const go = (href: string): void => { const hadDeferredSync = deferredSharedRevision !== null; history.pushState({}, "", candidateHref(href)); sharedSyncFormDirty = false; deferredSharedRevision = null; cancellationConfirmationUserId = null; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); if (hadDeferredSync) void checkSharedRevision("safe-boundary"); };
   const saveProductionAssetReviewDraft = async (form: HTMLFormElement): Promise<void> => {
     if (!state || !form.dataset.sourceId) return;
     const data = new FormData(form);

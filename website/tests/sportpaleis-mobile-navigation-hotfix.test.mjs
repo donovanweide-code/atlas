@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation } from "../src/sportpaleis-mobile-navigation.ts";
+import { bindMobileNavigationBackdrop, setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation } from "../src/sportpaleis-mobile-navigation.ts";
 
 function navigationFixture() {
   const classes = new Set();
@@ -75,6 +75,24 @@ test("desktop viewport reset never hides or scroll-locks the persistent sidebar"
   assert.equal(classes.has("is-open"), false);
   assert.equal(attributes.has("sidebar:aria-hidden"), false);
   assert.equal(bodyClasses.has("sp-mobile-nav-open"), false);
+});
+
+test("exact Human regression: Menu sluiten consumes its click before the underlying Bedrukken route", () => {
+  let handler;
+  let dismissed = 0;
+  let removed = 0;
+  const backdrop = {
+    addEventListener: (type, callback) => { assert.equal(type, "click"); handler = callback; },
+    removeEventListener: (type, callback) => { assert.equal(type, "click"); assert.equal(callback, handler); removed += 1; },
+  };
+  const cleanup = bindMobileNavigationBackdrop(backdrop, () => { dismissed += 1; });
+  const event = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+  handler(event);
+  assert.equal(event.prevented, true);
+  assert.equal(event.stopped, true, "delegated navigation may not observe the dismissal click");
+  assert.equal(dismissed, 1);
+  cleanup();
+  assert.equal(removed, 1);
 });
 
 test("390px premium shell makes the toggled sidebar visible and interactive", async () => {

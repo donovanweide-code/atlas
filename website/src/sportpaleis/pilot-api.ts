@@ -696,6 +696,13 @@ export class SportpaleisPilotApi {
   }
 
   async #mutatingFetch(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+    const candidate = new URLSearchParams(globalThis.location?.search ?? "").get("candidate");
+    if (candidate === "full-workspace-r3" || globalThis.location?.pathname?.endsWith("/reviews/full-workspace")) {
+      return new Response(JSON.stringify({
+        code: "CANDIDATE_READ_ONLY",
+        message: "Deze volledige Workspace Candidate is alleen-lezen. Er is niets gewijzigd.",
+      }), { status: 409, headers: { "Content-Type": "application/json" } });
+    }
     return fetch(input, {
       ...init,
       credentials: "same-origin",
