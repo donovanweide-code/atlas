@@ -10,7 +10,7 @@ test("Guided Setup toont iedere verplichte Product Truth-dimensie en concrete ve
   assert.match(source, /Klaar[\s\S]*Automatisch hersteld[\s\S]*Actie nodig/u);
   assert.match(source, /beheer\/verenigingen\?vereniging=/u);
   assert.match(source, /beheer\/productieprofielen\?vereniging=/u);
-  assert.match(source, /Bevestig .* in .*; daarna verdwijnt deze actie/u);
+  assert.match(source, /Controleer .* in .*\. Na bevestiging verdwijnt deze actie|productiebron ontbreekt/u);
   assert.match(source, /Geen actie nodig/u);
 });
 
@@ -18,7 +18,7 @@ test("Teamwear-begeleiding, contextassets en garment surfaces blijven in de fina
   const experience = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
   const workspace = await readFile(new URL("../src/sportpaleis-teamkit-workspace.ts", import.meta.url), "utf8");
   const styles = await readFile(new URL("../src/styles/sportpaleis-teamwear.css", import.meta.url), "utf8");
-  assert.match(experience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Maten & aantallen[\s\S]*Voorstel[\s\S]*Afhandeling/u);
+  assert.match(experience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);
   assert.match(experience, /const contextAssets = clubAssets\(state, proposal\)/u);
   assert.match(experience, /studio-filter-assets[\s\S]*CLUB_LOGO[\s\S]*SPONSOR[\s\S]*NAME[\s\S]*BACK_NUMBER[\s\S]*FREE_TEXT/u);
   assert.match(experience, /aria-label="Collectie in Studio"/u);

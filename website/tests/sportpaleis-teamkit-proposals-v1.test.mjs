@@ -38,7 +38,7 @@ test("Teamwear experience houdt catalogus in Collectie en Studio bij contextgebo
   assert.match(source, /Ontwerp toevoegen/u);
   assert.match(source, /Alleen assets van deze klant, vereniging of dit voorstel/u);
   assert.match(source, /<strong>Catalogus<\\\/strong>[\s\S]*?Asset Library/u);
-  assert.match(source, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Maten & aantallen[\s\S]*Voorstel[\s\S]*Afhandeling/u);
+  assert.match(source, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);
   assert.match(source, /studio-filter-assets[\s\S]*CLUB_LOGO[\s\S]*SPONSOR[\s\S]*NAME[\s\S]*BACK_NUMBER[\s\S]*FREE_TEXT/u);
   assert.match(source, /RUSTIG KIJKEN[\s\S]*Officiële merkcollecties[\s\S]*Ik weet wat ik zoek/u);
   assert.match(source, /SPORTPALEIS_TEAMWEAR_BRAND_SOURCES/u);
@@ -57,6 +57,65 @@ test("bestaand verenigingslogo wordt bij revision één keer als immutable voors
   assert.equal(proposal.sources[0].sha256, association.workspaceLogo.sha256);
   assert.equal(proposal.items[0].placements[0].sourceId, proposal.sources[0].id);
   assert.equal(proposal.revisions.at(-1).snapshot.sourceRefs[0].sha256, association.workspaceLogo.sha256);
+});
+
+test("twee verschillende logo-bronnen blijven als twee placements en immutable revision-bronnen bewaard", async (context) => {
+  const { service, operator } = await fixture(context);
+  let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Twee-logo acceptance", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: "A.S.C. Waterwijk", team: "Senioren 1", season: "2026/2027" });
+  const issued = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id);
+  const customerToken = issued.path.split("/").at(-1);
+  const secondSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="#111111" d="M10 50L50 10L90 50L50 90Z"/></svg>');
+  await service.savePublicTeamkitIntake(customerToken, { data: { association: "A.S.C. Waterwijk", products: "Wedstrijdshirt", sponsors: "Clublogo en sponsor" }, sources: [
+    { filename: "clublogo.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg.toString("base64") },
+    { filename: "sponsorlogo.svg", mimeType: "image/svg+xml", dataBase64: secondSvg.toString("base64") },
+  ] }, { submit: true });
+  proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  assert.equal(proposal.sources.length, 2);
+  const visualItem = item(proposal.sources[0].id);
+  visualItem.placements = [
+    visualItem.placements[0],
+    { ...visualItem.placements[1], sourceId: proposal.sources[1].id },
+  ];
+  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [visualItem], reason: "Clublogo en sponsor afzonderlijk geplaatst" });
+  assert.deepEqual(proposal.items[0].placements.map(({ sourceId }) => sourceId), proposal.sources.map(({ id }) => id));
+  assert.deepEqual(proposal.revisions.at(-1).snapshot.sourceRefs.map(({ sha256 }) => sha256).sort(), proposal.sources.map(({ sha256 }) => sha256).sort());
+  assert.match(proposal.revisions.at(-1).previewHtml, /Clublogo/u);
+  assert.match(proposal.revisions.at(-1).previewHtml, /Hoofdsponsor/u);
+  const revision = proposal.revisions.at(-1);
+  assert.match(revision.previewHtml, /data:image\/svg\+xml;base64,/u, "de immutable preview rendert de echte bron en niet alleen een label");
+  assert.match(revision.snapshot.items[0].placements[0].visualSource.sha256, /^[A-F0-9]{64}$/u);
+  assert.match(revision.snapshot.items[0].placements[1].visualSource.sha256, /^[A-F0-9]{64}$/u);
+  assert.deepEqual(revision.snapshot.sourceRefs.map(({ sha256 }) => sha256), proposal.sources.map(({ sha256 }) => sha256), "originele immutable bronhashes blijven naast de veilige visual behouden");
+  const customer = await service.publicTeamkitProposal(customerToken);
+  assert.match(customer.previewHtml, /data:image\/svg\+xml;base64,/u, "de beveiligde klantweergave gebruikt dezelfde revision-bronbeelden");
+});
+
+test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleidbare Teamwear-keten", async (context) => {
+  const { service, operator } = await fixture(context);
+  let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Canonical composition truth", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: "A.S.C. Waterwijk", team: "Senioren 1" });
+  const issued = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = issued.path.split("/").at(-1);
+  await service.savePublicTeamkitIntake(customerToken, { data: { products: "Wedstrijdshirt" }, sources: [{ filename: "clublogo.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg.toString("base64") }] }, { submit: true });
+  proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  const compositionItem = item(proposal.sources[0].id); compositionItem.quantity = null; compositionItem.sizes = []; compositionItem.placements = [compositionItem.placements[0]];
+  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [compositionItem], reason: "Approved ontwerp zonder operationele maatverdeling" });
+  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
+  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "SENT_TO_CUSTOMER", expectedRevision: proposal.aggregateRevision });
+  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision });
+  await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Reviewer", customerEmail: "review@example.test" });
+  proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  assert.equal(proposal.productionSizing, null);
+  await assert.rejects(service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision }), (error) => error.code === "TEAMKIT_PRODUCTION_SIZING_REQUIRED");
+
+  proposal = await service.updateTeamkitProductionSizing(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [{ itemId: compositionItem.id, sizeQuantities: [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }] }] });
+  assert.deepEqual(proposal.productionSizing.items[0], { itemId: compositionItem.id, quantity: 10, sizes: ["S", "M"], sizeQuantities: [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }], allocationMode: "PER_SIZE" });
+  assert.equal(proposal.revisions.at(-1).snapshot.items[0].quantity, null, "operationele maten wijzigen de approved designrevision niet");
+  assert.match(proposal.fulfillmentTasks[0].specification, /10 \| S, M/u);
+  const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
+  assert.equal(prepared.orders.length, 1);
+  assert.equal(prepared.orders[0].items[0].quantity, 10);
+  assert.equal(prepared.orders[0].items[0].size, "S ×4 · M ×6");
+  assert.equal(prepared.orders[0].teamkitContext.productionSizingSnapshotHash, proposal.productionSizing.snapshotHash);
+  assert.equal(prepared.orders[0].teamkitContext.productionSizingRevision, 1);
 });
 
 test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhandeling end-to-end", async (context) => {
@@ -116,6 +175,9 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   assert.equal(finalPdf.sha256, proposal.approval.pdfSha256);
   await assert.rejects(service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [] }), (error) => error.code === "APPROVED_REVISION_IMMUTABLE");
   const externalTask = proposal.fulfillmentTasks.find(({ kind }) => kind === "EXTERNAL_SUPPLIER");
+  const internalTask = proposal.fulfillmentTasks.find(({ kind }) => kind === "INTERNAL_PRODUCTION");
+  await assert.rejects(service.updateTeamkitFulfillmentTask(operator.token, operator.csrfToken, proposal.id, externalTask.id, { status: "CONFIRMED" }), (error) => error.code === "TEAMKIT_FULFILLMENT_TRANSITION_INVALID", "uitbesteden mag geen tussenstappen overslaan");
+  await assert.rejects(service.updateTeamkitFulfillmentTask(operator.token, operator.csrfToken, proposal.id, internalTask.id, { status: "COMPLETED" }), (error) => error.code === "TEAMKIT_FULFILLMENT_STATUS_MANAGED", "interne productiestatus volgt uitsluitend de WorkspaceOrder");
   const supplierPreview = await service.previewTeamkitProposalMail(operator.token, proposal.id, { templateKey: "PROPOSAL_SUPPLIER_HANDOFF", taskId: externalTask.id, recipient: "planning@bedrukpartner.nl", supplierName: "Bestaande bedrukpartner" });
   assert.match(supplierPreview.text, /A\.S\.C\. Waterwijk|SV Voorbeeld/u);
   assert.match(supplierPreview.text, /Hoofdsponsor/u);

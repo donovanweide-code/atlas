@@ -90,9 +90,20 @@ const BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT = 120;
 const ORDER_HISTORY_PAGE_LIMIT = 40;
 const ORDER_HISTORY_PAGE_LIMIT_MAX = 80;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
+const LEGACY_PIONEERS_ASSOCIATION = "Almerer Pioneers";
+const CANONICAL_PIONEERS_ASSOCIATION = "Almere Pioneers";
+const canonicalAssociationName = (value) => String(value ?? "") === LEGACY_PIONEERS_ASSOCIATION ? CANONICAL_PIONEERS_ASSOCIATION : value;
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "chestNumber", "shortsNumber"];
+export const SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH = Object.freeze({
+  kind: "NAAMBALK",
+  semantic: "COMPOSED_APPLICATION",
+  componentFields: Object.freeze(["name", "backNumber"]),
+  aggregatePhysicalDimensions: null,
+  dimensionAuthority: "EXISTING_COMPONENT_PRODUCTION_PROFILES",
+  source: "Human Product Truth 2026-08-26",
+});
 const NON_WINKEL_ORDER_MAIL_TEMPLATES = new Set(["ORDER_QUESTION"]);
 const PRODUCTION_PROOF_STATUSES = new Set(["CONFIGURED", "GEOMETRY_VALIDATED", "WINPLOT_VALIDATED", "PHYSICALLY_VALIDATED", "DATA_GAP"]);
 const PRODUCTION_LINE_TYPES = new Set(["TEXT", "INITIALS", "NUMBER", "LOGO", "PRODUCTION_ELEMENT"]);
@@ -119,7 +130,7 @@ const PILOT_FONT = Object.freeze({
 });
 
 const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
-for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "Almerer Pioneers" && ["116386", "116388"].includes(String(articleNumber)))) {
+for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "Almere Pioneers" && ["116386", "116388"].includes(String(articleNumber)))) {
   article.supports = [...new Set([...(article.supports ?? []), "backNumber", "chestNumber"])];
   article.personalizationPolicy = { mode: "combination", fields: { ...(article.personalizationPolicy?.fields ?? {}), backNumber: "optional", chestNumber: "optional" } };
   if (!article.commercialPrintOptions?.some(({ canonicalField }) => canonicalField === "chestNumber")) article.commercialPrintOptions = [...(article.commercialPrintOptions ?? []), { sourceLabel: "Rug / Borst / Short nummer · borst", canonicalField: "chestNumber", priceEur: 0, status: "VALIDATED" }];
@@ -153,8 +164,8 @@ PRODUCTION_PROFILES.push(
   { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
   { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
   { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myriad Pro Bold", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
-  { id: "profile-pioneers-shirt", name: "Almerer Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
-  { id: "profile-pioneers-shorts", name: "Almerer Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
+  { id: "profile-pioneers-shirt", name: "Almere Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
+  { id: "profile-pioneers-shorts", name: "Almere Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
 );
 const profileSlug = (value) => String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const sourceProfileFields = [
@@ -314,8 +325,8 @@ function createGoldenProductionJobs(recordedAt = iso()) {
   const actor = { userId: "donovan-support", name: "Donovan", role: "support" };
   const shared = {
     organizationId: "sport-2000-sportpaleis-bv",
-    association: "Almerer Pioneers",
-    productionProfile: { id: "profile-pioneers-shirt", revision: 1, name: "Almerer Pioneers shirt · Senior rugnummer 200 mm" },
+    association: "Almere Pioneers",
+    productionProfile: { id: "profile-pioneers-shirt", revision: 1, name: "Almere Pioneers shirt · Senior rugnummer 200 mm" },
     productionGroup: { foilColor: "Wit", material: "HTV-WHITE", workingWidthMm: 440 },
     scale: 1,
     humanControlRequiredBeforeHardware: true,
@@ -587,6 +598,8 @@ export function migrateSportpaleisPilotState(input) {
       };
   }
   for (const order of state.orders ?? []) {
+    order.association = canonicalAssociationName(order.association);
+    if (Array.isArray(order.associations)) order.associations = order.associations.map(canonicalAssociationName);
     order.referenceSeries ??= order.teamkitContext?.kind === "TEAMKIT_APPROVAL" || /^TK-/u.test(String(order.id)) ? "TK" : "SP";
     order.standardPersonalization ??= { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
     order.standardPersonalization.initialsInfix ??= "";
@@ -603,8 +616,10 @@ export function migrateSportpaleisPilotState(input) {
     order.operationalFacts ??= {};
     order.communication ??= { receipt: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt }, production: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt }, ready: { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt } };
     order.communication.production ??= { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt };
+    order.communication.ready ??= { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt };
     order.communication.requiredForIndividualOrder ??= false;
     for (const item of order.items ?? []) {
+      item.association = canonicalAssociationName(item.association);
       item.sourceType ??= item.articleId ? "CATALOG" : "CUSTOM";
       item.sourceProvenance ??= item.articleId ? "Bestaande Sportpaleis pilotcatalogus" : "Historisch eigen artikel; herkomst niet volledig vastgelegd";
       item.productionReadiness ??= item.productionProfileId ? { status: "CONFIGURED", reason: null } : { status: "DATA_GAP", reason: "Productieprofiel ontbreekt" };
@@ -619,6 +634,9 @@ export function migrateSportpaleisPilotState(input) {
       if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
     }
   }
+  for (const association of state.associations ?? []) association.name = canonicalAssociationName(association.name);
+  for (const article of state.articles ?? []) article.association = canonicalAssociationName(article.association);
+  for (const profile of state.productionProfiles ?? []) if (typeof profile.name === "string") profile.name = profile.name.replaceAll(LEGACY_PIONEERS_ASSOCIATION, CANONICAL_PIONEERS_ASSOCIATION);
   if (!Array.isArray(state.associations) || !state.associations.length) state.associations = structuredClone(SPORTPALEIS_ASSOCIATIONS);
   else if (previousConfigurationVersion !== SPORTPALEIS_CONFIGURATION_VERSION) {
     state.associations = SPORTPALEIS_ASSOCIATIONS.map((sourceAssociation) => {
@@ -720,6 +738,10 @@ export function migrateSportpaleisPilotState(input) {
   state.webshopIntake.printEvents ??= [];
   state.webshopIntake.stockLogo ??= { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] };
   state.productionElements ??= [];
+  for (const element of state.productionElements) {
+    element.ownerName = canonicalAssociationName(element.ownerName);
+    for (const context of element.contexts ?? []) if (context.type === "ASSOCIATION") context.label = canonicalAssociationName(context.label);
+  }
   state.productionAssetSources ??= [];
   reconcileVerifiedProductionNumberSources(state);
   for (const source of state.productionAssetSources) {
@@ -737,7 +759,11 @@ export function migrateSportpaleisPilotState(input) {
   state.productionJobs ??= [];
   state.productionProposals ??= [];
   state.teamkitProposals ??= [];
-  for (const proposal of state.teamkitProposals) proposal.approvalHistory ??= [];
+  for (const proposal of state.teamkitProposals) {
+    proposal.approvalHistory ??= [];
+    proposal.productionSizing ??= null;
+    if (proposal.association) proposal.association.name = canonicalAssociationName(proposal.association.name);
+  }
   state.quickProductionIntakes ??= [];
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
@@ -876,7 +902,7 @@ export function validateSportpaleisPilotState(input) {
   state.productionJobs ??= [];
   state.productionProposals ??= [];
   state.teamkitProposals ??= [];
-  for (const proposal of state.teamkitProposals) proposal.approvalHistory ??= [];
+  for (const proposal of state.teamkitProposals) { proposal.approvalHistory ??= []; proposal.productionSizing ??= null; }
   state.quickProductionIntakes ??= [];
   state.nextProductionJobSequence ??= 1;
   state.nextTeamkitOrderSequence ??= 1;
@@ -953,12 +979,17 @@ export function validateSportpaleisPilotState(input) {
       if (!reference || reference.original.sha256 !== source.conversion.derivedFromSha256 || source.fidelity?.referenceSha256 !== reference.original.sha256) throw new Error("Afgeleide productiebron mist immutable herleidbaarheid naar het origineel.");
     }
     if (source.reviewDraft) {
-      if (!Number.isInteger(source.reviewDraft.revision) || source.reviewDraft.revision < 1 || source.reviewDraft.selectedCandidateIds.some((id) => !source.candidates.some((candidate) => candidate.id === id))) throw new Error("Ongeldig concept voor productiebronreview.");
+      const candidateIds = new Set(source.candidates.map(({ id }) => id));
+      const invalidArtwork = Object.entries(source.reviewDraft.candidateArtwork ?? {}).some(([candidateId, artwork]) => !candidateIds.has(candidateId) || !artwork?.name || !["LOGO", "SPONSOR", "ARTWORK"].includes(artwork.kind));
+      if (!Number.isInteger(source.reviewDraft.revision) || source.reviewDraft.revision < 1 || source.reviewDraft.selectedCandidateIds.some((id) => !candidateIds.has(id)) || invalidArtwork) throw new Error("Ongeldig concept voor productiebronreview.");
     }
   }
   for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
     if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
   }
+  const registrationIds = state.productionElements.map(({ registrationId }) => registrationId).filter(Boolean);
+  if (new Set(registrationIds).size !== registrationIds.length) throw new Error("Dubbele productiebronregistratie.");
+  for (const profile of state.productionProfiles ?? []) if ((profile.productionNumberAssetIds ?? []).some((id) => !state.productionElements.some((asset) => asset.id === id && asset.lifecycleStatus === "PRODUCTION_READY"))) throw new Error("Productieprofiel verwijst naar een ontbrekende of niet-productierijpe bron.");
   if (new Set(state.productionJobs.map(({ id }) => id)).size !== state.productionJobs.length || new Set(state.productionJobs.map(({ jobNumber }) => jobNumber)).size !== state.productionJobs.length) throw new Error("Dubbele productiejob.");
   if (new Set(state.productionProposals.map(({ id }) => id)).size !== state.productionProposals.length || new Set(state.productionProposals.map(({ proposalNumber }) => proposalNumber)).size !== state.productionProposals.length) throw new Error("Dubbel productievoorstel.");
   if (new Set(state.quickProductionIntakes.map(({ id }) => id)).size !== state.quickProductionIntakes.length) throw new Error("Dubbele Quick Production Intake.");
@@ -1217,6 +1248,59 @@ function idempotent(state, key, userId, operation, valueFactory) {
   return { duplicate: false, value };
 }
 
+const FULFILLMENT_TRANSITION_ACTIONS = new Set(["READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"]);
+const TEAMKIT_EXTERNAL_TASK_SEQUENCE = ["READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"];
+
+function assertFulfillmentTransition(order, action) {
+  if (!FULFILLMENT_TRANSITION_ACTIONS.has(action)) return;
+  if (order.stage !== "DONE") throw Object.assign(new Error("Uitleveren kan pas nadat Productie de order Gereed heeft gemeld."), { statusCode: 409, code: "ORDER_NOT_READY" });
+  if (["READY_FOR_PICKUP", "PICKED_UP"].includes(action) && order.fulfillment?.mode === "DELIVERY") throw Object.assign(new Error("Deze order staat op bezorgen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
+  if (action === "READY_FOR_PICKUP" && order.fulfillment?.status !== "PENDING") throw Object.assign(new Error("Deze order is al vrijgegeven voor afhalen of afgehaald."), { statusCode: 409, code: "FULFILLMENT_ALREADY_ADVANCED" });
+  if (action === "PICKED_UP" && order.fulfillment?.status !== "READY_FOR_PICKUP") throw Object.assign(new Error("Meld de order eerst Klaar om op te halen."), { statusCode: 409, code: "ORDER_NOT_READY_FOR_PICKUP" });
+  if (action === "DELIVERED" && order.fulfillment?.mode !== "DELIVERY") throw Object.assign(new Error("Deze order staat op afhalen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
+  if (action === "DELIVERED" && order.fulfillment?.status !== "PENDING") throw Object.assign(new Error("Deze order is al bezorgd."), { statusCode: 409, code: "FULFILLMENT_ALREADY_ADVANCED" });
+}
+
+function transitionTeamkitFulfillmentTask(task, payload) {
+  const priorStatus = task.status;
+  const requestedRoute = payload.route ? allowedValue(payload.route, ["INTERN_BEDRUKKEN", "EXTERNE_BEDRUKKER", "NOG_TE_BEPALEN"], "Afhandelroute") : task.route;
+  const routeChanged = requestedRoute !== task.route;
+  if (routeChanged) {
+    if (task.orderId || !["HUMAN_CHECK", "READY_TO_SEND"].includes(task.status)) throw Object.assign(new Error("De afhandelroute kan niet meer wijzigen nadat afhandeling of productie is gestart."), { statusCode: 409, code: "TEAMKIT_FULFILLMENT_ROUTE_LOCKED" });
+    task.route = requestedRoute;
+    task.kind = requestedRoute === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : requestedRoute === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION";
+    task.attention = requestedRoute === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : null;
+    task.status = requestedRoute === "EXTERNE_BEDRUKKER" ? "READY_TO_SEND" : "HUMAN_CHECK";
+  }
+  if (!payload.status) return;
+  const requestedStatus = allowedValue(payload.status, ["HUMAN_CHECK", ...TEAMKIT_EXTERNAL_TASK_SEQUENCE], "Taakstatus");
+  if (routeChanged && requestedStatus === priorStatus) return;
+  if (requestedStatus === task.status) return;
+  if (task.route !== "EXTERNE_BEDRUKKER" || task.kind !== "EXTERNAL_SUPPLIER") throw Object.assign(new Error("De status van interne productie volgt uitsluitend de gekoppelde WorkspaceOrder."), { statusCode: 409, code: "TEAMKIT_FULFILLMENT_STATUS_MANAGED" });
+  const currentIndex = TEAMKIT_EXTERNAL_TASK_SEQUENCE.indexOf(task.status);
+  if (currentIndex < 0 || TEAMKIT_EXTERNAL_TASK_SEQUENCE[currentIndex + 1] !== requestedStatus) throw Object.assign(new Error("Kies uitsluitend de volgende geldige afhandelstap; overslaan of terugzetten is geblokkeerd."), { statusCode: 409, code: "TEAMKIT_FULFILLMENT_TRANSITION_INVALID" });
+  if (requestedStatus === "SENT" && !String(payload.supplierName ?? task.supplierName ?? "").trim()) throw Object.assign(new Error("Leg eerst vast naar welke externe bedrukker dit gaat."), { statusCode: 409, code: "TEAMKIT_SUPPLIER_REQUIRED" });
+  task.status = requestedStatus;
+}
+
+function assertProductionAssetContexts(state, productionLines, associations) {
+  const associationRecords = associations.map((value) => state.associations.find(({ id, name }) => id === value || name === value)).filter(Boolean);
+  for (const line of productionLines.filter(({ source }) => source.kind === "PRODUCTION_ELEMENT")) {
+    const asset = state.productionElements.find(({ id }) => id === line.source.id); if (!asset) continue;
+    // Transfers are deliberately blocked by production readiness and never become
+    // plot geometry. Context isolation is consequential for sources that can
+    // actually enter the self-produced SVG/PlotJob route.
+    if (asset.productionMethod !== "SELF_PRODUCED") continue;
+    const scoped = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
+    if (!scoped.length) {
+      if (asset.ownerType === "ASSOCIATION") throw Object.assign(new Error(`${asset.name} mist een gecontroleerde verenigingskoppeling.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_REQUIRED" });
+      continue;
+    }
+    const matches = associationRecords.some((association) => scoped.some(({ id, label }) => id === association.id || label === association.name));
+    if (!matches) throw Object.assign(new Error(`${asset.name} hoort niet bij de gekozen vereniging.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_MISMATCH" });
+  }
+}
+
 function createWorkspaceOrderRecord(state, user, payload, options = {}) {
   const referenceSeries = options.referenceSeries === "TK" ? "TK" : "SP";
   const sequenceKey = referenceSeries === "TK" ? "nextTeamkitOrderSequence" : "nextOrderSequence";
@@ -1228,14 +1312,15 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
   const strictPilotContract = ["INDIVIDUAL", "TEAM"].includes(orderKind);
   let productionLines = validateProductionLines(payload.productionLines ?? [], state, user, orderKind, { allowTeamkitDataGaps: referenceSeries === "TK" });
   const standardPersonalization = validatePersonalization(payload.standardPersonalization ?? {}, { requireBackNumberSizeClass: false });
-  const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0, optionalAssociation: orderKind === "TEAM", maximumQuantity: referenceSeries === "TK" ? 10_000 : 99 });
+  const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract, defaultAssociation: payload.association, freeProduction: orderKind === "CUSTOM" && productionLines.length > 0, optionalAssociation: orderKind === "TEAM", maximumQuantity: referenceSeries === "TK" ? 10_000 : orderKind === "TEAM" ? 999 : 99 });
   if (orderKind === "TEAM") items.forEach((item, index) => {
     if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
     item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
   });
+  const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
+  assertProductionAssetContexts(state, productionLines, associations);
   if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
   applyProductionReadiness(items, productionLines);
-  const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
   const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
   const teamCustomerFallback = teamContext ? `Teamorder · ${teamContext}` : associations.length === 1 ? `Teamorder · ${associations[0]}` : "Teamorder";
   const createdAt = iso();
@@ -1301,6 +1386,52 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
   return order;
 }
 
+function normalizedTeamkitSizingItems(revision, inputItems, { allowLegacyTotals = false } = {}) {
+  const supplied = new Map((Array.isArray(inputItems) ? inputItems : []).map((item) => [String(item?.itemId ?? ""), item]));
+  if (!Array.isArray(inputItems) || inputItems.length !== revision.snapshot.items.length || supplied.size !== revision.snapshot.items.length || revision.snapshot.items.some(({ id }) => !supplied.has(id))) throw Object.assign(new Error("Vul maten en aantallen in voor ieder artikel uit de approved compositie."), { statusCode: 409, code: "TEAMKIT_PRODUCTION_SIZING_INCOMPLETE" });
+  return revision.snapshot.items.map((item) => {
+    const input = supplied.get(item.id); const seen = new Set(); const sizeQuantities = [];
+    for (const row of Array.isArray(input?.sizeQuantities) ? input.sizeQuantities : []) {
+      const size = requiredText(row?.size, `${item.productName} maat`, 40); const key = size.toLocaleLowerCase("nl-NL"); const quantity = Number(row?.quantity);
+      if (seen.has(key) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error(`Controleer de maatverdeling voor ${item.productName}.`), { statusCode: 400, code: "TEAMKIT_SIZE_QUANTITY_INVALID" });
+      seen.add(key); sizeQuantities.push({ size, quantity });
+    }
+    if (sizeQuantities.length) return { itemId: item.id, quantity: sizeQuantities.reduce((sum, { quantity }) => sum + quantity, 0), sizes: sizeQuantities.map(({ size }) => size), sizeQuantities, allocationMode: "PER_SIZE" };
+    const quantity = Number(input?.quantity); const sizes = [...new Set((Array.isArray(input?.sizes) ? input.sizes : []).map((size) => requiredText(size, `${item.productName} maat`, 40)))];
+    if (!allowLegacyTotals || !Number.isInteger(quantity) || quantity < 1 || quantity > 999 || !sizes.length) throw Object.assign(new Error(`Vul voor ${item.productName} per maat een aantal in.`), { statusCode: 409, code: "TEAMKIT_PRODUCTION_SIZING_REQUIRED" });
+    return { itemId: item.id, quantity, sizes, sizeQuantities: [], allocationMode: "TOTAL_ACROSS_SELECTED_SIZES" };
+  });
+}
+
+function createTeamkitProductionSizing(proposal, revision, inputItems, actor, { allowLegacyTotals = false } = {}) {
+  const items = normalizedTeamkitSizingItems(revision, inputItems, { allowLegacyTotals });
+  const sizingRevision = proposal.productionSizing?.approvedRevision === revision.number ? proposal.productionSizing.revision + 1 : 1;
+  const body = { proposalId: proposal.id, approvedRevision: revision.number, revision: sizingRevision, items };
+  return { ...body, snapshotHash: proposalSha256(JSON.stringify(body)), updatedAt: iso(), updatedBy: { id: actor.id, name: actor.name, role: actor.role } };
+}
+
+function teamkitSizingForItem(proposal, revision, item) {
+  if (proposal.productionSizing?.approvedRevision !== revision.number) return null;
+  return proposal.productionSizing.items.find(({ itemId }) => itemId === item.id) ?? null;
+}
+
+function teamkitEffectiveItem(proposal, revision, item) {
+  const sizing = teamkitSizingForItem(proposal, revision, item);
+  return sizing ? { ...item, quantity: sizing.quantity, sizes: sizing.sizes } : item;
+}
+
+function refreshTeamkitFulfillmentSizing(proposal, revision, state) {
+  const freshById = new Map(approvedFulfillmentTasks(proposal, revision, state).map((task) => [task.id, task]));
+  for (const task of proposal.fulfillmentTasks.filter(({ approvedRevision }) => approvedRevision === revision.number)) {
+    const fresh = freshById.get(task.id); if (!fresh) continue;
+    fresh.route = task.route; fresh.kind = task.route === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : task.route === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION"; fresh.supplierName = task.supplierName;
+    const missingAttention = fresh.attention?.startsWith("Controleer ontbrekend:") ? fresh.attention : null;
+    fresh.attention = fresh.route === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : missingAttention;
+    fresh.status = fresh.route === "EXTERNE_BEDRUKKER" && !fresh.attention ? "READY_TO_SEND" : "HUMAN_CHECK";
+    task.specification = fresh.specification; task.attention = fresh.attention; task.status = fresh.status; task.updatedAt = iso();
+  }
+}
+
 function teamkitProfileProductionLine(state, proposal, revision, item, placement, task, provenance) {
   const field = ({ NAME: "name", INITIALS: "initials", BACK_NUMBER: "backNumber", SHORT_NUMBER: "shortsNumber" })[placement.kind];
   if (!field) return null;
@@ -1329,9 +1460,10 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
   const fields = [];
   if (!applicable || !derived || derived.validation.status !== "VALID") fields.push("SOURCE");
   if (!override && !(resolvedHeightMm > 0)) fields.push("DIMENSIONS");
-  const requestedFoil = applicable ? effectiveCatalogFoilColor(article, association, profile) : "";
+  const visualFoilOverride = ({ "#ffffff": "Wit", "#101419": "Zwart", "#d3172f": "Rood" })[String(placement.colorOverride ?? "").toLocaleLowerCase("nl-NL")];
+  const requestedFoil = applicable ? visualFoilOverride ?? effectiveCatalogFoilColor(article, association, profile) : "";
   const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
-  if (!foilColor) fields.push("FOIL_COLOR");
+  if (!foilColor || Boolean(placement.colorOverride && !visualFoilOverride)) fields.push("FOIL_COLOR");
   const widthMm = Number(override?.widthMm ?? (resolvedHeightMm > 0 && derived?.heightMm > 0 ? derived.widthMm * resolvedHeightMm / derived.heightMm : derived?.widthMm ?? 0));
   const heightMm = Number(override?.heightMm ?? resolvedHeightMm);
   const measurementSource = override ? "EXPLICIT_PROPOSAL_OVERRIDE" : resolvedHeightMm > 0 ? "PRODUCTION_PROFILE" : "DATA_GAP";
@@ -1344,7 +1476,7 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
         : profileHeightMm > 0
           ? `Productieprofiel ${profile.id}@${profile.revision ?? 1} · ${profile.sizeLabel}`
           : "Geen toepasselijke server-authoritative productiemaat gevonden";
-  const context = { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: article?.id ?? null, profileId: profile?.id ?? null, profileRevision: profile?.revision ?? null, measurementSource, measurementEvidence, explicitOverride: override };
+  const context = { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: article?.id ?? null, associationName: association?.name ?? null, profileId: profile?.id ?? null, profileRevision: profile?.revision ?? null, fontProfile: profile?.fontProfile ?? null, sizeLabel: profile?.sizeLabel ?? null, mirror: profile?.mirror ?? null, measurementSource, measurementEvidence, explicitOverride: override };
   const base = {
     id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"),
     type: derived?.type ?? ({ NAME: "TEXT", INITIALS: "INITIALS", BACK_NUMBER: "NUMBER", SHORT_NUMBER: "NUMBER" })[placement.kind],
@@ -1381,29 +1513,92 @@ function teamkitProductionLine(state, proposal, revision, item, placement, task)
   const widthMm = Number(override?.widthMm ?? asset?.sizePolicy?.defaultWidthMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.widthMm ?? 0);
   const heightMm = Number(override?.heightMm ?? asset?.sizePolicy?.defaultHeightMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.heightMm ?? 0);
   const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
-  const requestedFoil = String(asset?.defaultFoilColor ?? association?.defaultFoilColor ?? "").trim();
+  const visualFoilOverride = ({ "#ffffff": "Wit", "#101419": "Zwart", "#d3172f": "Rood" })[String(placement.colorOverride ?? "").toLocaleLowerCase("nl-NL")];
+  const requestedFoil = String(visualFoilOverride ?? asset?.defaultFoilColor ?? association?.defaultFoilColor ?? "").trim();
   const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
   const fields = [];
   if (!sourceMatches) fields.push("SOURCE");
   if (!(widthMm > 0) || !(heightMm > 0)) fields.push("DIMENSIONS");
-  if (!foilColor) fields.push("FOIL_COLOR");
+  if (!foilColor || Boolean(placement.colorOverride && !visualFoilOverride)) fields.push("FOIL_COLOR");
   const content = String(placement.text ?? asset?.name ?? placement.label).trim();
   const measurementEvidence = override ? `${proposal.proposalNumber} V${revision.number} · expliciete goedgekeurde maatoverride` : asset ? `Production Asset ${asset.id}@${asset.version ?? asset.revision}` : "Geen toepasselijke productiemaat gevonden";
-  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, profileId: null, profileRevision: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
+  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, associationName: association?.name ?? revision.snapshot.association.name ?? null, profileId: null, profileRevision: null, fontProfile: null, sizeLabel: widthMm > 0 && heightMm > 0 ? `${Math.round(widthMm * 1000) / 1000}×${Math.round(heightMm * 1000) / 1000} mm` : null, mirror: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
   if (!fields.length) return base;
   const labels = { SOURCE: "goedgekeurde productiebron", DIMENSIONS: "fysieke maat in millimeters", FOIL_COLOR: "beheerde foliekleur" };
   const reason = `Controle nodig: ${fields.map((field) => labels[field]).join(", ")} ontbreekt of wijkt af van de goedgekeurde bron.`;
   return { ...base, sourceVersion: task.assetRef.version ?? "unresolved", sourceSha256: task.assetRef.sha256 ?? undefined, dataGap: { fields, reason } };
 }
 
-function teamkitOrderInput(state, proposal, revision, item, tasks) {
+function teamkitPlacementRuleFromLine(line) {
+  const context = line.teamkitProductionContext ?? {};
+  const body = {
+    status: line.dataGap ? "REVIEW_REQUIRED" : "RESOLVED",
+    resolver: context.profileId ? "ARTICLE_PROFILE" : context.measurementSource === "PRODUCTION_ASSET" ? "PRODUCTION_ASSET" : "UNRESOLVED",
+    articleId: context.articleId ?? null,
+    associationName: context.associationName ?? null,
+    profileId: context.profileId ?? null,
+    profileRevision: context.profileRevision ?? null,
+    fontProfile: context.fontProfile ?? null,
+    foilColor: line.foilColor ?? null,
+    sizeLabel: context.sizeLabel ?? null,
+    physicalWidthMm: Number(line.widthMm) > 0 ? Number(line.widthMm) : null,
+    physicalHeightMm: Number(line.heightMm) > 0 ? Number(line.heightMm) : null,
+    mirror: context.mirror ?? null,
+    measurementSource: context.measurementSource ?? "DATA_GAP",
+    sourceId: line.sourceId ?? null,
+    sourceVersion: line.sourceVersion ?? null,
+    sourceSha256: line.sourceSha256 ?? null,
+    reason: line.dataGap?.reason ?? null,
+  };
+  return { ...body, ruleHash: proposalSha256(JSON.stringify(body)) };
+}
+
+function teamkitPlacementTask(proposal, state, placement) {
+  const source = proposal.sources.find(({ id }) => id === placement.sourceId);
+  const asset = state.productionElements.find(({ id }) => id === placement.productionAssetId);
+  return {
+    id: `proposal-rule-${placement.id}`,
+    assetRef: {
+      sourceId: source?.id ?? asset?.sourceId ?? null,
+      productionAssetId: asset?.id ?? null,
+      version: source ? String(source.version) : asset?.version ?? placement.assetVersion ?? null,
+      sha256: source?.sha256 ?? asset?.sourceLayers?.vectorSource?.sha256 ?? null,
+    },
+  };
+}
+
+function resolveTeamkitPlacementProductionRules(state, proposal, revisionNumber) {
+  const revision = { number: revisionNumber, snapshot: { association: structuredClone(proposal.association) } };
+  for (const item of proposal.items) for (const placement of item.placements) {
+    const line = teamkitProductionLine(state, proposal, revision, item, placement, teamkitPlacementTask(proposal, state, placement));
+    placement.productionRule = teamkitPlacementRuleFromLine(line);
+  }
+}
+
+function enforceApprovedTeamkitPlacementRule(line, placement) {
+  const current = teamkitPlacementRuleFromLine(line); const approved = placement.productionRule;
+  const traced = { ...line, teamkitProductionContext: { ...line.teamkitProductionContext, approvedProductionRuleHash: approved?.ruleHash ?? null, currentProductionRuleHash: current.ruleHash } };
+  if (approved?.ruleHash === current.ruleHash) return traced;
+  const fields = [...new Set([...(line.dataGap?.fields ?? []), approved ? "APPROVED_RULE_DRIFT" : "APPROVED_RULE"])];
+  const reason = approved
+    ? approved.status === "REVIEW_REQUIRED"
+      ? approved.reason ?? "De approved Teamwear-compositie bevat nog een productiecontrole."
+      : "Productieprofiel, lettertype, foliekleur, maat of bron wijkt af van de approved Teamwear-compositie."
+    : "De approved Teamwear-compositie bevat geen immutable productie-instelling.";
+  return { ...traced, dataGap: { fields, reason } };
+}
+
+function teamkitOrderInput(state, proposal, revision, approvedItem, tasks) {
+  const sizing = teamkitSizingForItem(proposal, revision, approvedItem);
+  if (!sizing) throw Object.assign(new Error(`Vul voor ${approvedItem.productName} eerst de maten en aantallen in.`), { statusCode: 409, code: "TEAMKIT_PRODUCTION_SIZING_REQUIRED" });
+  const item = teamkitEffectiveItem(proposal, revision, approvedItem);
   if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999) throw Object.assign(new Error(`Vul voor ${item.productName} eerst een uitvoerbaar aantal van 1–999 in.`), { statusCode: 409, code: "TEAMKIT_ITEM_QUANTITY_REQUIRED" });
   const placements = tasks.map((task) => {
     const placement = item.placements.find(({ id }) => id === task.placementId);
     if (!placement) throw Object.assign(new Error("Een interne afhandelingstaak mist de immutable placement."), { statusCode: 409, code: "TEAMKIT_PLACEMENT_NOT_FOUND" });
     return { placement, task };
   });
-  const productionLines = placements.map(({ placement, task }) => teamkitProductionLine(state, proposal, revision, item, placement, task));
+  const productionLines = placements.map(({ placement, task }) => enforceApprovedTeamkitPlacementRule(teamkitProductionLine(state, proposal, revision, item, placement, task), placement));
   const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
   const printableSummary = placements.map(({ placement }) => `${placement.label}${placement.text ? `: ${placement.text}` : ""}`).join(" · ");
   const teamLabel = [revision.snapshot.association.name, item.team ?? revision.snapshot.team, item.productName].filter(Boolean).join(" · ").slice(0, 120);
@@ -1418,7 +1613,7 @@ function teamkitOrderInput(state, proposal, revision, item, tasks) {
     externalReference: `${proposal.proposalNumber}/V${revision.number}/${item.articleNumber ?? item.id}`,
     provenance: `Immutable Teamkit approval ${proposal.proposalNumber} V${revision.number} · snapshot ${revision.snapshotHash} · PDF ${proposal.approval.pdfSha256}`,
     internalNote: `Klantakkoord ${proposal.proposalNumber} · V${revision.number}. Productie alleen via bestaande Human GO.`,
-    items: [{ product: item.productName, ...(association ? { association: association.name } : {}), size: "", quantity: item.quantity, personalization: printableSummary || "Approved Teamkit-bedrukking", foilColor: productionLines.find(({ foilColor }) => foilColor)?.foilColor ?? "Onbekend", deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } }],
+    items: [{ product: item.productName, ...(association ? { association: association.name } : {}), size: sizing.allocationMode === "PER_SIZE" ? sizing.sizeQuantities.map(({ size, quantity }) => `${size} ×${quantity}`).join(" · ") : sizing.sizes.join(", "), quantity: item.quantity, personalization: printableSummary || "Approved Teamkit-bedrukking", foilColor: productionLines.find(({ foilColor }) => foilColor)?.foilColor ?? "Onbekend", deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } }],
     productionLines,
   };
 }
@@ -1937,16 +2132,18 @@ export class SportpaleisPilotService {
       const now = iso(); const id = `teamkit-proposal-${randomBytes(10).toString("hex")}`;
       const associationName = optional(payload.associationName, 160) || null;
       const association = associationName ? state.associations.find(({ id: associationId, name }) => associationId === payload.associationId || name === associationName) : null;
+      const requestedCustomerId = optional(payload.customerId, 160) || null;
+      const reusableCustomerId = !association && requestedCustomerId && state.teamkitProposals.some((candidate) => !candidate.association.id && candidate.customer.id === requestedCustomerId) ? requestedCustomerId : null;
       const proposal = {
         id, proposalNumber: `PV-${year}-${String(highest + 1).padStart(4, "0")}`, aggregateRevision: 1, currentRevision: 1, status: "DRAFT",
         title: requiredText(payload.title, "Interne titel", 180), type: optional(payload.type, 120) || "Teamkit",
-        customer: { id: optional(payload.customerId, 160) || null, name: optional(payload.customerName, 160) || requiredText(payload.title, "Werkreferentie", 180), contactName: optional(payload.contactName, 160) || "", email: optionalEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
+        customer: { id: association ? null : reusableCustomerId ?? `customer-context-${randomBytes(10).toString("hex")}`, name: optional(payload.customerName, 160) || requiredText(payload.title, "Werkreferentie", 180), contactName: optional(payload.contactName, 160) || "", email: optionalEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
         association: { id: association?.id ?? (optional(payload.associationId, 160) || null), name: association?.name ?? associationName },
         team: optional(payload.team, 120) || null, season: optional(payload.season, 80) || null, category: optional(payload.category, 80) || null, deadline: payload.deadline ? new Date(payload.deadline).toISOString() : null,
         notes: optional(payload.notes, 1_500) || null, items: [], sources: [], intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
-        customerAccess: null, feedback: [], revisions: [], approval: null, approvalHistory: [], fulfillmentTasks: [], createdAt: now, createdBy: { id: user.id, name: user.name, role: user.role }, updatedAt: now, updatedBy: { id: user.id, name: user.name, role: user.role }, archivedAt: null, copiedFrom: null,
+        customerAccess: null, feedback: [], revisions: [], approval: null, approvalHistory: [], productionSizing: null, fulfillmentTasks: [], createdAt: now, createdBy: { id: user.id, name: user.name, role: user.role }, updatedAt: now, updatedBy: { id: user.id, name: user.name, role: user.role }, archivedAt: null, copiedFrom: null,
       };
-      proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, "Voorstel aangemaakt"));
+      proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, "Voorstel aangemaakt", [], new Date(), state));
       state.teamkitProposals.unshift(proposal); audit(state, user.id, "Voorstel aangemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, association: proposal.association.name });
       return { state, value: publicProposal(proposal) };
     }); return result.value;
@@ -1959,10 +2156,10 @@ export class SportpaleisPilotService {
       if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
       if (proposal.status === "APPROVED" && payload.reopenApproved !== true) throw Object.assign(new Error("De goedgekeurde versie is immutable. Start expliciet een nieuwe revision."), { statusCode: 409, code: "APPROVED_REVISION_IMMUTABLE" });
       const priorApprovalRevision = proposal.approval?.revision ?? null;
-      if (proposal.status === "APPROVED" && proposal.approval) { proposal.approvalHistory ??= []; if (!proposal.approvalHistory.some(({ revision }) => revision === proposal.approval.revision)) proposal.approvalHistory.push(structuredClone(proposal.approval)); proposal.approval = null; }
+      if (proposal.status === "APPROVED" && proposal.approval) { proposal.approvalHistory ??= []; if (!proposal.approvalHistory.some(({ revision }) => revision === proposal.approval.revision)) proposal.approvalHistory.push(structuredClone(proposal.approval)); proposal.approval = null; proposal.productionSizing = null; }
       proposal.title = payload.title === undefined ? proposal.title : requiredText(payload.title, "Titel", 180);
       proposal.type = payload.type === undefined ? proposal.type : requiredText(payload.type, "Voorsteltype", 120);
-      if (payload.customer) proposal.customer = { id: optional(payload.customer.id, 160) || null, name: requiredText(payload.customer.name, "Klant", 160), contactName: optional(payload.customer.contactName, 160) || "", email: optionalEmail(payload.customer.email), phone: optional(payload.customer.phone, 40) || null };
+      if (payload.customer) proposal.customer = { id: proposal.customer.id ?? (!proposal.association.id ? `customer-context-${randomBytes(10).toString("hex")}` : null), name: requiredText(payload.customer.name, "Klant", 160), contactName: optional(payload.customer.contactName, 160) || "", email: optionalEmail(payload.customer.email), phone: optional(payload.customer.phone, 40) || null };
       if (payload.association) { const match = state.associations.find(({ id, name }) => id === payload.association.id || name === payload.association.name); proposal.association = { id: match?.id ?? (optional(payload.association.id, 160) || null), name: match?.name ?? (optional(payload.association.name, 160) || null) }; }
       for (const key of ["team", "season", "category", "notes"]) if (Object.hasOwn(payload, key)) proposal[key] = optional(payload[key], key === "notes" ? 1_500 : 160) || null;
       if (Object.hasOwn(payload, "deadline")) proposal.deadline = payload.deadline ? new Date(payload.deadline).toISOString() : null;
@@ -1976,7 +2173,7 @@ export class SportpaleisPilotService {
             const origin = state.teamkitProposals?.find(({ id }) => id === originProposalId);
             const originSource = origin?.sources.find(({ id }) => id === originSourceId);
             const sameAssociation = Boolean(proposal.association.id && origin?.association.id === proposal.association.id);
-            const sameCustomer = Boolean(!proposal.association.id && !origin?.association.id && (proposal.customer.id && origin?.customer.id === proposal.customer.id || proposal.customer.email && origin?.customer.email === proposal.customer.email || proposal.customer.name === origin?.customer.name));
+            const sameCustomer = Boolean(!proposal.association.id && !origin?.association.id && proposal.customer.id && origin?.customer.id === proposal.customer.id);
             if (!origin || !originSource?.dataBase64 || (!sameAssociation && !sameCustomer)) throw Object.assign(new Error("Dit asset hoort niet bij deze klant- of verenigingscontext."), { statusCode: 403, code: "TEAMWEAR_SHARED_ASSET_FORBIDDEN" });
             let source = proposal.sources.find(({ sha256 }) => sha256 === originSource.sha256);
             if (!source) {
@@ -2003,12 +2200,13 @@ export class SportpaleisPilotService {
           placement.sourceId = source.id;
         }
         proposal.items = normalizeProposalItems(items);
+        resolveTeamkitPlacementProductionRules(state, proposal, proposal.currentRevision + 1);
       }
       proposal.currentRevision += 1; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
       if (proposal.status === "APPROVED") proposal.status = "IN_DESIGN"; else if (["DRAFT", "READY_FOR_DESIGN", "CUSTOMER_FEEDBACK", "READY_FOR_REVIEW"].includes(proposal.status)) proposal.status = "IN_DESIGN";
       const feedbackIds = Array.isArray(payload.feedbackIds) ? payload.feedbackIds.map(String) : [];
       for (const feedback of proposal.feedback.filter(({ id }) => feedbackIds.includes(id))) { feedback.status = "PROCESSED"; feedback.processedAt = proposal.updatedAt; feedback.processedBy = user.id; }
-      const revision = createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, optional(payload.reason, 500) || (priorApprovalRevision ? `Nieuwe revision na akkoord V${priorApprovalRevision}` : "Voorstelinhoud bijgewerkt"), feedbackIds);
+      const revision = createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, optional(payload.reason, 500) || (priorApprovalRevision ? `Nieuwe revision na akkoord V${priorApprovalRevision}` : "Voorstelinhoud bijgewerkt"), feedbackIds, new Date(), state);
       proposal.revisions.push(revision); audit(state, user.id, priorApprovalRevision ? "Nieuwe voorstelrevision na akkoord" : "Voorstelrevision gemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, revision: revision.number, snapshotHash: revision.snapshotHash, feedbackIds });
       return { state, value: publicProposal(proposal) };
     }); return result.value;
@@ -2075,8 +2273,8 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const source = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!source) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
       const year = new Date().getUTCFullYear(); const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0); const now = iso();
-      const copy = structuredClone(source); copy.id = `teamkit-proposal-${randomBytes(10).toString("hex")}`; copy.proposalNumber = `PV-${year}-${String(highest + 1).padStart(4, "0")}`; copy.aggregateRevision = 1; copy.currentRevision = 1; copy.status = "DRAFT"; copy.title = optional(payload.title, 180) || `${source.title} — nieuw seizoen`; copy.season = optional(payload.season, 80) || null; copy.customerAccess = null; copy.feedback = []; copy.revisions = []; copy.approval = null; copy.approvalHistory = []; copy.fulfillmentTasks = []; copy.intake = { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} }; copy.createdAt = now; copy.createdBy = { id: user.id, name: user.name, role: user.role }; copy.updatedAt = now; copy.updatedBy = { id: user.id, name: user.name, role: user.role }; copy.archivedAt = null; copy.copiedFrom = { proposalId: source.id, approvedRevision: source.approval?.revision ?? source.approvalHistory?.at(-1)?.revision ?? null };
-      copy.sources = copy.sources.map((item) => ({ ...item, proposalId: copy.id })); copy.revisions.push(createProposalRevision(copy, { id: user.id, name: user.name, role: user.role }, `Gebruikt als basis vanuit ${source.proposalNumber}`));
+      const copy = structuredClone(source); copy.id = `teamkit-proposal-${randomBytes(10).toString("hex")}`; copy.proposalNumber = `PV-${year}-${String(highest + 1).padStart(4, "0")}`; copy.aggregateRevision = 1; copy.currentRevision = 1; copy.status = "DRAFT"; copy.title = optional(payload.title, 180) || `${source.title} — nieuw seizoen`; copy.season = optional(payload.season, 80) || null; copy.customerAccess = null; copy.feedback = []; copy.revisions = []; copy.approval = null; copy.approvalHistory = []; copy.productionSizing = null; copy.fulfillmentTasks = []; copy.intake = { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} }; copy.createdAt = now; copy.createdBy = { id: user.id, name: user.name, role: user.role }; copy.updatedAt = now; copy.updatedBy = { id: user.id, name: user.name, role: user.role }; copy.archivedAt = null; copy.copiedFrom = { proposalId: source.id, approvedRevision: source.approval?.revision ?? source.approvalHistory?.at(-1)?.revision ?? null };
+      copy.sources = copy.sources.map((item) => ({ ...item, proposalId: copy.id })); copy.revisions.push(createProposalRevision(copy, { id: user.id, name: user.name, role: user.role }, `Gebruikt als basis vanuit ${source.proposalNumber}`, [], new Date(), state));
       state.teamkitProposals.unshift(copy); audit(state, user.id, "Voorstel gekopieerd", copy.id, { sourceProposalId: source.id, sourceApprovedRevision: source.approval?.revision ?? null, proposalNumber: copy.proposalNumber });
       return { state, value: publicProposal(copy) };
     }); return result.value;
@@ -2120,12 +2318,33 @@ export class SportpaleisPilotService {
       if (!["SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(proposal.status)) throw Object.assign(new Error("Sportpaleis heeft deze versie nog niet voor akkoord vrijgegeven."), { statusCode: 409, code: "PROPOSAL_APPROVAL_NOT_READY" });
       if (revisionNumber !== proposal.currentRevision) throw Object.assign(new Error("Deze preview is niet meer de actuele versie."), { statusCode: 409, code: "PROPOSAL_REVISION_STALE", currentRevision: proposal.currentRevision });
       const revision = proposal.revisions.find(({ number }) => number === revisionNumber); if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
-      const customerName = requiredText(payload.customerName, "Naam", 160); const customerEmail = validEmail(payload.customerEmail ?? proposal.customer.email); const pdf = generateProposalPdf(revision.snapshot, true); const previewHtml = renderProposalPreview(revision.snapshot, { customer: true });
+      const customerName = requiredText(payload.customerName, "Naam", 160); const customerEmail = validEmail(payload.customerEmail ?? proposal.customer.email); const pdf = await generateProposalPdf(revision.snapshot, true, { state, proposal }); const previewHtml = renderProposalPreview(revision.snapshot, { customer: true });
       proposal.approval = { revision: revisionNumber, approvedAt: iso(), customerName, customerEmail, accessContextId: proposal.customerAccess.id, snapshotHash: revision.snapshotHash, previewHtml, previewSha256: proposalSha256(previewHtml), pdfBase64: pdf.toString("base64"), pdfSha256: proposalSha256(pdf), artifactFilename: `${proposal.proposalNumber}-V${revisionNumber}-akkoord.pdf` };
+      const legacySizingComplete = revision.snapshot.items.length > 0 && revision.snapshot.items.every(({ quantity, sizes }) => Number.isInteger(quantity) && quantity > 0 && Array.isArray(sizes) && sizes.length > 0);
+      proposal.productionSizing = legacySizingComplete ? createTeamkitProductionSizing(proposal, revision, revision.snapshot.items.map(({ id, quantity, sizes }) => ({ itemId: id, quantity, sizes })), { id: proposal.customerAccess.id, name: customerName, role: "customer" }, { allowLegacyTotals: true }) : null;
       proposal.approvalHistory ??= []; const nextTasks = approvedFulfillmentTasks(proposal, revision, state); proposal.fulfillmentTasks.push(...nextTasks.filter(({ id }) => !proposal.fulfillmentTasks.some((task) => task.id === id))); proposal.status = "APPROVED"; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: proposal.customerAccess.id, name: customerName, role: "customer" };
       audit(state, "customer", "Klant akkoord", proposal.id, { proposalNumber: proposal.proposalNumber, revision: revisionNumber, snapshotHash: revision.snapshotHash, previewSha256: proposal.approval.previewSha256, pdfSha256: proposal.approval.pdfSha256, fulfillmentTaskIds: proposal.fulfillmentTasks.map(({ id }) => id) });
       for (const task of proposal.fulfillmentTasks) audit(state, "system", task.kind === "INTERNAL_PRODUCTION" ? "Interne afhandeling voorbereid" : task.kind === "EXTERNAL_SUPPLIER" ? "Uitbesteedtaak voorbereid" : "Afhandelroute vereist", task.id, { proposalId: proposal.id, approvedRevision: revisionNumber, itemId: task.itemId, placementId: task.placementId, route: task.route, assetRef: task.assetRef });
       return { state, value: customerProposal(proposal) };
+    }); return result.value;
+  }
+
+  async updateTeamkitProductionSizing(token, csrfToken, proposalId, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
+    const result = await this.store.mutate(async (state) => {
+      const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId);
+      if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+      if (!proposal.approval || proposal.status !== "APPROVED") throw Object.assign(new Error("Maten en aantallen worden gekoppeld aan de exact goedgekeurde compositie."), { statusCode: 409, code: "TEAMKIT_APPROVAL_REQUIRED" });
+      if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
+      const revision = proposal.revisions.find(({ number }) => number === proposal.approval.revision);
+      if (!revision || revision.snapshotHash !== proposal.approval.snapshotHash) throw Object.assign(new Error("De immutable approved compositie is niet exact beschikbaar."), { statusCode: 409, code: "TEAMKIT_APPROVAL_EVIDENCE_INVALID" });
+      const lockedTask = proposal.fulfillmentTasks.find(({ approvedRevision, orderId, status }) => approvedRevision === revision.number && (Boolean(orderId) || ["SENT", "CONFIRMED", "RETURNED", "COMPLETED"].includes(status)));
+      if (lockedTask) throw Object.assign(new Error("Maten en aantallen kunnen niet meer wijzigen nadat afhandeling of productie is gestart."), { statusCode: 409, code: "TEAMKIT_PRODUCTION_SIZING_LOCKED" });
+      proposal.productionSizing = createTeamkitProductionSizing(proposal, revision, payload.items, user);
+      refreshTeamkitFulfillmentSizing(proposal, revision, state);
+      proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+      audit(state, user.id, "Teamwear maten en aantallen vastgelegd", proposal.id, { approvedRevision: revision.number, sizingRevision: proposal.productionSizing.revision, sizingSnapshotHash: proposal.productionSizing.snapshotHash, items: proposal.productionSizing.items.map(({ itemId, quantity, sizeQuantities }) => ({ itemId, quantity, sizeQuantities })) });
+      return { state, value: publicProposal(proposal) };
     }); return result.value;
   }
 
@@ -2144,7 +2363,7 @@ export class SportpaleisPilotService {
   async teamkitProposalPdf(token, proposalId, requestedRevision = null) {
     const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]); const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
     if (requestedRevision !== null) { const revisionNumber = Number(requestedRevision); const approved = [proposal.approval, ...(proposal.approvalHistory ?? [])].filter(Boolean).find(({ revision }) => revision === revisionNumber); if (!approved) throw Object.assign(new Error("Deze approved voorstelversie is niet beschikbaar."), { statusCode: 404, code: "PROPOSAL_APPROVED_PDF_NOT_FOUND" }); return { bytes: Buffer.from(approved.pdfBase64, "base64"), mimeType: "application/pdf", filename: approved.artifactFilename, sha256: approved.pdfSha256, cacheControl: "private, no-store", allowSameOriginFrame: true }; }
-    const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision); const bytes = proposal.approval?.revision === proposal.currentRevision ? Buffer.from(proposal.approval.pdfBase64, "base64") : generateProposalPdf(revision.snapshot, false);
+    const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision); const bytes = proposal.approval?.revision === proposal.currentRevision ? Buffer.from(proposal.approval.pdfBase64, "base64") : await generateProposalPdf(revision.snapshot, false, { state, proposal });
     return { bytes, mimeType: "application/pdf", filename: proposal.approval?.revision === proposal.currentRevision ? proposal.approval.artifactFilename : `${proposal.proposalNumber}-V${proposal.currentRevision}-concept.pdf`, sha256: proposalSha256(bytes), cacheControl: "private, no-store", allowSameOriginFrame: true };
   }
 
@@ -2158,10 +2377,9 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); const task = proposal?.fulfillmentTasks.find(({ id }) => id === taskId); if (!proposal || !task) throw Object.assign(new Error("Afhandelingstaak niet gevonden."), { statusCode: 404, code: "PROPOSAL_TASK_NOT_FOUND" });
       if (task.approvedRevision !== proposal.approval?.revision) throw Object.assign(new Error("Deze taak hoort niet bij de immutable approved revision."), { statusCode: 409, code: "PROPOSAL_TASK_REVISION_INVALID" });
-      if (payload.route) { const route = allowedValue(payload.route, ["INTERN_BEDRUKKEN", "EXTERNE_BEDRUKKER", "NOG_TE_BEPALEN"], "Afhandelroute"); task.route = route; task.kind = route === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : route === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION"; task.attention = route === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : null; task.status = route === "EXTERNE_BEDRUKKER" ? "READY_TO_SEND" : "HUMAN_CHECK"; }
-      if (payload.status) task.status = allowedValue(payload.status, ["HUMAN_CHECK", "READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"], "Taakstatus");
       if (Object.hasOwn(payload, "supplierName")) task.supplierName = optional(payload.supplierName, 160) || null;
       if (Object.hasOwn(payload, "orderId") && (optional(payload.orderId, 160) || null) !== task.orderId) throw Object.assign(new Error("Een TK-order wordt uitsluitend atomair via ‘Interne productie klaarzetten’ gekoppeld."), { statusCode: 409, code: "TEAMKIT_ORDER_LINK_MANAGED" });
+      transitionTeamkitFulfillmentTask(task, payload);
       task.updatedAt = iso(); proposal.aggregateRevision += 1; proposal.updatedAt = task.updatedAt; proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; audit(state, user.id, "Voorstelafhandeling gewijzigd", task.id, { proposalId: proposal.id, approvedRevision: task.approvedRevision, route: task.route, status: task.status, orderId: task.orderId });
       return { state, value: publicProposal(proposal) };
     }); return result.value;
@@ -2186,6 +2404,7 @@ export class SportpaleisPilotService {
         return order?.teamkitContext?.proposalId === proposal.id && order.teamkitContext.approvedRevision === revision.number && order.teamkitContext.itemId === itemId ? order : null;
       });
       if (existingOrders.every(Boolean)) return { state, value: { duplicate: true, proposal: publicProposal(proposal), orders: existingOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) })) } };
+      if (proposal.productionSizing?.approvedRevision !== revision.number || proposal.productionSizing.items.length !== revision.snapshot.items.length) throw Object.assign(new Error("Vul eerst de maten en aantallen in voor de approved Teamwear-compositie."), { statusCode: 409, code: "TEAMKIT_PRODUCTION_SIZING_REQUIRED" });
       if (payload.expectedRevision !== undefined && proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd. Vernieuw eerst de pagina."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
       const orders = [];
       for (const [itemId, itemTasks] of grouped) {
@@ -2199,6 +2418,8 @@ export class SportpaleisPilotService {
           approvedRevision: revision.number,
           itemId: item.id,
           itemSnapshotHash: proposalSha256(JSON.stringify(item)),
+          productionSizingRevision: proposal.productionSizing.revision,
+          productionSizingSnapshotHash: proposal.productionSizing.snapshotHash,
           fulfillmentTaskIds: itemTasks.map(({ id }) => id),
           placementRefs: itemTasks.map((task) => ({ placementId: task.placementId, taskId: task.id, assetId: task.assetRef.productionAssetId ?? task.assetRef.sourceId ?? null, assetVersion: task.assetRef.version ?? null, assetSha256: task.assetRef.sha256 ?? null })),
           snapshotHash: revision.snapshotHash,
@@ -2617,7 +2838,9 @@ export class SportpaleisPilotService {
     if (existing) throw Object.assign(new Error("Dit webshopordernummer bestaat al; dubbele materialisatie is geblokkeerd."), { statusCode: 409, code: "WEBSHOP_ORDER_DUPLICATE" });
     const association = requiredText(payload.association || match.association, "Vereniging", 160);
     const customer = requiredText(payload.customer || match.customer, "Klant", 120);
-    const backNumberSizeClass = allowedValue(payload.backNumberSizeClass ?? "SENIOR", ["JUNIOR", "SENIOR"], "Rugnummermaat");
+    const backNumberSizeClass = payload.backNumberSizeClass
+      ? allowedValue(payload.backNumberSizeClass, ["JUNIOR", "SENIOR"], "Rugnummermaat")
+      : "";
     const items = match.articles.map((sourceArticle) => {
       const articleMatches = state.articles.filter(({ active, association: owner, articleNumber }) => active !== false && owner === association && String(articleNumber) === String(sourceArticle.articleNumber));
       if (articleMatches.length !== 1) throw Object.assign(new Error(`${sourceArticle.articleNumber}: artikelmatch is niet exact; controle blijft vereist.`), { statusCode: 409, code: "WEBSHOP_ARTICLE_MATCH_REVIEW_REQUIRED" });
@@ -2628,6 +2851,7 @@ export class SportpaleisPilotService {
         const field = ({ INITIALS: "initials", BACK_NAME: "name", BACK_NUMBER: "backNumber", CHEST_NUMBER: "chestNumber", SHORTS_NUMBER: "shortsNumber" })[personalization.kind];
         if (field && supported.has(field)) overrides[field] = personalization.value;
       }
+      if (overrides.backNumber && !backNumberSizeClass) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 409, code: "WEBSHOP_BACK_NUMBER_SIZE_CLASS_REVIEW_REQUIRED" });
       if (overrides.backNumber) overrides.backNumberSizeClass = backNumberSizeClass;
       return { articleId: article.id, size: requiredText(sourceArticle.size, `${sourceArticle.articleNumber} maat`, 40), quantity: sourceArticle.quantity, deviation: true, overrides };
     });
@@ -2865,6 +3089,7 @@ export class SportpaleisPilotService {
           const pickupReady = order.fulfillment?.mode !== "DELIVERY";
           if (pickupReady) {
             order.fulfillment ??= { mode: "PICKUP", status: "PENDING", updatedAt: null, updatedBy: null };
+            assertFulfillmentTransition(order, "READY_FOR_PICKUP");
             order.fulfillment.status = "READY_FOR_PICKUP";
             order.fulfillment.updatedAt = order.updatedAt;
             order.fulfillment.updatedBy = user.id;
@@ -3070,7 +3295,7 @@ export class SportpaleisPilotService {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
       if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden afgehaald."), { statusCode: 409, code: "ORDER_DELETED" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-      if (order.stage !== "DONE" || order.fulfillment?.status !== "READY_FOR_PICKUP") throw Object.assign(new Error("Meld de order eerst Klaar om op te halen."), { statusCode: 409, code: "ORDER_NOT_READY_FOR_PICKUP" });
+      assertFulfillmentTransition(order, "PICKED_UP");
       const at = iso(); order.pickup = { status: "PICKED_UP", pickedUpAt: at, pickedUpBy: user.id, exception: String(payload.exception ?? "").trim() || null }; order.fulfillment = { mode: "PICKUP", status: "PICKED_UP", updatedAt: at, updatedBy: user.id, feeEur: 0, address: null }; order.operationalFacts ??= {}; order.operationalFacts.PICKED_UP = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" }; order.revision += 1; order.updatedAt = at;
       order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PICKED_UP", at, userId: user.id, userName: user.name, source: payload.source === "barcode-emulation" ? "barcode-emulation" : "button" });
       audit(state, user.id, "Order afgehaald", order.id); return { state, value: structuredClone(order) };
@@ -3089,12 +3314,8 @@ export class SportpaleisPilotService {
           const progress = productionProgressForOrder(state, order);
           if (progress && (!progress.trackedComplete || !progress.complete)) throw Object.assign(new Error("Bevestig eerst iedere kleurproductie afzonderlijk vanuit de bijbehorende productiejob."), { statusCode: 409, code: "PRODUCTION_LINES_PENDING" });
         }
-        if (["READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"].includes(action) && order.stage !== "DONE") throw Object.assign(new Error("Uitleveren kan pas nadat Productie de order Gereed heeft gemeld."), { statusCode: 409, code: "ORDER_NOT_READY" });
+        assertFulfillmentTransition(order, action);
         if (action === "PAID" && (order.orderKind !== "TEAM" || order.stage !== "DONE" || order.fulfillment?.mode === "DELIVERY")) throw Object.assign(new Error("Betaling wordt in Workspace alleen bij een gereed teamorder voor afhalen vastgelegd."), { statusCode: 409, code: "PAYMENT_ACTION_NOT_AVAILABLE" });
-        if (["READY_FOR_PICKUP", "PICKED_UP"].includes(action) && order.fulfillment?.mode === "DELIVERY") throw Object.assign(new Error("Deze order staat op bezorgen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
-        if (action === "READY_FOR_PICKUP" && order.fulfillment?.status !== "PENDING") throw Object.assign(new Error("Deze order is al vrijgegeven voor afhalen of afgehaald."), { statusCode: 409, code: "FULFILLMENT_ALREADY_ADVANCED" });
-        if (action === "PICKED_UP" && order.fulfillment?.status !== "READY_FOR_PICKUP") throw Object.assign(new Error("Meld de order eerst Klaar om op te halen."), { statusCode: 409, code: "ORDER_NOT_READY_FOR_PICKUP" });
-        if (action === "DELIVERED" && order.fulfillment?.mode !== "DELIVERY") throw Object.assign(new Error("Deze order staat op afhalen."), { statusCode: 409, code: "FULFILLMENT_MODE_CONFLICT" });
         const at = iso(); order.operationalFacts ??= {}; order.operationalFacts[action] = { at, userId: user.id, userName: user.name, source: "MANUAL_WORKSPACE" };
         if (action === "REGISTER_PROCESSED") order.payment = { status: "REGISTER_PROCESSED", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
         if (action === "PAID") order.payment = { status: "PAID", updatedAt: at, updatedBy: user.id, source: "MANUAL_WORKSPACE" };
@@ -3216,6 +3437,7 @@ export class SportpaleisPilotService {
             const remap = (id) => candidateIdByHash.get(previousCandidates.get(id)?.geometryHash) ?? null;
             existing.reviewDraft.selectedCandidateIds = existing.reviewDraft.selectedCandidateIds.map(remap).filter(Boolean);
             existing.reviewDraft.glyphAssignments = Object.fromEntries(Object.entries(existing.reviewDraft.glyphAssignments).map(([id, value]) => [remap(id), value]).filter(([id]) => id));
+            existing.reviewDraft.candidateArtwork = Object.fromEntries(Object.entries(existing.reviewDraft.candidateArtwork ?? {}).map(([id, value]) => [remap(id), value]).filter(([id]) => id));
             existing.reviewDraft.revision += 1;
             existing.reviewDraft.updatedAt = iso();
             existing.reviewDraft.updatedBy = { userId: user.id, name: user.name };
@@ -3298,12 +3520,17 @@ export class SportpaleisPilotService {
       if (selectedCandidateIds.some((id) => !source.candidates.some((candidate) => candidate.id === id))) throw Object.assign(new Error("Een gekozen voorbeeld hoort niet bij deze bron."), { statusCode: 400, code: "PRODUCTION_ASSET_SELECTION_INVALID" });
       const glyphAssignments = Object.fromEntries(Object.entries(payload.glyphAssignments ?? {}).filter(([candidateId, value]) => source.candidates.some(({ id }) => id === candidateId) && (value === "" || value === "NOT_USED" || /^\d$/u.test(String(value)))).map(([candidateId, value]) => [candidateId, String(value)]));
       const text = (value, max = 160) => String(value ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").slice(0, max);
+      const candidateArtwork = Object.fromEntries(Object.entries(payload.candidateArtwork ?? {}).filter(([candidateId]) => source.candidates.some(({ id }) => id === candidateId)).map(([candidateId, value]) => [candidateId, {
+        name: text(value?.name),
+        kind: allowedValue(value?.kind ?? "LOGO", ["LOGO", "SPONSOR", "ARTWORK"], "Type opdruk"),
+      }]));
       source.reviewDraft = {
         revision: currentRevision + 1,
         updatedAt: iso(),
         updatedBy: { userId: user.id, name: user.name },
         selectedCandidateIds,
         glyphAssignments,
+        candidateArtwork,
         name: text(payload.name),
         primaryContextKey: text(payload.primaryContextKey, 260),
         additionalContextKeys: [...new Set((Array.isArray(payload.additionalContextKeys) ? payload.additionalContextKeys : []).map((value) => text(value, 260)).filter(Boolean))].slice(0, 20),
@@ -3353,7 +3580,7 @@ export class SportpaleisPilotService {
     const state = await this.store.read();
     const asset = state.productionElements.find(({ id, sourceId, applications }) => id === elementId && sourceId && applications?.some(({ kind }) => kind === "NUMBER_SET"));
     const digits = String(value ?? "");
-    if (!asset || !/^\d{1,3}$/u.test(digits)) throw Object.assign(new Error("Nummervoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
+    if (!asset || !/^\d{1,4}$/u.test(digits)) throw Object.assign(new Error("Nummervoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
     const variant = asset.variants.find(({ heightMm }) => Number(heightMm) > 0);
     const piece = productionAssetPiece({ asset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
     const svg = productionAssetPreviewSvg({ controlledVector: { contours: piece.contours } });
@@ -3427,8 +3654,45 @@ export class SportpaleisPilotService {
         const association = state.associations.find(({ id, name }) => id === context.id || name === context.label);
         if (!association || association.name !== context.label) throw Object.assign(new Error("Kies een bestaande vereniging uit Workspace."), { statusCode: 400, code: "PRODUCTION_ASSET_ASSOCIATION_CONTEXT_INVALID" });
       }
+      const productionProfileId = optional(payload.productionProfileId, 180) || null;
+      const linkedProfile = productionProfileId ? state.productionProfiles?.find(({ id }) => id === productionProfileId) : null;
+      if (productionProfileId && !linkedProfile) throw Object.assign(new Error("Het gekozen productieprofiel bestaat niet meer."), { statusCode: 409, code: "PRODUCTION_ASSET_PROFILE_NOT_FOUND" });
+      if (linkedProfile) {
+        if (!isNumberSet) throw Object.assign(new Error("Alleen een gecontroleerde SVG-nummerset kan aan een nummerprofiel worden gekoppeld."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_APPLICATION_INVALID" });
+        const associationContext = contexts.find(({ type }) => type === "ASSOCIATION");
+        const profileBelongsToContext = associationContext && state.articles.some(({ association, profileId, active }) => active !== false && association === associationContext.label && profileId === linkedProfile.id);
+        if (!profileBelongsToContext) throw Object.assign(new Error("Kies een productieprofiel dat bij de geselecteerde vereniging en haar artikelen hoort."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_CONTEXT_MISMATCH" });
+        const requestedPlacement = applications.find(({ kind }) => kind === "NUMBER_SET")?.placement ?? "";
+        const requiredField = /short|rok/iu.test(requestedPlacement) ? "shortsNumber" : /rug/iu.test(requestedPlacement) ? "backNumber" : /borst/iu.test(requestedPlacement) ? "chestNumber" : null;
+        if (!requiredField || !linkedProfile.supports?.includes(requiredField)) throw Object.assign(new Error("De gekozen toepassing hoort niet bij dit productieprofiel. Kies het profiel voor Rug, Borst of Short/rok dat deze bedrukking ondersteunt."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH" });
+      }
+      const registrationBody = {
+        sourceSha256: source.original.sha256,
+        sourceVersion: source.version,
+        geometryHash,
+        productionMethod,
+        contexts: [...contexts].sort((left, right) => `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`)).map(({ type, id }) => ({ type, id })),
+        applications: [...applications].sort((left, right) => `${left.kind}:${left.placement ?? ""}`.localeCompare(`${right.kind}:${right.placement ?? ""}`)),
+        sizePolicy: { mode: requestedSizePolicy, widthMm, heightMm, minWidthMm, maxWidthMm },
+        defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
+      };
+      const registrationId = `source-registration-${sha256(JSON.stringify(registrationBody)).slice(0, 32).toLowerCase()}`;
+      const existingRegistration = state.productionElements.find((candidate) => candidate.registrationId === registrationId);
+      if (existingRegistration) {
+        if (linkedProfile && !linkedProfile.productionNumberAssetIds?.includes(existingRegistration.id)) {
+          const previous = structuredClone(linkedProfile);
+          linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), existingRegistration.id])];
+          linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
+          linkedProfile.validationHistory ??= [];
+          linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · bestaande registratie gekoppeld via Guided Source Setup` });
+          audit(state, user.id, "Bestaande productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: existingRegistration.id, registrationId, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
+        }
+        audit(state, user.id, "Bestaande productiebronregistratie hergebruikt", existingRegistration.id, { registrationId, sourceId: source.id, sourceSha256: source.original.sha256, productionProfileId });
+        return { state, value: publicProductionElement(existingRegistration) };
+      }
       const element = {
-        id: `production-asset-${randomBytes(8).toString("hex")}`,
+        id: `production-asset-${registrationId.slice(-16)}`,
+        registrationId,
         name: requiredText(payload.name, "Naam", 160),
         ownerType: allowedValue(payload.ownerType, ["ASSOCIATION", "CUSTOMER", "SPONSOR", "OWN_BRAND"], "Eigenaartype"),
         ownerName: requiredText(payload.ownerName, "Vereniging/klant/sponsor", 160),
@@ -3448,11 +3712,29 @@ export class SportpaleisPilotService {
         ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
         sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED", conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION" }, physicallyProvenContour: null },
         revision: 1,
-        variants: [{ id: `variant-${randomBytes(6).toString("hex")}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
+        variants: [{ id: `variant-${registrationId.slice(-12)}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
       };
       state.productionElements.push(element);
-      delete source.reviewDraft;
-      audit(state, user.id, hasProductionSize ? "Productieasset vrijgegeven" : "Productieasset veilig bewaard", element.id, { sourceId: source.id, sourceVersion: source.version, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, rawToken: undefined });
+      if (linkedProfile) {
+        const previous = structuredClone(linkedProfile);
+        linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), element.id])];
+        linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
+        linkedProfile.validationHistory ??= [];
+        linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · expliciet gekoppeld via Guided Source Setup` });
+        audit(state, user.id, "Gecontroleerde productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: element.id, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
+      }
+      if (source.reviewDraft) {
+        const promotedIds = new Set(candidateIds);
+        source.reviewDraft.selectedCandidateIds = source.reviewDraft.selectedCandidateIds.filter((id) => !promotedIds.has(id));
+        source.reviewDraft.glyphAssignments = Object.fromEntries(Object.entries(source.reviewDraft.glyphAssignments ?? {}).filter(([id]) => !promotedIds.has(id)));
+        source.reviewDraft.candidateArtwork = Object.fromEntries(Object.entries(source.reviewDraft.candidateArtwork ?? {}).filter(([id]) => !promotedIds.has(id)));
+        if (source.reviewDraft.selectedCandidateIds.length) {
+          source.reviewDraft.revision += 1;
+          source.reviewDraft.updatedAt = iso();
+          source.reviewDraft.updatedBy = { userId: user.id, name: user.name };
+        } else delete source.reviewDraft;
+      }
+      audit(state, user.id, hasProductionSize ? "Productieasset vrijgegeven" : "Productieasset veilig bewaard", element.id, { registrationId, sourceId: source.id, sourceVersion: source.version, sourceSha256: source.original.sha256, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, productionProfileId, rawToken: undefined });
       return { state, value: publicProductionElement(element) };
     });
     return result.value;
@@ -3578,7 +3860,9 @@ export class SportpaleisPilotService {
     await this.#assertCsrf(token, csrfToken);
     const orderMailRequest = this.#orderMailRequest(state, user, orderId, payload);
     const currentOrder = state.orders.find(({ id }) => id === orderId);
-    if (payload.templateKey === "ORDER_RECEIVED" && currentOrder?.communication?.receipt.status === "UNKNOWN") {
+    const communicationChannelByTemplate = { ORDER_RECEIVED: "receipt", ORDER_IN_PRODUCTION: "production", ORDER_READY: "ready" };
+    const communicationChannel = communicationChannelByTemplate[payload.templateKey];
+    if (communicationChannel && currentOrder?.communication?.[communicationChannel]?.status === "UNKNOWN") {
       throw Object.assign(new Error("De vorige verzenduitkomst is onbekend. Menselijke controle is vereist voordat opnieuw verzonden mag worden."), { statusCode: 409, code: "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW" });
     }
     const request = { ...orderMailRequest, idempotencyKey };
@@ -3983,10 +4267,10 @@ export class SportpaleisPilotService {
     assertRole(user, ["admin"]);
     const result = await this.store.mutate(async (state) => {
       const articleNumber = requiredText(payload.articleNumber, "Artikelnummer", 80);
-      if (state.articles.some((article) => article.articleNumber.toLocaleLowerCase("nl-NL") === articleNumber.toLocaleLowerCase("nl-NL"))) throw Object.assign(new Error("Dit artikelnummer bestaat al."), { statusCode: 409, code: "ARTICLE_EXISTS" });
       const association = requiredText(payload.association, "Vereniging", 120);
       const associationRecord = state.associations.find(({ name }) => name === association);
       if (!associationRecord) throw Object.assign(new Error("Kies een bestaande vereniging uit Beheer."), { statusCode: 400, code: "ASSOCIATION_UNKNOWN" });
+      if (state.articles.some((article) => article.association === association && article.articleNumber.toLocaleLowerCase("nl-NL") === articleNumber.toLocaleLowerCase("nl-NL"))) throw Object.assign(new Error("Dit artikelnummer bestaat al binnen deze vereniging."), { statusCode: 409, code: "ARTICLE_EXISTS" });
       const requestedFoilOverride = String(payload.foilColorOverride ?? "").trim();
       const foilColorOverride = requestedFoilOverride ? managedFoilColor(state, requestedFoilOverride) : null;
       if (requestedFoilOverride && !foilColorOverride) throw Object.assign(new Error("Kies een bestaande beheerde foliekleur uit Folie en rollen."), { statusCode: 400, code: "ARTICLE_FOIL_COLOR_UNKNOWN" });
@@ -3996,6 +4280,14 @@ export class SportpaleisPilotService {
       if (!ARTICLE_IMAGE_KEYS.has(imageKey)) throw Object.assign(new Error("Kies een bestaande lokale artikelafbeelding."), { statusCode: 400, code: "IMAGE_ASSET_UNKNOWN" });
       const source = requiredText(payload.source, "Bron / bevestiging", 1_000);
       const createdAt = iso();
+      const teamwearInput = payload.teamwearCatalog;
+      const teamwearCatalog = teamwearInput ? {
+        status: allowedValue(teamwearInput.status ?? "REVIEW_REQUIRED", ["REVIEW_REQUIRED", "HIDDEN"], "Teamwear-status"),
+        brand: requiredText(teamwearInput.brand, "Teamwear-merk", 80), model: requiredText(teamwearInput.model || payload.name, "Teamwear-model", 120), category: requiredText(teamwearInput.category, "Teamwear-categorie", 80),
+        audiences: normalizedTextList(teamwearInput.audiences, "Teamwear-doelgroepen", 5, 20).map((value) => allowedValue(value, ["JUNIOR", "SENIOR", "MEN", "WOMEN", "UNISEX"], "Teamwear-doelgroep")),
+        colorLabel: requiredText(teamwearInput.colorLabel, "Teamwear-kleur", 80), collection: optional(teamwearInput.collection, 120) || null,
+        sourceLabel: requiredText(teamwearInput.sourceLabel || source, "Teamwear-bron", 500), sourceUrl: optional(teamwearInput.sourceUrl, 500) || null, reviewedAt: null, reviewedBy: null,
+      } : undefined;
       const article = {
         id: `article-${randomBytes(8).toString("hex")}`,
         articleNumber,
@@ -4014,9 +4306,10 @@ export class SportpaleisPilotService {
         productionDataGaps: ["Maten, varianten en bedrukregels moeten nog worden bevestigd"],
         validation: { status: "DATA_GAP", source, name: "DATA_GAP", sku: "DATA_GAP", image: "DATA_GAP", variants: "DATA_GAP", sizes: "DATA_GAP", personalization: "DATA_GAP" },
         validationHistory: [{ at: createdAt, userId: user.id, previous: null, next: { articleNumber, association, profileId: profile.id, status: "DATA_GAP", active: false }, source }],
+        ...(teamwearCatalog ? { teamwearCatalog } : {}),
       };
       state.articles.push(article);
-      audit(state, user.id, "Artikel aangemaakt", article.id, { revision: 1, association, profileId: profile.id, status: "DATA_GAP", active: false });
+      audit(state, user.id, "Artikel aangemaakt", article.id, { revision: 1, association, profileId: profile.id, status: "DATA_GAP", active: false, teamwearStatus: article.teamwearCatalog?.status ?? null, teamwearSource: article.teamwearCatalog?.sourceLabel ?? null });
       return { state, value: structuredClone(article) };
     });
     return result.value;
@@ -4097,11 +4390,23 @@ export class SportpaleisPilotService {
         nextValidation.status = deriveArticleValidationStatus(nextValidation);
         article.validation = nextValidation;
       }
+      if (payload.teamwearCatalog !== undefined) {
+        const input = payload.teamwearCatalog; const status = allowedValue(input.status, ["REVIEW_REQUIRED", "SELECTABLE", "HIDDEN"], "Teamwear-status");
+        if (status === "SELECTABLE" && ["name", "sku", "image", "variants", "sizes"].some((field) => article.validation?.[field] !== "VALIDATED")) throw Object.assign(new Error("Bevestig eerst naam, artikelnummer, afbeelding, varianten en maten voordat dit artikel in Teamwear selecteerbaar wordt."), { statusCode: 409, code: "TEAMWEAR_PRODUCT_TRUTH_REQUIRED" });
+        article.teamwearCatalog = {
+          status, brand: requiredText(input.brand, "Teamwear-merk", 80), model: requiredText(input.model || article.name, "Teamwear-model", 120), category: requiredText(input.category || article.category, "Teamwear-categorie", 80),
+          audiences: normalizedTextList(input.audiences, "Teamwear-doelgroepen", 5, 20).map((value) => allowedValue(value, ["JUNIOR", "SENIOR", "MEN", "WOMEN", "UNISEX"], "Teamwear-doelgroep")),
+          colorLabel: requiredText(input.colorLabel, "Teamwear-kleur", 80), collection: optional(input.collection, 120) || null,
+          sourceLabel: requiredText(input.sourceLabel, "Teamwear-bron", 500), sourceUrl: optional(input.sourceUrl, 500) || null,
+          reviewedAt: status === "SELECTABLE" ? iso() : null, reviewedBy: status === "SELECTABLE" ? user.id : null,
+        };
+      }
+      if (state.articles.some((candidate) => candidate.id !== article.id && candidate.association === article.association && candidate.articleNumber.toLocaleLowerCase("nl-NL") === article.articleNumber.toLocaleLowerCase("nl-NL"))) throw Object.assign(new Error("Dit artikelnummer bestaat al binnen deze vereniging."), { statusCode: 409, code: "ARTICLE_EXISTS" });
       article.revision = Number(article.revision ?? 1) + 1;
       article.validationHistory ??= [];
       const changedAt = iso();
       article.validationHistory.unshift({ at: changedAt, userId: user.id, previous, next: structuredClone(article), source: article.validation?.source ?? "Adminwijziging in Workspace" });
-      audit(state, user.id, reorderOnly ? "Artikelvolgorde gewijzigd" : "Artikelinstelling gewijzigd", article.id, { revision: article.revision, displayOrder: article.displayOrder ?? null, active: article.active, profileId: article.profileId, association: article.association, validationStatus: article.validation?.status ?? "DATA_GAP" });
+      audit(state, user.id, reorderOnly ? "Artikelvolgorde gewijzigd" : "Artikelinstelling gewijzigd", article.id, { revision: article.revision, displayOrder: article.displayOrder ?? null, active: article.active, profileId: article.profileId, association: article.association, validationStatus: article.validation?.status ?? "DATA_GAP", teamwearStatus: article.teamwearCatalog?.status ?? null, teamwearSource: article.teamwearCatalog?.sourceLabel ?? null });
       return { state, value: structuredClone(article) };
     });
     return result.value;
@@ -4652,7 +4957,7 @@ function configuredManagedFont(state, profile) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-const PIONEERS_ASSOCIATION = "Almerer Pioneers";
+const PIONEERS_ASSOCIATION = "Almere Pioneers";
 const PIONEERS_PROFILE_AUTHORITY_EVENT = "SPW-PIONEERS-NUMBER-AUTHORITY-20260825";
 const VERIFIED_NUMBER_SOURCE_EVENT = "SPW-VERIFIED-SVG-NUMBER-SOURCES-20260825";
 
@@ -4748,7 +5053,32 @@ function assertScBuitenboysShortSource(state, order, line) {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
     if (font && normalizedProductionIdentity(font.name) === "spain") return;
   }
-  throw Object.assign(new Error("SC Buitenboys shortnummer heeft geen exact beheerde Spain-fontbron; productie blijft op REVIEW."), { statusCode: 409, code: "SC_BUITENBOYS_SHORT_SOURCE_REVIEW_REQUIRED" });
+  if (line.source?.kind === "PRODUCTION_ELEMENT") {
+    const profile = state.productionProfiles.find(({ id }) => id === SC_BUITENBOYS_SHORT_PROFILE_ID);
+    const asset = state.productionElements.find(({ id, version, revision, lifecycleStatus, productionMethod }) => id === line.source.id && (version ?? String(revision)) === line.source.version && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED");
+    const exactProfileLink = profile?.productionNumberAssetIds?.includes(asset?.id);
+    const exactAssociation = asset?.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === item.association || label === item.association));
+    const shortApplication = asset?.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && /short|rok/iu.test(String(placement ?? "")));
+    const completeGlyphSet = Object.keys(asset?.numberGlyphs ?? {}).length === 10 && Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => asset?.numberGlyphs?.[digit]);
+    const exactHeight = asset?.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(line.heightMm)) <= 0.01);
+    if (exactProfileLink && exactAssociation && shortApplication && completeGlyphSet && exactHeight && ["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) return;
+  }
+  throw Object.assign(new Error("SC Buitenboys shortnummer heeft geen exact aan het Spain-profiel gekoppelde productiebron; productie blijft op REVIEW."), { statusCode: 409, code: "SC_BUITENBOYS_SHORT_SOURCE_REVIEW_REQUIRED" });
+}
+
+function naambalkApplicationContext(values, field) {
+  if (!SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.componentFields.includes(field)) return null;
+  if (!String(values?.name ?? "").trim() || !String(values?.backNumber ?? "").trim()) return null;
+  return {
+    kind: SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.kind,
+    semantic: SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.semantic,
+    component: field === "name" ? "NAME" : "RUGNUMBER",
+    componentFields: [...SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.componentFields],
+    dimensionAuthority: SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.dimensionAuthority,
+    aggregatePhysicalDimensions: null,
+    backNumberSizeClass: String(values.backNumberSizeClass ?? "").trim() || null,
+    source: SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH.source,
+  };
 }
 
 function productionDecorationIdentity(order, line) {
@@ -4853,17 +5183,23 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
     const teamkitProductionContext = requestedTeamkitContext ? {
       proposalPlacementId: requiredText(requestedTeamkitContext.proposalPlacementId, "Teamkit-placement", 180),
       side: allowedValue(requestedTeamkitContext.side, ["FRONT", "BACK"], "Teamkit-zijde"),
-      preset: allowedValue(requestedTeamkitContext.preset, ["LINKERBORST", "RECHTERBORST", "MIDDENBORST", "RUG_BOVEN", "RUG_MIDDEN", "MOUW_LINKS", "MOUW_RECHTS", "SHORT_LINKS", "SHORT_RECHTS", "BROEK", "TAS"], "Teamkit-positie"),
+      preset: allowedValue(requestedTeamkitContext.preset, ["BACK_UPPER", "BACK_LOWER", "FRONT_CENTER_LARGE", "CHEST_LEFT", "CHEST_RIGHT", "SLEEVE_LEFT", "SLEEVE_RIGHT", "LEFT", "RIGHT", "FREE_PLACEMENT", "LINKERBORST", "RECHTERBORST", "MIDDENBORST", "RUG_BOVEN", "RUG_MIDDEN", "MOUW_LINKS", "MOUW_RECHTS", "SHORT_LINKS", "SHORT_RECHTS", "BROEK", "TAS"], "Teamkit-positie"),
       articleId: optional(requestedTeamkitContext.articleId, 180) || null,
+      associationName: optional(requestedTeamkitContext.associationName, 180) || null,
       profileId: optional(requestedTeamkitContext.profileId, 180) || null,
       profileRevision: Number.isInteger(requestedTeamkitContext.profileRevision) ? requestedTeamkitContext.profileRevision : null,
+      fontProfile: optional(requestedTeamkitContext.fontProfile, 180) || null,
+      sizeLabel: optional(requestedTeamkitContext.sizeLabel, 180) || null,
+      mirror: typeof requestedTeamkitContext.mirror === "boolean" ? requestedTeamkitContext.mirror : null,
+      approvedProductionRuleHash: optional(requestedTeamkitContext.approvedProductionRuleHash, 128) || null,
+      currentProductionRuleHash: optional(requestedTeamkitContext.currentProductionRuleHash, 128) || null,
       measurementSource: allowedValue(requestedTeamkitContext.measurementSource, ["PRODUCTION_PROFILE", "PRODUCTION_ASSET", "EXPLICIT_PROPOSAL_OVERRIDE", "DATA_GAP"], "Teamkit-maatbron"),
       measurementEvidence: requiredText(requestedTeamkitContext.measurementEvidence, "Teamkit-maatbewijs", 500),
       explicitOverride: requestedTeamkitContext.explicitOverride ? { widthMm: Number(requestedTeamkitContext.explicitOverride.widthMm), heightMm: Number(requestedTeamkitContext.explicitOverride.heightMm), aspectRatioLocked: true } : null,
     } : undefined;
     const requestedDataGapFields = Array.isArray(line.dataGap?.fields) ? [...new Set(line.dataGap.fields)] : [];
     if (options.allowTeamkitDataGaps === true && requestedDataGapFields.length) {
-      if (requestedDataGapFields.some((field) => !["SOURCE", "DIMENSIONS", "FOIL_COLOR"].includes(field))) throw Object.assign(new Error("Ongeldige Teamkit DATA_GAP."), { statusCode: 400, code: "TEAMKIT_PRODUCTION_DATA_GAP_INVALID" });
+      if (requestedDataGapFields.some((field) => !["SOURCE", "DIMENSIONS", "FOIL_COLOR", "APPROVED_RULE", "APPROVED_RULE_DRIFT"].includes(field))) throw Object.assign(new Error("Ongeldige Teamkit DATA_GAP."), { statusCode: 400, code: "TEAMKIT_PRODUCTION_DATA_GAP_INVALID" });
       const widthMm = Number(line.widthMm) || 0; const heightMm = Number(line.heightMm) || 0; const quantity = Number(line.quantity);
       if (widthMm < 0 || heightMm < 0 || widthMm > 1000 || heightMm > 1000 || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Ongeldige geblokkeerde Teamkit-productieregel."), { statusCode: 400, code: "TEAMKIT_PRODUCTION_DATA_GAP_INVALID" });
       const reason = requiredText(line.dataGap.reason, "Reden ontbrekende productiegegevens", 500);
@@ -4874,6 +5210,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
         source: { kind: "PROFILE", id: optional(line.sourceId, 180) || "teamkit-production-data-gap", version: optional(line.sourceVersion, 120) || "unresolved", ...(optional(line.sourceSha256, 128) ? { sha256: optional(line.sourceSha256, 128) } : {}) },
         widthMm: Math.round(widthMm * 1000) / 1000,
         heightMm: Math.round(heightMm * 1000) / 1000,
+        ...(optional(line.foilColor, 80) ? { foilColor: optional(line.foilColor, 80) } : {}),
         quantity,
         preview: { kind: "PROFILE_REFERENCE", label: optional(line.previewLabel, 160) || content, aspectRatioLocked: ["LOGO", "PRODUCTION_ELEMENT"].includes(type) },
         provenance: requiredText(line.provenance, "Teamkit-herkomst", 500),
@@ -5075,6 +5412,7 @@ function deriveCatalogProductionLines(state, orderId, items) {
           provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}${linkedNumberSet.asset ? ` · gekoppelde SVG-nummerset ${linkedNumberSet.asset.id}@${linkedNumberSet.asset.version}` : ""}`,
           proofStatus: linkedNumberSet.asset ? productionElementProof(linkedNumberSet.asset) : versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
           validation: { status: !linkedNumberSet.ambiguous && !configuredNumberHeightMissing && (linkedNumberSet.asset || versionedSource || managedFont || field === "initialsInfix" && !reason) ? "VALID" : "BLOCKED", reason },
+          ...(naambalkApplicationContext(values, field) ? { applicationContext: naambalkApplicationContext(values, field) } : {}),
           ...(field === "initialsInfix" ? { placementRule: { alignment: infixRule?.alignment ?? "CENTER", horizontalSpacingMm: infixRule?.horizontalSpacingMm ?? null, baselineOffsetMm: infixRule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: infixRule?.revision ?? 1 } } : {}),
         });
       }
@@ -5679,12 +6017,17 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         const size = enteredSize || "Niet opgegeven";
         if (enteredSize && article.validation?.sizes === "VALIDATED" && article.availableSizes?.length && !article.availableSizes.includes(enteredSize)) throw Object.assign(new Error(`${enteredSize} is geen bevestigde maat voor ${article.name}.`), { statusCode: 400, code: "ARTICLE_SIZE_UNAVAILABLE" });
         const deviation = Boolean(variant.deviation);
-        const overrides = deviation ? validatePersonalization(variant.overrides ?? {}, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
+        const overrideInput = variant.overrides ?? {};
+        const overrides = deviation ? validatePersonalization(overrideInput, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
         const forbiddenOverrides = PERSONALIZATION_FIELDS.filter((field) => !article.supports.includes(field) && Boolean(overrides[field]));
         if (forbiddenOverrides.length) throw Object.assign(new Error(`${article.name} staat deze bedrukking niet toe.`), { statusCode: 400, code: "ARTICLE_PERSONALIZATION_NOT_ALLOWED" });
-        const appliedFields = Object.fromEntries(article.supports.map((key) => [key, deviation && Object.hasOwn(overrides, key) ? overrides[key] : standardPersonalization[key] ?? ""]));
-        if (article.supports.includes("initials")) appliedFields.initialsInfix = deviation ? overrides.initialsInfix : standardPersonalization.initialsInfix ?? "";
-        const selectedBackNumberSizeClass = deviation ? overrides.backNumberSizeClass : standardPersonalization.backNumberSizeClass;
+        const hasExplicitOverride = (key) => deviation && (
+          String(overrideInput[key] ?? "").trim() !== ""
+          || key === "initialsInfix" && Object.hasOwn(overrideInput, key) && String(overrideInput.initials ?? "").trim() !== ""
+        );
+        const appliedFields = Object.fromEntries(article.supports.map((key) => [key, hasExplicitOverride(key) ? overrides[key] : standardPersonalization[key] ?? ""]));
+        if (article.supports.includes("initials")) appliedFields.initialsInfix = hasExplicitOverride("initialsInfix") ? overrides.initialsInfix : standardPersonalization.initialsInfix ?? "";
+        const selectedBackNumberSizeClass = hasExplicitOverride("backNumberSizeClass") ? overrides.backNumberSizeClass : standardPersonalization.backNumberSizeClass;
         const appliedBackNumberSizeClass = appliedFields.backNumber ? selectedBackNumberSizeClass || inferBackNumberSizeClass(association, article, enteredSize) : "";
         if (appliedFields.backNumber && options.requireBackNumberSizeClass === true && !BACK_NUMBER_SIZE_CLASSES.has(appliedBackNumberSizeClass)) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 400, code: "BACK_NUMBER_SIZE_CLASS_REQUIRED" });
         const applied = { ...appliedFields, backNumberSizeClass: appliedBackNumberSizeClass };
@@ -5954,6 +6297,8 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (teamkitPdfMatch && method === "GET") { binary(response, 200, await service.teamkitProposalPdf(token, decodeURIComponent(teamkitPdfMatch[1]), requestUrl.searchParams.get("revision"))); return true; }
       const teamkitTaskMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/fulfillment\/([^/]+)$/);
       if (teamkitTaskMatch && method === "PATCH") { json(response, 200, await service.updateTeamkitFulfillmentTask(token, csrf, decodeURIComponent(teamkitTaskMatch[1]), decodeURIComponent(teamkitTaskMatch[2]), await readJson(request))); return true; }
+      const teamkitSizingMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/production-sizing$/);
+      if (teamkitSizingMatch && method === "POST") { json(response, 200, await service.updateTeamkitProductionSizing(token, csrf, decodeURIComponent(teamkitSizingMatch[1]), await readJson(request))); return true; }
       const teamkitInternalProductionMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/internal-production$/);
       if (teamkitInternalProductionMatch && method === "POST") { json(response, 201, await service.prepareTeamkitInternalProduction(token, csrf, decodeURIComponent(teamkitInternalProductionMatch[1]), await readJson(request))); return true; }
       const teamkitMailPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/mail\/preview$/);
@@ -6131,7 +6476,7 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         binary(response, 200, await service.productionAssetPreview(token, decodeURIComponent(productionAssetManagedPreviewMatch[1])));
         return true;
       }
-      const productionAssetNumberPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/numbers\/(\d{1,3})\.svg$/);
+      const productionAssetNumberPreviewMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/numbers\/(\d{1,4})\.svg$/);
       if (productionAssetNumberPreviewMatch && method === "GET") {
         binary(response, 200, await service.productionAssetNumberPreview(token, decodeURIComponent(productionAssetNumberPreviewMatch[1]), productionAssetNumberPreviewMatch[2]));
         return true;

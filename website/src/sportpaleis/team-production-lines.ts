@@ -19,9 +19,9 @@ export function parseTeamProductionLines(input: string): TeamProductionLine[] {
     const repeated = raw.match(/^(.+?)\s*[x×]\s*(\d+)$/i);
     const value = (words?.[1] ?? repeated?.[1] ?? raw).trim();
     const quantity = words ? 2 : repeated ? Number(repeated[2]) : 1;
-    if (!value || !Number.isInteger(quantity) || quantity < 1 || quantity > 9) throw new Error("Gebruik per regel een waarde of 'waarde x aantal' (maximaal 9).");
+    if (!value || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw new Error("Gebruik per regel een waarde of 'waarde x aantal' (maximaal 999).");
     results.push({ value, quantity });
   }
-  if (!results.length || results.length > 50 || results.reduce((sum, row) => sum + row.quantity, 0) > 99) throw new Error("Gebruik 1 tot 50 regels en maximaal 99 stuks.");
+  if (!results.length || results.length > 50 || results.reduce((sum, row) => sum + row.quantity, 0) > 999) throw new Error("Gebruik 1 tot 50 regels en maximaal 999 stuks.");
   return results;
 }

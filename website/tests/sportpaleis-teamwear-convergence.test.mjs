@@ -49,17 +49,18 @@ test("centrale Teamwear-catalogus bundelt merken, varianten en bounded discovery
   assert.ok(scale.products.length <= 24);
 });
 
-test("pricing-policy is deterministic, customer-safe and snapshot-ready", async (context) => {
+test("pricing-policy invents no discount without an authoritative policy", async (context) => {
   const { state } = await fixture(context);
   const product = buildTeamwearCatalog(state).find(({ supplierArticleNumber }) => supplierArticleNumber === "BV6708");
   assert.ok(product);
   const base = resolveTeamwearPrice(product, 10);
-  assert.deepEqual({ label: base.label, minimumQuantity: base.minimumQuantity, effectivePriceEur: base.effectivePriceEur }, { label: "Teamprijs", minimumQuantity: 10, effectivePriceEur: 19.99 });
+  assert.deepEqual({ label: base.label, minimumQuantity: base.minimumQuantity, effectivePriceEur: base.effectivePriceEur }, { label: null, minimumQuantity: null, effectivePriceEur: null });
+  assert.equal(base.advicePriceEur, 24.99);
   const customer = resolveTeamwearPrice(product, 10, "association:asc-waterwijk");
-  assert.equal(customer.label, "Jullie prijs");
-  assert.equal(customer.relationshipOverrideApplied, true);
-  assert.equal(customer.policyRef, "relationship-waterwijk-v1");
-  assert.equal(customer.effectivePriceEur, 18.74);
+  assert.equal(customer.label, null);
+  assert.equal(customer.relationshipOverrideApplied, false);
+  assert.equal(customer.policyRef, null);
+  assert.equal(customer.effectivePriceEur, null);
   assert.ok(!JSON.stringify(customer).match(/inkoop|marge/iu));
 });
 
@@ -163,4 +164,18 @@ test("contextuploads verschijnen in een volgende Teamwear van dezelfde verenigin
   assert.ok(reusedSource);
   assert.deepEqual(reusedSource.libraryOrigin, { proposalId: first.id, sourceId: upload.source.id, sha256: upload.source.sha256 });
   assert.equal(reused.items[0].placements[0].sourceId, reusedSource.id);
+});
+
+test("gelijknamige losse klanten delen nooit assets zonder dezelfde stabiele klantcontext", async (context) => {
+  const { service, admin } = await fixture(context);
+  const first = await service.createTeamkitProposal(admin.token, admin.csrfToken, { title: "Eerste context", customerName: "Jan Jansen" });
+  const upload = await service.addTeamkitProposalSource(admin.token, admin.csrfToken, first.id, { filename: "jan-een.svg", mimeType: "image/svg+xml", dataBase64: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20"/></svg>').toString("base64") });
+  const unrelated = await service.createTeamkitProposal(admin.token, admin.csrfToken, { title: "Tweede context", customerName: "Jan Jansen" });
+  assert.notEqual(first.customer.id, unrelated.customer.id);
+  let state = await service.bootstrap(admin.token);
+  assert.equal(buildTeamwearAssetLibrary(state, state.teamkitProposals.find(({ id }) => id === unrelated.id)).some(({ masterRef }) => masterRef === upload.source.sha256), false);
+  const related = await service.createTeamkitProposal(admin.token, admin.csrfToken, { title: "Vervolgcontext", customerName: "J. Jansen", customerId: first.customer.id });
+  state = await service.bootstrap(admin.token);
+  assert.equal(related.customer.id, first.customer.id);
+  assert.equal(buildTeamwearAssetLibrary(state, state.teamkitProposals.find(({ id }) => id === related.id)).some(({ masterRef }) => masterRef === upload.source.sha256), true);
 });

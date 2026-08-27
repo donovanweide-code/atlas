@@ -18,7 +18,7 @@ async function fixture(context, key) {
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const operator = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
   let state = await service.bootstrap(admin.token);
-  const pioneers = state.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = state.associations.find(({ name }) => name === "Almere Pioneers");
   await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit", "Blauw"], defaultFoilColor: "Wit" });
   state = await service.bootstrap(admin.token);
   const blueArticle = state.articles.find(({ id }) => id === "sp-live-116386");

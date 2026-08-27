@@ -18,7 +18,7 @@ function developmentOrders() {
       ],
     },
     {
-      id: "SNIJTEST-001", revision: 1, customer: "Interne productietest", association: "Maatvoering volgens Almerer Pioneers",
+      id: "SNIJTEST-001", revision: 1, customer: "Interne productietest", association: "Maatvoering volgens Almere Pioneers",
       createdAt: "2026-08-06T13:10:00.000Z", updatedAt: "2026-08-06T13:10:00.000Z", promisedAt: "2026-08-08T10:00:00.000Z",
       stage: "PRINT", owner: "Patrick", totalPieces: 3, attention: "Fysieke validatie en hardwarevalidatie zijn nog vereist.", productionReference: "SNIJTEST-001",
       items: [

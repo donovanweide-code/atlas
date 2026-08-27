@@ -10,7 +10,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "name": "Almere Pioneers Wedstrijdshirt Omkeerbaar",
     "imageKey": "sp-live-116386",
     "category": "Live bedrukartikel",
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shirt",
     "supports": [
       "backNumber"
@@ -101,7 +101,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "name": "Almere Pioneers Shooting Shirt",
     "imageKey": "sp-live-116388",
     "category": "Live bedrukartikel",
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shirt",
     "supports": [
       "backNumber"
@@ -186,7 +186,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "name": "Almere Pioneers Wedstrijdshort",
     "imageKey": "sp-live-116387",
     "category": "Live bedrukartikel",
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shorts",
     "supports": [
       "shortsNumber"
@@ -275,7 +275,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "name": "Almere Pioneers VARSITY JACKET",
     "imageKey": "sp-live-138505",
     "category": "Live bedrukartikel",
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "profileId": "profile-source-almerer-pioneers-name",
     "supports": [
       "name"
@@ -15199,42 +15199,42 @@ export const SPORTPALEIS_LIVE_HUMAN_CONFIRMATION_REQUIRED_ARTICLES = [
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "115448",
     "name": "Almere Pioneers Trainingsshirt",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-trainingsshirt_70103.html",
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "115449",
     "name": "Almere Pioneers Trainingsshort",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-trainingsshort_70104.html",
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "116154",
     "name": "Almere Pioneers Trainingsjack",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-trainingsjack_70801.html",
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "116153",
     "name": "Almere Pioneers Trainingsbroek",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-trainingsbroek_70800.html",
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "121212",
     "name": "Almere Pioneers Hoodie",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-hoodie_75815.html",
     "status": "HUMAN_CONFIRMATION_REQUIRED"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "articleNumber": "115445",
     "name": "Almere Pioneers Trainingskousen",
     "sourceUrl": "https://www.sportpaleis.nl/almere-pioneers-trainingskousen_70100.html",
@@ -16961,7 +16961,7 @@ export const SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS = [
     "logoSourceUrl": "https://www.sportpaleis.nl/img/almere-81_40x40_74667.png"
   },
   {
-    "association": "Almerer Pioneers",
+    "association": "Almere Pioneers",
     "productCount": 10,
     "confirmedPrintArticleCount": 4,
     "humanConfirmationRequiredCount": 6,

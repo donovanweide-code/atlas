@@ -22,7 +22,7 @@ async function fixture(context) {
 test("niet-beschikbare foliekleur faalt vóór voorstel, job, revision en auditmutatie", async (context) => {
   const { service, admin } = await fixture(context);
   let state = await service.bootstrap(admin.token);
-  const pioneers = state.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = state.associations.find(({ name }) => name === "Almere Pioneers");
   await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit", "Zwart"], defaultFoilColor: "Wit" });
   state = await service.bootstrap(admin.token);
   const shirt = state.articles.find(({ id }) => id === "sp-live-116386");

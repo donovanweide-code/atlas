@@ -36,7 +36,7 @@ function placement(id, route, { asset = null, sourceId = null, preset = "LINKERB
 }
 
 function profilePlacement(id, kind, text, options = {}) {
-  return { id, kind, label: id.replaceAll("-", " "), side: kind === "BACK_NUMBER" ? "BACK" : "FRONT", preset: kind === "BACK_NUMBER" ? "RUG_MIDDEN" : "LINKERBORST", sourceId: null, productionAssetId: null, assetVersion: null, text, widthPercent: 24, physicalSizeOverride: options.physicalSizeOverride ?? null, route: "INTERN_BEDRUKKEN", supplierName: null, note: null };
+  return { id, kind, label: id.replaceAll("-", " "), side: kind === "BACK_NUMBER" ? "BACK" : "FRONT", preset: kind === "BACK_NUMBER" ? "RUG_MIDDEN" : "LINKERBORST", sourceId: null, productionAssetId: null, assetVersion: null, text, colorOverride: options.colorOverride ?? null, widthPercent: 24, physicalSizeOverride: options.physicalSizeOverride ?? null, route: "INTERN_BEDRUKKEN", supplierName: null, note: null };
 }
 
 async function approvedProposal(service, operator, sourceId, asset) {
@@ -119,11 +119,21 @@ test("Teamkit resolveert bestaande profielmaten en bewaart alleen expliciete ove
   const access = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = access.path.split("/").at(-1);
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   const items = [
-    { id: "profile-initials", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-default", "INITIALS", "AB")] },
+    { id: "profile-initials", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-default", "INITIALS", "AB", { colorOverride: "#101419" })] },
     { id: "profile-back-number", articleId: "sp-live-137294", articleNumber: "137294", productName: "ASC Waterwijk WEDSTRIJD SHIRT SELECTIE", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("back-default", "BACK_NUMBER", "12")] },
     { id: "profile-explicit-override", articleId: "sp-live-140224", articleNumber: "140224", productName: "ASC Waterwijk FULL ZIP JACK", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-override", "INITIALS", "CD", { physicalSizeOverride: { widthMm: 58, heightMm: 35, aspectRatioLocked: true } })] },
   ];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items, reason: "Profielmaat en expliciete override vastgelegd" });
+  const draftRules = Object.fromEntries(proposal.items.map((item) => [item.id, item.placements[0].productionRule]));
+  assert.equal(draftRules["profile-initials"].status, "REVIEW_REQUIRED", "ontbrekende gecontroleerde contourbron blijft fail-closed zonder bekende defaults te verliezen");
+  assert.equal(draftRules["profile-initials"].resolver, "ARTICLE_PROFILE");
+  assert.equal(draftRules["profile-initials"].fontProfile, "Schluber");
+  assert.equal(draftRules["profile-initials"].foilColor, "Zwart", "visuele zwartkeuze is dezelfde beheerde productiefoliekleur");
+  assert.equal(draftRules["profile-initials"].physicalHeightMm, 30);
+  assert.equal(draftRules["profile-explicit-override"].measurementSource, "EXPLICIT_PROPOSAL_OVERRIDE");
+  assert.equal(draftRules["profile-explicit-override"].physicalWidthMm, 58);
+  assert.equal(draftRules["profile-explicit-override"].physicalHeightMm, 35);
+  assert.match(proposal.revisions.at(-1).previewHtml, /Schluber · [\d.]+×30 mm · Zwart · Productiecontrole nodig/u, "revision-preview toont dezelfde production truth plus de echte reviewstatus");
   for (const status of ["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Teamcoördinator", customerEmail: "team@waterwijk.test" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
@@ -131,6 +141,11 @@ test("Teamkit resolveert bestaande profielmaten en bewaart alleen expliciete ove
   assert.equal(prepared.orders.length, 3);
   const byItem = Object.fromEntries(prepared.orders.map((order) => [order.teamkitContext.itemId, order.productionLines[0]]));
   assert.equal(byItem["profile-initials"].heightMm, 30, "initialen gebruiken de bestaande verenigings-/profielmaat zonder proposal-mm");
+  assert.equal(byItem["profile-initials"].foilColor, "Zwart");
+  assert.equal(byItem["profile-initials"].teamkitProductionContext.fontProfile, draftRules["profile-initials"].fontProfile);
+  assert.equal(byItem["profile-initials"].teamkitProductionContext.profileId, draftRules["profile-initials"].profileId);
+  assert.equal(byItem["profile-initials"].teamkitProductionContext.approvedProductionRuleHash, draftRules["profile-initials"].ruleHash);
+  assert.equal(byItem["profile-initials"].teamkitProductionContext.currentProductionRuleHash, draftRules["profile-initials"].ruleHash);
   assert.equal(byItem["profile-initials"].teamkitProductionContext.measurementSource, "PRODUCTION_PROFILE");
   assert.ok(!byItem["profile-initials"].dataGap?.fields.includes("DIMENSIONS"));
   assert.equal(byItem["profile-back-number"].heightMm, 220, "Senior rugnummer gebruikt het bestaande server-authoritative profiel");
@@ -143,5 +158,29 @@ test("Teamkit resolveert bestaande profielmaten en bewaart alleen expliciete ove
   assert.match(byItem["profile-explicit-override"].provenance, /override 58×35 mm/u);
   const state = await store.read(); const approved = state.teamkitProposals.find(({ id }) => id === proposal.id).revisions.find(({ number }) => number === proposal.approval.revision);
   assert.deepEqual(approved.snapshot.items[2].placements[0].physicalSizeOverride, { widthMm: 58, heightMm: 35, aspectRatioLocked: true }, "approved snapshot bewaart exact dezelfde override");
+  assert.deepEqual(approved.snapshot.items.map((item) => item.placements[0].productionRule), proposal.items.map((item) => item.placements[0].productionRule), "approved compositie bewaart profiel/font/folie/formaat onveranderd");
+  const approval = state.teamkitProposals.find(({ id }) => id === proposal.id).approval;
+  assert.match(Buffer.from(approval.pdfBase64, "base64").toString("ascii"), /Schluber \| [\d.]+x30 mm \| Zwart/u, "immutable PDF bevat dezelfde font-, formaat- en foliekeuze");
   assert.equal(state.productionJobs.length, 4, "profielresolutie start geen PlotJob");
+});
+
+test("Teamkit productie faalt gesloten wanneer profiel/font/folie/formaat na approval afwijkt", async (context) => {
+  const { store, service, operator } = await fixture(context);
+  let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Immutable productieregel", customerName: "A.S.C. Waterwijk", contactName: "Teamcoördinator", customerEmail: "team@waterwijk.test", associationName: "A.S.C. Waterwijk", team: "Selectie" });
+  const access = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = access.path.split("/").at(-1);
+  proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  const items = [{ id: "profile-drift", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-drift", "INITIALS", "AB")] }];
+  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items, reason: "Productieregel approved" });
+  const approvedRule = structuredClone(proposal.items[0].placements[0].productionRule);
+  for (const status of ["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
+  await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Teamcoördinator", customerEmail: "team@waterwijk.test" });
+  proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  await store.mutate(async (state) => { const profile = state.productionProfiles.find(({ id }) => id === approvedRule.profileId); profile.fontProfile = "Onverwacht gewijzigd profiel"; profile.revision = (profile.revision ?? 1) + 1; return { state, value: null }; });
+
+  const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
+  assert.equal(prepared.orders[0].productionStatus, "ATTENTION");
+  assert.equal(prepared.orders[0].productionLines[0].validation.status, "BLOCKED");
+  assert.ok(prepared.orders[0].productionLines[0].dataGap.fields.includes("APPROVED_RULE_DRIFT"));
+  assert.equal(prepared.orders[0].teamkitContext.approvedRevision, proposal.approval.revision);
+  assert.equal((await store.read()).productionJobs.length, 4, "drift maakt nooit stil een PlotJob");
 });

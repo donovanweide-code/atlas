@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Bedrukken als één taak | Bestaande contextgestuurde orderflow en state-driven primaire acties behouden | premium shell, first-day en production-practice suites | PASS |
 | SV Huizen per-artikelregels | Artikelbeleid blijft authoritative; generieke orderkeuze overschrijft niets | `sportpaleis-today-production-practice.test.mjs` | PASS |
-| Naambalkmaten en tussenvoegsel 20 mm | Bestaande production profiles en compositieregels behouden | production profile/production practice suites | PASS |
+| Naambalk-compositie en tussenvoegsel 20 mm | Naambalk is uitsluitend de samengestelde applicatie `NAME` + `RUGNUMBER`; beide componenten behouden hun eigen bestaande profielmaat. Er bestaat geen afzonderlijke Naambalk-totaalmaat. | production profile/practice + R20 Human Product Truth invariant | PASS |
 | Buitenboys cardinality en kleur | Identity omvat regel, placement, waarde, kleur en profiel | Buitenboys 19 en blue-34 suites | PASS |
 | Pioneers/Hockey echte bronnen | Bestaande gecontroleerde SVG-source/profile-koppelingen behouden; fail-closed fallback | real production number sources suites | PASS |
 | Vrije opdruk | Semantische soorten, combinaties en artikelcontext blijven zichtbaar zonder handmatige bekende maat/font/kleur | first-day + workspace shell tests | PASS |

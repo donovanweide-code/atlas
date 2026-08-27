@@ -64,6 +64,15 @@ const associationLogoRoot = path.join(outputRoot, "assets", "organizations", "sp
 const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS).map((logo) => [path.join(associationLogoRoot, logo.filename), logo]));
 const brandLogoPath = path.join(outputRoot, "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png");
 const brandLogoSha256 = "70C424DCD371BB7F690946D24B6F3AEEEA3F7D0F276928C4707951EB8BDD4BB4";
+const teamwearFixtureRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "teamwear-fixtures");
+const teamwearFixtureNames = [
+  "teamwear-fixture-bag-black.svg",
+  "teamwear-fixture-jacket-black.svg",
+  "teamwear-fixture-jacket-navy.svg",
+  "teamwear-fixture-shirt-black.svg",
+  "teamwear-fixture-shirt-red.svg",
+  "teamwear-fixture-shorts-black.svg",
+];
 if (associationLogoPaths.size !== 20) fail("exact 20 gecontroleerde Sportpaleis-verenigingslogo's zijn vereist");
 if (rasterFiles.some((file) => !file.endsWith(".webp") && !associationLogoPaths.has(file) && file !== brandLogoPath)) fail("alleen lokaal beheerde WebP-catalogusassets en gehashte Sportpaleis-logo's zijn toegestaan");
 if (!files.includes(brandLogoPath)) fail("gecontroleerd Sportpaleis-merklogo ontbreekt");
@@ -72,6 +81,12 @@ for (const [file, logo] of associationLogoPaths) {
   if (!files.includes(file)) fail(`Sportpaleis-verenigingslogo ontbreekt: ${logo.filename}`);
   const hash = createHash("sha256").update(await readFile(file)).digest("hex").toUpperCase();
   if (hash !== logo.sha256) fail(`Sportpaleis-verenigingslogo wijkt af: ${logo.filename}`);
+}
+for (const fileName of teamwearFixtureNames) {
+  const file = path.join(teamwearFixtureRoot, fileName);
+  if (!files.includes(file)) fail(`Teamwear-garmentvisual ontbreekt: ${fileName}`);
+  const source = await readFile(file, "utf8");
+  if (!source.includes("<svg") || !source.includes("viewBox")) fail(`Teamwear-garmentvisual is geen bruikbare SVG: ${fileName}`);
 }
 for (const file of rasterFiles) if ((await stat(file)).size > 1_000_000) fail("onverwacht grote Workspace-catalogusasset aangetroffen");
 

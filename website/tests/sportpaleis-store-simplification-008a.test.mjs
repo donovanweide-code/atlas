@@ -41,6 +41,13 @@ test("008A - Winkelmedewerker simplification", async (context) => {
     assert.match(order.items[2].personalization, /Initialen SB/);
   });
 
+  await context.test("een lege afwijking wist andere ondersteunde artikelstandaarden niet", async () => {
+    const order = (await create([{ articleId: "sp-live-140298", size: "M", quantity: 1, deviation: true, overrides: { initials: "", backNumber: "14", chestNumber: "" } }], "partial-override-keeps-standard-008a", { initials: "DW", backNumber: "10", chestNumber: "7" })).value;
+    assert.match(order.items[0].personalization, /Initialen DW/);
+    assert.match(order.items[0].personalization, /Rug 14/);
+    assert.match(order.items[0].personalization, /Borst 7/);
+  });
+
   await context.test("één klantorder bewaart twee verenigingen en verschillende productieprofielen per artikel", async () => {
     const order = (await create([
       { articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} },

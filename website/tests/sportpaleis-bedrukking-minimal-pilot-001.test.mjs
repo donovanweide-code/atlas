@@ -24,6 +24,7 @@ async function fixture(context) {
   });
   return {
     root, store, service,
+    admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }),
     storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }),
     patrick: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }),
     support: await service.login({ email: "support@webuildanddesign.nl", password: passwords["donovan-support"] }),
@@ -41,7 +42,7 @@ function individualPayload(overrides = {}) {
 }
 
 test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
-  const { root, store, service, storeUser, patrick, support } = await fixture(context);
+  const { root, store, service, admin, storeUser, patrick, support } = await fixture(context);
 
   await context.test("Junior/Senior is verborgen zonder rugnummer, wordt betrouwbaar afgeleid en is anders verplicht", async () => {
     const withoutBackNumber = await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({
@@ -107,6 +108,14 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.equal(unknown.status, "UNKNOWN_PARTIAL_SEND");
     assert.equal((await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === unknownOrder.id).communication.receipt.status, "UNKNOWN");
     await assert.rejects(service.captureOrderMail(storeUser.token, storeUser.csrfToken, unknownOrder.id, { templateKey: "ORDER_RECEIVED" }, "pilot-mail-unknown-retry"), (error) => error.code === "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW");
+
+    for (const [templateKey, channel] of [["ORDER_IN_PRODUCTION", "production"], ["ORDER_READY", "ready"]]) {
+      const statusOrder = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload({ customer: `Mail Unknown ${templateKey}` }), `pilot-mail-unknown-${channel}-order`)).value;
+      const statusUnknown = await service.captureOrderMail(admin.token, admin.csrfToken, statusOrder.id, { templateKey, simulation: "unknown" }, `pilot-mail-unknown-${channel}`);
+      assert.equal(statusUnknown.status, "UNKNOWN_PARTIAL_SEND");
+      assert.equal((await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === statusOrder.id).communication[channel].status, "UNKNOWN");
+      await assert.rejects(service.captureOrderMail(admin.token, admin.csrfToken, statusOrder.id, { templateKey }, `pilot-mail-unknown-${channel}-retry`), (error) => error.code === "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW");
+    }
   });
 
   await context.test("inhoudscorrectie mag alleen in ORDER en gebruikt revision, audit en authorization", async () => {

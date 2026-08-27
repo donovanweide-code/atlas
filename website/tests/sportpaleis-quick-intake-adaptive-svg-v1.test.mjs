@@ -83,6 +83,15 @@ test("intake bewaart originele bron centraal, dedupliceert en maakt pas na expli
   assert.equal((await store.read()).orders.length, orderCountBefore + 1);
 });
 
+test("Quick Intake gokt een ontbrekend aantal nooit als één", async (context) => {
+  const { service, operator } = await fixture(context);
+  const created = await service.createQuickProductionIntake(operator.token, operator.csrfToken, sourceInput("Bestelnummer: EXT-QPI-NO-QTY\nArtikelnummer: 116386\nMaat: L\nRugnummer: 2"), "quick-intake-no-quantity");
+  await assert.rejects(
+    service.acceptQuickProductionIntake(operator.token, operator.csrfToken, created.value.id, { explicitAgreement: true, customer: "Controle aantal", backNumberSizeClass: "SENIOR", fields: {} }),
+    (error) => error.code === "QUICK_INTAKE_QUANTITY_REQUIRED",
+  );
+});
+
 function vectorSvg() {
   const groups = Array.from({ length: 10 }, (_, digit) => `<g id="digit-${digit}"><path d="M ${20 + digit * 60} 20 h ${10 + digit} v 40 h -${10 + digit} z"/></g>`).join("");
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 100">${groups}</svg>`);

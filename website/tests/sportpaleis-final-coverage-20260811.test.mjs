@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { parseTeamProductionLines } from "../src/sportpaleis/team-production-lines.ts";
+import { buildTeamwearCatalog } from "../src/sportpaleis-teamwear-foundations.ts";
 
 const passwords = { kevin: "Coverage-Kevin-2026!", patrick: "Coverage-Patrick-2026!", collega: "Coverage-Store-2026!", "donovan-support": "Coverage-Support-2026!" };
 const empty = { initials: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -29,7 +30,8 @@ test("FINAL COVERAGE — productie-eerst teamregels ondersteunen reeks, losse wa
     { value: "34", quantity: 1 }, { value: "3", quantity: 2 }, { value: "DW", quantity: 2 },
   ]);
   assert.throws(() => parseTeamProductionLines("50 t/m 1"), /oplopende reeks/);
-  assert.throws(() => parseTeamProductionLines("A x 10"), /maximaal 9/);
+  assert.deepEqual(parseTeamProductionLines("logo x 20\nlogo groot x 8"), [{ value: "logo", quantity: 20 }, { value: "logo groot", quantity: 8 }]);
+  assert.throws(() => parseTeamProductionLines("A x 1000"), /maximaal 999/);
 });
 
 test("FINAL COVERAGE — admin kan vereniging en verborgen DATA_GAP-artikel veilig toevoegen", async (context) => {
@@ -45,6 +47,33 @@ test("FINAL COVERAGE — admin kan vereniging en verborgen DATA_GAP-artikel veil
   const state = await store.read();
   assert.ok(state.audit.some(({ action, subject }) => action === "Vereniging aangemaakt" && subject === association.name));
   assert.ok(state.audit.some(({ action, subject }) => action === "Artikel aangemaakt" && subject === article.id));
+});
+
+test("FINAL COVERAGE — onbedrukt Teamwear-model is na broncontrole selecteerbaar zonder winkelorder of codewijziging", async (context) => {
+  const { service, admin } = await fixture(context);
+  const bootstrap = await service.bootstrap(admin.token);
+  const association = bootstrap.associations.find(({ name }) => name === "A.S.C. Waterwijk");
+  const example = bootstrap.articles.find(({ association: owner }) => owner === association.name);
+  const profile = bootstrap.productionProfiles.find(({ id }) => id === example.profileId);
+  const created = await service.createArticle(admin.token, admin.csrfToken, {
+    name: "Teamwear testtas", articleNumber: "TW-BAG-900", imageKey: example.imageKey, association: association.name, profileId: profile.id,
+    source: "Gecontroleerde leverancierskaart fixture · geen bestaande bedrukking",
+    teamwearCatalog: { status: "REVIEW_REQUIRED", brand: "Testmerk", model: "Teamwear testtas", category: "Tassen", audiences: ["UNISEX"], colorLabel: "Zwart", collection: "Team 2026", sourceLabel: "Gecontroleerde leverancierskaart fixture", sourceUrl: "https://official.example.test/teamwear-testtas", reviewedAt: null, reviewedBy: null },
+  });
+  assert.equal(created.active, false);
+  assert.deepEqual(created.supports, []);
+  const selected = await service.updateArticle(admin.token, admin.csrfToken, created.id, {
+    expectedRevision: created.revision, active: false, variantLabels: ["Zwart"], availableSizes: ["One size"], supports: [], personalizationPolicy: { mode: "none", fields: {} },
+    validation: { source: "Gecontroleerde leverancierskaart fixture", name: "VALIDATED", sku: "VALIDATED", image: "VALIDATED", variants: "VALIDATED", sizes: "VALIDATED", personalization: "DATA_GAP" },
+    teamwearCatalog: { ...created.teamwearCatalog, status: "SELECTABLE" },
+  });
+  assert.equal(selected.active, false, "Teamwear-curatie maakt geen winkelorderartikel");
+  assert.equal(selected.teamwearCatalog.status, "SELECTABLE");
+  const state = await service.bootstrap(admin.token);
+  const product = buildTeamwearCatalog(state).find(({ variants }) => variants.some(({ sourceArticleId }) => sourceArticleId === created.id));
+  assert.equal(product?.model, "Teamwear testtas");
+  assert.equal(product?.use, "ACCESSOIRES");
+  assert.equal(product?.sourceStatus, "AUTHORITATIVE");
 });
 
 test("FINAL COVERAGE — correcties bewaren oud/nieuw en respecteren XPRT-autoriteit", async (context) => {

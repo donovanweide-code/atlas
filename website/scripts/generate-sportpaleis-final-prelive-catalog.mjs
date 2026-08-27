@@ -12,7 +12,7 @@ const IMAGE_DIR = path.join(ROOT, "src", "assets", "images", "sportpaleis", "liv
 const LOGO_DIR = path.join(ROOT, "public", "assets", "organizations", "sportpaleis", "association-logos");
 
 const expectedAssociations = [
-  "Almere'81", "Almerer Pioneers", "As,8o", "A.S.C. Waterwijk", "Brouwersports",
+  "Almere'81", "Almere Pioneers", "As,8o", "A.S.C. Waterwijk", "Brouwersports",
   "Buitenhout MHC", "DCG", "EKVA", "FC Almere", "FC Huizen", "HBSA", "MHC Lelystad",
   "Najaden", "SC Buitenboys", "SC Geinburgia", "Sporting Almere", "VVA / Spartaan",
   "Wooter", "Sloeproeien", "Hasselbaink",
@@ -53,8 +53,8 @@ function canonicalField(product, option) {
 
 function profileId(product, field) {
   const sku = String(product.productInfo?.Artikelnummer ?? "");
-  if (product.association === "Almerer Pioneers" && ["116386", "116388"].includes(sku)) return "profile-pioneers-shirt";
-  if (product.association === "Almerer Pioneers" && sku === "116387") return "profile-pioneers-shorts";
+  if (product.association === "Almere Pioneers" && ["116386", "116388"].includes(sku)) return "profile-pioneers-shirt";
+  if (product.association === "Almere Pioneers" && sku === "116387") return "profile-pioneers-shorts";
   if (product.association === "MHC Lelystad" && /wedstrijdshirt uit/iu.test(product.title)) return "profile-mhc-shirt-away";
   if (product.association === "MHC Lelystad" && /wedstrijdshirt thuis/iu.test(product.title)) return "profile-mhc-shirt-home";
   if (!field) return "profile-pending";

@@ -2,7 +2,7 @@
   "source": { "file": "info bedrukkingen 2026.xlsx", "sheet": "Blad1", "range": "A1:J21", "capturedAt": "2026-08-10" },
   "rows": [
     { "row": 2, "name": "Almere'81", "fontProfile": "Myriad Pro - Italic", "foilColors": [], "dimensionsCm": {}, "notes": "Bedrukking volgens bron: doen we zelf." },
-    { "row": 3, "name": "Almerer Pioneers", "fontProfile": "FFF englisch | zie map 'Pioneers'", "foilColors": ["Wit"], "dimensionsCm": { "backNumberJuniorSourceValue": 16, "backNumberSenior": 20, "chestNumber": 8, "shortsNumber": 8, "nameHeight": 2 }, "notes": "Maximale naambreedte 9 cm; Caps Lock aan." },
+    { "row": 3, "name": "Almere Pioneers", "fontProfile": "FFF englisch | zie map 'Pioneers'", "foilColors": ["Wit"], "dimensionsCm": { "backNumberJuniorSourceValue": 16, "backNumberSenior": 20, "chestNumber": 8, "shortsNumber": 8, "nameHeight": 2 }, "notes": "Maximale naambreedte 9 cm; Caps Lock aan." },
     { "row": 4, "name": "As,8o", "fontProfile": "Spain", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "shortsNumber": 7.5 }, "notes": "" },
     { "row": 5, "name": "A.S.C. Waterwijk", "fontProfile": "schluber (spain = thuis wedstrijdshirt/short)", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "backNumberJuniorSourceValue": 20, "backNumberSenior": 22, "shortsNumber": 7.5 }, "notes": "Wedstrijdshirt thuis is zwart; maximale breedte 22,5 cm." },
     { "row": 6, "name": "Brouwersports", "fontProfile": "schluber", "foilColors": ["Wit"], "dimensionsCm": { "initialsShirt": 3, "shortsNumber": 7.5, "nameHeight": 5 }, "notes": "" },

@@ -7,10 +7,10 @@ const createdAt = "2026-08-11T12:00:00.000Z";
 const nesting = { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 };
 const reference = Object.fromEntries(createReferencePieces().map((piece) => [piece.label.replace("Rugnummer ", ""), piece]));
 const specs = [
-  { id: "01", association: "Almerer Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["2"], ready: true },
-  { id: "02", association: "Almerer Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["34"], ready: true },
-  { id: "03", association: "Almerer Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["77"], ready: true },
-  { id: "04", association: "Almerer Pioneers", profile: "FFF englisch", kind: "Team-mix 2/34/77", values: ["2", "34", "77", "2", "34", "77"], ready: true },
+  { id: "01", association: "Almere Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["2"], ready: true },
+  { id: "02", association: "Almere Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["34"], ready: true },
+  { id: "03", association: "Almere Pioneers", profile: "FFF englisch", kind: "Senior rugnummer", values: ["77"], ready: true },
+  { id: "04", association: "Almere Pioneers", profile: "FFF englisch", kind: "Team-mix 2/34/77", values: ["2", "34", "77", "2", "34", "77"], ready: true },
   { id: "05", association: "A.S.C. Waterwijk", profile: "schluber / Spain", kind: "Senior rugnummer 22 cm", ready: false, gaps: ["Exact lokaal vectorbronbestand ontbreekt", "Snijcontour en fysieke output zijn niet gevalideerd"] },
   { id: "06", association: "Buitenhout MHC", profile: "Myriad Pro Bold / outline", kind: "Senior rugnummer 20 cm outline", ready: false, gaps: ["Buitenhout-bronmap ontbreekt lokaal", "Outline-contour en fysieke output zijn niet gevalideerd"] },
   { id: "07", association: "DCG", profile: "schluber", kind: "Initialen 3 cm", ready: false, gaps: ["Exact schluber-letterbestand/contour ontbreekt", "Fysieke initialen-output is niet gevalideerd"] },
@@ -19,7 +19,7 @@ const specs = [
   { id: "10", association: "HBSA", profile: "Viking-Normal", kind: "Naam 2 cm · geel", ready: false, gaps: ["Exact Viking-Normal-letterbestand/contour ontbreekt", "Gele naam-output is niet fysiek gevalideerd"] },
 ];
 
-const manifest = { buildId: "SPW-PRE-PILOT-MASTER-CORRECTION-20260811", status: "PARTIAL_HUMAN_WINPLOT_REVIEW_REQUIRED", generatedAt: createdAt, physicalPlotPerformed: false, hardwareSendEnabled: false, requestedCases: 10, reliablePositiveCases: 4, blockedCases: 6, exactValidatedScope: "Almerer Pioneers Senior-rugnummers 2, 34 en 77 op 200 mm; bestaande bevestigde contourbron", nesting, cases: [] };
+const manifest = { buildId: "SPW-PRE-PILOT-MASTER-CORRECTION-20260811", status: "PARTIAL_HUMAN_WINPLOT_REVIEW_REQUIRED", generatedAt: createdAt, physicalPlotPerformed: false, hardwareSendEnabled: false, requestedCases: 10, reliablePositiveCases: 4, blockedCases: 6, exactValidatedScope: "Almere Pioneers Senior-rugnummers 2, 34 en 77 op 200 mm; bestaande bevestigde contourbron", nesting, cases: [] };
 await mkdir(outputDirectory, { recursive: true });
 
 for (const spec of specs) {

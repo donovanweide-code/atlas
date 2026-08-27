@@ -35,7 +35,8 @@ export function teamwearContextArticles(state: PilotBootstrap, proposal: Teamkit
 export function teamwearContextProductionAssets(state: PilotBootstrap, proposal: TeamkitProposal): SportpaleisProductionElement[] {
   const associationName = proposal.association.name?.toLocaleLowerCase("nl-NL");
   if (!associationName) return [];
-  return state.productionElements.filter(({ lifecycleStatus, ownerName, contexts }) => lifecycleStatus === "PRODUCTION_READY" && (ownerName.toLocaleLowerCase("nl-NL") === associationName || contexts?.some(({ label }) => label.toLocaleLowerCase("nl-NL") === associationName)));
+  const association = state.associations.find(({ id, name }) => id === proposal.association.id || name.toLocaleLowerCase("nl-NL") === associationName);
+  return state.productionElements.filter(({ lifecycleStatus, ownerName, contexts }) => lifecycleStatus === "PRODUCTION_READY" && (contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === association?.id) || ownerName.toLocaleLowerCase("nl-NL") === associationName));
 }
 
 export interface TeamwearRelationshipContext {
@@ -103,19 +104,22 @@ export interface TeamwearComposition {
   }[];
 }
 
-const VISUAL_POSITION = Object.freeze({ LINKERBORST: [33, 28], RECHTERBORST: [67, 28], MIDDENBORST: [50, 39], RUG_BOVEN: [50, 24], RUG_MIDDEN: [50, 48], MOUW_LINKS: [16, 35], MOUW_RECHTS: [84, 35], SHORT_LINKS: [38, 64], SHORT_RECHTS: [62, 64], BROEK: [50, 64], TAS: [50, 50] } satisfies Record<TeamkitProposalPlacement["preset"], readonly [number, number]>);
+const VISUAL_POSITION = Object.freeze({ BACK_UPPER: [50, 24], BACK_LOWER: [50, 67], FRONT_CENTER_LARGE: [50, 44], CHEST_LEFT: [33, 28], CHEST_RIGHT: [67, 28], SLEEVE_LEFT: [16, 35], SLEEVE_RIGHT: [84, 35], LEFT: [38, 64], RIGHT: [62, 64], FREE_PLACEMENT: [50, 50], LINKERBORST: [33, 28], RECHTERBORST: [67, 28], MIDDENBORST: [50, 39], RUG_BOVEN: [50, 24], RUG_MIDDEN: [50, 48], MOUW_LINKS: [16, 35], MOUW_RECHTS: [84, 35], SHORT_LINKS: [38, 64], SHORT_RECHTS: [62, 64], BROEK: [50, 64], TAS: [50, 50] } satisfies Record<TeamkitProposalPlacement["preset"], readonly [number, number]>);
+const LEGACY_PLACEMENT_ZONE: Partial<Record<TeamkitProposalPlacement["preset"], TeamkitProposalPlacement["preset"]>> = { LINKERBORST: "CHEST_LEFT", RECHTERBORST: "CHEST_RIGHT", MIDDENBORST: "FRONT_CENTER_LARGE", RUG_BOVEN: "BACK_UPPER", RUG_MIDDEN: "BACK_LOWER", MOUW_LINKS: "SLEEVE_LEFT", MOUW_RECHTS: "SLEEVE_RIGHT", SHORT_LINKS: "LEFT", SHORT_RECHTS: "RIGHT", BROEK: "FREE_PLACEMENT", TAS: "FREE_PLACEMENT" };
+export function canonicalTeamwearPlacementZone(preset: TeamkitProposalPlacement["preset"]): TeamkitProposalPlacement["preset"] { return LEGACY_PLACEMENT_ZONE[preset] ?? preset; }
 
 export function teamwearVisualSurface(preset: TeamkitProposalPlacement["preset"]): TeamwearVisualSurface {
-  if (preset === "MOUW_LINKS") return "LEFT_SLEEVE";
-  if (preset === "MOUW_RECHTS") return "RIGHT_SLEEVE";
-  if (preset === "RUG_BOVEN" || preset === "RUG_MIDDEN") return "BACK_TORSO";
-  if (preset === "SHORT_LINKS" || preset === "SHORT_RECHTS" || preset === "BROEK") return "LOWER_GARMENT";
+  if (preset === "SLEEVE_LEFT" || preset === "MOUW_LINKS") return "LEFT_SLEEVE";
+  if (preset === "SLEEVE_RIGHT" || preset === "MOUW_RECHTS") return "RIGHT_SLEEVE";
+  if (["BACK_UPPER", "BACK_LOWER", "RUG_BOVEN", "RUG_MIDDEN"].includes(preset)) return "BACK_TORSO";
+  if (["LEFT", "RIGHT", "SHORT_LINKS", "SHORT_RECHTS", "BROEK"].includes(preset)) return "LOWER_GARMENT";
   if (preset === "TAS") return "ACCESSORY";
   return "FRONT_TORSO";
 }
 
 function compositionPlacement(placement: TeamkitProposalPlacement): TeamwearCompositionPlacement {
-  const [fallbackX, fallbackY] = VISUAL_POSITION[placement.preset];
+  const preset = canonicalTeamwearPlacementZone(placement.preset);
+  const [fallbackX, fallbackY] = VISUAL_POSITION[preset];
   const visualPosition = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition : null;
   return {
     id: placement.id,
@@ -123,14 +127,14 @@ function compositionPlacement(placement: TeamkitProposalPlacement): TeamwearComp
     side: placement.side,
     visual: {
       coordinateSpace: "GARMENT_PRINT_AREA_V1",
-      surface: teamwearVisualSurface(placement.preset),
+      surface: teamwearVisualSurface(preset),
       xPercent: visualPosition?.xPercent ?? fallbackX,
       yPercent: visualPosition?.yPercent ?? fallbackY,
       widthPercent: placement.widthPercent,
       colorOverride: placement.colorOverride ?? null,
     },
     production: {
-      preset: placement.preset,
+      preset,
       productionAssetId: placement.productionAssetId,
       assetVersion: placement.assetVersion,
       sourceId: placement.sourceId,
@@ -146,7 +150,7 @@ function compositionItems(items: readonly TeamkitProposalItem[]): TeamwearCompos
     color: item.color,
     media: {
       frontImageKey: item.catalogSnapshot?.imageKey ?? null,
-      backImageKey: item.catalogSnapshot?.imageKey ?? null,
+      backImageKey: item.catalogSnapshot?.backImageKey ?? null,
     },
     placements: item.placements.map(compositionPlacement),
   }));
@@ -202,16 +206,16 @@ const FIXTURES = [
 
 export function buildTeamwearCatalog(state: PilotBootstrap): TeamwearCatalogProduct[] {
   const base = buildSportpaleisProductCatalog(state.articles).map((product): TeamwearCatalogProduct => ({
-    ...product, supplierName: product.brand === "Stanno" ? "Stanno / Deventrade" : "Sportpaleis", supplierArticleName: product.model,
-    supplierArticleNumber: product.variants[0]?.sourceArticleNumber ?? product.id, use: useFor(product.category, product.model), collection: null, familyKey: null,
-    advicePriceEur: priceFor(state, product), sourceStatus: product.variants.some(({ sourceArticleId }) => state.articles.find(({ id }) => id === sourceArticleId)?.catalogProvenance) ? "AUTHORITATIVE" : "DATA_GAP",
-    syncStatus: "REVIEW_REQUIRED", variants: product.variants.map((variant) => ({ ...variant, colorHex: null, media: [{ kind: "FRONT", imageKey: variant.imageKey }, { kind: "BACK", imageKey: variant.imageKey }] })),
+    ...product, supplierName: product.brand === "Stanno" ? "Stanno / Deventrade" : product.brand || "Sportpaleis", supplierArticleName: product.model,
+    supplierArticleNumber: product.variants[0]?.sourceArticleNumber ?? product.id, use: useFor(product.category, product.model), collection: product.variants.map(({ sourceArticleId }) => state.articles.find(({ id }) => id === sourceArticleId)?.teamwearCatalog?.collection).find(Boolean) ?? null, familyKey: null,
+    advicePriceEur: priceFor(state, product), sourceStatus: product.variants.some(({ sourceArticleId }) => { const article = state.articles.find(({ id }) => id === sourceArticleId); return article?.teamwearCatalog?.status === "SELECTABLE" && Boolean(article.teamwearCatalog.sourceLabel || article.catalogProvenance); }) || product.variants.some(({ sourceArticleId }) => state.articles.find(({ id }) => id === sourceArticleId)?.catalogProvenance) ? "AUTHORITATIVE" : "DATA_GAP",
+    syncStatus: "REVIEW_REQUIRED", variants: product.variants.map((variant) => ({ ...variant, colorHex: null, media: [{ kind: "FRONT", imageKey: variant.imageKey }] })),
   }));
   const fixtureMedia = ["teamwear-fixture-shirt-red", "teamwear-fixture-shirt-black", "teamwear-fixture-shorts-black", "teamwear-fixture-jacket-navy", "teamwear-fixture-jacket-black", "teamwear-fixture-bag-black"];
   const fixtures = FIXTURES.map(([brand, supplierName, model, number, category, use, collection, familyKey, advicePriceEur, audiences], index): TeamwearCatalogProduct => {
     const imageKey = fixtureMedia[index] ?? fixtureMedia[0];
     const audienceValues = audiences as readonly string[];
-    return { id: `fixture-${brand}-${number}`.toLocaleLowerCase().replace(/[^a-z0-9]+/gu, "-"), brand, supplierName, supplierArticleName: model, supplierArticleNumber: number, model, category, use, collection, familyKey, advicePriceEur, sourceStatus: "CONTROLLED_FIXTURE", syncStatus: "NOT_CONNECTED", audiences: [...audiences] as SportpaleisCatalogAudience[], sourceAdapterId: "teamwear-review-fixtures", variants: [{ id: `fixture-${number}-navy`, colorLabel: index === 2 ? "Zwart" : "Navy", colorHex: index === 2 ? "#101419" : "#102448", imageKey, media: [{ kind: "FRONT", imageKey }, { kind: "BACK", imageKey }], availableSizes: audienceValues.includes("JUNIOR") ? ["116", "128", "140", "152", "164", "S", "M", "L", "XL"] : ["XS", "S", "M", "L", "XL", "XXL"], sourceArticleId: "", sourceArticleNumber: number, associationNames: [] }] };
+    return { id: `fixture-${brand}-${number}`.toLocaleLowerCase().replace(/[^a-z0-9]+/gu, "-"), brand, supplierName, supplierArticleName: model, supplierArticleNumber: number, model, category, use, collection, familyKey, advicePriceEur, sourceStatus: "CONTROLLED_FIXTURE", syncStatus: "NOT_CONNECTED", audiences: [...audiences] as SportpaleisCatalogAudience[], sourceAdapterId: "teamwear-review-fixtures", variants: [{ id: `fixture-${number}-navy`, colorLabel: index === 2 ? "Zwart" : "Navy", colorHex: index === 2 ? "#101419" : "#102448", imageKey, media: [{ kind: "FRONT", imageKey }], availableSizes: audienceValues.includes("JUNIOR") ? ["116", "128", "140", "152", "164", "S", "M", "L", "XL"] : ["XS", "S", "M", "L", "XL", "XXL"], sourceArticleId: "", sourceArticleNumber: number, associationNames: [] }] };
   });
   return [...fixtures, ...base];
 }
@@ -227,18 +231,18 @@ export function queryTeamwearCatalog(products: readonly TeamwearCatalogProduct[]
 
 export function resolveTeamwearPrice(product: TeamwearCatalogProduct, quantity = 10, relationshipId?: string | null): TeamwearPriceQuote {
   if (product.advicePriceEur == null) return { advicePriceEur: null, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
-  const relationshipDiscount = relationshipId?.includes("waterwijk") ? .25 : null;
-  const baseDiscount = quantity >= 10 ? .2 : 0;
-  const discount = relationshipDiscount ?? baseDiscount;
-  return { advicePriceEur: product.advicePriceEur, effectivePriceEur: Math.round(product.advicePriceEur * (1 - discount) * 100) / 100, label: relationshipDiscount == null ? "Teamprijs" : "Jullie prijs", minimumQuantity: relationshipDiscount == null && baseDiscount ? 10 : null, policyRef: relationshipDiscount == null ? "teamwear-base-10-v1" : "relationship-waterwijk-v1", relationshipOverrideApplied: relationshipDiscount != null };
+  // Een catalogusprijs is geen bewijs voor een Sportpaleis-klantprijs. Zonder
+  // expliciete, beheerbare prijsafspraak blijft de offerteprijs bewust open.
+  void quantity; void relationshipId;
+  return { advicePriceEur: product.advicePriceEur, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
 }
 
 export function buildTeamwearRelationships(state: PilotBootstrap): TeamwearRelationshipContext[] {
   const contexts = new Map<string, TeamwearRelationshipContext>();
   const add = (value: TeamwearRelationshipContext) => { const existing = contexts.get(value.id); contexts.set(value.id, existing ? { ...existing, roles: [...new Set([...existing.roles, ...value.roles])], searchableTerms: `${existing.searchableTerms} ${value.searchableTerms}` } : value); };
   for (const association of state.associations) add({ id: `association:${association.id}`, kind: "ASSOCIATION", name: association.name, subtitle: "Vereniging", email: null, phone: null, roles: [], associationName: association.name, searchableTerms: `${association.name} ${association.sourceName}` });
-  for (const order of state.orders) { const id = `customer:${order.customerEmail || order.customerPhone || order.customer}`.toLocaleLowerCase("nl-NL"); add({ id, kind: order.association ? "ORGANIZATION" : "GENERAL", name: order.customer || order.teamContext || order.id, subtitle: order.teamContext ? `Team · ${order.teamContext}` : order.association || "Klant", email: order.customerEmail || null, phone: order.customerPhone || null, roles: [order.teamContext ? "Teamcontact" : "Klant"], associationName: order.association || null, searchableTerms: `${order.id} ${order.customer} ${order.customerEmail ?? ""} ${order.customerPhone ?? ""} ${order.association} ${order.teamContext ?? ""}` }); }
-  for (const proposal of state.teamkitProposals ?? []) { const id = `customer:${proposal.customer.email || proposal.customer.phone || proposal.customer.name}`.toLocaleLowerCase("nl-NL"); add({ id, kind: proposal.association.name ? "ASSOCIATION" : "ORGANIZATION", name: proposal.customer.name, subtitle: proposal.association.name ?? proposal.team ?? "Teamwear-context", email: proposal.customer.email || null, phone: proposal.customer.phone || null, roles: proposal.customer.contactName ? ["Contactpersoon"] : [], associationName: proposal.association.name, searchableTerms: `${proposal.proposalNumber} ${proposal.customer.name} ${proposal.customer.contactName} ${proposal.customer.email} ${proposal.customer.phone ?? ""} ${proposal.association.name ?? ""} ${proposal.team ?? ""}` }); }
+  for (const order of state.orders) { const id = `order:${order.id}`; add({ id, kind: order.association ? "ORGANIZATION" : "GENERAL", name: order.customer || order.teamContext || order.id, subtitle: order.teamContext ? `Team · ${order.teamContext}` : order.association || "Klant", email: order.customerEmail || null, phone: order.customerPhone || null, roles: [order.teamContext ? "Teamcontact" : "Klant"], associationName: order.association || null, searchableTerms: `${order.id} ${order.customer} ${order.customerEmail ?? ""} ${order.customerPhone ?? ""} ${order.association} ${order.teamContext ?? ""}` }); }
+  for (const proposal of state.teamkitProposals ?? []) { const id = proposal.association.id ? `association:${proposal.association.id}` : proposal.customer.id ? `customer:${proposal.customer.id}` : `proposal:${proposal.id}`; add({ id, kind: proposal.association.name ? "ASSOCIATION" : "ORGANIZATION", name: proposal.customer.name, subtitle: proposal.association.name ?? proposal.team ?? "Teamwear-context", email: proposal.customer.email || null, phone: proposal.customer.phone || null, roles: proposal.customer.contactName ? ["Contactpersoon"] : [], associationName: proposal.association.name, searchableTerms: `${proposal.proposalNumber} ${proposal.customer.name} ${proposal.customer.contactName} ${proposal.customer.email} ${proposal.customer.phone ?? ""} ${proposal.association.name ?? ""} ${proposal.team ?? ""}` }); }
   add({ id: "supplier:stanno", kind: "SUPPLIER", name: "Stanno / Deventrade", subtitle: "Leverancier · dealercontext", email: null, phone: null, roles: ["Leverancier"], associationName: null, searchableTerms: "Stanno Deventrade leverancier catalogus" });
   add({ id: "sponsor:rabobank", kind: "SPONSOR", name: "Rabobank", subtitle: "Sponsororganisatie · reviewfixture", email: null, phone: null, roles: ["Sponsor"], associationName: null, searchableTerms: "Rabobank sponsor" });
   add({ id: "organization:brandweer-almere", kind: "ORGANIZATION", name: "Brandweer Almere", subtitle: "Organisatie · reviewfixture", email: null, phone: null, roles: ["Opdrachtgever"], associationName: null, searchableTerms: "Brandweer Almere organisatie" });
@@ -248,7 +252,7 @@ export function buildTeamwearRelationships(state: PilotBootstrap): TeamwearRelat
 export function buildTeamwearAssetLibrary(state: PilotBootstrap, proposal?: TeamkitProposal): TeamwearAssetLibraryEntry[] {
   const entries = new Map<string, TeamwearAssetLibraryEntry>();
   for (const association of state.associations) if (association.workspaceLogo) entries.set(`sha:${association.workspaceLogo.sha256}`, { id: `association-logo:${association.id}`, name: `${association.name} clublogo`, kind: "CLUB_LOGO", masterRef: association.workspaceLogo.sha256, version: String(association.revision ?? 1), previewKind: "ASSOCIATION_LOGO", contextIds: [`association:${association.id}`], internalOnly: true, customerContextIds: [`association:${association.id}`], sourceProposalId: null, sourceId: null, productionAssetId: null });
-  for (const asset of state.productionElements) { const masterRef = asset.sourceLayers?.visualSource?.sha256 ?? asset.sourceId ?? asset.id; const kind = asset.applications?.some(({ kind }) => kind === "SPONSOR") ? "SPONSOR" : asset.applications?.some(({ kind }) => kind === "LOGO") ? "CLUB_LOGO" : "PRODUCTION_ASSET"; entries.set(`master:${masterRef}`, { id: asset.id, name: asset.name, kind, masterRef, version: asset.version ?? String(asset.revision), previewKind: "PRODUCTION_ELEMENT", contextIds: (asset.contexts ?? []).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), internalOnly: true, customerContextIds: (asset.contexts ?? []).filter(({ type }) => ["ASSOCIATION", "TEAM", "ORGANIZATION"].includes(type)).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), sourceProposalId: null, sourceId: asset.sourceId ?? null, productionAssetId: asset.id }); }
+  for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) { const masterRef = asset.sourceLayers?.visualSource?.sha256 ?? asset.sourceId ?? asset.id; const kind = asset.applications?.some(({ kind }) => kind === "SPONSOR") ? "SPONSOR" : asset.applications?.some(({ kind }) => kind === "LOGO") ? "CLUB_LOGO" : "PRODUCTION_ASSET"; entries.set(`master:${masterRef}`, { id: asset.id, name: asset.name, kind, masterRef, version: asset.version ?? String(asset.revision), previewKind: "PRODUCTION_ELEMENT", contextIds: (asset.contexts ?? []).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), internalOnly: true, customerContextIds: (asset.contexts ?? []).filter(({ type }) => ["ASSOCIATION", "TEAM", "ORGANIZATION"].includes(type)).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), sourceProposalId: null, sourceId: asset.sourceId ?? null, productionAssetId: asset.id }); }
   if (proposal) {
     const contextId = teamwearProposalContextId(proposal);
     const contextProposals = (state.teamkitProposals ?? []).filter((candidate) => candidate.id === proposal.id || (contextId && teamwearProposalContextId(candidate) === contextId));
@@ -260,8 +264,8 @@ export function buildTeamwearAssetLibrary(state: PilotBootstrap, proposal?: Team
   return [...entries.values()];
 }
 
-export function teamwearProposalContextId(proposal: TeamkitProposal): string | null {
-  return proposal.association.id ? `association:${proposal.association.id}` : proposal.customer.email || proposal.customer.phone || proposal.customer.name ? `customer:${proposal.customer.email || proposal.customer.phone || proposal.customer.name}`.toLocaleLowerCase("nl-NL") : null;
+export function teamwearProposalContextId(proposal: TeamkitProposal): string {
+  return proposal.association.id ? `association:${proposal.association.id}` : proposal.customer.id ? `customer:${proposal.customer.id}` : `proposal:${proposal.id}`;
 }
 
 export function teamwearTeamorderHandoff(proposal: TeamkitProposal): { existingRoute: string; context: string; association: string; proposalId: string; articleIds: string[]; missing: string[] } {

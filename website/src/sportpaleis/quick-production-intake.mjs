@@ -139,7 +139,8 @@ export function quickIntakeOrderPayload(record, input, state) {
   const association = clean(input?.association || (matches.length === 1 ? matches[0].association : ""), 160);
   const article = matches.length === 1 && (!association || matches[0].association === association) ? matches[0] : null;
   const quantity = Number(value("quantity"));
-  const safeQuantity = Number.isInteger(quantity) && quantity > 0 && quantity <= 500 ? quantity : 1;
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) throw intakeError("Controleer en vul een geldig aantal van 1 tot en met 500 in.", "QUICK_INTAKE_QUANTITY_REQUIRED", 409);
+  const safeQuantity = quantity;
   const corrections = Object.entries(input?.fields ?? {}).filter(([field, next]) => clean(next) !== clean(record.extraction.fields[field]?.value)).map(([field, next]) => ({ field, previous: record.extraction.fields[field]?.value ?? "", next: clean(next) }));
   const externalReference = value("externalReference");
   const standardPersonalization = { initials: value("initials"), initialsInfix: "", name: value("backName"), backNumber: value("backNumber"), backNumberSizeClass: value("backNumber") ? clean(input?.backNumberSizeClass) : "", shortsNumber: value("shortsNumber"), initialsSemantic: null };

@@ -21,7 +21,7 @@ async function fixture(context) {
 test("geldige beheerde artikeloverride en meerkleurige order stromen zonder Controleren of Aandacht naar Productie", async (context) => {
   const { service, admin } = await fixture(context);
   let state = await service.bootstrap(admin.token);
-  const pioneers = state.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = state.associations.find(({ name }) => name === "Almere Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
   state = await service.bootstrap(admin.token);
   const shirt = state.articles.find(({ id }) => id === "sp-live-116386");

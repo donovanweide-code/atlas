@@ -65,7 +65,7 @@ test("vijf echte productiebronnen blijven byte-identiek, leveren 0-9 en koppelen
   const bootstrap = await service.bootstrap(operator.token);
   assert.equal(bootstrap.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).length, 5);
   const junior = (await service.createOrder(operator.token, operator.csrfToken, {
-    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104-J", provenance: "Pioneers junior source fixture", association: "Almerer Pioneers", customer: "Pioneers Junior", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104-J", provenance: "Pioneers junior source fixture", association: "Almere Pioneers", customer: "Pioneers Junior", customerEmail: "", customerPhone: "", standardPersonalization: empty,
     items: [{ articleId: "sp-live-116386", size: "M", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "18", backNumberSizeClass: "JUNIOR" } }],
   }, "pioneers-junior-exact-source")).value;
   assert.equal(junior.productionLines[0].heightMm, 160);
@@ -138,7 +138,7 @@ test("VVA / Spartaan voorraadlogo is uitsluitend Webshop, verlaagt 74 eenmaal en
 test("Pioneers 45 gebruikt de echte rug- en shortbronnen en houdt borst fail-closed", async (context) => {
   const { service, store, operator } = await fixture(context);
   const created = (await service.createOrder(operator.token, operator.csrfToken, {
-    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104", provenance: "Gecontroleerde webshop-PDF fixture", association: "Almerer Pioneers", customer: "Pioneers 45", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104", provenance: "Gecontroleerde webshop-PDF fixture", association: "Almere Pioneers", customer: "Pioneers 45", customerEmail: "", customerPhone: "", standardPersonalization: empty,
     items: [
       { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "45", chestNumber: "45", backNumberSizeClass: "SENIOR" } },
       { articleId: "sp-live-116387", size: "L", quantity: 1, deviation: true, overrides: { ...empty, shortsNumber: "45" } },

@@ -63,13 +63,13 @@ ARTICLES = [
     ("A.S.C. Waterwijk", "123691", "410008", "Training/uit shirt", "Nummer - DATA_GAP"),
     ("FC Almere", "116597", "695904", "Wedstrijdshirt", "Rugnummer"),
     ("FC Almere", "141521", "420004", "Wedstrijd/training short", "Nummer - DATA_GAP"),
-    ("Almerer Pioneers", "116386", "DM0Q3S25980", "Wedstrijdshirt omkeerbaar", "Rug/borst/short nummer + naam"),
-    ("Almerer Pioneers", "116388", "FM703C25980", "Shooting shirt", "Rug/borst/short nummer + naam"),
-    ("Almerer Pioneers", "116387", "FP713Z08260", "Wedstrijdshort", "Rug/borst/short nummer + naam"),
+    ("Almere Pioneers", "116386", "DM0Q3S25980", "Wedstrijdshirt omkeerbaar", "Rug/borst/short nummer + naam"),
+    ("Almere Pioneers", "116388", "FM703C25980", "Shooting shirt", "Rug/borst/short nummer + naam"),
+    ("Almere Pioneers", "116387", "FP713Z08260", "Wedstrijdshort", "Rug/borst/short nummer + naam"),
 ]
 
 ASSOCIATIONS = [
-    ("A.S.C. Waterwijk", 41), ("Echtnaton", 6), ("Almerer Pioneers", 10),
+    ("A.S.C. Waterwijk", 41), ("Echtnaton", 6), ("Almere Pioneers", 10),
     ("Almere'81", 20), ("Almere City Youth", 15), ("AS'80", 53),
     ("Brouwer Sports", 8), ("Buitenhout", 22), ("DCG", 28),
     ("DCG Selectie", "HTTP 500"), ("EKVA", 17), ("FC Almere", 31),

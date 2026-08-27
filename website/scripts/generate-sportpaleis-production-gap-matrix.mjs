@@ -8,7 +8,7 @@ const labels = { initialsShirt: "initialen shirt", backNumberJuniorSourceValue: 
 const rows = SPORTPALEIS_ASSOCIATIONS.map((association) => {
   const allowedOptions = Object.entries(association.dimensionsCm).filter(([, value]) => value !== null).map(([key]) => labels[key]);
   const dimensions = Object.fromEntries(Object.entries(association.dimensionsCm).filter(([, value]) => value !== null));
-  const pioneers = association.name === "Almerer Pioneers";
+  const pioneers = association.name === "Almere Pioneers";
   const statedInternal = /doen we zelf/i.test(association.notes);
   const dataGaps = [];
   if (!association.foilColors.length) dataGaps.push("Foliekleur ontbreekt in bevestigde matrix");

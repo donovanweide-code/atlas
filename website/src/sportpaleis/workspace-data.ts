@@ -226,6 +226,20 @@ export interface CatalogArticle {
   supplierArticleNumber?: string;
   commercialPrintOptions?: { sourceLabel: string; canonicalField: keyof OrderPersonalization | null; priceEur: number | null; status: "VALIDATED" | "DATA_GAP" }[];
   catalogProvenance?: { authority: "SPORTPALEIS_LIVE"; url: string; imageUrl: string; checkedAt: string };
+  /** Teamwear curation is independent from availability in ordinary store orders. */
+  teamwearCatalog?: {
+    status: "REVIEW_REQUIRED" | "SELECTABLE" | "HIDDEN";
+    brand: string;
+    model: string;
+    category: string;
+    audiences: ("JUNIOR" | "SENIOR" | "MEN" | "WOMEN" | "UNISEX")[];
+    colorLabel: string;
+    collection: string | null;
+    sourceLabel: string;
+    sourceUrl: string | null;
+    reviewedAt: string | null;
+    reviewedBy: string | null;
+  };
   printRelevance?: { status: "CONFIRMED_VISIBLE_PERSONALIZATION" | "HUMAN_CONFIRMATION_REQUIRED"; sourceLabel: string; checkedAt: string };
   productionDataGaps?: string[];
   revision?: number;
@@ -417,6 +431,8 @@ export interface WorkspaceOrder {
     approvedRevision: number;
     itemId: string;
     itemSnapshotHash: string;
+    productionSizingRevision: number;
+    productionSizingSnapshotHash: string;
     fulfillmentTaskIds: string[];
     placementRefs: { placementId: string; taskId: string; assetId: string | null; assetVersion: string | null; assetSha256: string | null }[];
     snapshotHash: string;
@@ -473,6 +489,8 @@ export interface SportpaleisMailbatch {
 
 export interface SportpaleisProductionElement {
   id: string;
+  /** Stable registration identity for retry-safe Source → Asset → Context/Application registration. */
+  registrationId?: string;
   name: string;
   ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND";
   ownerName: string;
@@ -548,6 +566,10 @@ export interface SportpaleisProductionAssetSource {
     updatedBy: { userId: string; name: string };
     selectedCandidateIds: string[];
     glyphAssignments: Record<string, string>;
+    candidateArtwork?: Record<string, {
+      name: string;
+      kind: "LOGO" | "SPONSOR" | "ARTWORK";
+    }>;
     name: string;
     primaryContextKey: string;
     additionalContextKeys: string[];
@@ -772,7 +794,16 @@ export type TeamkitProposalStatus =
   | "ARCHIVED";
 
 export type TeamkitFulfillmentRoute = "INTERN_BEDRUKKEN" | "EXTERNE_BEDRUKKER" | "NOG_TE_BEPALEN";
-export type TeamkitPlacementPreset = "LINKERBORST" | "RECHTERBORST" | "MIDDENBORST" | "RUG_BOVEN" | "RUG_MIDDEN" | "MOUW_LINKS" | "MOUW_RECHTS" | "SHORT_LINKS" | "SHORT_RECHTS" | "BROEK" | "TAS";
+/**
+ * Canonical semantic placement zone. It is deliberately separate from the
+ * decoration/asset kind and never replaces the approved visual coordinates.
+ * Legacy values remain readable so existing immutable revisions keep rendering.
+ */
+export type TeamkitPlacementPreset =
+  | "BACK_UPPER" | "BACK_LOWER" | "FRONT_CENTER_LARGE" | "CHEST_LEFT" | "CHEST_RIGHT"
+  | "SLEEVE_LEFT" | "SLEEVE_RIGHT" | "LEFT" | "RIGHT" | "FREE_PLACEMENT"
+  | "LINKERBORST" | "RECHTERBORST" | "MIDDENBORST" | "RUG_BOVEN" | "RUG_MIDDEN"
+  | "MOUW_LINKS" | "MOUW_RECHTS" | "SHORT_LINKS" | "SHORT_RECHTS" | "BROEK" | "TAS";
 
 export interface TeamkitProposalSource {
   id: string;
@@ -824,6 +855,27 @@ export interface TeamkitProposalPlacement {
   };
   /** Optional physical production override; absence means resolve from the existing server-authoritative production truth. */
   physicalSizeOverride?: { widthMm: number; heightMm: number; aspectRatioLocked: true } | null;
+  /** Server-resolved truth stored with the immutable proposal revision. */
+  productionRule?: {
+    status: "RESOLVED" | "REVIEW_REQUIRED";
+    resolver: "ARTICLE_PROFILE" | "PRODUCTION_ASSET" | "UNRESOLVED";
+    articleId: string | null;
+    associationName: string | null;
+    profileId: string | null;
+    profileRevision: number | null;
+    fontProfile: string | null;
+    foilColor: string | null;
+    sizeLabel: string | null;
+    physicalWidthMm: number | null;
+    physicalHeightMm: number | null;
+    mirror: boolean | null;
+    measurementSource: "EXPLICIT_PROPOSAL_OVERRIDE" | "PRODUCTION_PROFILE" | "PRODUCTION_ASSET" | "DATA_GAP";
+    sourceId: string | null;
+    sourceVersion: string | null;
+    sourceSha256: string | null;
+    reason: string | null;
+    ruleHash: string;
+  };
   route: TeamkitFulfillmentRoute;
   supplierName: string | null;
   note: string | null;
@@ -851,6 +903,7 @@ export interface TeamkitProposalItem {
     audience: string[];
     colorLabel: string;
     imageKey: string;
+    backImageKey?: string | null;
     advicePriceEur: number | null;
     effectivePriceEur: number | null;
     priceLabel: "Teamprijs" | "Jullie prijs" | null;
@@ -939,6 +992,27 @@ export interface TeamkitProposalApproval {
   artifactFilename: string;
 }
 
+/**
+ * Operational sizing belongs to the exact approved composition, but is not a
+ * second design revision. This keeps Studio, preview/PDF and the later
+ * WorkspaceOrder on one immutable visual truth while allowing sizes to be
+ * completed after customer approval.
+ */
+export interface TeamkitProductionSizing {
+  approvedRevision: number;
+  revision: number;
+  items: {
+    itemId: string;
+    quantity: number;
+    sizes: string[];
+    sizeQuantities: { size: string; quantity: number }[];
+    allocationMode: "PER_SIZE" | "TOTAL_ACROSS_SELECTED_SIZES";
+  }[];
+  snapshotHash: string;
+  updatedAt: string;
+  updatedBy: { id: string; name: string; role: SportpaleisRole | "customer" };
+}
+
 export interface TeamkitProposal {
   id: string;
   proposalNumber: string;
@@ -976,6 +1050,7 @@ export interface TeamkitProposal {
   revisions: TeamkitProposalRevision[];
   approval: TeamkitProposalApproval | null;
   approvalHistory: TeamkitProposalApproval[];
+  productionSizing: TeamkitProductionSizing | null;
   fulfillmentTasks: TeamkitFulfillmentTask[];
   createdAt: string;
   createdBy: { id: string; name: string; role: SportpaleisRole };
@@ -1132,7 +1207,7 @@ export function createInitialSportpaleisState(): SportpaleisWorkspaceState {
         id: "SNIJTEST-001",
         revision: 1,
         customer: "Interne productietest",
-        association: "Maatvoering volgens Almerer Pioneers",
+        association: "Maatvoering volgens Almere Pioneers",
         createdAt: "2026-08-06T13:10:00.000Z",
         promisedAt: "2026-08-08T10:00:00.000Z",
         stage: "PRINT",

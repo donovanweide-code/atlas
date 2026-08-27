@@ -32,7 +32,7 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   const lineLessControlled = initial.orders.filter(({ stage, productionLines }) => stage === "CONTROL" && !productionLines?.length);
   assert.ok(lineLessControlled.length > 0, "seed bevat de historische CONTROL-zonder-productieregels situatie");
   assert.ok(lineLessControlled.every(({ productionStatus, productionStatusReason }) => productionStatus === "ATTENTION" && /geen gevalideerde productieregels/u.test(productionStatusReason)));
-  const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
   const legacyOrder = await controlledOrder(service, admin, "legacy-unmanaged", [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]);
   const legacyProposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: legacyOrder.id, expectedRevision: legacyOrder.revision }] }, "bulk-ux-legacy-proposal")).value;
@@ -105,7 +105,7 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
 test("batch Gereed selecteert van acht geraakte orders uitsluitend de zes volledig geproduceerde", async (context) => {
   const { service, admin } = await fixture(context);
   const initial = await service.bootstrap(admin.token);
-  const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
   const shirt = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-116386");
   if (shirt.foilColorOverride !== "Blauw") await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });

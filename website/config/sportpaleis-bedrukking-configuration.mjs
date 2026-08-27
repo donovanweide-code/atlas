@@ -1,7 +1,7 @@
 import { SPORTPALEIS_ASSOCIATION_LOGOS } from "./sportpaleis-association-logos.generated.mjs";
 import { SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS } from "./sportpaleis-final-prelive-catalog.generated.mjs";
 
-export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-006-20260812";
+export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-007-20260826";
 
 export const SPORTPALEIS_FONT_CONFIRMATION = Object.freeze({
   id: "SPW-HUMAN-FONT-CONFIRMATION-001-20260812",
@@ -21,7 +21,7 @@ export const SPORTPALEIS_FONT_ASSET_INVENTORY = Object.freeze([
 
 const FONT_CONFIRMATION_BY_ASSOCIATION = Object.freeze({
   "Almere'81": Object.freeze({ confirmedValue: "Myriad Pro - Italic", canonicalName: "Myriad Pro Italic" }),
-  "Almerer Pioneers": Object.freeze({ confirmedValue: "FFF englisch + bronverwijzing", canonicalName: "FFF englisch", reference: "Pioneers nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
+  "Almere Pioneers": Object.freeze({ confirmedValue: "FFF englisch + bronverwijzing", canonicalName: "FFF englisch", reference: "Pioneers nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
   "As,8o": Object.freeze({ confirmedAssociationName: "AS '80", confirmedValue: "Spain", canonicalName: "Spain", associationNameStatus: "NORMALIZED_MATCH" }),
   "A.S.C. Waterwijk": Object.freeze({ confirmedAssociationName: "ASC Waterwijk", confirmedValue: "schluber; spain = thuis wedstrijdshirt/short", canonicalName: "Schluber", exception: "Spain voor thuiswedstrijdshirt en thuiswedstrijdshort", associationNameStatus: "NORMALIZED_MATCH" }),
   Brouwersports: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
@@ -63,7 +63,7 @@ export const SPORTPALEIS_CONFIGURATION_SOURCES = Object.freeze({
   }),
   physicalSeniorTest: Object.freeze({
     file: "Sportpaleis-Snijtest-001-2-34-77.ai",
-    authority: "Gevalideerde testmaat Almerer Pioneers Senior 200 mm; niet generaliseren naar andere verenigingen",
+    authority: "Gevalideerde testmaat Almere Pioneers Senior 200 mm; niet generaliseren naar andere verenigingen",
   }),
   identity: Object.freeze({
     primary: "NEW2025-CID_Manual_BENE sep 25.pdf",
@@ -137,7 +137,7 @@ const association = (row, name, sourceName, fontProfile, foilColors, dimensions 
 
 export const SPORTPALEIS_ASSOCIATIONS = Object.freeze([
   association(2, "Almere'81", "Almere'81", "Myriad Pro - Italic", [], {}, "Bedrukking volgens bron: doen we zelf."),
-  association(3, "Almerer Pioneers", "Almerer Pioneers", "FFF englisch | zie map 'Pioneers'", ["Wit"], { backNumberJuniorSourceValue: 16, backNumberSenior: 20, chestNumber: 8, shortsNumber: 8, nameHeight: 2 }, "Maximale naambreedte 9 cm; Caps Lock aan."),
+  association(3, "Almere Pioneers", "Almerer Pioneers", "FFF englisch | zie map 'Pioneers'", ["Wit"], { backNumberJuniorSourceValue: 16, backNumberSenior: 20, chestNumber: 8, shortsNumber: 8, nameHeight: 2 }, "Maximale naambreedte 9 cm; Caps Lock aan."),
   association(4, "As,8o", "As,8o", "Spain", ["Wit"], { initialsShirt: 3, shortsNumber: 7.5 }),
   association(5, "A.S.C. Waterwijk", "ASC Waterwijk.", "schluber (spain = thuis wedstrijdshirt/short)", ["Wit"], { initialsShirt: 3, backNumberJuniorSourceValue: 20, backNumberSenior: 22, shortsNumber: 7.5 }, "Wedstrijdshirt thuis is zwart; maximale breedte 22,5 cm."),
   association(6, "Brouwersports", "Brouwersports", "schluber", ["Wit"], { initialsShirt: 3, shortsNumber: 7.5, nameHeight: 5 }),

@@ -17,7 +17,7 @@ const byAssociation = Object.fromEntries(SPORTPALEIS_ASSOCIATIONS.map((associati
 test("human-confirmed verenigingfonts zijn canoniek vastgelegd zonder assetclaims", () => {
   const expected = {
     "Almere'81": "Myriad Pro Italic",
-    "Almerer Pioneers": "FFF englisch",
+    "Almere Pioneers": "FFF englisch",
     "As,8o": "Spain",
     "A.S.C. Waterwijk": "Schluber",
     Brouwersports: "Schluber",
@@ -88,6 +88,44 @@ test("fontmigratie wijzigt alleen aantoonbare fontvelden en houdt productieparam
   assert.deepEqual(profile.backNumberSizeClasses, beforeProfile.backNumberSizeClasses);
   assert.equal(profile.productionSourceSetId, beforeProfile.productionSourceSetId);
   assert.equal(profile.outputWriterId, beforeProfile.outputWriterId);
+});
+
+test("legacy Pioneers-weergavenaam wordt centraal genormaliseerd zonder immutable jobhistorie te herschrijven", () => {
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-08-12T12:00:00.000Z"));
+  legacy.configurationVersion = "SPW-CONFIG-BEDRUKKING-006-20260812";
+  legacy.associations.find(({ id }) => id === "association-03").name = "Almerer Pioneers";
+  legacy.articles.find(({ association }) => association === "Almere Pioneers").association = "Almerer Pioneers";
+  legacy.orders.push({
+    id: "SP-LEGACY-PIONEERS",
+    revision: 1,
+    customer: "Legacy Pioneers",
+    customerEmail: "",
+    customerPhone: "",
+    association: "Almerer Pioneers",
+    associations: ["Almerer Pioneers"],
+    createdAt: "2026-08-12T12:00:00.000Z",
+    updatedAt: "2026-08-12T12:00:00.000Z",
+    stage: "ORDER",
+    owner: "Patrick",
+    totalPieces: 1,
+    standardPersonalization: { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null },
+    items: [{ product: "Legacy shirt", association: "Almerer Pioneers", quantity: 1 }],
+  });
+  legacy.productionElements.push({ id: "legacy-pioneers-asset", ownerName: "Almerer Pioneers", contexts: [{ type: "ASSOCIATION", id: "association-03", label: "Almerer Pioneers" }] });
+  const historicalJob = legacy.productionJobs.find(({ snapshot }) => snapshot?.association === "Almere Pioneers");
+  historicalJob.snapshot.association = "Almerer Pioneers";
+
+  const migrated = migrateSportpaleisPilotState(legacy);
+  const order = migrated.orders.find(({ id }) => id === "SP-LEGACY-PIONEERS");
+  const element = migrated.productionElements.find(({ id }) => id === "legacy-pioneers-asset");
+  assert.equal(migrated.associations.find(({ id }) => id === "association-03").name, "Almere Pioneers");
+  assert.equal(migrated.articles.find(({ id }) => id === legacy.articles.find(({ association }) => association === "Almerer Pioneers").id).association, "Almere Pioneers");
+  assert.equal(order.association, "Almere Pioneers");
+  assert.deepEqual(order.associations, ["Almere Pioneers"]);
+  assert.equal(order.items[0].association, "Almere Pioneers");
+  assert.equal(element.ownerName, "Almere Pioneers");
+  assert.equal(element.contexts[0].label, "Almere Pioneers");
+  assert.equal(migrated.productionJobs.find(({ id }) => id === historicalJob.id).snapshot.association, "Almerer Pioneers", "immutable productiehistorie behoudt de destijds vastgelegde snapshot");
 });
 
 test("alleen Liberation Sans is als echt lokaal productiefont geregistreerd", async () => {

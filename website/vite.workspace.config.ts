@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { basename } from "node:path";
 
 const pwaAsset = (name: string) => readFileSync(new URL(`./workspace-public/${name}`, import.meta.url), "utf8");
 
@@ -7,7 +9,7 @@ export default defineConfig({
   publicDir: false,
   plugins: [{
     name: "sportpaleis-pwa-assets",
-    generateBundle() {
+    generateBundle(_options, bundle) {
       for (const fileName of ["robots.txt", "sportpaleis.webmanifest", "sportpaleis-sw.js", "sportpaleis-pwa-icon.svg", "wbd-owner.webmanifest", "wbd-owner-sw.js", "wbd-owner-icon.svg"]) this.emitFile({ type: "asset", fileName, source: pwaAsset(fileName) });
       for (const fileName of ["LiberationSans-Regular.ttf", "LICENSE_LIBERATION.txt"]) {
         this.emitFile({
@@ -33,10 +35,31 @@ export default defineConfig({
           source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/association-logos/${fileName}`, import.meta.url)),
         });
       }
+      for (const fileName of readdirSync(new URL("./public/assets/organizations/sportpaleis/teamwear-fixtures/", import.meta.url)).filter((name) => name.endsWith(".svg")).sort()) {
+        this.emitFile({
+          type: "asset",
+          fileName: `assets/organizations/sportpaleis/teamwear-fixtures/${fileName}`,
+          source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/teamwear-fixtures/${fileName}`, import.meta.url)),
+        });
+      }
+      const catalogImages: Record<string, { fileName: string; sha256: string }> = {};
+      for (const asset of Object.values(bundle)) {
+        if (asset.type !== "asset") continue;
+        const original = asset.originalFileNames?.find((name) => name.replaceAll("\\", "/").includes("src/assets/images/sportpaleis/"));
+        if (!original) continue;
+        const key = basename(original).replace(/\.[^.]+$/u, "");
+        const source = typeof asset.source === "string" ? Buffer.from(asset.source) : Buffer.from(asset.source);
+        catalogImages[key] = { fileName: asset.fileName, sha256: createHash("sha256").update(source).digest("hex").toUpperCase() };
+      }
+      this.emitFile({
+        type: "asset",
+        fileName: "assets/organizations/sportpaleis/teamwear-catalog-manifest.json",
+        source: `${JSON.stringify({ schemaVersion: 1, images: catalogImages }, null, 2)}\n`,
+      });
     },
   }],
   build: {
-    assetsInlineLimit: 4_096,
+    assetsInlineLimit: 0,
     outDir: "dist-workspace",
     emptyOutDir: true,
     sourcemap: false,

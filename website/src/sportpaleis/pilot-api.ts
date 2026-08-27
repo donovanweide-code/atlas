@@ -498,7 +498,7 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources/${encodeURIComponent(sourceId)}/review-draft`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async promoteProductionAsset(sourceId: string, input: { candidateIds: string[]; name: string; ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND"; ownerName: string; productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER"; widthMm: number; heightMm: number; sizePolicyMode?: "FIXED" | "DEFAULT_WITH_LIMITS" | "PROPORTIONAL_FREE"; minWidthMm?: number; maxWidthMm?: number; defaultFoilColor?: string; variantLabel?: string; contexts?: { type: "ASSOCIATION" | "SPONSOR" | "ORGANIZATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[]; applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[]; glyphMap?: Record<string, string>; proofAuthority: "HUMAN_ACCEPTANCE"; strokeReviewAccepted?: boolean }): Promise<SportpaleisProductionElement> {
+  async promoteProductionAsset(sourceId: string, input: { candidateIds: string[]; name: string; ownerType: "ASSOCIATION" | "CUSTOMER" | "SPONSOR" | "OWN_BRAND"; ownerName: string; productionMethod: "SELF_PRODUCED" | "PHYSICAL_TRANSFER"; widthMm: number; heightMm: number; sizePolicyMode?: "FIXED" | "DEFAULT_WITH_LIMITS" | "PROPORTIONAL_FREE"; minWidthMm?: number; maxWidthMm?: number; defaultFoilColor?: string; variantLabel?: string; contexts?: { type: "ASSOCIATION" | "SPONSOR" | "ORGANIZATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[]; applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[]; productionProfileId?: string; glyphMap?: Record<string, string>; proofAuthority: "HUMAN_ACCEPTANCE"; strokeReviewAccepted?: boolean }): Promise<SportpaleisProductionElement> {
     return responseBody(await this.#mutatingFetch(`${API}/production-asset-sources/${encodeURIComponent(sourceId)}/promote`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
@@ -610,6 +610,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposalId)}/fulfillment/${encodeURIComponent(taskId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
+  async updateTeamkitProductionSizing(proposal: TeamkitProposal, items: { itemId: string; sizeQuantities: { size: string; quantity: number }[] }[]): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}/production-sizing`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: proposal.aggregateRevision, items }) }));
+  }
+
   async prepareTeamkitInternalProduction(proposal: TeamkitProposal): Promise<{ duplicate: boolean; proposal: TeamkitProposal; orders: WorkspaceOrder[] }> {
     return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals/${encodeURIComponent(proposal.id)}/internal-production`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: proposal.aggregateRevision }) }));
   }
@@ -638,11 +642,12 @@ export class SportpaleisPilotApi {
     displayOrder?: number;
     foilColorOverride?: string | null;
     priceConfiguration?: CatalogArticle["priceConfiguration"];
+    teamwearCatalog?: CatalogArticle["teamwearCatalog"];
   }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/articles/${encodeURIComponent(articleId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 
-  async createArticle(input: { name: string; articleNumber: string; imageKey: string; association: string; profileId: string; source: string; foilColorOverride?: string | null }): Promise<CatalogArticle> {
+  async createArticle(input: { name: string; articleNumber: string; imageKey: string; association: string; profileId: string; source: string; foilColorOverride?: string | null; teamwearCatalog?: CatalogArticle["teamwearCatalog"] }): Promise<CatalogArticle> {
     return responseBody(await this.#mutatingFetch(`${API}/admin/articles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

@@ -63,7 +63,7 @@ test("Pioneers 2 loopt van normale order tot byte-identiek SVG-productieartefact
 });
 
 test("normale Bedrukken-invoer volgt de werkelijk ingerichte artikelregels", async () => {
-  const pioneers = associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, "Almerer Pioneers");
+  const pioneers = associationPersonalizationModel(SPORTPALEIS_LIVE_PILOT_ARTICLES, "Almere Pioneers");
   assert.equal(pioneers.articles.length, 4);
   assert.deepEqual(pioneers.fields, ["backNumber", "shortsNumber", "name"]);
   assert.ok(pioneers.articles.every((article) => pioneers.fields.some((field) => article.personalizationPolicy.fields[field])));
@@ -139,7 +139,7 @@ test("teamorder bewaart tussenvoegsel afzonderlijk en blokkeert onbekende fysiek
       { id: "team-initials-last", type: "INITIALS", placementRole: "INITIALS_LAST", placementRule: { compositionId: "team-composite", compositeText: "JvdM", segmentIndex: 2, segmentCount: 3, alignment: "CENTER" }, content: "M", sourceId: profile.id, widthMm: 0, heightMm: 0, quantity: 1, previewLabel: "Samengestelde initialen JvdM", provenance: "Gerichte lokale Human Review" },
       { id: "team-initials-no-infix", type: "INITIALS", content: "PK", sourceId: profile.id, widthMm: 60, heightMm: 30, quantity: 1, previewLabel: "Initialen PK", provenance: "Gerichte lokale Human Review" },
     ],
-    items: [{ product: "Teamproductie", association: "Almerer Pioneers", productionProfileId: profile.id, size: "", quantity: 3, personalization: "Initialen JM + tussenvoegsel vd; initialen PK zonder tussenvoegsel", deviation: true, overrides: empty }],
+    items: [{ product: "Teamproductie", association: "Almere Pioneers", productionProfileId: profile.id, size: "", quantity: 3, personalization: "Initialen JM + tussenvoegsel vd; initialen PK zonder tussenvoegsel", deviation: true, overrides: empty }],
   }, "review-team-initials-infix")).value;
   const infix = created.productionLines.find(({ placementRole }) => placementRole === "INITIALS_INFIX");
   assert.equal(infix.content, "vd"); assert.equal(infix.validation.status, "BLOCKED"); assert.equal(infix.widthMm, 0); assert.equal(infix.heightMm, 0);
@@ -164,7 +164,7 @@ test("teamorder accepteert lege contactgegevens en kledingmaat zonder die waarde
   const created = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "TEAM", customer: "", customerEmail: "", customerPhone: "", standardPersonalization: empty,
     productionLines: [{ id: "team-line-1", type: "NUMBER", content: "2", sourceId: profile.id, widthMm: 99.06, heightMm: 200, quantity: 1, previewLabel: "Rugnummer 2", provenance: "Gerichte lokale Human Review" }],
-    items: [{ product: "Teamproductie", association: "Almerer Pioneers", productionProfileId: profile.id, size: "", quantity: 1, personalization: "Rugnummer 2", deviation: true, overrides: empty }],
+    items: [{ product: "Teamproductie", association: "Almere Pioneers", productionProfileId: profile.id, size: "", quantity: 1, personalization: "Rugnummer 2", deviation: true, overrides: empty }],
   }, "review-team-optional-contact")).value;
-  assert.equal(created.customer, "Teamorder · Almerer Pioneers"); assert.equal(created.customerEmail, ""); assert.equal(created.customerPhone, ""); assert.equal(created.items[0].size, "");
+  assert.equal(created.customer, "Teamorder · Almere Pioneers"); assert.equal(created.customerEmail, ""); assert.equal(created.customerPhone, ""); assert.equal(created.items[0].size, "");
 });

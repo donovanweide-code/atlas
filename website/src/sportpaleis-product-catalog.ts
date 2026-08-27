@@ -75,11 +75,12 @@ function normalizedModelName(article: CatalogArticle): string {
 }
 
 function productKey(article: CatalogArticle): string {
-  const supplier = article.supplierArticleNumber?.trim();
+  const supplier = article.supplierArticleNumber?.trim() || article.articleNumber.trim();
   return supplier && /^\d{5,}$/u.test(supplier) ? `supplier:${supplier}` : `model:${normalizedModelName(article).toLocaleLowerCase("nl-NL")}`;
 }
 
 function audienceFor(article: CatalogArticle): SportpaleisCatalogAudience[] {
+  if (article.teamwearCatalog?.audiences.length) return [...article.teamwearCatalog.audiences];
   const source = `${article.name} ${(article.variantLabels ?? []).join(" ")}`.toLocaleLowerCase("nl-NL");
   if (/dames|women|female/iu.test(source)) return ["SENIOR", "WOMEN"];
   if (/heren|men|male/iu.test(source)) return ["SENIOR", "MEN"];
@@ -96,13 +97,13 @@ function audienceFor(article: CatalogArticle): SportpaleisCatalogAudience[] {
  */
 export function buildSportpaleisProductCatalog(articles: readonly CatalogArticle[]): SportpaleisCatalogProduct[] {
   const products = new Map<string, SportpaleisCatalogProduct>();
-  for (const article of articles.filter(({ active }) => active)) {
+  for (const article of articles.filter(({ active, teamwearCatalog }) => teamwearCatalog?.status === "SELECTABLE" || (active && teamwearCatalog?.status !== "HIDDEN"))) {
     const key = productKey(article);
     const product = products.get(key) ?? {
       id: `catalog-${key.replace(/[^a-z0-9]+/giu, "-")}`,
-      brand: /stanno|stadio|pride|bolt/iu.test(article.name) ? "Stanno" : "Sportpaleis",
-      model: normalizedModelName(article),
-      category: article.category,
+      brand: article.teamwearCatalog?.brand || (/stanno|stadio|pride|bolt/iu.test(article.name) ? "Stanno" : "Sportpaleis"),
+      model: article.teamwearCatalog?.model || normalizedModelName(article),
+      category: article.teamwearCatalog?.category || article.category,
       audiences: audienceFor(article),
       variants: [],
       sourceAdapterId: "sportpaleis-existing",
@@ -110,7 +111,7 @@ export function buildSportpaleisProductCatalog(articles: readonly CatalogArticle
     const existingVariant = product.variants.find(({ sourceArticleNumber }) => sourceArticleNumber === article.articleNumber);
     if (!existingVariant) product.variants.push({
       id: `variant-${article.id}`,
-      colorLabel: "Bestaande clubvariant",
+      colorLabel: article.teamwearCatalog?.colorLabel || "Bestaande clubvariant",
       imageKey: article.imageKey,
       availableSizes: [...new Set(article.availableSizes ?? [])],
       sourceArticleId: article.id,

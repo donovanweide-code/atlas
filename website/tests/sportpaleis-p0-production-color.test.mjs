@@ -80,7 +80,7 @@ test("verenigingdefault en expliciete artikeloverride blijven logisch, persisten
 test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerdere orders per kleurgroep", async (context) => {
   const { service, admin, storeUser } = await fixture(context);
   const initial = await service.bootstrap(admin.token);
-  const pioneers = initial.associations.find(({ name }) => name === "Almerer Pioneers");
+  const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit"], defaultFoilColor: "Wit" });
   const shirt = (await service.bootstrap(admin.token)).articles.find(({ id }) => id === "sp-live-116386");
   await service.updateArticle(admin.token, admin.csrfToken, shirt.id, { expectedRevision: shirt.revision, foilColorOverride: "Blauw" });

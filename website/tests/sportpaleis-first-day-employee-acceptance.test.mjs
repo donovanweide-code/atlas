@@ -32,7 +32,7 @@ test("first-day medewerker kan de volledige Teamwear-flow bronmatig volgen", () 
   assert.match(teamwearWorkspace, /Start met wat al bekend is/u);
   assert.match(teamwearWorkspace, /Contact, planning en overige gegevens/u);
   assert.match(teamwearWorkspace, /Naar collectie/u);
-  assert.match(teamwearExperience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Maten & aantallen[\s\S]*Voorstel[\s\S]*Afhandeling/u);
+  assert.match(teamwearExperience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);
   assert.match(teamwearExperience, /Ontwerp toevoegen/u);
   assert.match(teamwearExperience, /data-kind="CLUB_LOGO">Logo/u);
   assert.match(teamwearExperience, /data-kind="SPONSOR">Sponsor/u);
