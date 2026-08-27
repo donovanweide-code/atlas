@@ -47,8 +47,8 @@ test("human review correction — kledingmaat is optioneel, ook per exemplaar", 
   const { service, storeUser } = await fixture(context);
   const withoutSize = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "optional-size-single")).value;
   assert.equal(withoutSize.items[0].size, "Niet opgegeven");
-  assert.equal(withoutSize.items[0].productionReadiness.status, "DATA_GAP");
-  assert.match(withoutSize.items[0].productionReadiness.reason, /productiegegevens|snijlijnen|snijoutput|contour\/fontbestand/iu);
+  assert.equal(withoutSize.items[0].productionReadiness.status, "ATTENTION");
+  assert.doesNotMatch(withoutSize.items[0].productionReadiness.reason, /snijlijnen|fysieke snijoutput/iu);
 
   const mixed = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", quantity: 3, variants: [{ size: "", quantity: 1, deviation: false, overrides: empty }, { size: "152", quantity: 1, deviation: false, overrides: empty }, { size: "", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "12", backNumberSizeClass: "SENIOR" } }] }] }), "optional-size-mixed")).value;
   assert.deepEqual(mixed.items[0].variants.map(({ size }) => size), ["Niet opgegeven", "152", "Niet opgegeven"]);

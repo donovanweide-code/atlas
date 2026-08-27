@@ -8,7 +8,7 @@ import type {
   WorkspacePreference,
   OrderPersonalization,
   CatalogArticle,
-  ProductionProfile,
+  ValidationStatus,
   AssociationConfiguration,
   SportpaleisMailbatch,
   SportpaleisOrderSource,
@@ -678,7 +678,20 @@ export class SportpaleisPilotApi {
     mirror?: boolean | null;
     instruction?: string;
     initialsInfixRule?: { active: boolean; heightMm: number | null; horizontalSpacingMm?: number | null; baselineOffsetMm?: number | null; /** Legacy call-site compatibility only. */ verticalOffsetMm?: number | null };
-    validation?: ProductionProfile["validation"];
+    validation?: {
+      status?: "VALIDATED" | "PARTIAL" | "DATA_GAP";
+      source: string;
+      size: ValidationStatus;
+      font: ValidationStatus;
+      foilColor: ValidationStatus;
+      placement?: ValidationStatus;
+      referenceDistance?: ValidationStatus;
+      rotation?: ValidationStatus;
+      mirror?: ValidationStatus;
+      cutContour?: ValidationStatus;
+      physicalCutOutput?: ValidationStatus;
+      validatedScope?: string[];
+    };
   }): Promise<void> {
     await responseBody(await this.#mutatingFetch(`${API}/admin/production-profiles/${encodeURIComponent(profileId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }

@@ -56,14 +56,15 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     assert.match(migrated.productionProfiles.find(({ id }) => id === "profile-shirt").instruction, /PILOT-AANDACHT/);
   });
 
-  await context.test("onbekende contour- en fontbronnen blijven DATA_GAP maar blokkeren orderinvoer en controle niet", async () => {
+  await context.test("optionele profielvelden blokkeren Bedrukken niet en echte contour-/fontbronnen blijven fail-closed", async () => {
     const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Pilot aandacht", customerEmail: "aandacht@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "readiness-007-attention")).value;
-    assert.equal(created.items[0].productionReadiness.status, "DATA_GAP");
-    assert.match(created.items[0].productionReadiness.reason, /contour\/fontbestand/u);
+    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
+    assert.doesNotMatch(created.items[0].productionReadiness.reason, /snijlijnen|fysieke snijoutput/iu);
+    assert.ok(created.productionLines.some(({ validation }) => validation.status === "BLOCKED" && /contour\/fontbestand/u.test(validation.reason)));
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "readiness-007-attention-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
     const advanced = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-attention-advance")).value;
@@ -76,13 +77,13 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "readiness-007-pending")).value;
-    assert.equal(pending.items[0].productionReadiness.status, "DATA_GAP");
-    assert.match(pending.items[0].productionReadiness.reason, /contour|fontbestand/);
+    assert.equal(pending.items[0].productionReadiness.status, "ATTENTION");
+    assert.doesNotMatch(pending.items[0].productionReadiness.reason, /snijlijnen|fysieke snijoutput/iu);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, pending.id, { templateKey: "ORDER_RECEIVED" }, "readiness-007-pending-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === pending.id);
     const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-pending-control")).value;
     assert.equal(controlled.stage, "CONTROL");
-    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-007-pending-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-007-pending-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE" && /contour|fontbestand/u.test(error.message) && !/snijlijnen|fysieke snijoutput/iu.test(error.message));
   });
 
   await context.test("normale multi-verenigingsorder bewaart per artikel de eigen live bron en gaat met niet-blokkerende aandacht naar Controle", async () => {
@@ -96,7 +97,8 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     }, "readiness-007-multi")).value;
     assert.deepEqual(new Set(created.items.map(({ association }) => association)), new Set(["A.S.C. Waterwijk", "FC Almere"]));
     assert.equal(created.items.every(({ sourceProvenance }) => sourceProvenance.includes("Sportpaleis")), true);
-    assert.equal(created.items.every(({ productionReadiness }) => productionReadiness.status === "DATA_GAP"), true);
+    assert.equal(created.items.every(({ productionReadiness }) => productionReadiness.status !== "DATA_GAP"), true);
+    assert.equal(created.items.every(({ productionReadiness }) => !/snijlijnen|fysieke snijoutput/iu.test(productionReadiness.reason ?? "")), true);
   });
 
   await context.test("Teamorder gebruikt dezelfde catalogus en houdt Senior uitvoer niet tegen op aanvullende positioneringskennis", async () => {
@@ -107,7 +109,8 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     }, "readiness-007-team")).value;
     assert.equal(created.items[0].variants.length, 18);
     assert.equal(created.items[0].variants.at(-1).personalizationValues.backNumber, "77");
-    assert.equal(created.items[0].productionReadiness.status, "DATA_GAP");
+    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
+    assert.doesNotMatch(created.items[0].productionReadiness.reason, /snijlijnen|fysieke snijoutput/iu);
   });
 
   await context.test("Pioneers-provenance blijft beperkt tot de bewezen Senior 200 mm snijlijnen", async () => {
@@ -127,7 +130,7 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     assert.match(client, /isBedrukkingRelevant/);
     assert.doesNotMatch(client, /association === "A\.S\.C\. Waterwijk"/);
     assert.match(server, /const criticalLabels/);
-    assert.match(server, /const advisoryLabels/);
-    assert.match(server, /status: "ATTENTION"/);
+    assert.doesNotMatch(server, /const advisoryLabels = \{ placement:/u);
+    assert.match(server, /const criticalLabels = \{ size:[^\n]+font:[^\n]+foilColor:/u);
   });
 });

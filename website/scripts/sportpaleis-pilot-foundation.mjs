@@ -587,13 +587,13 @@ export function migrateSportpaleisPilotState(input) {
       const existing = profile.initialsInfixRule;
       profile.initialsInfixRule = {
         active: existing?.active !== false,
-        // Canonical Sportpaleis default. Spacing and baseline remain fail-closed
-        // until an explicit production profile has physically confirmed them.
+        // Canonical Sportpaleis default. Legacy spacing/baseline values remain
+        // provenance only; the production runtime does not consume them.
         heightMm: existing?.heightMm ?? 20,
         horizontalSpacingMm: existing?.horizontalSpacingMm ?? null,
         baselineOffsetMm: existing?.baselineOffsetMm ?? null,
         alignment: "CENTER",
-        status: existing?.heightMm != null && existing?.horizontalSpacingMm != null && existing?.baselineOffsetMm != null ? "SOURCE_CONFIGURED" : "DATA_GAP",
+        status: existing?.heightMm != null ? "SOURCE_CONFIGURED" : "DATA_GAP",
         revision: Number(existing?.revision ?? 1),
       };
   }
@@ -2981,8 +2981,10 @@ export class SportpaleisPilotService {
         if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
           throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
-        if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
-          throw Object.assign(new Error("Productiedata ontbreekt. De order blijft zichtbaar bij Productie, maar kan nog niet naar fysieke productie."), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
+        const blockedProductionLine = order.stage === "CONTROL" ? order.productionLines?.find(({ validation }) => validation?.status !== "VALID") : null;
+        if (order.stage === "CONTROL" && (blockedProductionLine || order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP")))) {
+          const detail = blockedProductionLine?.validation?.reason ? `: ${blockedProductionLine.validation.reason}` : "";
+          throw Object.assign(new Error(`Productiedata ontbreekt${detail}. De order blijft zichtbaar bij Productie, maar kan nog niet naar fysieke productie.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
         }
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
           throw Object.assign(new Error("Deze order wacht volledig op de juiste foliekleur."), { statusCode: 409, code: "COLOR_HOLD" });
@@ -3023,8 +3025,10 @@ export class SportpaleisPilotService {
           if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
             throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
           }
-          if (order.stage === "CONTROL" && order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"))) {
-            throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
+          const blockedProductionLine = order.stage === "CONTROL" ? order.productionLines?.find(({ validation }) => validation?.status !== "VALID") : null;
+          if (order.stage === "CONTROL" && (blockedProductionLine || order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP")))) {
+            const detail = blockedProductionLine?.validation?.reason ? `: ${blockedProductionLine.validation.reason}` : "";
+            throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata${detail}.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
           }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
             throw Object.assign(new Error(`${order.id} wacht volledig op de juiste foliekleur.`), { statusCode: 409, code: "COLOR_HOLD" });
@@ -4528,15 +4532,15 @@ export class SportpaleisPilotService {
         const current = profile.initialsInfixRule ?? { revision: 0 };
         const active = payload.initialsInfixRule.active === true;
         const heightMm = nullableNumber(payload.initialsInfixRule.heightMm, "Grootte tussenvoegsel", 0.1, 100);
-        const horizontalSpacingMm = nullableNumber(payload.initialsInfixRule.horizontalSpacingMm, "Horizontale tussenruimte tussenvoegsel", 0, 100);
-        const baselineOffsetMm = nullableNumber(payload.initialsInfixRule.baselineOffsetMm, "Verticale positie tussenvoegsel", -100, 100);
-        profile.initialsInfixRule = { active, heightMm, horizontalSpacingMm, baselineOffsetMm, alignment: "CENTER", status: active && heightMm !== null && horizontalSpacingMm !== null && baselineOffsetMm !== null ? "SOURCE_CONFIGURED" : "DATA_GAP", revision: Number(current.revision ?? 0) + 1 };
+        const horizontalSpacingMm = payload.initialsInfixRule.horizontalSpacingMm === undefined ? current.horizontalSpacingMm ?? null : nullableNumber(payload.initialsInfixRule.horizontalSpacingMm, "Horizontale tussenruimte tussenvoegsel", 0, 100);
+        const baselineOffsetMm = payload.initialsInfixRule.baselineOffsetMm === undefined ? current.baselineOffsetMm ?? null : nullableNumber(payload.initialsInfixRule.baselineOffsetMm, "Verticale positie tussenvoegsel", -100, 100);
+        profile.initialsInfixRule = { active, heightMm, horizontalSpacingMm, baselineOffsetMm, alignment: "CENTER", status: active && heightMm !== null ? "SOURCE_CONFIGURED" : "DATA_GAP", revision: Number(current.revision ?? 0) + 1 };
       }
       if (payload.validation !== undefined) {
-        const fields = ["placement", "referenceDistance", "size", "font", "foilColor", "rotation", "mirror"];
+        const fields = ["size", "font", "foilColor"];
         const validation = { source: requiredText(payload.validation.source, "Validatiebron", 1_000) };
         for (const field of fields) validation[field] = allowedValue(payload.validation[field], ["VALIDATED", "SOURCE_CONFIGURED", "DATA_GAP"], `Validatiestatus ${field}`);
-        for (const field of ["cutContour", "physicalCutOutput"]) {
+        for (const field of ["placement", "referenceDistance", "rotation", "mirror", "cutContour", "physicalCutOutput"]) {
           const value = payload.validation[field] ?? profile.validation?.[field];
           if (value !== undefined) validation[field] = allowedValue(value, ["VALIDATED", "SOURCE_CONFIGURED", "DATA_GAP"], `Validatiestatus ${field}`);
         }
@@ -4806,7 +4810,7 @@ function deriveArticleValidationStatus(validation) {
 }
 
 function deriveProfileValidationStatus(validation) {
-  const values = [validation.placement, validation.referenceDistance, validation.size, validation.font, validation.foilColor, validation.rotation, validation.mirror, validation.cutContour, validation.physicalCutOutput].filter(Boolean);
+  const values = [validation.size, validation.font, validation.foilColor].filter(Boolean);
   if (values.some((status) => status === "DATA_GAP")) return "DATA_GAP";
   return values.every((status) => status === "VALIDATED") ? "VALIDATED" : "PARTIAL";
 }
@@ -4829,12 +4833,9 @@ function productionProfileReadiness(profile) {
   if (profile.id === "profile-none") return { status: "CONFIGURED", reason: null };
   const validation = profile.validation;
   if (!validation) return { status: "DATA_GAP", reason: "Productieprofiel mist validatiestatus" };
-  const criticalLabels = { size: "fysieke maatvoering", font: "letterprofiel", foilColor: "foliekleur", cutContour: "snijlijnen", physicalCutOutput: "fysieke snijoutput" };
-  const advisoryLabels = { placement: "positie", referenceDistance: "referentieafstand", rotation: "rotatie", mirror: "spiegeling" };
+  const criticalLabels = { size: "fysieke maatvoering", font: "letterprofiel", foilColor: "foliekleur" };
   const criticalGaps = Object.entries(criticalLabels).filter(([field]) => validation[field] === "DATA_GAP").map(([, label]) => label);
   if (criticalGaps.length) return { status: "DATA_GAP", reason: `Noodzakelijke productiegegevens ontbreken: ${criticalGaps.join(", ")}` };
-  const advisoryGaps = Object.entries(advisoryLabels).filter(([field]) => validation[field] === "DATA_GAP").map(([, label]) => label);
-  if (advisoryGaps.length) return { status: "ATTENTION", reason: `Productie past tijdens de pilot zelf toe: ${advisoryGaps.join(", ")}` };
   return { status: "CONFIGURED", reason: null };
 }
 
@@ -5266,7 +5267,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       const compositeText = compositeCharacters.length >= 2 ? `${compositeCharacters[0].toLocaleUpperCase("nl-NL")}${compositeCharacters.slice(1, -1).join("").toLocaleLowerCase("nl-NL")}${compositeCharacters.at(-1).toLocaleUpperCase("nl-NL")}` : rawCompositeText.toLocaleUpperCase("nl-NL");
       if (Number(line.placementRule?.segmentIndex) !== expectedIndex) throw Object.assign(new Error("Ongeldige volgorde in samengestelde initialen."), { statusCode: 400, code: "INITIALS_COMPOSITION_INVALID" });
       placementRule = { compositionId, compositeText, segmentIndex: expectedIndex, segmentCount: 3, alignment: "CENTER", horizontalSpacingMm: rule?.horizontalSpacingMm ?? null, baselineOffsetMm: rule?.baselineOffsetMm ?? null, profileRevision: profile?.revision ?? 1, ruleRevision: rule?.revision ?? 1 };
-      if (!rule?.active || !rule.heightMm || rule.horizontalSpacingMm === null || rule.baselineOffsetMm === null || rule.status === "DATA_GAP") validation = { status: "BLOCKED", reason: "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd." };
+      validation = { status: "BLOCKED", reason: "De samengestelde initialenopmaak heeft nog geen gecontroleerde uitvoerbare productiebron." };
     }
     const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
     const maximumObjectWidthMm = defaults.maxSafeTrackWidthMm;
@@ -5316,10 +5317,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
         const rule = baseProfile?.initialsInfixRule;
         const compositeText = `${characters[0]}${initialsInfix}${characters[1]}`;
         const compositionId = `${orderId}:${item.id}:${variant.id}:initials-composite`;
-        const ruleComplete = rule?.active && Number(rule.heightMm) > 0 && rule.horizontalSpacingMm !== null && rule.baselineOffsetMm !== null && rule.status !== "DATA_GAP";
+        const ruleComplete = rule?.active && Number(rule.heightMm) > 0 && rule.status !== "DATA_GAP";
         const reason = ruleComplete
-          ? `De bevestigde contour- of fontbron voor samengestelde initialen in ${baseProfile?.name ?? "dit profiel"} is nog niet gekoppeld.`
-          : "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd.";
+          ? `De gecontroleerde uitvoerbare bron voor samengestelde initialen in ${baseProfile?.name ?? "dit profiel"} is nog niet gekoppeld.`
+          : "De canonieke 20 mm-maat voor het tussenvoegsel ontbreekt.";
         const placementSnapshot = { compositionId, compositeText, segmentCount: 3, alignment: "CENTER", horizontalSpacingMm: rule?.horizontalSpacingMm ?? null, baselineOffsetMm: rule?.baselineOffsetMm ?? null, profileRevision: baseProfile?.revision ?? 1, ruleRevision: rule?.revision ?? 1 };
         const segments = [
           { role: "INITIALS_FIRST", content: characters[0], type: "INITIALS", segmentIndex: 0, heightMm: 0 },
@@ -5381,8 +5382,8 @@ function deriveCatalogProductionLines(state, orderId, items) {
           ? `Meerdere productierijpe SVG-nummersets zijn aan ${item.association} gekoppeld; kies eerst één authoritative versie.`
           : configuredNumberHeightMissing
           ? `Borstnummer is toegestaan, maar de fysieke borstnummermaat ontbreekt nog in het bestaande profiel voor ${item.association}.`
-          : field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.horizontalSpacingMm === null || infixRule.baselineOffsetMm === null || infixRule.status === "DATA_GAP")
-          ? "De kleinere maat, horizontale tussenruimte en verticale positie van het tussenvoegsel zijn nog niet bevestigd."
+          : field === "initialsInfix" && (!infixRule?.active || !infixRule.heightMm || infixRule.status === "DATA_GAP")
+            ? "De canonieke 20 mm-maat voor het tussenvoegsel ontbreekt."
           : linkedNumberSet.asset || versionedSource || managedFont
           ? null
           : profile?.productionSourceSetId

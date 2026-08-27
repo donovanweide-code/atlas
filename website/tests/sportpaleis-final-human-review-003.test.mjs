@@ -92,7 +92,7 @@ test("tussenvoegsel blijft een apart handmatig initialenelement met overname en 
   assert.ok(article, "een actief initialenartikel is vereist voor deze acceptatietest");
   const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
   assert.ok(profile?.initialsInfixRule);
-  assert.deepEqual(profile.initialsInfixRule, { active: true, heightMm: 20, horizontalSpacingMm: null, baselineOffsetMm: null, alignment: "CENTER", status: "DATA_GAP", revision: 1 });
+  assert.deepEqual(profile.initialsInfixRule, { active: true, heightMm: 20, horizontalSpacingMm: null, baselineOffsetMm: null, alignment: "CENTER", status: "SOURCE_CONFIGURED", revision: 1 });
 
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
     orderKind: "INDIVIDUAL", customer: "Initialencontrole", customerEmail: "initialen@example.nl", customerPhone: "0612345678", salesNumber: "45",
@@ -114,7 +114,7 @@ test("tussenvoegsel blijft een apart handmatig initialenelement met overname en 
 
   const infixLines = created.productionLines.filter(({ placementRole }) => placementRole === "INITIALS_INFIX");
   assert.deepEqual(infixLines.map(({ content }) => content).sort(), ["de", "vd"]);
-  assert.ok(infixLines.every(({ type, widthMm, heightMm, validation, placementRule }) => type === "TEXT" && widthMm === 0 && heightMm === 0 && validation.status === "BLOCKED" && placementRule.alignment === "CENTER" && placementRule.horizontalSpacingMm === null && placementRule.baselineOffsetMm === null));
+  assert.ok(infixLines.every(({ type, widthMm, heightMm, validation, placementRule }) => type === "TEXT" && widthMm === 0 && heightMm === 20 && validation.status === "BLOCKED" && /uitvoerbare bron/u.test(validation.reason) && placementRule.alignment === "CENTER" && placementRule.horizontalSpacingMm === null && placementRule.baselineOffsetMm === null));
   const composites = new Map(); for (const line of created.productionLines.filter(({ placementRule }) => placementRule?.compositionId)) composites.set(line.placementRule.compositionId, [...(composites.get(line.placementRule.compositionId) ?? []), line]);
   assert.deepEqual([...composites.values()].map((lines) => lines[0].placementRule.compositeText).sort(), ["AdeB", "JvdM"]);
   assert.ok([...composites.values()].every((lines) => lines.length === 3 && lines.map(({ placementRole }) => placementRole).join(",") === "INITIALS_FIRST,INITIALS_INFIX,INITIALS_LAST"));

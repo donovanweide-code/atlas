@@ -73,12 +73,12 @@ test("Teamwear leidt nooit naar maten vóór het voorstel expliciet is goedgekeu
   assert.match(teamwearExperienceSource, /sizingShortcut\.textContent = "Voorstel controleren →"/u);
 });
 
-test("Guided Setup stuurt een concrete gap naar het juiste beheerdoel en maakt placement/mirror geen pseudo-actie", () => {
+test("Guided Setup stuurt alleen bewezen productievereisten naar het juiste beheerdoel", () => {
   assert.match(workspaceSource, /validation\.font === "DATA_GAP" \? "lettertype\/nummerbron"/u);
   assert.match(workspaceSource, /validation\.size === "DATA_GAP" \? "fysieke maat"/u);
   assert.match(workspaceSource, /validation\.foilColor === "DATA_GAP" \? "foliekleur"/u);
-  assert.match(workspaceSource, /validation\.cutContour === "DATA_GAP" \? "gecontroleerde snijlijnen"/u);
-  assert.match(workspaceSource, /validation\.physicalCutOutput === "DATA_GAP" \? "bewezen fysieke snijoutput"/u);
+  assert.doesNotMatch(workspaceSource, /validation\.cutContour === "DATA_GAP" \? "gecontroleerde snijlijnen"/u);
+  assert.doesNotMatch(workspaceSource, /validation\.physicalCutOutput === "DATA_GAP" \? "bewezen fysieke snijoutput"/u);
   assert.match(workspaceSource, /gecontroleerde bron voor \$\{sourceProfile\.fontProfile\}/u);
   assert.match(workspaceSource, /beheer\/productieprofielen\?vereniging=\$\{encodeURIComponent\(association\.name\)\}/u);
   assert.match(workspaceSource, /beheer\/verenigingen\?vereniging=\$\{encodeURIComponent\(association\.name\)\}/u);
@@ -88,7 +88,8 @@ test("Guided Setup stuurt een concrete gap naar het juiste beheerdoel en maakt p
     workspaceSource.indexOf("const profileActions"),
     workspaceSource.indexOf("const groups ="),
   );
-  assert.doesNotMatch(gapProjection, /validation\.placement|validation\.mirror/u);
+  assert.doesNotMatch(gapProjection, /validation\.placement|validation\.mirror|validation\.cutContour|validation\.physicalCutOutput/u);
+  assert.match(serviceSource, /const criticalLabels = \{ size: "fysieke maatvoering", font: "letterprofiel", foilColor: "foliekleur" \}/u);
   assert.match(workspaceSource, /<span>Vereniging<\/span><span>Actie<\/span><span>Compleetheid<\/span>/u);
 });
 

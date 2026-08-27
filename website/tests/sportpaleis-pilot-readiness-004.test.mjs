@@ -88,7 +88,7 @@ test("Sportpaleis final pilot readiness 004", async (context) => {
     assert.match(source, /\+ Speler\/artikel toevoegen/);
     assert.doesNotMatch(source, /data-order-select|data-select-all/);
     assert.match(source, /productie\/voorstel/);
-    assert.match(source, /Technische profielen bekijken/);
+    assert.match(source, /Beheer alleen wat de fysieke uitvoer werkelijk nodig heeft/);
     assert.match(source, /Productievoorbeeld/u);
     assert.match(source, /<summary>Technische details<\/summary>/u);
     assert.match(source, /Nog niet maakbaar/);
