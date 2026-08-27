@@ -14,6 +14,15 @@ test("full Workspace Candidate keeps natural navigation in an explicit read-only
   assert.match(api, /full-workspace-r3/u);
 });
 
+test("full Workspace Candidate stays visibly distinct from LIVE on every candidate route", async () => {
+  const workspace = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  assert.match(workspace, /const candidateMode = fullWorkspaceCandidateActive\(\)/u);
+  assert.match(workspace, /LIVE \| CANDIDATE/u);
+  assert.match(workspace, /data-candidate="\$\{candidateMode \? FULL_WORKSPACE_CANDIDATE/u);
+  assert.match(workspace, /candidateLiveHref\(current\)/u);
+  assert.match(workspace, /<a href="\$\{esc\(candidateLiveHref\(current\)\)\}">Terug naar LIVE<\/a>/u, "LIVE exit must bypass candidate SPA navigation so the query is not restored");
+});
+
 test("Naamopdruk voorkant is exactly 20 mm and uppercase", () => {
   assert.equal(FRONT_NAME_DECORATION.label, "Naamopdruk (voorkant)");
   assert.equal(FRONT_NAME_DECORATION.placement, "FRONT");
