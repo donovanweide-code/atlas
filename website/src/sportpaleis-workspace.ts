@@ -16,7 +16,7 @@ import { openProductionColorContexts, unprintedProductionGroup } from "./sportpa
 import { appendProposalItem, appendProposalPlacement, proposalItemsFromEditor, teamkitProposalCreate, teamkitProposalDetail, teamkitProposalList } from "./sportpaleis-teamkit-workspace.ts";
 import { activateTeamkitExperience, teamkitProposalExperience } from "./sportpaleis-teamkit-experience.ts";
 import { buildTeamwearRelationships } from "./sportpaleis-teamwear-foundations.ts";
-import { toggleMobileNavigation } from "./sportpaleis-mobile-navigation.ts";
+import { setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation, type MobileNavigationElements } from "./sportpaleis-mobile-navigation.ts";
 
 const BUILD_ID = "SPW-MINI-PRODUCTION-CORRECTION-006-20260814";
 const PREVIOUS_RELEASE_ID = "SPW-PILOT-PRODUCTION-UX-CLEAN-START-005-20260814";
@@ -208,7 +208,8 @@ function shell(html: string, state: PilotBootstrap, current: string, title: stri
   const mobilePrimary = contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : nav(`${BASE}/orders/nieuw`, "Bedrukken", current);
   return `<div class="sp-workspace sp-density--${pref.density} sp-role--${user.role}${captureClass}" data-premium-shell="v1" data-integration-ready="mail proposals" data-readonly="${Boolean(state.readOnlyFallback)}" data-role-preview="${activeRolePreview ?? ""}" data-previous-build="${PREVIOUS_BUILD_ID}" data-polish-build="${PREVIOUS_POLISH_BUILD_ID}" data-previous-release="${PREVIOUS_RELEASE_ID}">
     <header class="sp-topbar"><button class="sp-icon-button sp-menu-button" data-action="toggle-nav" aria-label="Volledig menu" aria-expanded="false">☰</button><a class="sp-brand" data-link href="${BASE}/overzicht">${logo()}</a><div class="sp-topbar__meta"><span class="sp-env">${state.capabilities.demo ? "LOKALE REVIEW" : "PILOT"}</span><span class="sp-visually-hidden">Release ${esc(state.releaseId || BUILD_ID)} · foundation ${BASELINE_BUILD_ID}</span></div>${userMenu}</header>
-    <aside class="sp-sidebar"><nav class="sp-nav"><p class="sp-nav__label">WERK</p>${workNav}${orderActions ? `<p class="sp-nav__label">NIEUWE ORDER</p>${orderActions}` : ""}${adminNav ? `<p class="sp-nav__label">BEHEER</p>${adminNav}` : ""}<p class="sp-nav__label">SAMENWERKEN</p>${nav(`${BASE}/feedback`, "Feedback", current)}</nav></aside>
+    <button class="sp-nav-backdrop" type="button" data-action="dismiss-nav" aria-label="Menu sluiten" aria-hidden="true" hidden></button>
+    <aside class="sp-sidebar" aria-label="Volledig menu"><nav class="sp-nav"><p class="sp-nav__label">WERK</p>${workNav}${orderActions ? `<p class="sp-nav__label">NIEUWE ORDER</p>${orderActions}` : ""}${adminNav ? `<p class="sp-nav__label">BEHEER</p>${adminNav}` : ""}<p class="sp-nav__label">SAMENWERKEN</p>${nav(`${BASE}/feedback`, "Feedback", current)}</nav></aside>
     <main class="sp-main">${previewBanner}${state.readOnlyFallback ? `<div class="sp-offline-banner">Alleen-lezen herstelweergave</div>` : ""}${html}</main>
     <nav class="sp-mobile-nav" aria-label="Primaire navigatie">${nav(`${BASE}/overzicht`, "Vandaag", current)}${nav(`${BASE}/orders`, "Orders", current)}${mobilePrimary}${nav(`${BASE}/zoeken`, "Zoeken", current)}</nav></div>`;
 }
@@ -1610,8 +1611,29 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     menu.open = false;
     menu.querySelectorAll<HTMLInputElement>('input[type="password"], input[name="pin"]').forEach((input) => { input.value = ""; });
   };
+  const mobileNavigationElements = (): MobileNavigationElements => ({
+    sidebar: app.querySelector<HTMLElement>(".sp-sidebar"),
+    trigger: app.querySelector<HTMLButtonElement>("[data-action='toggle-nav']"),
+    backdrop: app.querySelector<HTMLButtonElement>("[data-action='dismiss-nav']"),
+    body: document.body,
+  });
+  const closeMobileNavigation = (restoreFocus = true): void => { setMobileNavigation(mobileNavigationElements(), false, restoreFocus); };
   document.addEventListener("pointerdown", (event) => { const menu = app.querySelector<HTMLDetailsElement>(".sp-user-menu"); if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) closeUserMenu(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeUserMenu(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeUserMenu();
+      if (app.querySelector(".sp-sidebar.is-open")) closeMobileNavigation();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const sidebar = app.querySelector<HTMLElement>(".sp-sidebar.is-open");
+    if (!sidebar) return;
+    const focusable = Array.from(sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    const first = focusable[0]; const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
   document.addEventListener("click", (event) => { const summary = event.target instanceof Element ? event.target.closest(".sp-user-menu > summary") : null; const menu = summary?.parentElement as HTMLDetailsElement | null; if (menu?.open) menu.querySelectorAll<HTMLInputElement>('input[type="password"], input[name="pin"]').forEach((input) => { input.value = ""; }); });
   const loadMailHistory = async (orderId: string): Promise<void> => {
     const container = app.querySelector<HTMLElement>("[data-mail-history]");
@@ -1627,6 +1649,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     if (!state) { const current = path(); app.innerHTML = current === `${BASE}/activeren` ? activationPage(activationNotice) : current === `${BASE}/wachtwoord-vergeten` ? recoveryRequestPage(activationNotice) : current === `${BASE}/wachtwoord-herstellen` ? recoveryCompletePage(activationNotice) : login(notice, demoEnabled); return; }
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
+    syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
     if (current === REVIEW_ROUTE && viewState.capabilities.reviewMode) {
       const root = app.querySelector<HTMLElement>("[data-review-candidate-root]");
       if (root) void import("./sportpaleis/review-candidates/library-teamkit-v1.ts").then(({ mountLibraryTeamkitCandidate }) => {
@@ -1861,11 +1884,12 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       if (error instanceof PilotApiError && error.code === "REVISION_CONFLICT") { await load(); notice = "Een collega wijzigde deze controle. De nieuwste bewaarde keuzes zijn geladen."; render({ preserveScroll: true }); }
     }
   };
-  app.addEventListener("click", (event) => { const target = event.target as HTMLElement; const link = target.closest<HTMLAnchorElement>("a[data-link]"); if (link) { event.preventDefault(); if (link.closest(".sp-result-dialog")) postSaveOrderId = ""; go(link.href); return; } const button = target.closest<HTMLElement>("[data-action]"); if (!button) return;
+  app.addEventListener("click", (event) => { const target = event.target as HTMLElement; const link = target.closest<HTMLAnchorElement>("a[data-link]"); if (link) { event.preventDefault(); if (link.closest(".sp-sidebar")) closeMobileNavigation(false); if (link.closest(".sp-result-dialog")) postSaveOrderId = ""; go(link.href); return; } const button = target.closest<HTMLElement>("[data-action]"); if (!button) return;
     if (button.dataset.action === "load-more-production-history" && state?.productionHistoryPage?.nextCursor) { button.setAttribute("disabled", ""); void api.productionJobHistory({ query: state.productionHistoryPage.query, cursor: state.productionHistoryPage.nextCursor }).then((next) => { if (!state?.productionHistoryPage) return; state.productionHistoryPage = { ...next, items: [...state.productionHistoryPage.items, ...next.items] }; render({ preserveScroll: true }); }).catch((error) => { notice = message(error); render({ preserveScroll: true }); }); return; }
     if (button.dataset.action === "filter-managed-assets") { activeManagedAssetType = (button.dataset.assetType as typeof activeManagedAssetType) || "all"; app.querySelectorAll<HTMLElement>('[data-action="filter-managed-assets"]').forEach((item) => item.classList.toggle("is-active", item.dataset.assetType === activeManagedAssetType)); const query = app.querySelector<HTMLInputElement>("[data-managed-asset-search]")?.value.trim().toLocaleLowerCase("nl-NL") ?? ""; app.querySelectorAll<HTMLElement>("[data-managed-asset-card]").forEach((card) => { const types = card.dataset.managedAssetType?.split(" ") ?? []; const typeMismatch = activeManagedAssetType === "review" || activeManagedAssetType === "ready" ? card.dataset.managedAssetState !== activeManagedAssetType : activeManagedAssetType === "recent" ? card.dataset.managedAssetUsed !== "true" : activeManagedAssetType === "added" ? card.dataset.managedAssetAdded !== "true" : activeManagedAssetType !== "all" && !types.includes(activeManagedAssetType); card.hidden = typeMismatch || (Boolean(query) && !card.textContent?.toLocaleLowerCase("nl-NL").includes(query)); }); return; }
     if (button.dataset.action === "close-post-save") { postSaveOrderId = ""; render(); return; }
-    if (button.dataset.action === "toggle-nav") { toggleMobileNavigation(app.querySelector<HTMLElement>(".sp-sidebar"), button); return; }
+    if (button.dataset.action === "toggle-nav") { toggleMobileNavigation(mobileNavigationElements()); return; }
+    if (button.dataset.action === "dismiss-nav") { closeMobileNavigation(); return; }
     if (button.dataset.action === "accept-email-suggestion") { const input = app.querySelector<HTMLInputElement>('input[name="customerEmail"]'); if (input) { input.value = button.dataset.email ?? input.value; draftOrderMeta.customerEmail = input.value; const hint = app.querySelector<HTMLElement>("[data-email-hint]"); if (hint) hint.textContent = "E-mailadres gecorrigeerd; controleer het nog één keer."; } return; }
     if (button.dataset.action === "demo-login") { void api.demoLogin(button.dataset.view as "admin" | "operator" | "store").then(refresh).catch((e) => { notice = message(e); render(); }); return; }
     if (button.dataset.action === "logout") { void api.logout().finally(() => { state = undefined; activationHandoff = null; recoveryHandoff = null; render(); }); return; }
@@ -2414,6 +2438,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   app.addEventListener("focusout", () => { setTimeout(() => { if (deferredSharedRevision !== null && !sharedSyncFormDirty && !hasFocusedEditor()) void checkSharedRevision("safe-boundary"); }, 0); });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void checkSharedRevision("visible"); });
   addEventListener("focus", () => { if (document.visibilityState === "visible") void checkSharedRevision("focus"); });
+  addEventListener("resize", () => syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches), { passive: true });
   window.setInterval(() => { if (document.visibilityState === "visible") void checkSharedRevision("interval"); }, SHARED_STATUS_POLL_MS);
   addEventListener("popstate", () => { sharedSyncFormDirty = false; deferredSharedRevision = null; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); }); if (location.pathname === BASE || location.pathname === `${BASE}/` || (!BASE && location.pathname === "/")) history.replaceState({}, "", `${BASE}/overzicht`);
   void api.demoOptions().then((value) => { demoEnabled = value.enabled; return api.session(); }).then(refresh).catch(() => render());

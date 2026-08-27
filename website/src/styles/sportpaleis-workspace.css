@@ -1602,6 +1602,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--sp-accent)}
 @media(max-width:760px){
   :root{--sp-topbar:64px}
   .sp-topbar{grid-template-columns:48px minmax(0,1fr) 48px}.sp-menu-button{display:grid;place-items:center}.sp-brand{justify-content:center;padding:0;background:#0d1110}.sp-brand__official{width:min(185px,52vw);height:52px;transform:none;background-size:650px 389px;background-position:-17px -148px}.sp-brand__official span{display:none}.sp-topbar__meta{padding:0 8px}.sp-user{min-width:auto;border:0;padding:0}.sp-user>a>div:not(.sp-user__avatar),.sp-user>button{display:none}
+  .sp-nav-backdrop:not([hidden]){position:fixed;z-index:35;inset:var(--sp-topbar) 0 0;display:block;width:100%;height:auto;border:0;background:rgb(11 14 13 / 42%);padding:0;touch-action:manipulation}
   .sp-sidebar{display:flex;width:min(84vw,252px);visibility:hidden;pointer-events:none}.sp-sidebar.is-open{visibility:visible;pointer-events:auto}
   .sp-main{padding:26px 16px 96px}.sp-page-head{display:grid;gap:16px;margin-bottom:20px}.sp-page-head h1,.sp-empty h1{font-size:31px}.sp-page-head .sp-button{width:100%}
   .sp-panel{padding:18px;border-radius:14px}.sp-today-focus{grid-template-columns:1fr;padding:23px 20px}.sp-today-focus .sp-button{width:100%}.sp-dashboard--today,.sp-dashboard,.sp-detail-grid,.sp-production-grid,.sp-admin-grid{grid-template-columns:1fr}
@@ -1613,6 +1614,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--sp-accent)}
   .sp-admin-links{grid-template-columns:1fr}.sp-admin-links .sp-admin-card{min-height:104px}.sp-settings-editor>form{padding-inline:16px}
   .sp-managed-asset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sp-managed-asset-card{grid-template-columns:1fr}.sp-managed-asset-card>img{width:100%;height:120px}.sp-asset-candidate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sp-asset-candidate img{height:105px}
 }
+body.sp-mobile-nav-open{overflow:hidden}
+body.sp-mobile-nav-open .sp-mobile-nav{pointer-events:none}
 @media(max-width:600px){
   .sp-asset-source .sp-asset-candidate-grid{grid-template-columns:1fr;gap:14px}
   .sp-asset-source .sp-asset-split-card{gap:13px;padding:14px}
