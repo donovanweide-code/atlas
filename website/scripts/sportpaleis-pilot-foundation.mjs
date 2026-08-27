@@ -193,7 +193,7 @@ for (const association of SPORTPALEIS_ASSOCIATIONS) {
       mirror: null,
       rotationDeg: null,
       supports: [field],
-      instruction: `Bronconfiguratie ${association.source.file} · ${association.source.sheet}!${association.source.range}. Positie, afstand, contour-/fontoutput, rotatie en spiegeling blijven fail-closed totdat de specifieke route is gevalideerd.`,
+      instruction: `Bronconfiguratie ${association.source.file} · ${association.source.sheet}!${association.source.range}. Workspace gebruikt de bevestigde maat, letter-/nummerbron en foliekleur; plaatsing, spiegeling en veilige rotatie volgen automatisch uit de productieregel.`,
       ...(field === "backNumber" ? {
         backNumberSizeClasses: {
           SENIOR: dimensionCm == null
@@ -221,7 +221,7 @@ PRODUCTION_PROFILES.push({
   mirror: null,
   rotationDeg: null,
   supports: ["name", "backNumber"],
-  instruction: "Bronconfiguratie: thuis wit; nummer outline; naam met hoofdletter. Positie, afstand, contour-/fontoutput, rotatie en spiegeling blijven fail-closed.",
+  instruction: "Bronconfiguratie: thuis wit; nummer outline; naam met hoofdletter. Workspace past plaatsing, spiegeling en veilige rotatie automatisch toe.",
   backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } },
 });
 for (const profile of PRODUCTION_PROFILES) {
@@ -550,6 +550,21 @@ export function migrateSportpaleisPilotState(input) {
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
   state.migrationWarnings ??= [];
+  const legacyProfileInstructions = new Map([
+    ["PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", "Workspace gebruikt de bevestigde maat, letter-/nummerbron en foliekleur. Plaatsing, spiegeling en veilige rotatie volgen automatisch uit de productieregel."],
+    ["DATA_GAP: de fysieke bedrukkingsmaat ontbreekt en blokkeert productie. Positie, referentieafstand, rotatie en spiegeling zijn niet-blokkerende pilot-aandachtspunten.", "De fysieke bedrukkingsmaat ontbreekt. Voeg alleen deze noodzakelijke maat toe; plaatsing, spiegeling en veilige rotatie volgen automatisch."],
+    ["DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie.", "Bevestig of ‘Nummer’ een rug-, borst- of shortnummer is. Daarna kiest Workspace automatisch de toepasselijke productieregel."],
+    ["DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm.", "Voor shortnummers is een gecontroleerde productiebron van 80 mm nodig. Bestaande Senior-rugnummerbronnen worden niet als vervanging gebruikt."],
+  ]);
+  const humanProfileSource = (value) => String(value ?? "")
+    .replace(/Positie, afstand, contour-\/fontoutput, rotatie en spiegeling blijven fail-closed totdat de specifieke route is gevalideerd\.?/gu, "Plaatsing, spiegeling en veilige rotatie volgen automatisch uit de productieregel.")
+    .replace(/Positie, afstand, contour-\/fontoutput, rotatie en spiegeling blijven fail-closed\.?/gu, "Plaatsing, spiegeling en veilige rotatie volgen automatisch uit de productieregel.")
+    .replace(/Positie, afstand, rotatie en spiegeling onbevestigd\.?/gu, "Plaatsing, spiegeling en veilige rotatie volgen automatisch uit de productieregel.");
+  for (const profile of state.productionProfiles ?? []) {
+    const previousInstruction = String(profile.instruction ?? "");
+    profile.instruction = legacyProfileInstructions.get(previousInstruction) ?? humanProfileSource(previousInstruction);
+    if (profile.validation?.source) profile.validation.source = humanProfileSource(profile.validation.source);
+  }
   for (const user of state.users ?? []) {
     if (user.salesNumber === undefined) user.salesNumber = null;
     user.personType ??= "HUMAN";
@@ -4818,13 +4833,9 @@ function deriveProfileValidationStatus(validation) {
 function assertProfileValidatedValues(profile, validation) {
   if (profile.id === "profile-none") return;
   const missing = [];
-  if (validation.placement !== "DATA_GAP" && (!profile.placement || profile.placement === "Onbevestigd")) missing.push("positie");
-  if (validation.referenceDistance !== "DATA_GAP" && !Number.isFinite(profile.referenceDistanceCm)) missing.push("referentieafstand");
   if (validation.size !== "DATA_GAP" && !String(profile.sizeLabel ?? "").trim()) missing.push("maatvoering");
   if (validation.font !== "DATA_GAP" && !String(profile.fontProfile ?? "").trim()) missing.push("letterprofiel");
   if (validation.foilColor !== "DATA_GAP" && !String(profile.foilColor ?? "").trim()) missing.push("foliekleur");
-  if (validation.rotation !== "DATA_GAP" && !Number.isFinite(profile.rotationDeg)) missing.push("rotatie");
-  if (validation.mirror !== "DATA_GAP" && typeof profile.mirror !== "boolean") missing.push("spiegeling");
   if (missing.length) throw Object.assign(new Error(`Bevestigde profielvelden missen een waarde: ${missing.join(", ")}.`), { statusCode: 400, code: "PROFILE_VALIDATED_VALUE_MISSING" });
 }
 

@@ -105,7 +105,10 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   assert.match(source, /productionAttentionCopy/);
   assert.match(source, /workspaceTerminology/);
   assert.match(source, /aria-label="Volledig menu"/);
-  assert.match(source, /orders\/team`, "Teamorder"/);
+  assert.match(source, /orders\/nieuw`, "Bedrukken"/);
+  assert.match(source, /<summary>Meer soorten productiewerk<\/summary>/);
+  assert.match(source, /orders\/team/);
+  assert.match(source, /Batch-\/teamproductie/);
   assert.match(source, /class="\$\{name === selected \? "is-active" : ""\}"/);
   assert.match(source, /const workAudit = state\.audit\.filter/);
   assert.match(source, /ingelogd\|uitgelogd\|login\|sessie/);
@@ -113,6 +116,9 @@ test("mobile correction — zichtbaar contract gebruikt korte rustige flow en mo
   assert.match(css, /\.sp-mobile-nav \.sp-nav__item\.is-active/);
   assert.match(css, /background:var\(--sp-red\)/);
   assert.match(css, /\.sp-menu-button\{grid-column:1;grid-row:1;color:#fff\}/);
+  assert.match(css, /\.sp-icon-button \{ width: 44px; height: 44px;/u);
+  assert.match(css, /\.sp-printing-sticky button\{min-height:44px/u);
+  assert.match(css, /\.sp-user-menu__logout\{min-height:44px/u);
   assert.match(source, /createProductionProposal/);
   assert.match(source, /Voer deze fysieke productieactie uit op de productie-pc/);
   assert.doesNotMatch(source, /Maat gecontroleerd|Controleer eerst de maat/);

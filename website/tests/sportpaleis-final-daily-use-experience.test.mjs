@@ -40,8 +40,9 @@ test("tussenvoegsel gebruikt één KvdA-compositie en uitsluitend het actuele fy
   const client = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const server = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
   assert.match(client, /const compositeText = `\$\{characters\[0\]\}\$\{infix\}\$\{characters\[1\]\}`/u);
-  assert.match(client, /initialsInfixHorizontalSpacingMm/u);
-  assert.match(client, /initialsInfixBaselineOffsetMm/u);
+  assert.doesNotMatch(client, /name="initialsInfixHorizontalSpacingMm"/u);
+  assert.doesNotMatch(client, /name="initialsInfixBaselineOffsetMm"/u);
+  assert.match(client, /Workspace gebruikt standaard 20 mm\. De samenstelling wordt automatisch gecentreerd/u);
   assert.match(server, /horizontalSpacingMm: rule\?\.horizontalSpacingMm/u);
   assert.match(server, /baselineOffsetMm: rule\?\.baselineOffsetMm/u);
   const derivation = server.slice(server.indexOf("function deriveCatalogProductionLines"), server.indexOf("function normalizeStoredOrder"));

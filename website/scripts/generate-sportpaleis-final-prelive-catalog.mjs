@@ -86,11 +86,7 @@ function toArticle(product, index, duplicateSkus) {
   }));
   const articleUnitPriceEur = commonPrice(product.variantPrices);
   const personalizationUnitPricesEur = field ? { [field]: option.price } : {};
-  const gaps = [
-    "Positie en referentieafstand zijn niet artikel-specifiek bevestigd.",
-    "Letterprofiel- en contouroutput blijven fail-closed totdat deze combinatie aantoonbaar is gevalideerd.",
-    "Rotatie en spiegeling volgen uitsluitend een aantoonbaar gevalideerde productieroute.",
-  ];
+  const gaps = [];
   if (!field) gaps.unshift(`Zichtbare optie \u201c${option.label}\u201d is printrelevant, maar de exacte Workspace-betekenis is nog HUMAN_CONFIRMATION_REQUIRED.`);
   return {
     id: `sp-live-${identity}`,

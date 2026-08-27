@@ -80,14 +80,14 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     assert.equal(before.referenceDistanceCm, null);
     assert.equal(before.validation.placement, "DATA_GAP");
     await assert.rejects(() => service.updateProductionProfile(storeUser.token, storeUser.csrfToken, before.id, { expectedRevision: before.revision }), (error) => error.code === "FORBIDDEN");
-    await assert.rejects(() => service.updateProductionProfile(admin.token, admin.csrfToken, before.id, { expectedRevision: before.revision, validation: profileValidation() }), (error) => error.code === "PROFILE_VALIDATED_VALUE_MISSING");
     profile = await service.updateProductionProfile(admin.token, admin.csrfToken, before.id, {
-      expectedRevision: before.revision, placement: "Middenachter · testfixture", referenceDistanceCm: 7, sizeLabel: before.sizeLabel,
-      fontProfile: before.fontProfile, foilColor: before.foilColor, rotationDeg: 0, mirror: false,
+      expectedRevision: before.revision, sizeLabel: before.sizeLabel, fontProfile: before.fontProfile, foilColor: before.foilColor,
       instruction: "Test-only profielbevestiging; niet als productiebron gebruiken.", validation: profileValidation(),
     });
-    assert.equal(profile.validation.status, "PARTIAL");
-    assert.equal(profile.referenceDistanceCm, 7);
+    assert.equal(profile.validation.status, "PARTIAL", "optionele historische provenance mag gedeeltelijk blijven zonder opslaan te blokkeren");
+    assert.equal(profile.referenceDistanceCm, null);
+    assert.equal(profile.rotationDeg, null);
+    assert.equal(profile.mirror, null);
     const row = productionProfileToMariaDbRow(profile, "2026-08-10T12:00:00.000Z");
     assert.deepEqual(mariaDbRowToProductionProfile(row).validation, profile.validation);
   });
