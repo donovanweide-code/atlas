@@ -636,6 +636,60 @@ export interface SportpaleisQuickProductionIntake {
   orderId: string | null;
 }
 
+export type SportpaleisVisualConcept = "SEASON_START" | "PRODUCT_FOCUS" | "CLUB_MOMENT";
+export type SportpaleisVisualChannel = "HOMEPAGE" | "SOCIAL_SQUARE" | "STORY" | "MAIL_HERO" | "TEAMWEAR_PROOF";
+
+/**
+ * A Visual Studio composition is creative output, not a second product or
+ * asset master. Product and asset references are immutable snapshots of the
+ * existing Sportpaleis catalog/Library truth.
+ */
+export interface SportpaleisVisualComposition {
+  id: string;
+  revision: number;
+  status: "DRAFT" | "READY_FOR_REVIEW";
+  concept: SportpaleisVisualConcept;
+  title: string;
+  artDirection: string;
+  productRef: {
+    articleId: string;
+    articleRevision: number;
+    articleNumber: string;
+    name: string;
+    imageKey: string;
+    sourceHash: string;
+  };
+  assetRefs: {
+    assetId: string;
+    name: string;
+    sourceId: string;
+    version: string;
+    sourceSha256: string;
+  }[];
+  geometry: {
+    product: { xPercent: number; yPercent: number; scale: number };
+    assets: { assetId: string; xPercent: number; yPercent: number; scale: number }[];
+  };
+  channels: {
+    channel: SportpaleisVisualChannel;
+    widthPx: number;
+    heightPx: number;
+    renderHash: string;
+  }[];
+  checks: {
+    canonicalProductLocked: true;
+    canonicalAssetsLocked: true;
+    withinBounds: boolean;
+    readyForReview: boolean;
+    warnings: string[];
+  };
+  compositionHash: string;
+  createdAt: string;
+  createdBy: { userId: string; name: string };
+  updatedAt: string;
+  updatedBy: { userId: string; name: string };
+}
+
 export interface SportpaleisProductionElementRequirement {
   id: string;
   orderId: string;
@@ -1144,6 +1198,7 @@ export interface SportpaleisWorkspaceState {
   productionElements: SportpaleisProductionElement[];
   productionAssetSources?: SportpaleisProductionAssetSource[];
   quickProductionIntakes?: SportpaleisQuickProductionIntake[];
+  visualCompositions?: SportpaleisVisualComposition[];
   productionFonts: SportpaleisProductionFont[];
   productionElementRequirements: SportpaleisProductionElementRequirement[];
   productionJobs: ProductionJob[];

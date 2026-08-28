@@ -22,6 +22,7 @@ import type {
   SportpaleisEmployee,
   SportpaleisProductionAssetSource,
   SportpaleisQuickProductionIntake,
+  SportpaleisVisualComposition,
   TeamkitProposal,
   TeamkitProposalItem,
   TeamkitFulfillmentRoute,
@@ -311,6 +312,18 @@ export class SportpaleisPilotApi {
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("quick-intake") },
       body: JSON.stringify(input),
     }));
+  }
+
+  async createVisualComposition(input: { concept: SportpaleisVisualComposition["concept"]; title: string; artDirection: string; articleId: string; assetIds: string[] }): Promise<{ duplicate: boolean; value: SportpaleisVisualComposition }> {
+    return responseBody(await this.#mutatingFetch(`${API}/visual-compositions`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("visual-composition") }, body: JSON.stringify(input) }));
+  }
+
+  async updateVisualComposition(composition: SportpaleisVisualComposition, input: { title: string; artDirection: string; geometry: SportpaleisVisualComposition["geometry"] }): Promise<SportpaleisVisualComposition> {
+    return responseBody(await this.#mutatingFetch(`${API}/visual-compositions/${encodeURIComponent(composition.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, expectedRevision: composition.revision }) }));
+  }
+
+  async submitVisualCompositionReview(composition: SportpaleisVisualComposition): Promise<SportpaleisVisualComposition> {
+    return responseBody(await this.#mutatingFetch(`${API}/visual-compositions/${encodeURIComponent(composition.id)}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: composition.revision }) }));
   }
 
   async ingestWebshopMailDocument(input: { sourceMessageId: string; receivedAt: string; filename: string; mimeType: "application/pdf"; dataBase64: string }): Promise<{ duplicate: boolean; value: unknown }> {
