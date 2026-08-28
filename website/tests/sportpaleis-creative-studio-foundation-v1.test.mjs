@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createCanvas } from "@napi-rs/canvas";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { createCreativeVectorCandidate, CREATIVE_VECTOR_ENGINES, preflightCreativeRaster } from "../src/sportpaleis/creative-vectorization.mjs";
 import { createVisualStudioComposition, updateVisualStudioComposition, VISUAL_STUDIO_DIRECTIONS } from "../src/sportpaleis/visual-studio.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+
+test("production package verklaart de self-hosted VTracer runtime-afhankelijkheid", async () => {
+  const productionPackage = JSON.parse(await readFile(new URL("../package.production.json", import.meta.url), "utf8"));
+  assert.equal(productionPackage.dependencies["@visioncortex/vtracer"], "1.0.0-alpha.3");
+});
 
 function raster({ width = 480, height = 320, paint }) {
   const canvas = createCanvas(width, height);
