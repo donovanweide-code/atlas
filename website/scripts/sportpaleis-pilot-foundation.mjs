@@ -31,6 +31,7 @@ import {
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
+import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -735,6 +736,7 @@ export function migrateSportpaleisPilotState(input) {
       const direct = articleIdRemap.get(item.articleId);
       const matched = direct ? null : ARTICLE_CATALOG.find(({ association, articleNumber }) => association === item.association && String(articleNumber) === String(item.articleNumber));
       if (direct || matched) item.articleId = direct ?? matched.id;
+      if (order.stage !== "DONE" && /^profile-source-almerer-pioneers-/u.test(String(item.productionProfileId ?? ""))) item.productionProfileId = String(item.productionProfileId).replace("profile-source-almerer-pioneers-", "profile-source-almere-pioneers-");
     }
     const warning = "Final pre-live catalogus 006: 183 actuele artikelen met zichtbare bestelbare personalisatie canoniek ingericht; overige actuele clubartikelen blijven buiten Bedrukken; historische ordersnapshots blijven ongewijzigd.";
     if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
@@ -791,6 +793,7 @@ export function migrateSportpaleisPilotState(input) {
       if (index < 0) state.productionProfiles.push(structuredClone(profile));
       else if (Number(state.productionProfiles[index].revision ?? 1) <= 1) state.productionProfiles[index] = structuredClone(profile);
     }
+    reconcileVerifiedProductionNumberSources(state);
     const warning = "Correctieronde 1: verenigingsbron behouden; kledingmaten 116–164 gebruiken de human-confirmed Juniorregel van 200 mm";
     if (!state.migrationWarnings.includes(warning)) state.migrationWarnings.push(warning);
   }
@@ -1332,6 +1335,17 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     if (!String(payload.items?.[index]?.size ?? "").trim()) item.size = "";
     item.variants?.forEach((variant, variantIndex) => { if (!String(payload.items?.[index]?.variants?.[variantIndex]?.size ?? "").trim()) variant.size = ""; });
   });
+  if (["TEAM", "CUSTOM"].includes(orderKind) && items.length === 1) productionLines = productionLines.map((line) => {
+    if (!PERSONALIZATION_FIELDS.includes(line.personalizationField)) return line;
+    const item = items[0];
+    const foilColor = line.foilColor ?? item.foilColor;
+    return {
+      ...line,
+      orderId: id,
+      itemId: item.id,
+      decorationIdentity: { orderId: id, itemId: item.id, articleNumber: item.articleNumber || item.id, decorationType: line.personalizationField, placement: line.personalizationField, value: line.content, foilColor, productionProfileId: item.productionProfileId || line.source.id },
+    };
+  });
   const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
   assertProductionAssetContexts(state, productionLines, associations);
   if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
@@ -1729,15 +1743,16 @@ const SPORTPALEIS_REVIEW_CANDIDATES = Object.freeze([Object.freeze({
   }),
 })]);
 
-function reviewModeAllowed(user, principalIds) {
-  return user.role === "admin"
+function reviewModeAllowed(user, principalIds, reviewCandidates) {
+  return reviewCandidates.length > 0
+    && user.role === "admin"
     && user.seatType === "customer"
     && user.featureExposure?.teamwearExperiencePilot === true
     && principalIds.has(user.id);
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [] }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [] }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -1753,6 +1768,8 @@ export class SportpaleisPilotService {
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
     this.reviewPrincipalIds = new Set(reviewPrincipalIds);
+    const activeCandidateIds = new Set(activeReviewCandidateIds);
+    this.reviewCandidates = SPORTPALEIS_REVIEW_CANDIDATES.filter(({ id }) => activeCandidateIds.has(id));
   }
 
   async initialize() {
@@ -1761,7 +1778,7 @@ export class SportpaleisPilotService {
 
   async reviewManifest(token) {
     const { user } = await this.authenticate(token);
-    if (!reviewModeAllowed(user, this.reviewPrincipalIds)) {
+    if (!reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates)) {
       throw Object.assign(new Error("Review Mode is niet beschikbaar voor dit account."), { statusCode: 403, code: "REVIEW_MODE_FORBIDDEN" });
     }
     return {
@@ -1769,7 +1786,7 @@ export class SportpaleisPilotService {
       principalId: user.id,
       candidateStateAuthority: "CANDIDATE_ONLY",
       productionMutationAuthority: false,
-      candidates: SPORTPALEIS_REVIEW_CANDIDATES,
+      candidates: this.reviewCandidates,
     };
   }
 
@@ -2064,7 +2081,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -4508,13 +4525,20 @@ export class SportpaleisPilotService {
       for (const profile of state.productionProfiles.filter(({ id }) => linkedProfileIds.has(id))) {
         const previousProfile = structuredClone(profile);
         profile.fontProfile = association.fontProfile;
-        profile.sizeLabel = associationProfileSizeLabel(association, profile);
         if (profile.supports?.includes("backNumber")) {
           profile.backNumberSizeClasses ??= {};
+          if (Number.isFinite(association.dimensionsCm.backNumberSenior) && association.dimensionsCm.backNumberSenior > 0) {
+            profile.backNumberSizeClasses.SENIOR = {
+              physicalHeightMm: association.dimensionsCm.backNumberSenior * 10,
+              status: "SOURCE_CONFIGURED",
+              source: association.juniorValidationNote || "Admin bevestiging in Workspace",
+            };
+          }
           profile.backNumberSizeClasses.JUNIOR = association.juniorValidationStatus === "VALIDATED"
             ? { physicalHeightMm: association.juniorPhysicalHeightMm, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "VALIDATED", source: association.juniorValidationNote }
             : { physicalHeightMm: null, sourceValueMm: association.dimensionsCm.backNumberJuniorSourceValue ? association.dimensionsCm.backNumberJuniorSourceValue * 10 : null, status: "DATA_GAP", source: association.juniorValidationNote };
         }
+        profile.sizeLabel = associationProfileSizeLabel(association, profile);
         profile.revision = Number(profile.revision ?? 1) + 1;
         profile.validationHistory ??= [];
         profile.validationHistory.unshift({ at: association.updatedAt, userId: user.id, previous: previousProfile, next: structuredClone(profile), source: association.juniorValidationNote });
@@ -4907,8 +4931,10 @@ function associationProfileSizeLabel(association, profile) {
   if (profile.supports?.includes("initials") && dimensions.initialsShirt) labels.push(`Initialen ${dimensions.initialsShirt} cm`);
   if (profile.supports?.includes("name") && dimensions.nameHeight) labels.push(`Naam ${dimensions.nameHeight} cm`);
   if (profile.supports?.includes("backNumber")) {
-    if (dimensions.backNumberSenior) labels.push(`Rug Senior ${dimensions.backNumberSenior} cm`);
-    if (association.juniorValidationStatus === "VALIDATED") labels.push(`Rug Junior ${association.juniorPhysicalHeightMm} mm (${(association.juniorGarmentSizes ?? []).join("–")})`);
+    const seniorMm = Number(profile.backNumberSizeClasses?.SENIOR?.physicalHeightMm) || Number(dimensions.backNumberSenior) * 10;
+    const juniorMm = Number(profile.backNumberSizeClasses?.JUNIOR?.physicalHeightMm) || (association.juniorValidationStatus === "VALIDATED" ? Number(association.juniorPhysicalHeightMm) : 0);
+    if (seniorMm > 0) labels.push(`Rug Senior ${seniorMm} mm`);
+    if (juniorMm > 0) labels.push(`Rug Junior ${juniorMm} mm${(association.juniorGarmentSizes ?? []).length ? ` (${association.juniorGarmentSizes.join("–")})` : ""}`);
   }
   if (profile.supports?.includes("chestNumber") && dimensions.chestNumber) labels.push(`Borst ${dimensions.chestNumber} cm`);
   if (profile.supports?.includes("shortsNumber") && dimensions.shortsNumber) labels.push(`Short ${dimensions.shortsNumber} cm`);
@@ -4965,7 +4991,14 @@ function publicProductionElement(element) {
 function configuredManagedFont(state, profile) {
   const configuredName = String(profile?.fontProfile ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
   if (!configuredName) return null;
-  const matches = state.productionFonts.filter(({ name, status }) => status === "TECHNICALLY_VALID" && String(name).normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL") === configuredName);
+  const normalized = (value) => String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
+  const configuredIdentity = normalized(configuredName);
+  const spainIdentity = normalized(OWNER_SUPPLIED_FONT_EVIDENCE.spain.canonicalProfileName);
+  const matches = state.productionFonts.filter(({ name, sha256: hash, status }) => {
+    if (status !== "TECHNICALLY_VALID") return false;
+    if (configuredIdentity === spainIdentity) return String(hash ?? "").toUpperCase() === OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256;
+    return normalized(name) === configuredIdentity;
+  });
   return matches.length === 1 ? matches[0] : null;
 }
 
@@ -4997,10 +5030,29 @@ function reconcileVerifiedProductionNumberSources(state) {
   const assetsByKey = new Map(state.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).map((element) => [element.verifiedSourceKey, element.id]));
   const links = new Map([
     ["profile-pioneers-shirt", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
-    ["profile-source-almerer-pioneers-backNumber", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
+    ["profile-source-almere-pioneers-backNumber", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
     ["profile-pioneers-shorts", ["pioneers-short-80"]],
-    ["profile-source-almerer-pioneers-shortsNumber", ["pioneers-short-80"]],
+    ["profile-source-almere-pioneers-shortsNumber", ["pioneers-short-80"]],
   ]);
+  const hockeySourceRules = [
+    { field: "backNumber", dimensionKey: "backNumberSenior", expectedCm: 20, sourceKey: "hockey-rug-200" },
+    { field: "shortsNumber", dimensionKey: "shortsNumber", expectedCm: 7.5, sourceKey: "hockey-short-75" },
+  ];
+  for (const association of state.associations?.filter(({ name }) => /\bMHC\b/iu.test(name)) ?? []) {
+    const associationProfilePrefix = `profile-source-${profileSlug(association.name)}-`;
+    for (const rule of hockeySourceRules) {
+      if (Math.abs(Number(association.dimensionsCm?.[rule.dimensionKey]) - rule.expectedCm) > 0.001) continue;
+      const assetId = assetsByKey.get(rule.sourceKey);
+      const element = state.productionElements.find(({ id }) => id === assetId);
+      if (element && !element.contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === association.id)) {
+        element.contexts ??= [];
+        element.contexts.push({ type: "ASSOCIATION", id: association.id, label: association.name });
+      }
+      for (const profile of state.productionProfiles?.filter(({ id, supports }) => id.startsWith(associationProfilePrefix) && supports?.includes(rule.field)) ?? []) {
+        links.set(profile.id, [rule.sourceKey]);
+      }
+    }
+  }
   for (const [profileId, keys] of links) {
     const profile = state.productionProfiles?.find(({ id }) => id === profileId);
     if (!profile) continue;
@@ -5037,7 +5089,7 @@ function applyPioneersProductionAuthority(state) {
     if (!record.validationHistory.some(({ source }) => source === PIONEERS_PROFILE_AUTHORITY_EVENT)) record.validationHistory.push({ at: "2026-08-25T00:00:00.000Z", userId: "system:pioneers-source-authority", field, previous, next: canonicalName, source: PIONEERS_PROFILE_AUTHORITY_EVENT });
   };
   update(association);
-  for (const profile of state.productionProfiles ?? []) if (/^profile-pioneers-|^profile-source-almerer-pioneers-(?:backNumber|chestNumber|shortsNumber)$/u.test(profile.id)) update(profile);
+  for (const profile of state.productionProfiles ?? []) if (/^profile-pioneers-|^profile-source-almere-pioneers-(?:backNumber|chestNumber|shortsNumber)$/u.test(profile.id)) update(profile);
 }
 
 const SC_BUITENBOYS_ASSOCIATION = "SC Buitenboys";
@@ -5062,8 +5114,9 @@ function assertScBuitenboysShortSource(state, order, line) {
   if (item?.association !== SC_BUITENBOYS_ASSOCIATION || line.personalizationField !== "shortsNumber") return;
   if (item.productionProfileId !== SC_BUITENBOYS_SHORT_PROFILE_ID) throw Object.assign(new Error("SC Buitenboys shortnummer mist het canonieke Spain-shortprofiel; productie blijft op REVIEW."), { statusCode: 409, code: "SC_BUITENBOYS_SHORT_PROFILE_MISMATCH" });
   if (line.source?.kind === "FONT") {
-    const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
-    if (font && normalizedProductionIdentity(font.name) === "spain") return;
+    const profile = state.productionProfiles.find(({ id }) => id === SC_BUITENBOYS_SHORT_PROFILE_ID);
+    const font = configuredManagedFont(state, profile);
+    if (font && line.source.id === font.id && line.source.version === font.version && line.source.sha256 === font.sha256) return;
   }
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
     const profile = state.productionProfiles.find(({ id }) => id === SC_BUITENBOYS_SHORT_PROFILE_ID);
@@ -5101,6 +5154,17 @@ function productionDecorationIdentity(order, line) {
 }
 
 function assertOrderProductionDecorationCardinality(state, order) {
+  if (["TEAM", "CUSTOM"].includes(order.orderKind)) {
+    const seenLineIds = new Set();
+    for (const line of order.productionLines ?? []) {
+      if (seenLineIds.has(line.id)) throw Object.assign(new Error("Een directe productieregel komt dubbel voor."), { statusCode: 409, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH" });
+      seenLineIds.add(line.id);
+      if (!PERSONALIZATION_FIELDS.includes(line.personalizationField)) continue;
+      const identity = productionDecorationIdentity(order, line);
+      if (!identity || identity.orderId !== order.id || identity.itemId !== line.itemId || identity.decorationType !== line.personalizationField || identity.value !== line.content || !identity.foilColor || !identity.productionProfileId) throw Object.assign(new Error(`${line.preview?.label ?? line.content}: productie-identiteit is onvolledig.`), { statusCode: 409, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" });
+    }
+    return;
+  }
   if (order.orderKind !== "INDIVIDUAL") return;
   const catalogLines = (order.productionLines ?? []).filter(({ personalizationField }) => PERSONALIZATION_FIELDS.includes(personalizationField));
   const compositionLines = (order.productionLines ?? []).filter(({ placementRule }) => Boolean(placementRule?.compositionId));
@@ -5176,10 +5240,35 @@ function associationNumberSet(state, associationName, { field = null, profileId 
     && element.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && placementMatchesField(placement))
     && Object.keys(element.numberGlyphs ?? {}).length === 10
     && Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => element.numberGlyphs?.[digit])
-    && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name))
-    && (!linkedAssetIds.size || linkedAssetIds.has(element.id))
-    && (!linkedAssetIds.size || !(Number(requestedHeightMm) > 0) || element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)));
-  return { association, asset: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
+    && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name)));
+  const associationSpecific = matches.filter((element) => !element.verifiedSourceKey);
+  const canonicalAtRequestedHeight = matches.filter((element) => element.verifiedSourceKey
+    && (!(Number(requestedHeightMm) > 0) || element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)));
+  const preferred = associationSpecific.length
+    ? associationSpecific
+    : linkedAssetIds.size
+      ? canonicalAtRequestedHeight.filter(({ id }) => linkedAssetIds.has(id))
+      : canonicalAtRequestedHeight;
+  return { association, asset: preferred.length === 1 ? preferred[0] : null, ambiguous: preferred.length > 1 };
+}
+
+function profileFieldPhysicalHeightMm(association, profile, field, variant = null) {
+  if (field === "initialsInfix") return Number(profile?.initialsInfixRule?.heightMm) || 0;
+  if (field === "backNumber") {
+    const explicit = Number(variant?.backNumberProduction?.physicalHeightMm);
+    if (explicit > 0) return explicit;
+    const sizeClass = variant?.backNumberProduction?.sizeClass;
+    const configured = Number(profile?.backNumberSizeClasses?.[sizeClass]?.physicalHeightMm);
+    if (configured > 0) return configured;
+  }
+  const dimensionKey = field === "initials" ? "initialsShirt" : field === "name" ? "nameHeight" : field === "chestNumber" ? "chestNumber" : field === "shortsNumber" ? "shortsNumber" : null;
+  const associationHeight = dimensionKey ? Number(association?.dimensionsCm?.[dimensionKey]) * 10 : 0;
+  if (associationHeight > 0) return associationHeight;
+  if ((profile?.supports ?? []).length === 1 && profile.supports[0] === field) {
+    const singleValue = Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
+    if (singleValue > 0) return singleValue;
+  }
+  return 0;
 }
 
 function validateProductionLines(value, state, user, orderKind, options = {}) {
@@ -5187,6 +5276,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
   if (!Array.isArray(value) || value.length > 100) throw Object.assign(new Error("Gebruik maximaal 100 productieregels."), { statusCode: 400, code: "PRODUCTION_LINES_INVALID" });
   const validated = value.map((line, index) => {
     const type = allowedValue(line.type, [...PRODUCTION_LINE_TYPES], "Productieregeltype");
+    const personalizationField = line.personalizationField === undefined ? null : allowedValue(line.personalizationField, PERSONALIZATION_FIELDS, "Bedrukkingstype");
     if (user.role === "store" && orderKind !== "TEAM" && ["LOGO", "PRODUCTION_ELEMENT"].includes(type)) throw Object.assign(new Error("Logo's en beeldmerken zijn alleen beschikbaar in Teamorder/Productie."), { statusCode: 403, code: "STORE_LOGO_FORBIDDEN" });
     const content = normalizeProductionContent(type, requiredText(line.content, "Inhoud", 160), line.placementRole);
     if (type === "NUMBER" && !/^\d{1,4}$/u.test(content)) throw Object.assign(new Error("Een nummerregel bevat alleen 1 tot 4 cijfers."), { statusCode: 400, code: "PRODUCTION_NUMBER_INVALID" });
@@ -5229,6 +5319,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
         proofStatus: "DATA_GAP",
         validation: { status: "BLOCKED", reason },
         dataGap: { status: "DATA_GAP", fields: requestedDataGapFields, reason },
+        ...(personalizationField ? { personalizationField } : {}),
         ...(teamkitProductionContext ? { teamkitProductionContext } : {}),
       };
     }
@@ -5295,6 +5386,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       heightMm: Math.round(heightMm * 1000) / 1000,
       quantity,
       ...(canonicalFoilColor ? { foilColor: canonicalFoilColor } : {}),
+      ...(personalizationField ? { personalizationField } : {}),
       preview: { kind: source.kind === "FONT" ? "LIVE_FONT" : "ASSET_REFERENCE", label: optional(line.previewLabel, 160) || content, aspectRatioLocked: ["LOGO", "PRODUCTION_ELEMENT"].includes(type) },
       provenance: optional(line.provenance, 500) || `${orderKind} · handmatig vastgelegd in Workspace`,
       proofStatus,
@@ -5369,15 +5461,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
         const content = normalizeProductionContent(lineType, values[field], field === "initialsInfix" ? "INITIALS_INFIX" : null);
         if (!content) continue;
         const infixRule = field === "initialsInfix" ? profile?.initialsInfixRule : null;
-        const configuredHeight = field === "initialsInfix"
-          ? Number(infixRule?.heightMm)
-          : field === "backNumber"
-          ? Number(variant.backNumberProduction?.physicalHeightMm)
-          : Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
         const association = state.associations.find(({ id, name }) => id === item.association || name === item.association);
-        const associatedNumberHeight = field === "shortsNumber" ? Number(association?.dimensionsCm?.shortsNumber) * 10 : field === "chestNumber" ? Number(association?.dimensionsCm?.chestNumber) * 10 : 0;
-        const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(associatedNumberHeight > 0) && !(configuredHeight > 0);
-        const requestedHeightMm = associatedNumberHeight > 0 ? associatedNumberHeight : configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
+        const configuredHeight = profileFieldPhysicalHeightMm(association, profile, field, variant);
+        const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(configuredHeight > 0);
+        const requestedHeightMm = configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
         const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association, { field, profileId: profile?.id, requestedHeightMm }) : { association: null, asset: null, ambiguous: false };
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: profile?.productionSourceSetId,
@@ -5444,7 +5531,9 @@ function lineFromOrderItem(state, order, item, index) {
   const value = String(item.personalization ?? item.product).trim();
   const numeric = value.match(/(?:Rug|Short|Nummer)?\s*(\d{1,4})/iu)?.[1];
   const profile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
-  const configuredHeight = Number(item.backNumberProduction?.physicalHeightMm) || Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10 || 30;
+  const association = state.associations.find(({ id, name }) => id === item.association || name === item.association);
+  const supportedField = (profile?.supports ?? []).length === 1 ? profile.supports[0] : null;
+  const configuredHeight = profileFieldPhysicalHeightMm(association, profile, supportedField, item) || 30;
   const content = numeric ?? value.slice(0, 160);
   return { id: `legacy-line-${order.id}-${index + 1}`, type: numeric ? "NUMBER" : "TEXT", content, source: { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) }, widthMm: Math.round(Math.max(20, configuredHeight * Math.max(0.5, content.length * 0.48)) * 1000) / 1000, heightMm: Math.round(configuredHeight * 1000) / 1000, quantity: item.quantity, preview: { kind: "PROFILE_REFERENCE", label: value, aspectRatioLocked: false }, provenance: item.sourceProvenance ?? `Order ${order.id}`, proofStatus: "CONFIGURED", validation: { status: item.productionReadiness?.status === "DATA_GAP" ? "BLOCKED" : "VALID", reason: item.productionReadiness?.reason ?? null } };
 }

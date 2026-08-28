@@ -10,11 +10,11 @@ import { initialLibraryTeamkitDraft, transitionLibraryTeamkitDraft } from "../sr
 
 const passwords = { kevin: "Review-Kevin-2026!", patrick: "Review-Patrick-2026!", collega: "Review-Store-2026!", "donovan-support": "Review-Support-2026!" };
 
-async function fixture(context, reviewPrincipalIds = []) {
+async function fixture(context, reviewPrincipalIds = [], activeReviewCandidateIds = reviewPrincipalIds.length ? ["spw-r20-human-review-20260827"] : []) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-review-mode-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), allowedOrigin: "https://workspace.sportpaleis.nl", uploadsEnabled: true, reviewPrincipalIds });
+  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), allowedOrigin: "https://workspace.sportpaleis.nl", uploadsEnabled: true, reviewPrincipalIds, activeReviewCandidateIds });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const employee = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
@@ -44,8 +44,11 @@ test("Review Mode is default-deny en vereist exact principal, adminrol én besta
 test("runtime accepteert alleen canonical principal IDs en blijft zonder configuratie fail-closed", () => {
   const base = { NODE_ENV: "test", APP_ENV: "test", WORKSPACE_DATA_FILE: "state.json", WORKSPACE_BACKUP_DIRECTORY: "backups", SESSION_COOKIE_SECURE: "false" };
   assert.deepEqual(parseWorkspaceRuntimeConfig(base).reviewPrincipalIds, []);
+  assert.deepEqual(parseWorkspaceRuntimeConfig(base).activeReviewCandidateIds, []);
   assert.deepEqual(parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_REVIEW_PRINCIPAL_IDS: "user-25812f676558376d" }).reviewPrincipalIds, ["user-25812f676558376d"]);
+  assert.deepEqual(parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS: "spw-r20-human-review-20260827" }).activeReviewCandidateIds, ["spw-r20-human-review-20260827"]);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_REVIEW_PRINCIPAL_IDS: "Donovan Weide" }), WorkspaceRuntimeConfigError);
+  assert.throws(() => parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS: "../candidate" }), WorkspaceRuntimeConfigError);
 });
 
 test("candidate gebruikt alleen disposable session-state en bevat geen productie- of cross-tenant authority", async () => {

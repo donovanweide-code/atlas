@@ -33,7 +33,9 @@ export const OWNER_SUPPLIED_FONT_EVIDENCE = Object.freeze({
     version: "Version 1.00 2015",
     sha256: "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585",
     contractValidation: "TECHNICALLY_VALID",
-    profileMatchStatus: "NOT_PROVEN",
+    profileMatchStatus: "HUMAN_PRODUCT_TRUTH_CONFIRMED",
+    canonicalProfileName: "Spain",
+    confirmedUse: "SC Buitenboys shortnummer",
   }),
 });
 

@@ -174,7 +174,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(source, /Productievoorstel maken… Workspace blijft bezig/u);
   assert.match(source, /Klaar voor productie/u);
   assert.match(source, /Aandacht nodig/u);
-  assert.match(source, /action: "Oplossen ›"/u);
+  assert.match(source, /action: "Order controleren ›"/u);
   assert.match(source, /data-action="select-all-completion-orders"[^]*?>Alles selecteren</u);
   assert.match(source, /data-action="bulk-complete-production-orders"[^]*?>Gereed</u);
   assert.match(source, /filterButton\("deleted", "Verwijderd"\)/u);

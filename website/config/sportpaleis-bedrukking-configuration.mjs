@@ -1,7 +1,7 @@
 import { SPORTPALEIS_ASSOCIATION_LOGOS } from "./sportpaleis-association-logos.generated.mjs";
 import { SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS } from "./sportpaleis-final-prelive-catalog.generated.mjs";
 
-export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-007-20260826";
+export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-008-20260828";
 
 export const SPORTPALEIS_FONT_CONFIRMATION = Object.freeze({
   id: "SPW-HUMAN-FONT-CONFIRMATION-001-20260812",
@@ -14,7 +14,7 @@ export const SPORTPALEIS_FONT_ASSET_INVENTORY = Object.freeze([
   Object.freeze({ canonicalName: "Myriad Pro Italic", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: null }),
   Object.freeze({ canonicalName: "Myriad Pro Bold", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: Object.freeze({ filename: "Buitenhout - Lelystad nummers.ai", format: "AI_VECTOR_REFERENCE", sha256: "DE29A4CA4B77D429327E2A5758993687DB3A34C57CA3D7951763BD15F4FCF6B8", status: "PRESENT_NOT_A_FONT_FILE" }) }),
   Object.freeze({ canonicalName: "FFF englisch", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: Object.freeze({ filename: "Pioneers nummers.ai", format: "AI_VECTOR_REFERENCE", sha256: "FB2D8FF0939ACAE08FF4264C02775A317988F21DD09B6CA4F5DF178A1F7A3582", status: "PRESENT_NOT_A_FONT_FILE" }) }),
-  Object.freeze({ canonicalName: "Spain", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: null }),
+  Object.freeze({ canonicalName: "Spain", fontAssetStatus: "HUMAN_PRODUCT_TRUTH_CONFIRMED", registeredFontAssetId: null, referenceAsset: Object.freeze({ filename: "Spain .ttf", familyName: "Spain Euro 2016", postScriptName: "SpainEuro-Regular", format: "TTF", sha256: "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585", status: "EXACT_IDENTITY_CONFIRMED_DYNAMIC_LIBRARY_LINK" }) }),
   Object.freeze({ canonicalName: "Schluber", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: null }),
   Object.freeze({ canonicalName: "Viking-Normal", fontAssetStatus: "DATA_GAP", registeredFontAssetId: null, referenceAsset: null, identityStatus: "ASSOCIATION_MISMATCH_FSA_VS_HBSA" }),
 ]);
@@ -33,7 +33,7 @@ const FONT_CONFIRMATION_BY_ASSOCIATION = Object.freeze({
   HBSA: Object.freeze({ confirmedAssociationName: "FSA", confirmedValue: "Viking-Normal", canonicalName: "Viking-Normal", associationNameStatus: "MISMATCH", applied: false, reason: "De Human Confirmation noemt FSA, terwijl de bestaande bronvereniging HBSA heet. Deze identiteiten zijn niet zonder aanvullend bewijs gelijkgesteld." }),
   "MHC Lelystad": Object.freeze({ confirmedValue: "Myrad pro - Bold", canonicalName: "Myriad Pro Bold", reference: "Buitenhout - Lelystad nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
   Najaden: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
-  "SC Buitenboys": Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
+  "SC Buitenboys": Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber", exception: "Shortnummer gebruikt Spain Euro 2016 / SpainEuro-Regular" }),
   "SC Geinburgia": Object.freeze({ confirmedValue: "Spain", canonicalName: "Spain" }),
   "Sporting Almere": Object.freeze({ confirmedValue: "Spain", canonicalName: "Spain" }),
   "VVA / Spartaan": Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),

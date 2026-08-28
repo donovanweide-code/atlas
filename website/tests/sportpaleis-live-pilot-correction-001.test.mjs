@@ -103,7 +103,7 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     const profile = bootstrap.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber");
     assert.equal(profile.fontProfile, "schluber · pilotcorrectie");
     assert.equal(profile.foilColor, "Wit");
-    assert.match(profile.sizeLabel, /Rug Senior 21 cm/);
+    assert.match(profile.sizeLabel, /Rug Senior 210 mm/);
     assert.equal(bootstrap.orders.find(({ id }) => id === existing.id).items[0].foilColor, "Wit");
     const after = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Na voorstel", customerEmail: "navoorstel@example.nl", customerPhone: "0612345678",

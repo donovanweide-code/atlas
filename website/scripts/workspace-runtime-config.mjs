@@ -16,6 +16,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   wbdWorkspaceBaseUrl: string,
  *   releaseId: string,
  *   reviewPrincipalIds: readonly string[],
+ *   activeReviewCandidateIds: readonly string[],
  *   distDir: string,
  *   logLevel: LogLevel,
  *   productionDatabases: Readonly<{
@@ -201,6 +202,13 @@ export function parseWorkspaceRuntimeConfig(env) {
   if (reviewPrincipalIds.some((entry) => !/^user-[a-f0-9]{16}$/u.test(entry))) {
     throw new WorkspaceRuntimeConfigError("SPORTPALEIS_REVIEW_PRINCIPAL_IDS bevat een ongeldige canonical principal ID.");
   }
+  const activeReviewCandidateIds = Object.freeze(value(env, "SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean));
+  if (activeReviewCandidateIds.some((entry) => !/^[a-z0-9][a-z0-9-]{0,127}$/u.test(entry))) {
+    throw new WorkspaceRuntimeConfigError("SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS bevat een ongeldige candidate ID.");
+  }
 
   const logLevel = value(env, "LOG_LEVEL") || "info";
   if (!new Set(["debug", "info", "warn", "error"]).has(logLevel)) {
@@ -238,6 +246,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     wbdWorkspaceBaseUrl,
     releaseId,
     reviewPrincipalIds,
+    activeReviewCandidateIds,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,
     productionDatabases,

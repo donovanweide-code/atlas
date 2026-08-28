@@ -276,7 +276,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "imageKey": "sp-live-138505",
     "category": "Live bedrukartikel",
     "association": "Almere Pioneers",
-    "profileId": "profile-source-almerer-pioneers-name",
+    "profileId": "profile-source-almere-pioneers-name",
     "supports": [
       "name"
     ],
@@ -9914,6 +9914,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
+    "foilColorOverride": "Blauw",
     "supports": [
       "backNumber"
     ],
@@ -10001,6 +10002,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-shortsNumber",
+    "foilColorOverride": "Wit",
     "supports": [
       "shortsNumber"
     ],
@@ -10088,6 +10090,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
+    "foilColorOverride": "Wit",
     "supports": [
       "backNumber"
     ],

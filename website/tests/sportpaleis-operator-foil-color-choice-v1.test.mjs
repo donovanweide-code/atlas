@@ -106,7 +106,7 @@ test("gelijktijdige medewerkerkeuzes leveren nooit twee actieve kleuren in dezel
 test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /availableColorCount > 1 \? "Welke foliekleur wil je nu produceren\?" : "Nu maken"/u);
-  assert.match(source, /De enige veilige OPEN foliekleur staat klaar/u);
+  assert.match(source, /De enige veilige foliekleur staat klaar/u);
   assert.match(source, /BESCHIKBARE FOLIEKLEUR/u);
   assert.match(source, /NOG TE PRODUCEREN/u);
   assert.match(source, /data-remaining-open-production-group/u);

@@ -339,7 +339,7 @@ export interface AssociationConfiguration {
     canonicalName: string | null;
     confirmationStatus: "MATCH" | "MISMATCH" | "DATA_GAP";
     applied: boolean;
-    assetStatus: "DATA_GAP" | "PRESENT";
+    assetStatus: "DATA_GAP" | "PRESENT" | "HUMAN_PRODUCT_TRUTH_CONFIRMED";
     assetId: string | null;
     reference: string | null;
     referenceKind: "VECTOR_CONTOUR_REFERENCE" | null;

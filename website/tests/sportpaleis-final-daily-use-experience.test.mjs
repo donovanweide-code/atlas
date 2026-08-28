@@ -7,7 +7,7 @@ test("Productie toont fysieke batches en houdt technische PlotJob-identiteit in 
   assert.match(source, /Nu maken/u);
   assert.match(source, /\+ Bekijk wat meegaat/u);
   assert.match(source, /Plot-\/printhistorie/u);
-  assert.match(source, /Een voorstel, SVG of voorbereide PlotJob rondt een kleur nooit af; alleen Bedrukt doet dat/u);
+  assert.match(source, /Een voorstel of productiebestand rondt een kleur nooit af; alleen Bedrukt doet dat/u);
   assert.match(source, /BATCH AFGEROND/u);
   assert.match(source, /select-completed-batch-orders/u);
   assert.match(source, /Eerder productiewerk/u);

@@ -66,5 +66,7 @@ test("owner font evidence records exact internal identities and remains fail-clo
   assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.arialRegular.ingestStatus, "BLOCKED_CANDIDATE_READ_ONLY");
   assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.fullName, "Spain Euro 2016 Regular");
   assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.postscriptName, "SpainEuro-Regular");
-  assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.profileMatchStatus, "NOT_PROVEN");
+  assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.profileMatchStatus, "HUMAN_PRODUCT_TRUTH_CONFIRMED");
+  assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.canonicalProfileName, "Spain");
+  assert.equal(OWNER_SUPPLIED_FONT_EVIDENCE.spain.confirmedUse, "SC Buitenboys shortnummer");
 });
