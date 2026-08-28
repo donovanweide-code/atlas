@@ -141,6 +141,23 @@ test("Fontbibliotheek toont de uploadflow alleen bij de server-side admincapabil
   assert.match(source, /state\.currentUser\.role !== "admin"/);
   assert.match(source, /state\.capabilities\.fontUploadsEnabled/);
   assert.match(source, /Alleen een bevoegde beheerder kan een productie-font toevoegen/);
-  assert.match(source, /TTF, OTF, WOFF of WOFF2/);
-  assert.match(source, /Technisch valideren en toevoegen/);
+  assert.match(source, /Fontbestand/);
+  assert.match(source, /Valideren en toevoegen/);
+  const fontForm = source.slice(source.indexOf("data-production-font-form"), source.indexOf("data-production-font-form") + 1_500);
+  assert.doesNotMatch(fontForm, /name="provenance"[^>]*required/);
+});
+
+test("beheerder hoeft geen technische provenance in te voeren; audit vult veilige herkomst aan", async (context) => {
+  const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-font-minimal-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
+  const service = new SportpaleisPilotService({ store, uploadsEnabled: false, fontUploadsEnabled: true });
+  await service.initialize();
+  const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
+  const sourceBytes = await readFile(new URL("../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf", import.meta.url));
+  const added = await service.addProductionFont(admin.token, admin.csrfToken, { name: "Minimale invoer", filename: "LiberationSans-Italic.ttf", dataBase64: sourceBytes.toString("base64"), provenance: "", allowedInStore: true });
+  const stored = (await store.read()).productionFonts.find(({ id }) => id === added.id);
+  assert.match(stored.provenance, /via Beheer/u);
+  assert.equal(stored.uploadedBy.userId, admin.user.id);
+  assert.equal(stored.allowedInStore, true);
 });

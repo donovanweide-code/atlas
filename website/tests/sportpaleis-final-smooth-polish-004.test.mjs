@@ -40,8 +40,8 @@ test("Teamorder accepteert geldige verwerkte invoer zonder verborgen native requ
 test("Vrije opdruk accepteert ontbrekend artikel en maat in UI en server", async (context) => {
   const source = await readFile(sourceUrl, "utf8");
   const serviceSource = await readFile(serviceUrl, "utf8");
-  assert.match(source, /Artikel \(optioneel\)<input name="product" placeholder=/u);
-  assert.match(source, /Maat \(optioneel\)<input name="size" placeholder=/u);
+  assert.match(source, /Artikel<input name="product" placeholder="Optioneel"/u);
+  assert.match(source, /Kledingmaat<input name="size" placeholder="Optioneel"/u);
   assert.doesNotMatch(source, /Artikel<input name="product" required/u);
   assert.match(serviceSource, /options\.freeProduction \? \(optional\(item\.product, 120\) \|\| "Vrije opdruk"\)/u);
 

@@ -29,7 +29,7 @@ test("first-day medewerker vindt en begrijpt de primaire dagelijkse Sportpaleis-
 
 test("first-day medewerker kan de volledige Teamwear-flow bronmatig volgen", () => {
   assert.match(teamwearWorkspace, /Voor wie maken we dit\?/u);
-  assert.match(teamwearWorkspace, /Zoek een bekende klant, vereniging of team/u);
+  assert.match(teamwearWorkspace, /Naam, vereniging of team/u);
   assert.match(teamwearWorkspace, /Alleen indien nodig: team, contact of planning/u);
   assert.match(teamwearWorkspace, /Naar collectie/u);
   assert.match(teamwearExperience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);

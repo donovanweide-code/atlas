@@ -122,9 +122,9 @@ test("relevante beheerformulieren markeren klant-e-mail als optioneel", async ()
   const free = section("function freePrintingOrder", "function productionFonts");
   const orderDetail = section("function orderDetail", "function production(");
   for (const form of [bedrukken, teamorder, custom, free, orderDetail]) {
-    assert.match(form, /E-mail \(optioneel\)/u);
+    assert.match(form, /E-mail \(optioneel\)|E-mail<input name="customerEmail"[^>]*placeholder="Optioneel"/u);
     assert.doesNotMatch(form, /name="customerEmail"[^>]*\brequired\b/u);
-    assert.match(form, /Telefoon \(optioneel\)/u);
+    assert.match(form, /Telefoon \(optioneel\)|Telefoon<input name="customerPhone"[^>]*placeholder="Optioneel"/u);
     assert.doesNotMatch(form, /name="customerPhone"[^>]*\brequired\b/u);
   }
   assert.match(source, /if \(!edited && value\.customerEmail\)/u);

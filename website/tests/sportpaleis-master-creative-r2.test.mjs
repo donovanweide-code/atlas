@@ -77,7 +77,7 @@ test("HA-01 en HA-02 zijn zichtbaar als first-class input en intention-first con
   assert.match(workspace, /Plak, sleep of kies een beeld/u);
   assert.match(workspace, /addEventListener\("paste"/u);
   assert.match(workspace, /addEventListener\("drop"/u);
-  assert.match(workspace, /Een catalogusrecord is handig, maar nooit verplicht/u);
+  assert.match(workspace, /Je kunt ook zonder catalogusrecord beginnen/u);
   assert.match(teamwear, /Voor wie maken we dit\?/u);
   assert.match(teamwear, /data-teamwear-context-search/u);
   assert.doesNotMatch(teamwear, /<select name="contextId"/u);

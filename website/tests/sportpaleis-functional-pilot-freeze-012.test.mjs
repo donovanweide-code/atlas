@@ -126,5 +126,5 @@ test("Functional pilot freeze UX is context-first, preview-safe and responsive",
   assert.match(source, /minimumGapMm/);
   assert.match(source, /Fontbibliotheek/);
   assert.match(css, /@media\(max-width:560px\)/);
-  assert.match(css, /\.sp-free-line__fields\{grid-template-columns:1fr 1fr\}/);
+  assert.match(css, /\.sp-free-line__fields,\.sp-free-line__fields--primary\{grid-template-columns:1fr 1fr\}/);
 });
