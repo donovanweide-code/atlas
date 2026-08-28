@@ -131,8 +131,8 @@ test("Guided Setup benoemt bij afzonderlijke nummerbronnen de exacte profiel- en
   const workspaceSource = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(workspaceSource, /const sourceContext = \[sourceProfile\.name, humanProfileValue\(sourceProfile\.sizeLabel\)\]/u);
   assert.match(workspaceSource, /productiebron ontbreekt voor \$\{sourceContext \|\| sourceProfile\.name\}/u);
-  assert.match(workspaceSource, /Artikelen ontbreken voor \$\{association\.name\}/u);
-  assert.match(workspaceSource, /Productieprofiel ontbreekt voor \$\{association\.name\}/u);
+  assert.match(workspaceSource, /Nog geen actieve bedrukartikelen; richt dit pas in wanneer de vereniging ermee gaat werken\./u);
+  assert.match(workspaceSource, /Artikelen zijn bekend; koppel het eerste productieprofiel wanneer bedrukking nodig is\./u);
   assert.doesNotMatch(workspaceSource, /action: `Controleer \$\{missing\.join/u);
   assert.doesNotMatch(workspaceSource, />DATA_GAP · niet fysiek bevestigd</u);
   assert.doesNotMatch(workspaceSource, /value="\$\{esc\(price\?\.sourceLabel \?\? "DATA_GAP:/u);

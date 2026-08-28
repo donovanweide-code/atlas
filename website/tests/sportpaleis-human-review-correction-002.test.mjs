@@ -59,7 +59,8 @@ test("Orders en navigatie volgen de Human Review-scheiding zonder productiebedie
   const ordersSource = source.slice(source.indexOf("function orders("), source.indexOf("const printLabels"));
   const shellSource = source.slice(source.indexOf("function shell("), source.indexOf("function winkel("));
   assert.match(ordersSource, /sp-operational-order-row/);
-  assert.match(ordersSource, /Alles \+ testdata/);
+  assert.match(ordersSource, /filterButton\("all", "Alles"\)/);
+  assert.doesNotMatch(ordersSource, /Alles \+ testdata|testdata telt niet mee/i);
   assert.match(ordersSource, /Openen/);
   assert.match(source, /if \(order\.stage === "PRINT"\) return \{ label: "In behandeling"/);
   assert.doesNotMatch(ordersSource, /data-order-select|data-select-all|bulk-advance|Maak productievoorstel|productionPill/);

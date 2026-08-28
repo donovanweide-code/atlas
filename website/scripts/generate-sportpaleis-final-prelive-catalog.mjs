@@ -61,6 +61,13 @@ function profileId(product, field) {
   return `profile-source-${slug(product.association)}-${field}`;
 }
 
+const HUMAN_ARTICLE_TRUTH = Object.freeze({
+  "138505": Object.freeze({ association: "Almere Pioneers" }),
+  "141598": Object.freeze({ foilColorOverride: "Blauw" }),
+  "140294": Object.freeze({ foilColorOverride: "Wit" }),
+  "140305": Object.freeze({ foilColorOverride: "Wit" }),
+});
+
 function commonPrice(variantPrices) {
   const prices = [...new Set(Object.values(variantPrices ?? {}).filter((value) => typeof value === "number"))];
   return prices.length === 1 ? prices[0] : null;
@@ -79,6 +86,8 @@ function toArticle(product, index, duplicateSkus) {
   invariant(product.image, `Productafbeelding ontbreekt: ${product.sourceUrl}`);
   const identity = duplicateSkus.has(sku) ? `${safeSku(sku)}-${slug(product.association)}` : safeSku(sku);
   const imageKey = `sp-live-${identity}`;
+  const humanTruth = HUMAN_ARTICLE_TRUTH[sku] ?? {};
+  const canonicalProduct = humanTruth.association ? { ...product, association: humanTruth.association } : product;
   const rawVariantPrices = Object.entries(product.variantPrices ?? {}).filter(([size]) => size !== "__unit");
   const articleUnitPricesBySizeEur = Object.fromEntries(product.sizes.map(({ label }) => {
     const match = rawVariantPrices.find(([size]) => size.localeCompare(label, "nl", { sensitivity: "base" }) === 0);
@@ -95,8 +104,9 @@ function toArticle(product, index, duplicateSkus) {
     name: product.title,
     imageKey,
     category: "Live bedrukartikel",
-    association: product.association,
-    profileId: profileId(product, field),
+    association: canonicalProduct.association,
+    profileId: profileId(canonicalProduct, field),
+    ...(humanTruth.foilColorOverride ? { foilColorOverride: humanTruth.foilColorOverride } : {}),
     supports: field ? [field] : [],
     active: true,
     revision: 1,

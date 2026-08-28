@@ -38,7 +38,7 @@ test("human-confirmed verenigingfonts zijn canoniek vastgelegd zonder assetclaim
   for (const [association, font] of Object.entries(expected)) {
     assert.equal(byAssociation[association].fontProfile, font, association);
     assert.equal(byAssociation[association].fontEvidence.confirmationStatus, "MATCH", association);
-    assert.equal(byAssociation[association].fontEvidence.assetStatus, "DATA_GAP", association);
+    assert.equal(byAssociation[association].fontEvidence.assetStatus, font === "Spain" ? "HUMAN_PRODUCT_TRUTH_CONFIRMED" : "DATA_GAP", association);
     assert.equal(byAssociation[association].fontEvidence.assetId, null, association);
   }
   assert.equal(byAssociation.Sloeproeien.fontProfile, "DATA_GAP");
@@ -47,14 +47,19 @@ test("human-confirmed verenigingfonts zijn canoniek vastgelegd zonder assetclaim
   assert.equal(byAssociation.HBSA.fontEvidence.confirmationStatus, "MISMATCH");
   assert.equal(byAssociation.HBSA.fontEvidence.applied, false);
   assert.match(byAssociation.HBSA.fontEvidence.reason, /FSA.*HBSA/u);
+  assert.equal(byAssociation["SC Buitenboys"].fontEvidence.exception, "Shortnummer gebruikt Spain Euro 2016 / SpainEuro-Regular");
 });
 
 test("vectorverwijzingen worden niet als fontbestand gepromoveerd", () => {
   assert.equal(SPORTPALEIS_FONT_ASSET_INVENTORY.length, 6);
   for (const font of SPORTPALEIS_FONT_ASSET_INVENTORY) {
-    assert.equal(font.fontAssetStatus, "DATA_GAP", font.canonicalName);
+    assert.equal(font.fontAssetStatus, font.canonicalName === "Spain" ? "HUMAN_PRODUCT_TRUTH_CONFIRMED" : "DATA_GAP", font.canonicalName);
     assert.equal(font.registeredFontAssetId, null, font.canonicalName);
   }
+  const spain = SPORTPALEIS_FONT_ASSET_INVENTORY.find(({ canonicalName }) => canonicalName === "Spain");
+  assert.equal(spain.referenceAsset.familyName, "Spain Euro 2016");
+  assert.equal(spain.referenceAsset.postScriptName, "SpainEuro-Regular");
+  assert.equal(spain.referenceAsset.sha256, "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585");
   const pioneers = SPORTPALEIS_FONT_ASSET_INVENTORY.find(({ canonicalName }) => canonicalName === "FFF englisch");
   assert.deepEqual(pioneers.referenceAsset, {
     filename: "Pioneers nummers.ai",
