@@ -117,6 +117,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/orders/nieuw`,
   `${sportpaleisBoundary}/voorstellen`,
   `${sportpaleisBoundary}/voorstellen/nieuw`,
+  `${sportpaleisBoundary}/studio`,
   `${sportpaleisBoundary}/reviews/library-teamkit`,
   `${sportpaleisBoundary}/zoeken`,
   `${sportpaleisBoundary}/productie`,
@@ -139,6 +140,7 @@ const parameterizedWorkspaceRoutes = [
   /^\/workspace\/sportpaleis\/orders\/[^/]+$/,
   /^\/workspace\/sportpaleis\/voorstellen\/[^/]+$/,
   /^\/workspace\/sportpaleis\/voorstel\/[^/]+$/,
+  /^\/workspace\/sportpaleis\/studio\/[^/]+$/,
 ];
 
 const mimeTypes = new Map([
@@ -178,7 +180,7 @@ export function isKnownWorkspaceRoute(pathname) {
 
 function isCanonicalSportpaleisRoute(pathname) {
   const normalized = normalizePathname(pathname);
-  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/voorstellen", "/voorstel", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren", "/reviews"]
+  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/alles", "/orders", "/voorstellen", "/voorstel", "/studio", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren", "/reviews"]
     .some((root) => normalized === root || normalized.startsWith(`${root}/`));
 }
 

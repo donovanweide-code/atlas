@@ -61,8 +61,10 @@ import {
   createVisualStudioComposition,
   submitVisualStudioReview,
   updateVisualStudioComposition,
+  upgradeVisualStudioComposition,
   validateVisualStudioCompositions,
 } from "../src/sportpaleis/visual-studio.mjs";
+import { createCreativeVectorCandidate } from "../src/sportpaleis/creative-vectorization.mjs";
 import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
 import {
   approvedFulfillmentTasks,
@@ -538,6 +540,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     teamkitProposals: [],
     quickProductionIntakes: [],
     visualCompositions: [],
+    creativeVectorDrafts: [],
     preferences: {},
     audit: [{
       id: "audit-production-bootstrap",
@@ -790,6 +793,8 @@ export function migrateSportpaleisPilotState(input) {
   }
   state.quickProductionIntakes ??= [];
   state.visualCompositions ??= [];
+  state.visualCompositions = state.visualCompositions.map(upgradeVisualStudioComposition);
+  state.creativeVectorDrafts ??= [];
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
   const highestJobSequence = state.productionJobs.reduce((highest, { jobNumber }) => Math.max(highest, Number(String(jobNumber ?? "").match(/(\d+)$/u)?.[1] ?? 0)), 0);
@@ -1025,6 +1030,11 @@ export function validateSportpaleisPilotState(input) {
     if (intake.status === "ACCEPTED" && (!intake.orderId || !state.orders.some(({ id }) => id === intake.orderId))) throw new Error("Verwerkte Quick Production Intake mist de canonieke order.");
   }
   validateVisualStudioCompositions(state.visualCompositions);
+  if (new Set(state.creativeVectorDrafts.map(({ id }) => id)).size !== state.creativeVectorDrafts.length) throw new Error("Dubbel Creative Studio-vectorvoorstel.");
+  for (const draft of state.creativeVectorDrafts) {
+    if (draft.status !== "HUMAN_REVIEW_REQUIRED" || draft.engine !== "VTRACER_WASM_1_0_0_ALPHA_3" || draft.evidence?.canonicalPromotionPerformed !== false) throw new Error("Ongeldig Creative Studio-vectorvoorstel.");
+    if (sha256(Buffer.from(draft.source.dataBase64, "base64")).toUpperCase() !== draft.source.sha256 || sha256(draft.derivative.svg).toUpperCase() !== draft.derivative.sha256 || draft.evidence.sourceSha256 !== draft.source.sha256 || draft.evidence.derivativeSha256 !== draft.derivative.sha256) throw new Error("Creative Studio-vectorbewijs is gewijzigd.");
+  }
   for (const user of state.users) {
     if (!ROLE.has(user.role) || (user.status !== "Uitgenodigd" && !user.password?.hash)) throw new Error("Ongeldige gebruiker in datastore.");
   }
@@ -2068,6 +2078,7 @@ export class SportpaleisPilotService {
       teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       visualCompositions: ["admin", "operator"].includes(user.role) ? structuredClone(state.visualCompositions).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
+      creativeVectorDrafts: ["admin", "operator"].includes(user.role) ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
       associations: structuredClone(state.associations),
@@ -2855,6 +2866,50 @@ export class SportpaleisPilotService {
       return { state, value: structuredClone(updated) };
     });
     return result.value;
+  }
+
+  async createCreativeVectorDraft(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    if (!this.productionAssetUploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "CREATIVE_VECTOR_UPLOADS_DISABLED" });
+    const bytes = Buffer.from(requiredText(payload.dataBase64, "Beeldbron", 12 * 1024 * 1024), "base64");
+    const filename = requiredText(payload.filename, "Bestandsnaam", 180);
+    const mimeType = allowedValue(payload.mimeType, ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"], "Bestandstype");
+    const candidate = await createCreativeVectorCandidate({ bytes, filename, mimeType, officialVectorAvailable: payload.officialVectorAvailable === true });
+    const result = await this.store.mutate(async (state) => {
+      state.creativeVectorDrafts ??= [];
+      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_CREATIVE_VECTOR_DRAFT", () => {
+        const duplicate = state.creativeVectorDrafts.find(({ source }) => source.sha256 === candidate.preflight.source.sha256);
+        if (duplicate) return publicCreativeVectorDraft(duplicate);
+        const draft = {
+          id: candidate.id,
+          status: candidate.status,
+          engine: candidate.engine,
+          sourceClass: candidate.preflight.sourceClass,
+          source: { ...candidate.preflight.source, dataBase64: bytes.toString("base64") },
+          derivative: { ...candidate.derivative },
+          evidence: candidate.evidence,
+          createdAt: iso(),
+          createdBy: { userId: user.id, name: user.name },
+        };
+        state.creativeVectorDrafts.unshift(draft);
+        audit(state, user.id, "Creative Studio-vectorvoorstel gemaakt", draft.id, { sourceSha256: draft.source.sha256, derivativeSha256: draft.derivative.sha256, engine: draft.engine, sourceClass: draft.sourceClass, canonicalPromotionPerformed: false });
+        return publicCreativeVectorDraft(draft);
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async creativeVectorDraftFile(token, draftId, kind) {
+    const { user } = await this.authenticate(token);
+    assertRole(user, ["admin", "operator"]);
+    const state = await this.store.read();
+    const draft = state.creativeVectorDrafts?.find(({ id }) => id === draftId);
+    if (!draft) throw Object.assign(new Error("Vectorvoorstel niet gevonden."), { statusCode: 404, code: "CREATIVE_VECTOR_DRAFT_NOT_FOUND" });
+    if (kind === "source") return { mimeType: draft.source.mimeType, bytes: Buffer.from(draft.source.dataBase64, "base64"), filename: draft.source.filename, sha256: draft.source.sha256, cacheControl: "private, no-store" };
+    return { mimeType: "image/svg+xml", bytes: Buffer.from(draft.derivative.svg), filename: `${path.parse(draft.source.filename).name}-voorstel.svg`, sha256: draft.derivative.sha256, cacheControl: "private, no-store", allowSameOriginFrame: true };
   }
 
   async ingestWebshopMailDocument(token, csrfToken, payload, idempotencyKey) {
@@ -5040,6 +5095,14 @@ function publicProductionAssetSource(source) {
   });
 }
 
+function publicCreativeVectorDraft(draft) {
+  return structuredClone({
+    ...draft,
+    source: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(draft.source),
+    derivative: (({ svg: _svg, ...metadata }) => metadata)(draft.derivative),
+  });
+}
+
 function publicProductionElement(element) {
   return structuredClone({
     ...element,
@@ -6487,6 +6550,15 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const visualCompositionReviewMatch = route.match(/^\/api\/sportpaleis\/v1\/visual-compositions\/([^/]+)\/review$/);
       if (visualCompositionReviewMatch && method === "POST") {
         json(response, 200, await service.submitVisualCompositionReview(token, csrf, decodeURIComponent(visualCompositionReviewMatch[1]), await readJson(request)));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/creative-vector-drafts" && method === "POST") {
+        json(response, 201, await service.createCreativeVectorDraft(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const creativeVectorFileMatch = route.match(/^\/api\/sportpaleis\/v1\/creative-vector-drafts\/([^/]+)\/(source|derivative)$/);
+      if (creativeVectorFileMatch && method === "GET") {
+        binary(response, 200, await service.creativeVectorDraftFile(token, decodeURIComponent(creativeVectorFileMatch[1]), creativeVectorFileMatch[2]));
         return true;
       }
       if (route === "/api/sportpaleis/v1/webshop-intakes/mail-document" && method === "POST") {

@@ -23,6 +23,7 @@ import type {
   SportpaleisProductionAssetSource,
   SportpaleisQuickProductionIntake,
   SportpaleisVisualComposition,
+  SportpaleisCreativeVectorDraft,
   TeamkitProposal,
   TeamkitProposalItem,
   TeamkitFulfillmentRoute,
@@ -318,12 +319,16 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/visual-compositions`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("visual-composition") }, body: JSON.stringify(input) }));
   }
 
-  async updateVisualComposition(composition: SportpaleisVisualComposition, input: { title: string; artDirection: string; geometry: SportpaleisVisualComposition["geometry"] }): Promise<SportpaleisVisualComposition> {
+  async updateVisualComposition(composition: SportpaleisVisualComposition, input: { title: string; artDirection: string; directionId: SportpaleisVisualComposition["directionId"]; geometry: SportpaleisVisualComposition["geometry"] }): Promise<SportpaleisVisualComposition> {
     return responseBody(await this.#mutatingFetch(`${API}/visual-compositions/${encodeURIComponent(composition.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, expectedRevision: composition.revision }) }));
   }
 
   async submitVisualCompositionReview(composition: SportpaleisVisualComposition): Promise<SportpaleisVisualComposition> {
     return responseBody(await this.#mutatingFetch(`${API}/visual-compositions/${encodeURIComponent(composition.id)}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: composition.revision }) }));
+  }
+
+  async createCreativeVectorDraft(input: { filename: string; mimeType: string; dataBase64: string; officialVectorAvailable: boolean }): Promise<{ duplicate: boolean; value: SportpaleisCreativeVectorDraft }> {
+    return responseBody(await this.#mutatingFetch(`${API}/creative-vector-drafts`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("creative-vector-draft") }, body: JSON.stringify(input) }));
   }
 
   async ingestWebshopMailDocument(input: { sourceMessageId: string; receivedAt: string; filename: string; mimeType: "application/pdf"; dataBase64: string }): Promise<{ duplicate: boolean; value: unknown }> {

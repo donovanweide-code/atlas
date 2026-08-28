@@ -638,6 +638,7 @@ export interface SportpaleisQuickProductionIntake {
 
 export type SportpaleisVisualConcept = "SEASON_START" | "PRODUCT_FOCUS" | "CLUB_MOMENT";
 export type SportpaleisVisualChannel = "HOMEPAGE" | "SOCIAL_SQUARE" | "STORY" | "MAIL_HERO" | "TEAMWEAR_PROOF";
+export type SportpaleisVisualDirection = "EDITORIAL_IMPACT" | "PERFORMANCE_ENERGY" | "PRODUCT_PRECISION" | "CLUB_PRIDE";
 
 /**
  * A Visual Studio composition is creative output, not a second product or
@@ -651,6 +652,7 @@ export interface SportpaleisVisualComposition {
   concept: SportpaleisVisualConcept;
   title: string;
   artDirection: string;
+  directionId: SportpaleisVisualDirection;
   productRef: {
     articleId: string;
     articleRevision: number;
@@ -674,6 +676,14 @@ export interface SportpaleisVisualComposition {
     channel: SportpaleisVisualChannel;
     widthPx: number;
     heightPx: number;
+    layout: {
+      crop: "WIDE_EDITORIAL" | "SQUARE_FOCAL" | "PORTRAIT_FULL" | "SHALLOW_WIDE" | "SQUARE_PROOF";
+      copyAnchor: "LEFT_BOTTOM" | "LEFT_TOP" | "LEFT_CENTER";
+      productScaleFactor: number;
+      safeInsetPercent: number;
+      emphasis: "CAMPAIGN" | "PRODUCT" | "MOMENT" | "MESSAGE" | "SOURCE_TRUTH";
+      product: { xPercent: number; yPercent: number; scale: number };
+    };
     renderHash: string;
   }[];
   checks: {
@@ -688,6 +698,18 @@ export interface SportpaleisVisualComposition {
   createdBy: { userId: string; name: string };
   updatedAt: string;
   updatedBy: { userId: string; name: string };
+}
+
+export interface SportpaleisCreativeVectorDraft {
+  id: string;
+  status: "HUMAN_REVIEW_REQUIRED";
+  engine: "VTRACER_WASM_1_0_0_ALPHA_3";
+  sourceClass: "MONOCHROME_LINE" | "FLAT_LOGO" | "MULTICOLOR_BADGE";
+  source: { filename: string; mimeType: string; bytes: number; sha256: string; width: number; height: number; aspectRatio: number; transparencyRatio: number };
+  derivative: { mimeType: "image/svg+xml"; sha256: string; bytes: number; pathCount: number; fillColors: string[]; width: number; height: number; geometryHash: string };
+  evidence: { sourceSha256: string; derivativeSha256: string; latencyMs: number; warnings: string[]; canonicalPromotionPerformed: false };
+  createdAt: string;
+  createdBy: { userId: string; name: string };
 }
 
 export interface SportpaleisProductionElementRequirement {
@@ -1199,6 +1221,7 @@ export interface SportpaleisWorkspaceState {
   productionAssetSources?: SportpaleisProductionAssetSource[];
   quickProductionIntakes?: SportpaleisQuickProductionIntake[];
   visualCompositions?: SportpaleisVisualComposition[];
+  creativeVectorDrafts?: SportpaleisCreativeVectorDraft[];
   productionFonts: SportpaleisProductionFont[];
   productionElementRequirements: SportpaleisProductionElementRequirement[];
   productionJobs: ProductionJob[];

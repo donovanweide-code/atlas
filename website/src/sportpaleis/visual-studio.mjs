@@ -8,6 +8,23 @@ export const VISUAL_STUDIO_CHANNELS = Object.freeze([
   Object.freeze({ channel: "TEAMWEAR_PROOF", widthPx: 1200, heightPx: 1200 }),
 ]);
 
+export const VISUAL_STUDIO_DIRECTIONS = Object.freeze([
+  Object.freeze({ id: "EDITORIAL_IMPACT", label: "Editorial impact", promise: "Veel rust, sterke typografie en één heldere blikvanger.", palette: "LIGHT", composition: "ASYMMETRIC" }),
+  Object.freeze({ id: "PERFORMANCE_ENERGY", label: "Performance energy", promise: "Tempo, contrast en beweging zonder het product te vervormen.", palette: "DARK", composition: "DIAGONAL" }),
+  Object.freeze({ id: "PRODUCT_PRECISION", label: "Product precision", promise: "Materiaal en pasvorm staan overtuigend en precies centraal.", palette: "NEUTRAL", composition: "CENTERED" }),
+  Object.freeze({ id: "CLUB_PRIDE", label: "Club pride", promise: "Clubidentiteit en teamgevoel krijgen een herkenbare hoofdrol.", palette: "CLUB", composition: "BADGE_LED" }),
+]);
+
+const DIRECTION_IDS = new Set(VISUAL_STUDIO_DIRECTIONS.map(({ id }) => id));
+
+const CHANNEL_ART_DIRECTION = Object.freeze({
+  HOMEPAGE: Object.freeze({ crop: "WIDE_EDITORIAL", copyAnchor: "LEFT_BOTTOM", productScaleFactor: 1, safeInsetPercent: 8, emphasis: "CAMPAIGN" }),
+  SOCIAL_SQUARE: Object.freeze({ crop: "SQUARE_FOCAL", copyAnchor: "LEFT_BOTTOM", productScaleFactor: 0.9, safeInsetPercent: 9, emphasis: "PRODUCT" }),
+  STORY: Object.freeze({ crop: "PORTRAIT_FULL", copyAnchor: "LEFT_TOP", productScaleFactor: 0.82, safeInsetPercent: 10, emphasis: "MOMENT" }),
+  MAIL_HERO: Object.freeze({ crop: "SHALLOW_WIDE", copyAnchor: "LEFT_CENTER", productScaleFactor: 0.78, safeInsetPercent: 10, emphasis: "MESSAGE" }),
+  TEAMWEAR_PROOF: Object.freeze({ crop: "SQUARE_PROOF", copyAnchor: "LEFT_BOTTOM", productScaleFactor: 0.88, safeInsetPercent: 12, emphasis: "SOURCE_TRUTH" }),
+});
+
 const hash = (value) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 const text = (value, maximum) => String(value ?? "").trim().slice(0, maximum);
 const number = (value, minimum, maximum, fallback) => {
@@ -58,21 +75,47 @@ function truthPayload(composition) {
     concept: composition.concept,
     title: composition.title,
     artDirection: composition.artDirection,
+    directionId: composition.directionId,
     productRef: composition.productRef,
     assetRefs: composition.assetRefs,
     geometry: composition.geometry,
   };
 }
 
+function directionId(value, concept) {
+  if (DIRECTION_IDS.has(value)) return value;
+  if (concept === "CLUB_MOMENT") return "CLUB_PRIDE";
+  if (concept === "PRODUCT_FOCUS") return "PRODUCT_PRECISION";
+  return "EDITORIAL_IMPACT";
+}
+
+function channelLayout(channel, direction, geometry) {
+  const base = CHANNEL_ART_DIRECTION[channel.channel];
+  const directionShift = direction === "PERFORMANCE_ENERGY" ? 5 : direction === "CLUB_PRIDE" ? -3 : 0;
+  const portraitShift = channel.channel === "STORY" ? -8 : 0;
+  return {
+    ...base,
+    product: {
+      xPercent: Math.min(82, Math.max(18, geometry.product.xPercent + directionShift)),
+      yPercent: Math.min(82, Math.max(18, geometry.product.yPercent + portraitShift)),
+      scale: Number((geometry.product.scale * base.productScaleFactor).toFixed(3)),
+    },
+  };
+}
+
 export function finalizeVisualStudioComposition(input) {
-  const compositionHash = hash(truthPayload(input));
-  const channels = VISUAL_STUDIO_CHANNELS.map((channel) => ({ ...channel, renderHash: hash(`${compositionHash}:${channel.channel}:${channel.widthPx}x${channel.heightPx}`) }));
+  const normalized = { ...input, directionId: directionId(input.directionId, input.concept) };
+  const compositionHash = hash(truthPayload(normalized));
+  const channels = VISUAL_STUDIO_CHANNELS.map((channel) => {
+    const layout = channelLayout(channel, normalized.directionId, normalized.geometry);
+    return { ...channel, layout, renderHash: hash({ compositionHash, channel, layout }) };
+  });
   const withinBounds = input.geometry.product.xPercent >= 18 && input.geometry.product.xPercent <= 82
     && input.geometry.product.yPercent >= 18 && input.geometry.product.yPercent <= 82
     && input.geometry.assets.every(({ xPercent, yPercent }) => xPercent >= 8 && xPercent <= 92 && yPercent >= 8 && yPercent <= 92);
   const warnings = [!input.assetRefs.length ? "Voeg minimaal één gecontroleerde Bibliotheekbron toe." : "", !input.artDirection ? "Leg de art-direction kort vast." : "", !withinBounds ? "Een element valt buiten de veilige compositieruimte." : ""].filter(Boolean);
   return {
-    ...input,
+    ...normalized,
     channels,
     checks: { canonicalProductLocked: true, canonicalAssetsLocked: true, withinBounds, readyForReview: warnings.length === 0, warnings },
     compositionHash,
@@ -83,13 +126,16 @@ export function createVisualStudioComposition({ id, now, user, concept, title, a
   if (!article) throw Object.assign(new Error("Kies een bestaand Sportpaleis-product."), { statusCode: 400, code: "VISUAL_PRODUCT_REQUIRED" });
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   const assetRefs = assets.map((asset) => visualStudioAssetRef(asset, sourceById.get(asset.sourceId)));
+  const selectedDirectionId = directionId(undefined, concept);
+  const selectedDirection = VISUAL_STUDIO_DIRECTIONS.find(({ id: candidateId }) => candidateId === selectedDirectionId);
   return finalizeVisualStudioComposition({
     id,
     revision: 1,
     status: "DRAFT",
     concept: ["SEASON_START", "PRODUCT_FOCUS", "CLUB_MOMENT"].includes(concept) ? concept : "PRODUCT_FOCUS",
     title: text(title || article.name, 120),
-    artDirection: text(artDirection, 500),
+    artDirection: text(artDirection || selectedDirection?.promise, 500),
+    directionId: selectedDirectionId,
     productRef: visualStudioProductRef(article),
     assetRefs,
     geometry: normalizedGeometry({}, assetRefs),
@@ -108,11 +154,16 @@ export function updateVisualStudioComposition(existing, input, user, now) {
     status: "DRAFT",
     title: text(input.title ?? existing.title, 120),
     artDirection: text(input.artDirection ?? existing.artDirection, 500),
+    directionId: directionId(input.directionId ?? existing.directionId, existing.concept),
     geometry: normalizedGeometry(input.geometry ?? existing.geometry, existing.assetRefs),
     updatedAt: now,
     updatedBy: { userId: user.id, name: user.name },
   };
   return finalizeVisualStudioComposition(next);
+}
+
+export function upgradeVisualStudioComposition(existing) {
+  return finalizeVisualStudioComposition({ ...existing, directionId: directionId(existing.directionId, existing.concept) });
 }
 
 export function submitVisualStudioReview(existing, expectedRevision, user, now) {
