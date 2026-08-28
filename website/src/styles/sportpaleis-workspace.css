@@ -737,6 +737,10 @@ form[data-settings-form] input, form[data-settings-form] textarea { width: 100%;
 .sp-size-class--override { grid-column: 1 / -1; padding: 9px; border-radius: 8px; background: #fff; }
 .sp-correction-banner { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 12px 16px; border-left: 4px solid var(--sp-red); background: #fff; box-shadow: var(--sp-shadow); }
 .sp-correction-banner span { color: var(--sp-muted); font-size: 12px; }
+.sp-correction-toolbar { position: sticky; z-index: 30; top: calc(var(--sp-topbar) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid rgb(197 20 45 / 32%); border-radius: 10px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 30px rgb(18 26 22 / 14%); backdrop-filter: blur(12px); }
+.sp-correction-toolbar > div { display: grid; gap: 2px; }
+.sp-correction-toolbar span { color: var(--sp-muted); font-size: 12px; }
+.sp-correction-toolbar .sp-button { flex: 0 0 auto; }
 .sp-correction-link { display: inline-flex; margin: 12px 0 4px; }
 .sp-production-size { display: block; margin-top: 7px; padding: 7px 9px; border-radius: 6px; color: #2f2f2f; background: #f1f1f1; font-size: 11px; line-height: 1.45; }
 .sp-production-size.is-gap { color: #8e1118; background: #fff0f0; }
@@ -1465,6 +1469,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sp-selected-item__identity small{display:none}
 .sp-admin-links .sp-panel{display:grid;grid-template-rows:auto 1fr auto;min-height:118px}.sp-admin-links .sp-panel b{margin-top:12px;color:#444;font-size:.78rem}.sp-user-list--overview article{grid-template-columns:auto minmax(0,1fr) auto}.sp-user-list--overview article>div small{color:#666}.sp-invite-user{max-width:720px}.sp-invite-user form{display:grid;gap:12px;margin-top:14px}.sp-employee-record>summary{display:flex;justify-content:space-between;gap:14px}.sp-employee-record>summary span{color:#666;font-size:.8rem;font-weight:500}.sp-user-workareas{margin:4px 0 8px}.sp-user-workareas>summary{cursor:pointer;font-weight:800}.sp-user-workareas[open]>summary{margin-bottom:10px}.sp-user-rights{align-self:start}
 @media(max-width:760px){.sp-user-menu__panel{top:calc(var(--sp-topbar) + 4px);right:8px;max-height:calc(100dvh - var(--sp-topbar) - 20px);overflow:auto}.sp-production-summary-facts{grid-template-columns:1fr}.sp-replot-panel{position:static}.sp-replot-panel>.sp-button{min-height:50px}.sp-form-actions{display:grid;grid-template-columns:1fr}.sp-form-actions .sp-button{width:100%;min-height:48px}.sp-form-actions .sp-button--primary{grid-row:1}.sp-form-actions .sp-button--secondary{grid-row:2}.sp-production-line-proposal__grid{grid-template-columns:1fr}.sp-production-preview-facts{grid-template-columns:1fr}.sp-employee-record>summary{display:grid}.sp-price-lines{padding:14px}.sp-action-notice{position:static;max-width:none}.sp-proposal-go{align-items:stretch}.sp-proposal-go .sp-button{width:100%;min-height:50px}.sp-user-list--overview article{grid-template-columns:auto minmax(0,1fr)}.sp-user-list--overview article>.sp-button{grid-column:1/-1;width:100%}}
+@media(max-width:760px){.sp-correction-toolbar{top:calc(var(--sp-topbar) + 6px);display:grid;gap:10px;padding:11px 12px}.sp-correction-toolbar .sp-button{width:100%;min-height:48px}.sp-store-edit form{grid-template-columns:1fr}.sp-store-edit .sp-button{width:100%;min-height:48px}}
 
 /* Final pilot polish: calmer hierarchy without changing workflow semantics. */
 body{line-height:1.45}
