@@ -14,7 +14,7 @@ export interface TeamwearCatalogProduct extends SportpaleisCatalogProduct {
   advicePriceEur: number | null;
   sourceStatus: "AUTHORITATIVE" | "CONTROLLED_FIXTURE" | "DATA_GAP";
   syncStatus: "CURRENT" | "REVIEW_REQUIRED" | "NOT_CONNECTED";
-  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null; media: { kind: "FRONT" | "BACK" | "DETAIL"; imageKey: string }[] })[];
+  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null })[];
 }
 
 export interface TeamwearPriceQuote {
@@ -209,7 +209,7 @@ export function buildTeamwearCatalog(state: PilotBootstrap): TeamwearCatalogProd
     ...product, supplierName: product.brand === "Stanno" ? "Stanno / Deventrade" : product.brand || "Sportpaleis", supplierArticleName: product.model,
     supplierArticleNumber: product.variants[0]?.sourceArticleNumber ?? product.id, use: useFor(product.category, product.model), collection: product.variants.map(({ sourceArticleId }) => state.articles.find(({ id }) => id === sourceArticleId)?.teamwearCatalog?.collection).find(Boolean) ?? null, familyKey: null,
     advicePriceEur: priceFor(state, product), sourceStatus: product.variants.some(({ sourceArticleId }) => { const article = state.articles.find(({ id }) => id === sourceArticleId); return article?.teamwearCatalog?.status === "SELECTABLE" && Boolean(article.teamwearCatalog.sourceLabel || article.catalogProvenance); }) || product.variants.some(({ sourceArticleId }) => state.articles.find(({ id }) => id === sourceArticleId)?.catalogProvenance) ? "AUTHORITATIVE" : "DATA_GAP",
-    syncStatus: "REVIEW_REQUIRED", variants: product.variants.map((variant) => ({ ...variant, colorHex: null, media: [{ kind: "FRONT", imageKey: variant.imageKey }] })),
+    syncStatus: "REVIEW_REQUIRED", variants: product.variants.map((variant) => ({ ...variant, colorHex: null })),
   }));
   const fixtureMedia = ["teamwear-fixture-shirt-red", "teamwear-fixture-shirt-black", "teamwear-fixture-shorts-black", "teamwear-fixture-jacket-navy", "teamwear-fixture-jacket-black", "teamwear-fixture-bag-black"];
   const fixtures = FIXTURES.map(([brand, supplierName, model, number, category, use, collection, familyKey, advicePriceEur, audiences], index): TeamwearCatalogProduct => {

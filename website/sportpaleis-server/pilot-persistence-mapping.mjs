@@ -14,7 +14,7 @@ export function articleToMariaDbRow(article, updatedAt = new Date().toISOString(
     revision: Number(article.revision ?? 1), variant_labels_json: json(article.variantLabels ?? []),
     available_sizes_json: json(article.availableSizes ?? []), validation_json: json(article.validation),
     validation_history_json: json(article.validationHistory ?? []),
-    catalog_metadata_json: json({ supplierArticleNumber: article.supplierArticleNumber ?? null, commercialPrintOptions: article.commercialPrintOptions ?? [], catalogProvenance: article.catalogProvenance ?? null, productionDataGaps: article.productionDataGaps ?? [] }),
+    catalog_metadata_json: json({ supplierArticleNumber: article.supplierArticleNumber ?? null, commercialPrintOptions: article.commercialPrintOptions ?? [], catalogProvenance: article.catalogProvenance ?? null, catalogMedia: article.catalogMedia ?? [], productionDataGaps: article.productionDataGaps ?? [] }),
     updated_at: updatedAt,
   };
 }
@@ -32,6 +32,7 @@ export function mariaDbRowToArticle(row) {
     supplierArticleNumber: catalogMetadata.supplierArticleNumber ?? undefined,
     commercialPrintOptions: catalogMetadata.commercialPrintOptions ?? [],
     catalogProvenance: catalogMetadata.catalogProvenance ?? undefined,
+    catalogMedia: catalogMetadata.catalogMedia ?? [],
     productionDataGaps: catalogMetadata.productionDataGaps ?? [],
   };
 }

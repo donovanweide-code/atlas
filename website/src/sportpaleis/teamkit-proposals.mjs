@@ -151,13 +151,19 @@ function normalizePlacement(input) {
 function normalizeCatalogSnapshot(input) {
   if (!input || typeof input !== "object") return undefined;
   const money = (value) => value == null || value === "" ? null : boundedNumber(value, "Prijs", 0, 1_000_000);
+  const officialMediaUrl = (value) => {
+    const candidate = nullableText(value, "Productbeeldbron", 500); if (!candidate) return null;
+    try { const parsed = new URL(candidate); return parsed.protocol === "https:" && parsed.hostname === "www.sportpaleis.nl" && parsed.pathname.startsWith("/img/") ? parsed.href : null; } catch { return null; }
+  };
   const imageKey = text(input.imageKey, "Productbeeld", 240);
   const requestedBackImageKey = nullableText(input.backImageKey, "Achteraanzicht", 240);
   return {
     catalogProductId: text(input.catalogProductId, "Catalogusproduct", 180), brand: text(input.brand, "Merk", 120), supplierName: text(input.supplierName || input.brand, "Leverancier", 160),
     supplierArticleName: text(input.supplierArticleName, "Leverancier-artikelnaam", 180), supplierArticleNumber: text(input.supplierArticleNumber, "Leverancier-artikelnummer", 120), category: text(input.category, "Categorie", 120),
     collection: nullableText(input.collection, "Collectie", 120), audience: Array.isArray(input.audience) ? [...new Set(input.audience.map((value) => text(value, "Doelgroep", 40)))].slice(0, 8) : [],
-    colorLabel: text(input.colorLabel || "Nog te bepalen", "Kleur", 120), imageKey, backImageKey: requestedBackImageKey && requestedBackImageKey !== imageKey ? requestedBackImageKey : null, advicePriceEur: money(input.advicePriceEur), effectivePriceEur: money(input.effectivePriceEur),
+    colorLabel: text(input.colorLabel || "Nog te bepalen", "Kleur", 120), imageKey, backImageKey: requestedBackImageKey && requestedBackImageKey !== imageKey ? requestedBackImageKey : null,
+    frontSourceUrl: officialMediaUrl(input.frontSourceUrl), backSourceUrl: officialMediaUrl(input.backSourceUrl), sourceProductId: nullableText(input.sourceProductId, "Bronproduct", 120), sourceColorId: nullableText(input.sourceColorId, "Bronkleur", 120), mediaClassification: input.mediaClassification === "SOURCE_GALLERY_ORDER_V1" ? input.mediaClassification : null,
+    advicePriceEur: money(input.advicePriceEur), effectivePriceEur: money(input.effectivePriceEur),
     priceLabel: ["Teamprijs", "Jullie prijs"].includes(input.priceLabel) ? input.priceLabel : null, minimumQuantity: input.minimumQuantity == null ? null : boundedNumber(input.minimumQuantity, "Minimumaantal", 1, 100_000),
     pricingPolicyRef: nullableText(input.pricingPolicyRef, "Prijsregel", 180), sourceAdapterId: text(input.sourceAdapterId, "Catalogusbron", 180), sourceStatus: ["AUTHORITATIVE", "CONTROLLED_FIXTURE", "DATA_GAP"].includes(input.sourceStatus) ? input.sourceStatus : "DATA_GAP",
   };
@@ -314,8 +320,14 @@ function generateLegacyProposalPdf(snapshot, approved = false) {
 }
 
 function canvasColor(value, fallback = "#111318") { return /^#[0-9a-f]{6}$/iu.test(String(value ?? "")) ? String(value) : fallback; }
-function canvasText(context, value, x, y, size, { bold = false, color = "#1b1d21", align = "left" } = {}) {
-  context.fillStyle = color; context.font = `${bold ? "700" : "400"} ${size}px Arial, sans-serif`; context.textAlign = align; context.textBaseline = "alphabetic"; context.fillText(String(value ?? ""), x, y);
+function canvasText(context, value, x, y, size, { bold = false, color = "#1b1d21", align = "left", maxWidth = null } = {}) {
+  context.fillStyle = color; context.font = `${bold ? "700" : "400"} ${size}px Arial, sans-serif`; context.textAlign = align; context.textBaseline = "alphabetic";
+  if (Number.isFinite(maxWidth) && maxWidth > 0) context.fillText(String(value ?? ""), x, y, maxWidth); else context.fillText(String(value ?? ""), x, y);
+}
+function isolatedDrawImage(context, image, rect) {
+  context.save();
+  try { context.drawImage(image, rect.x, rect.y, rect.width, rect.height); }
+  finally { context.restore(); }
 }
 function fitRect(image, x, y, width, height) {
   const ratio = Math.min(width / image.width, height / image.height); const drawWidth = image.width * ratio; const drawHeight = image.height * ratio;
@@ -347,13 +359,13 @@ async function drawPdfGarment(context, item, side, x, y, width, height, state, p
   const expectedVisual = item.visualGarmentSources?.[side] ?? (side === "FRONT" ? item.visualGarmentSource : null);
   if (expectedVisual?.sha256 && expectedVisual.sha256 !== visual?.sha256) throw error("De garment-preview wijkt af van de opgeslagen proposal-revision.", "TEAMKIT_GARMENT_VISUAL_REVISION_MISMATCH", 409);
   let fitted = { x: x + 18, y: y + 14, width: width - 36, height: height - 42 };
-  if (visual) { const garmentImage = await loadImage(visual.bytes); fitted = fitRect(garmentImage, x + 6, y + 6, width - 12, height - 26); context.drawImage(garmentImage, fitted.x, fitted.y, fitted.width, fitted.height); }
-  else { context.fillStyle = "#e2e4e6"; context.fillRect(fitted.x, fitted.y, fitted.width, fitted.height); canvasText(context, "Achteraanzicht bron nog controleren", x + width / 2, y + 18, 7, { bold: true, color: "#656a70", align: "center" }); }
+  if (visual) { const garmentImage = await loadImage(visual.bytes); fitted = fitRect(garmentImage, x + 6, y + 6, width - 12, height - 26); isolatedDrawImage(context, garmentImage, fitted); }
+  else { context.fillStyle = "#e2e4e6"; context.fillRect(fitted.x, fitted.y, fitted.width, fitted.height); canvasText(context, "Achterzijde niet aangeleverd", x + width / 2, y + 18, 6, { bold: true, color: "#656a70", align: "center", maxWidth: width - 10 }); }
   for (const placement of item.placements.filter((entry) => entry.side === side).slice(0, 8)) {
     const [fallbackX, fallbackY] = PRESET_POSITION[placement.preset] ?? [50, 50]; const px = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.xPercent : fallbackX; const py = placement.visualPosition?.coordinateSpace === "GARMENT_PRINT_AREA_V1" ? placement.visualPosition.yPercent : fallbackY;
     const markWidth = Math.max(12, Math.min(fitted.width * .58, fitted.width * Number(placement.widthPercent ?? 18) / 100)); const markHeight = placement.kind === "BACK_NUMBER" || placement.kind === "INITIALS" ? markWidth : Math.max(10, markWidth / 1.65); const markX = fitted.x + fitted.width * (.1 + .8 * px / 100) - markWidth / 2; const markY = fitted.y + fitted.height * (.1 + .83 * py / 100) - markHeight / 2;
     const assetBytes = proposalPlacementVisualBytes(placement, proposal, state);
-    if (assetBytes) { try { const image = await loadImage(assetBytes); const assetRect = fitRect(image, markX, markY, markWidth, markHeight); context.drawImage(image, assetRect.x, assetRect.y, assetRect.width, assetRect.height); continue; } catch { /* fail to text marker below */ } }
+    if (assetBytes) { try { const image = await loadImage(assetBytes); const assetRect = fitRect(image, markX, markY, markWidth, markHeight); isolatedDrawImage(context, image, assetRect); continue; } catch { /* fail to text marker below */ } }
     const value = placement.text || placement.label; canvasText(context, value, markX + markWidth / 2, markY + markHeight * .72, Math.max(9, Math.min(markHeight * .72, 34)), { bold: true, color: canvasColor(placement.colorOverride, "#ffffff"), align: "center" });
   }
   canvasText(context, side === "FRONT" ? "VOORZIJDE" : "ACHTERZIJDE", x + width / 2, y + height - 7, 7, { bold: true, color: "#656a70", align: "center" });
@@ -363,15 +375,15 @@ export async function generateProposalPdf(snapshot, approved = false, { state = 
   const document = new PDFDocument({ title: `${snapshot.proposalNumber} V${snapshot.revision}`, author: "Sport 2000 Sportpaleis", creator: "Sportpaleis Teamwear", producer: "WBD Workspace", compressionLevel: 9 });
   const pages = snapshot.items.length ? Array.from({ length: Math.ceil(snapshot.items.length / 4) }, (_, index) => snapshot.items.slice(index * 4, index * 4 + 4)) : [[]];
   for (const [pageIndex, page] of pages.entries()) {
-    const context = document.beginPage(842, 595); context.fillStyle = "#f4f5f5"; context.fillRect(0, 0, 842, 595); context.fillStyle = "#111318"; context.fillRect(0, 0, 842, 80); context.fillStyle = "#d3172f"; context.fillRect(34, 78, 92, 4);
-    canvasText(context, "SPORT 2000 SPORTPALEIS", 34, 28, 10, { bold: true, color: "#ffffff" }); canvasText(context, pdfShort(snapshot.title, 62), 34, 57, 20, { bold: true, color: "#ffffff" }); canvasText(context, `${snapshot.proposalNumber}  |  V${snapshot.revision}${approved ? "  |  AKKOORD" : ""}`, 808, 28, 10, { bold: true, color: "#ffffff", align: "right" }); canvasText(context, pdfShort(snapshot.association.name ?? snapshot.customer.name, 34), 808, 54, 8, { color: "#ffffff", align: "right" });
+    const context = document.beginPage(842, 595); context.resetTransform?.(); context.globalAlpha = 1; context.globalCompositeOperation = "source-over"; context.fillStyle = "#f4f5f5"; context.fillRect(0, 0, 842, 595); context.fillStyle = "#111318"; context.fillRect(0, 0, 842, 80); context.fillStyle = "#d3172f"; context.fillRect(34, 78, 92, 4);
+    canvasText(context, "SPORT 2000 SPORTPALEIS", 34, 28, 10, { bold: true, color: "#ffffff" }); canvasText(context, snapshot.title, 34, 57, 20, { bold: true, color: "#ffffff", maxWidth: 560 }); canvasText(context, `${snapshot.proposalNumber}  |  V${snapshot.revision}${approved ? "  |  AKKOORD" : ""}`, 808, 28, 10, { bold: true, color: "#ffffff", align: "right", maxWidth: 220 }); canvasText(context, snapshot.association.name ?? snapshot.customer.name, 808, 54, 8, { color: "#ffffff", align: "right", maxWidth: 220 });
     for (const [cardIndex, item] of page.entries()) {
       const col = cardIndex % 2; const row = Math.floor(cardIndex / 2); const x = 34 + col * 390; const y = 96 + row * 218;
-      context.fillStyle = "#ffffff"; context.fillRect(x, y, 374, 202); context.strokeStyle = "#d9dddc"; context.lineWidth = .8; context.strokeRect(x, y, 374, 202); canvasText(context, pdfShort(item.productName, 38), x + 16, y + 24, 12, { bold: true }); canvasText(context, pdfShort(`${item.catalogSnapshot?.brand ?? "TEAMWEAR"}  |  ${item.catalogSnapshot?.supplierArticleNumber ?? item.articleNumber ?? "Artikel volgt"}  |  ${item.color}`, 58), x + 16, y + 41, 7, { color: "#62676c" });
+      context.fillStyle = "#ffffff"; context.fillRect(x, y, 374, 202); context.strokeStyle = "#d9dddc"; context.lineWidth = .8; context.strokeRect(x, y, 374, 202); canvasText(context, item.productName, x + 16, y + 24, 12, { bold: true, maxWidth: 342 }); canvasText(context, `${item.catalogSnapshot?.brand ?? "TEAMWEAR"}  |  ${item.catalogSnapshot?.supplierArticleNumber ?? item.articleNumber ?? "Artikel volgt"}  |  ${item.color}`, x + 16, y + 41, 7, { color: "#62676c", maxWidth: 342 });
       await drawPdfGarment(context, item, "FRONT", x + 14, y + 52, 82, 132, state, proposal); await drawPdfGarment(context, item, "BACK", x + 102, y + 52, 82, 132, state, proposal);
-      let detailsY = y + 72; const detailsX = x + 200; if (item.catalogSnapshot?.advicePriceEur != null) { canvasText(context, `Adviesprijs ${pdfEuro(item.catalogSnapshot.advicePriceEur)}`, detailsX, detailsY, 8, { color: "#686d72" }); detailsY += 18; } if (item.catalogSnapshot?.effectivePriceEur != null) { canvasText(context, `${item.catalogSnapshot.priceLabel ?? "Teamprijs"} ${pdfEuro(item.catalogSnapshot.effectivePriceEur)}`, detailsX, detailsY, 11, { bold: true, color: "#111318" }); detailsY += 22; }
-      canvasText(context, `Beschikbaarheid: ${item.sizes.join(", ") || "maten volgen"}`, detailsX, detailsY, 8, { color: "#34383e" }); detailsY += 17;
-      for (const placement of item.placements.slice(0, 4)) { canvasText(context, pdfShort(`${placement.label}${placement.text ? ` - ${placement.text}` : ""} | ${placement.preset.replaceAll("_", " ").toLowerCase()}`, 62), detailsX, detailsY, 7, { color: "#42464b" }); detailsY += 14; }
+      let detailsY = y + 72; const detailsX = x + 200; const detailsWidth = 158; if (item.catalogSnapshot?.advicePriceEur != null) { canvasText(context, `Adviesprijs ${pdfEuro(item.catalogSnapshot.advicePriceEur)}`, detailsX, detailsY, 8, { color: "#686d72", maxWidth: detailsWidth }); detailsY += 18; } if (item.catalogSnapshot?.effectivePriceEur != null) { canvasText(context, `${item.catalogSnapshot.priceLabel ?? "Teamprijs"} ${pdfEuro(item.catalogSnapshot.effectivePriceEur)}`, detailsX, detailsY, 11, { bold: true, color: "#111318", maxWidth: detailsWidth }); detailsY += 22; }
+      canvasText(context, `Beschikbaarheid: ${item.sizes.join(", ") || "maten volgen"}`, detailsX, detailsY, 8, { color: "#34383e", maxWidth: detailsWidth }); detailsY += 17;
+      for (const placement of item.placements.slice(0, 4)) { canvasText(context, `${placement.label}${placement.text ? ` - ${placement.text}` : ""} | ${placement.preset.replaceAll("_", " ").toLowerCase()}`, detailsX, detailsY, 7, { color: "#42464b", maxWidth: detailsWidth }); detailsY += 14; }
     }
     canvasText(context, `${snapshot.customer.name}${snapshot.team ? `  |  ${snapshot.team}` : ""}  |  Definitieve productiecontrole door Sportpaleis.`, 34, 579, 7, { color: "#565b60" }); canvasText(context, `Pagina ${pageIndex + 1}/${pages.length}`, 808, 579, 7, { color: "#565b60", align: "right" }); document.endPage();
   }

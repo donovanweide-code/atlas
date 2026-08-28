@@ -65,6 +65,8 @@ const associationLogoPaths = new Map(Object.values(SPORTPALEIS_ASSOCIATION_LOGOS
 const brandLogoPath = path.join(outputRoot, "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png");
 const brandLogoSha256 = "70C424DCD371BB7F690946D24B6F3AEEEA3F7D0F276928C4707951EB8BDD4BB4";
 const teamwearFixtureRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "teamwear-fixtures");
+const teamwearCatalogManifestPath = path.join(outputRoot, "assets", "organizations", "sportpaleis", "teamwear-catalog-manifest.json");
+const catalogImageSourceRoot = path.resolve(scriptDirectory, "../src/assets/images/sportpaleis/live-catalog");
 const teamwearFixtureNames = [
   "teamwear-fixture-bag-black.svg",
   "teamwear-fixture-jacket-black.svg",
@@ -87,6 +89,17 @@ for (const fileName of teamwearFixtureNames) {
   if (!files.includes(file)) fail(`Teamwear-garmentvisual ontbreekt: ${fileName}`);
   const source = await readFile(file, "utf8");
   if (!source.includes("<svg") || !source.includes("viewBox")) fail(`Teamwear-garmentvisual is geen bruikbare SVG: ${fileName}`);
+}
+if (!files.includes(teamwearCatalogManifestPath)) fail("Teamwear-catalogusmanifest ontbreekt");
+const teamwearCatalogManifest = JSON.parse(await readFile(teamwearCatalogManifestPath, "utf8"));
+const sourceCatalogImages = (await readdir(catalogImageSourceRoot)).filter((name) => /\.(?:jpe?g|png|webp)$/iu.test(name)).sort();
+for (const sourceFileName of sourceCatalogImages) {
+  const key = path.basename(sourceFileName, path.extname(sourceFileName));
+  const manifestEntry = teamwearCatalogManifest.images?.[key];
+  if (!manifestEntry) fail(`Teamwear-catalogusmanifest mist bronalias: ${key}`);
+  const sourceHash = createHash("sha256").update(await readFile(path.join(catalogImageSourceRoot, sourceFileName))).digest("hex").toUpperCase();
+  if (manifestEntry.sha256 !== sourceHash) fail(`Teamwear-catalogusmanifest heeft afwijkende bronhash: ${key}`);
+  if (!files.includes(path.join(outputRoot, manifestEntry.fileName))) fail(`Teamwear-catalogusmanifest verwijst naar ontbrekend bestand: ${key}`);
 }
 for (const file of rasterFiles) if ((await stat(file)).size > 1_000_000) fail("onverwacht grote Workspace-catalogusasset aangetroffen");
 

@@ -226,6 +226,22 @@ export interface CatalogArticle {
   supplierArticleNumber?: string;
   commercialPrintOptions?: { sourceLabel: string; canonicalField: keyof OrderPersonalization | null; priceEur: number | null; status: "VALIDATED" | "DATA_GAP" }[];
   catalogProvenance?: { authority: "SPORTPALEIS_LIVE"; url: string; imageUrl: string; checkedAt: string };
+  /**
+   * Productmedia from the same authoritative catalogue article/colour context.
+   * Teamwear consumes this projection and never creates a parallel garment-image record.
+   */
+  catalogMedia?: {
+    kind: "FRONT" | "BACK" | "ALTERNATIVE";
+    imageKey: string | null;
+    sourceUrl: string;
+    sourceIndex: number;
+    sourceProductId: string | null;
+    sourceColorId: string | null;
+    colorLabel: string | null;
+    authority: "SPORTPALEIS_LIVE_PRODUCT_GALLERY";
+    classification: "SOURCE_GALLERY_ORDER_V1";
+    checkedAt: string;
+  }[];
   /** Teamwear curation is independent from availability in ordinary store orders. */
   teamwearCatalog?: {
     status: "REVIEW_REQUIRED" | "SELECTABLE" | "HIDDEN";
@@ -765,6 +781,19 @@ export interface ProductionJobSnapshot {
     contourCountPerObject?: number;
   }[];
   productionLines?: SportpaleisProductionLine[];
+  /** Operator-added foil optimization objects. These are never customer order lines. */
+  productionSupplements?: {
+    id: string;
+    type: ProductionLineType;
+    value: string;
+    quantity: number;
+    foilColor: string;
+    sourceId: string;
+    sourceVersion: string;
+    reason: "GEOMETRY_PROVEN_REST_CAPACITY";
+    customerOrderLine: false;
+    analysisHash: string;
+  }[];
   fontSources?: { id: string; name: string; version: string; sha256: string; originalFilename: string }[];
   logoSources?: { id: string; version?: string; revision: number; sourceId?: string | null; sourceSelection?: SportpaleisProductionElement["sourceSelection"] | null; sourceLayers: NonNullable<SportpaleisProductionElement["sourceLayers"]> }[];
   productionProfile: { id: string; revision: number; name: string };
@@ -860,6 +889,17 @@ export interface ProductionProposal {
     outputWriter: { id: string; version: string };
     orders: { id: string; expectedRevision: number }[];
     productionLineRefs: { orderId: string; lineId: string }[];
+    supplements?: SportpaleisProductionLine[];
+    efficiencyEvidence?: {
+      analysisHash: string;
+      baseUsedWidthMm: number;
+      baseUsedLengthMm: number;
+      augmentedUsedWidthMm: number;
+      augmentedUsedLengthMm: number;
+      utilizationBeforePercent: number;
+      utilizationAfterPercent: number;
+      customerOrderLinesCreated: false;
+    };
     dependsOnGroupIds?: string[];
     status: "OPEN" | "CONVERTED";
     productionJobId: string | null;
@@ -992,6 +1032,11 @@ export interface TeamkitProposalItem {
     colorLabel: string;
     imageKey: string;
     backImageKey?: string | null;
+    frontSourceUrl?: string | null;
+    backSourceUrl?: string | null;
+    sourceProductId?: string | null;
+    sourceColorId?: string | null;
+    mediaClassification?: "SOURCE_GALLERY_ORDER_V1" | null;
     advicePriceEur: number | null;
     effectivePriceEur: number | null;
     priceLabel: "Teamprijs" | "Jullie prijs" | null;

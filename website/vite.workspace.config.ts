@@ -45,11 +45,14 @@ export default defineConfig({
       const catalogImages: Record<string, { fileName: string; sha256: string }> = {};
       for (const asset of Object.values(bundle)) {
         if (asset.type !== "asset") continue;
-        const original = asset.originalFileNames?.find((name) => name.replaceAll("\\", "/").includes("src/assets/images/sportpaleis/"));
-        if (!original) continue;
-        const key = basename(original).replace(/\.[^.]+$/u, "");
+        const originals = asset.originalFileNames?.filter((name) => name.replaceAll("\\", "/").includes("src/assets/images/sportpaleis/")) ?? [];
+        if (originals.length === 0) continue;
         const source = typeof asset.source === "string" ? Buffer.from(asset.source) : Buffer.from(asset.source);
-        catalogImages[key] = { fileName: asset.fileName, sha256: createHash("sha256").update(source).digest("hex").toUpperCase() };
+        const entry = { fileName: asset.fileName, sha256: createHash("sha256").update(source).digest("hex").toUpperCase() };
+        for (const original of originals) {
+          const key = basename(original).replace(/\.[^.]+$/u, "");
+          catalogImages[key] = entry;
+        }
       }
       this.emitFile({
         type: "asset",

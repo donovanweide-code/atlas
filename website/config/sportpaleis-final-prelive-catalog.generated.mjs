@@ -9,6 +9,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "DM0Q3S25980",
     "name": "Almere Pioneers Wedstrijdshirt Omkeerbaar",
     "imageKey": "sp-live-116386",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-wedstrijdshirt-omkeerbaar_1000x1000_124014.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "71030",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-116386",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shirt",
@@ -100,6 +114,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "FM703C25980",
     "name": "Almere Pioneers Shooting Shirt",
     "imageKey": "sp-live-116388",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-shooting-shirt_1000x1000_124016.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "71032",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-116388",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shirt",
@@ -185,6 +213,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "FP713Z08260",
     "name": "Almere Pioneers Wedstrijdshort",
     "imageKey": "sp-live-116387",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-wedstrijdshort_1000x1000_124015.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "71031",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-116387",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Almere Pioneers",
     "profileId": "profile-pioneers-shorts",
@@ -274,6 +316,56 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "JC010Z",
     "name": "Almere Pioneers VARSITY JACKET",
     "imageKey": "sp-live-138505",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181520.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93035",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138505",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181659.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93035",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181521.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "93035",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181660.webp",
+        "sourceIndex": 3,
+        "sourceProductId": "93035",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138505-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Almere Pioneers",
     "profileId": "profile-source-almere-pioneers-name",
@@ -363,6 +455,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6124",
     "name": "AS'80 Academy Trainings Shirt",
     "imageKey": "sp-live-131240",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainings-shirt_1000x1000_165320.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85786",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131240",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainings-shirt_1000x1000_165321.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85786",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131240-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -452,6 +570,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6223",
     "name": "AS'80 Academy Trainingshort",
     "imageKey": "sp-live-131241",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingshort_1000x1000_165322.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85790",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131241",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingshort_1000x1000_165323.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85790",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131241-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -539,6 +683,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8624",
     "name": "AS'80 Academy Trainingstop",
     "imageKey": "sp-live-131244",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingstop_1000x1000_165327.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85789",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131244",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingstop_1000x1000_165328.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85789",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131244-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -626,6 +796,44 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8423",
     "name": "AS'80 Academy Trainingsbroek",
     "imageKey": "sp-live-131243",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingsbroek_1000x1000_165057.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85788",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131243",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingsbroek_1000x1000_165325.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85788",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingsbroek_1000x1000_165326.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "85788",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131243-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -715,6 +923,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "EX7250",
     "name": "AS'80 Academy Winterjas",
     "imageKey": "sp-live-119847",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-winterjas_1000x1000_137691.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74474",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119847",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -798,6 +1020,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "7402",
     "name": "AS'80 REGEN JACK ACADEMY",
     "imageKey": "sp-live-131949",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-regen-jack-academy_1000x1000_165511.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86490",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131949",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-regen-jack-academy_1000x1000_165512.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "86490",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131949-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -885,6 +1133,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "1814",
     "name": "AS'80 Academy Rugtas",
     "imageKey": "sp-live-131285",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-rugtas_1000x1000_165342.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85835",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131285",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-rugtas_1000x1000_165343.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85835",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131285-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -956,6 +1230,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "2024",
     "name": "AS'80 Academy Sporttas",
     "imageKey": "sp-live-131287",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-sporttas_1000x1000_165346.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85834",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131287",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-sporttas_1000x1000_165347.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85834",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131287-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1027,6 +1327,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8923",
     "name": "AS'80 Academy Keepersshirt",
     "imageKey": "sp-live-128855",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-keepersshirt_1000x1000_158535.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "83428",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128855",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-keepersshirt_1000x1000_172254.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "83428",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128855-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1108,6 +1434,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6124",
     "name": "AS'80 Trainingsshirt",
     "imageKey": "sp-live-131284",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsshirt_1000x1000_165340.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85831",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131284",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsshirt_1000x1000_165341.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85831",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131284-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1197,6 +1549,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6223",
     "name": "AS'80 Trainingsshort",
     "imageKey": "sp-live-131255",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsshort_1000x1000_165336.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85801",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131255",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsshort_1000x1000_165337.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85801",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131255-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1284,6 +1662,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8624",
     "name": "AS'80 Trainingstop",
     "imageKey": "sp-live-131283",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingstop_1000x1000_165338.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85833",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131283",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingstop_1000x1000_165339.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85833",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131283-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1373,6 +1777,44 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8423",
     "name": "AS'80 Trainingsbroek",
     "imageKey": "sp-live-131254",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsbroek_1000x1000_165333.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85800",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131254",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsbroek_1000x1000_165334.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85800",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsbroek_1000x1000_165335.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "85800",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131254-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1464,6 +1906,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "EX7250",
     "name": "AS'80 WINTERJAS",
     "imageKey": "sp-live-120175",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-winterjas_1000x1000_138726.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74792",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-120175",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1549,6 +2005,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "7402",
     "name": "AS'80 Regenjack",
     "imageKey": "sp-live-4703-30-2",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-regenjack_1000x1000_45763.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "31346",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4703-30-2",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-regenjack_1000x1000_165513.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "31346",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4703-30-2-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1636,6 +2118,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "1814",
     "name": "AS'80 Rugtas",
     "imageKey": "sp-live-131286",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-rugtas_1000x1000_165344.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85830",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131286",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-rugtas_1000x1000_165345.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85830",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131286-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1707,6 +2215,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "2024",
     "name": "AS'80 Sporttas",
     "imageKey": "sp-live-131288",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-sporttas_1000x1000_165348.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85829",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131288",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-sporttas_1000x1000_165349.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85829",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131288-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1778,6 +2312,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "4423",
     "name": "AS'80 Keepershort",
     "imageKey": "sp-live-129384",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keepershort_1000x1000_166643.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "83957",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-129384",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keepershort_1000x1000_166644.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "83957",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-129384-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1859,6 +2419,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6120",
     "name": "AS'80 Trainingsshirt",
     "imageKey": "sp-live-120000",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingsshirt_1000x1000_137832.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74624",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-120000",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -1936,6 +2510,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8620",
     "name": "AS'80 Trainingstop",
     "imageKey": "sp-live-120002",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-trainingstop_1000x1000_137869.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74623",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-120002",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2017,6 +2605,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8905",
     "name": "AS'80 Keepershirt",
     "imageKey": "sp-live-119886",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keepershirt_1000x1000_137825.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74511",
+        "sourceColorId": "12046",
+        "colorLabel": "TURQUAISE/AQUA",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119886",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keepershirt_1000x1000_137826.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "74511",
+        "sourceColorId": "12046",
+        "colorLabel": "TURQUAISE/AQUA",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119886-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2090,6 +2704,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6120",
     "name": "AS'80 Academy Trainingsshirt",
     "imageKey": "sp-live-119784",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingsshirt_1000x1000_137685.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74410",
+        "sourceColorId": "12090",
+        "colorLabel": "GRIJS",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119784",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2173,6 +2801,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8420",
     "name": "AS'80 Academy Trainingsbroek",
     "imageKey": "sp-live-119782",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingsbroek_1000x1000_137683.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74407",
+        "sourceColorId": "12090",
+        "colorLabel": "GRIJS",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119782",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2248,6 +2890,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8620",
     "name": "AS'80 Academy Trainingstop",
     "imageKey": "sp-live-119849",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-academy-trainingstop_1000x1000_137692.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "74475",
+        "sourceColorId": "12090",
+        "colorLabel": "GRIJS",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-119849",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2331,6 +2987,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "7150",
     "name": "AS'80 Winterjas",
     "imageKey": "sp-live-4730-30-13",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-winterjas_1000x1000_45887.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "31434",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4730-30-13",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2410,6 +3080,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8516",
     "name": "AS'80 Slidingbroek",
     "imageKey": "sp-live-4323-30-2",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-slidingbroek_1000x1000_44659.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "30479",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4323-30-2",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2487,6 +3171,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8936",
     "name": "AS'80 Keepersbroek",
     "imageKey": "sp-live-4630-70-4",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keepersbroek_1000x1000_45512.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "31175",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4630-70-4",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2564,6 +3262,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "3866",
     "name": "AS'80 Keeperkousen",
     "imageKey": "sp-live-129383",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keeperkousen_1000x1000_166642.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "83958",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-129383",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2641,6 +3353,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "4429",
     "name": "AS'80 Keeper Training Short",
     "imageKey": "sp-live-121099",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/as-80-keeper-training-short_1000x1000_165318.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "75707",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-121099",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "As,8o",
     "profileId": "profile-source-as-8o-initials",
@@ -2720,6 +3446,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "SELECTIE",
     "name": "ASC Waterwijk WEDSTRIJD SHIRT SELECTIE",
     "imageKey": "sp-live-137294",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-wedstrijd-shirt-selectie_1000x1000_178354.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "91825",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137294",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-wedstrijd-shirt-selectie_1000x1000_178355.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "91825",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137294-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -2805,6 +3557,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "BREEDTE",
     "name": "ASC Waterwijk WEDSTRIJD SHIRT BREEDTE",
     "imageKey": "sp-live-137295",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-wedstrijd-shirt-breedte_1000x1000_178356.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "91823",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137295",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-wedstrijd-shirt-breedte_1000x1000_178357.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "91823",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137295-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -2892,6 +3670,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "ASC Waterwijk WEDSTRIJD SHORT",
     "imageKey": "sp-live-134826",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-wedstrijd-short_1000x1000_172744.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "89364",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-134826",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-shortsNumber",
@@ -2981,6 +3773,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410001",
     "name": "ASC Waterwijk RESERVE SHIRT",
     "imageKey": "sp-live-140218",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-reserve-shirt_1000x1000_187330.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94743",
+        "sourceColorId": "12058",
+        "colorLabel": "BORDEAUX",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140218",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-reserve-shirt_1000x1000_187331.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94743",
+        "sourceColorId": "12058",
+        "colorLabel": "BORDEAUX",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140218-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -3068,6 +3886,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420000",
     "name": "ASC Waterwijk RESERVE SHORT",
     "imageKey": "sp-live-140219",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-reserve-short_1000x1000_187332.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94742",
+        "sourceColorId": "12058",
+        "colorLabel": "BORDEAUX",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140219",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-reserve-short_1000x1000_187333.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94742",
+        "sourceColorId": "12058",
+        "colorLabel": "BORDEAUX",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140219-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-shortsNumber",
@@ -3155,6 +3999,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410015",
     "name": "ASC Waterwijk TRAINING SHIRT",
     "imageKey": "sp-live-140221",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-training-shirt_1000x1000_187335.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94741",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140221",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-training-shirt_1000x1000_187336.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94741",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140221-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3240,6 +4110,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "ASC Waterwijk Trainingsshort",
     "imageKey": "sp-live-109097",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-trainingsshort_1000x1000_84388.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "63853",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109097",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-trainingsshort_1000x1000_84389.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "63853",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109097-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-shortsNumber",
@@ -3329,6 +4225,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408039",
     "name": "ASC Waterwijk FULL ZIP JACK",
     "imageKey": "sp-live-140224",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-full-zip-jack_1000x1000_187337.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94745",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140224",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-full-zip-jack_1000x1000_187338.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94745",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140224-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3416,6 +4338,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408040",
     "name": "ASC Waterwijk ZIP TOP",
     "imageKey": "sp-live-140228",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-zip-top_1000x1000_187341.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94765",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140228",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-zip-top_1000x1000_187342.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94765",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140228-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3501,6 +4449,56 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432013",
     "name": "ASC Waterwijk Stadio Pants",
     "imageKey": "sp-live-140304",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-stadio-pants_1000x1000_186392.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94845",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140304",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-stadio-pants_1000x1000_187343.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94845",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-stadio-pants_1000x1000_186393.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "94845",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-stadio-pants_1000x1000_187344.webp",
+        "sourceIndex": 3,
+        "sourceProductId": "94845",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140304-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3588,6 +4586,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "463003",
     "name": "ASC Waterwijk PRESENTATIE POLO",
     "imageKey": "sp-live-140226",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-presentatie-polo_1000x1000_187339.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94754",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140226",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-presentatie-polo_1000x1000_187340.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94754",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140226-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3675,6 +4699,44 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "415009",
     "name": "ASC Waterwijk KEEPERS SET BREEDTE",
     "imageKey": "sp-live-137293",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-breedte_1000x1000_177736.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "91824",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137293",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-breedte_1000x1000_187329.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "91824",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-breedte_1000x1000_177737.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "91824",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-137293-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -3758,6 +4820,44 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "415009",
     "name": "ASC Waterwijk KEEPERS SET SELECTIE",
     "imageKey": "sp-live-136241",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-selectie_1000x1000_175884.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "90774",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-136241",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-selectie_1000x1000_187328.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "90774",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-keepers-set-selectie_1000x1000_175885.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "90774",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-136241-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -3843,6 +4943,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "454002",
     "name": "ASC Waterwijk Regenjack",
     "imageKey": "sp-live-109104",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-regenjack_1000x1000_84402.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "63860",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109104",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-regenjack_1000x1000_84403.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "63860",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109104-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -3930,6 +5056,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "457006",
     "name": "ASC Waterwijk WINTERJAS",
     "imageKey": "sp-live-111793",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-winterjas_1000x1000_88360.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "66513",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-111793",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-winterjas_1000x1000_88361.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "66513",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-111793-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4017,6 +5169,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484807",
     "name": "ASC Waterwijk RUGTAS",
     "imageKey": "sp-live-139145",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-rugtas_1000x1000_182868.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93674",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139145",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-rugtas_1000x1000_182869.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93674",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139145-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4088,6 +5266,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484835",
     "name": "ASC Waterwijk Voetbaltas",
     "imageKey": "sp-live-109099",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-voetbaltas_1000x1000_84392.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "63855",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109099",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-voetbaltas_1000x1000_84393.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "63855",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109099-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4159,6 +5363,44 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484838",
     "name": "ASC Waterwijk Voetbal Rugtas",
     "imageKey": "sp-live-109098",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-voetbal-rugtas_1000x1000_84390.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "63854",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109098",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-voetbal-rugtas_1000x1000_187327.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "63854",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-voetbal-rugtas_1000x1000_84391.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "63854",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-109098-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4230,6 +5472,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410008",
     "name": "ASC Waterwijk Presentatie Shirt",
     "imageKey": "sp-live-124663",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-presentatie-shirt_1000x1000_148446.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "79244",
+        "sourceColorId": "12032",
+        "colorLabel": "LICHTBLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-124663",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4315,6 +5571,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408024",
     "name": "ASC Waterwijk Hoodie",
     "imageKey": "sp-live-123689",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-hoodie_1000x1000_145711.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78275",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123689",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4396,6 +5666,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408027",
     "name": "ASC Waterwijk Trainingstop",
     "imageKey": "sp-live-123692",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-trainingstop_1000x1000_145714.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78273",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123692",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-initials",
@@ -4471,6 +5755,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410008",
     "name": "ASC Waterwijk TRAINING/UIT SHIRT",
     "imageKey": "sp-live-123691",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/asc-waterwijk-training-uit-shirt_1000x1000_145713.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78260",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123691",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "A.S.C. Waterwijk",
     "profileId": "profile-source-a-s-c-waterwijk-backNumber",
@@ -4544,6 +5842,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS1021",
     "name": "Brouwer Sports Performance Shirt",
     "imageKey": "sp-live-127229",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-shirt_1000x1000_153538.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "81847",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127229",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Brouwersports",
     "profileId": "profile-source-brouwersports-initials",
@@ -4625,6 +5937,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS2011",
     "name": "Brouwer Sports Performance Short",
     "imageKey": "sp-live-127230",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-short_1000x1000_153539.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "81848",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127230",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Brouwersports",
     "profileId": "profile-source-brouwersports-initials",
@@ -4708,6 +6034,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS3011",
     "name": "Brouwer Sports Performance Sweater",
     "imageKey": "sp-live-127232",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-sweater_1000x1000_153542.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "81849",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127232",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-sweater_1000x1000_153543.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "81849",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127232-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Brouwersports",
     "profileId": "profile-source-brouwersports-initials",
@@ -4789,6 +6141,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS2510",
     "name": "Brouwer Sports Performance Trainingsbroek",
     "imageKey": "sp-live-127231",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-trainingsbroek_1000x1000_153540.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "81846",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127231",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-performance-trainingsbroek_1000x1000_153541.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "81846",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127231-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Brouwersports",
     "profileId": "profile-source-brouwersports-initials",
@@ -4870,6 +6248,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS4514",
     "name": "Brouwer Sports Regenjack",
     "imageKey": "sp-live-127233",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-regenjack_1000x1000_153544.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "81850",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127233",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/brouwer-sports-regenjack_1000x1000_153545.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "81850",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-127233-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Brouwersports",
     "profileId": "profile-source-brouwersports-initials",
@@ -4951,6 +6355,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410015",
     "name": "DCG Trainings shirt",
     "imageKey": "sp-live-141709",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-trainings-shirt_1000x1000_189466.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96220",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141709",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5036,6 +6454,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "DCG Wedstrijd/Training short",
     "imageKey": "sp-live-141705",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-wedstrijd-training-short_1000x1000_189458.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96226",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141705",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-wedstrijd-training-short_1000x1000_189459.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96226",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141705-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-shortsNumber",
@@ -5123,6 +6567,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408040",
     "name": "DCG Zip top",
     "imageKey": "sp-live-141711",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-zip-top_1000x1000_189469.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96224",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141711",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-zip-top_1000x1000_189470.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96224",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141711-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5206,6 +6676,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408039",
     "name": "DCG Full zip top",
     "imageKey": "sp-live-141710",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-full-zip-top_1000x1000_189467.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96222",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141710",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-full-zip-top_1000x1000_189468.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96222",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141710-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5289,6 +6785,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432013",
     "name": "Stanno Stadio Pants",
     "imageKey": "sp-live-140306-dcg",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186394.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-dcg",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186395.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-dcg-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5380,6 +6902,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "454002",
     "name": "DCG Wind/Regenjack",
     "imageKey": "sp-live-141712",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-wind-regenjack_1000x1000_189471.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96221",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141712",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-wind-regenjack_1000x1000_189472.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96221",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141712-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5465,6 +7013,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "457006",
     "name": "DCG Winterjas",
     "imageKey": "sp-live-138576",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-winterjas_1000x1000_181794.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93100",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138576",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-winterjas_1000x1000_181795.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93100",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138576-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5548,6 +7122,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484838",
     "name": "DCG Sportas",
     "imageKey": "sp-live-141708",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-sportas_1000x1000_189464.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96227",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141708",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-sportas_1000x1000_189465.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96227",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141708-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5619,6 +7219,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484807",
     "name": "DCG Rugtas",
     "imageKey": "sp-live-141707",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-rugtas_1000x1000_189462.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96225",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141707",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-rugtas_1000x1000_189463.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96225",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141707-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5690,6 +7316,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "415009",
     "name": "DCG keepers set",
     "imageKey": "sp-live-141706",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-keepers-set_1000x1000_189460.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96223",
+        "sourceColorId": "12066",
+        "colorLabel": "ORANJE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141706",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-keepers-set_1000x1000_189461.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96223",
+        "sourceColorId": "12066",
+        "colorLabel": "ORANJE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141706-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-backNumber",
@@ -5777,6 +7429,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160005",
     "name": "DCG Selectie Trainingsshirt",
     "imageKey": "sp-live-122930",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-selectie-trainingsshirt_1000x1000_144080.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "77522",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-122930",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5856,6 +7522,7 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "184838",
     "name": "DCG Selectie Rugtas",
     "imageKey": "sp-live-122931",
+    "catalogMedia": [],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -5927,6 +7594,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108008",
     "name": "DCG Selectie Sweater",
     "imageKey": "sp-live-122929",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-selectie-sweater_1000x1000_144078.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "77518",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-122929",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-selectie-sweater_1000x1000_144079.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "77518",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-122929-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -6008,6 +7701,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "105007",
     "name": "DCG Trainingspak",
     "imageKey": "sp-live-116350",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/dcg-trainingspak_1000x1000_124004.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "70995",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-116350",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "DCG",
     "profileId": "profile-source-dcg-initials",
@@ -6083,6 +7790,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410019",
     "name": "EKVA Korfbal EKVA Training shirt",
     "imageKey": "sp-live-141638",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/ekva-korfbal-ekva-training-shirt_1000x1000_190504.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96154",
+        "sourceColorId": "12080",
+        "colorLabel": "ZWART/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141638",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-initials",
@@ -6172,6 +7893,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410609",
     "name": "EKVA Korfbal EKVA Wedstrijdshirt Dames",
     "imageKey": "sp-live-141634",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/ekva-korfbal-ekva-wedstrijdshirt-dames_1000x1000_188700.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96149",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141634",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-backNumber",
@@ -6251,6 +7986,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410609",
     "name": "EKVA Korfbal EKVA Training shirt Dames",
     "imageKey": "sp-live-141635",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/ekva-korfbal-ekva-training-shirt-dames_1000x1000_188701.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96150",
+        "sourceColorId": "12080",
+        "colorLabel": "ZWART/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141635",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-initials",
@@ -6330,6 +8079,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410019",
     "name": "EKVA Korfbal EKVA Wedstrijdshirt",
     "imageKey": "sp-live-141636",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/ekva-korfbal-ekva-wedstrijdshirt_1000x1000_188702.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96142",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141636",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-backNumber",
@@ -6417,6 +8180,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408040",
     "name": "EKVA Korfbal EKVA Ziptop",
     "imageKey": "sp-live-141633",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/ekva-korfbal-ekva-ziptop_1000x1000_188699.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96148",
+        "sourceColorId": "12083",
+        "colorLabel": "ZWART/BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141633",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-initials",
@@ -6504,6 +8281,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432013",
     "name": "Stanno Stadio Pants",
     "imageKey": "sp-live-140306-ekva",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186394.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-ekva",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186395.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-ekva-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "EKVA",
     "profileId": "profile-source-ekva-initials",
@@ -6595,6 +8398,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "695904",
     "name": "FC Almere Wedstrijdshirt",
     "imageKey": "sp-live-116597",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-wedstrijdshirt_1000x1000_190298.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "71242",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-116597",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-backNumber",
@@ -6684,6 +8501,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420004",
     "name": "FC Almere FC Almere Wedtrijd/training short",
     "imageKey": "sp-live-141521",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-fc-almere-wedtrijd-training-short_1000x1000_188306.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96036",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141521",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-shortsNumber",
@@ -6771,6 +8602,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410015",
     "name": "FC Almere Selectie Training shirt",
     "imageKey": "sp-live-141556",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-training-shirt_1000x1000_188313.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96067",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141556",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-training-shirt_1000x1000_188314.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96067",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141556-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -6852,6 +8709,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410015",
     "name": "FC Almere Training shirt",
     "imageKey": "sp-live-141550",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-training-shirt_1000x1000_188307.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96065",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141550",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -6939,6 +8810,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408040",
     "name": "FC Almere Training Top",
     "imageKey": "sp-live-141551",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-training-top_1000x1000_188308.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96066",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141551",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7026,6 +8911,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408039",
     "name": "FC Almere Full Zip Top",
     "imageKey": "sp-live-141677",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-full-zip-top_1000x1000_189024.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96192",
+        "sourceColorId": "12085",
+        "colorLabel": "ZWART/GRIJS",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141677",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7109,6 +9008,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432013",
     "name": "Stanno Stadio Pants",
     "imageKey": "sp-live-140306-fc-almere",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186394.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-fc-almere",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186395.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-fc-almere-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7200,6 +9125,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "454002",
     "name": "FC Almere Wind/Regenjack",
     "imageKey": "sp-live-141552",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-wind-regenjack_1000x1000_188309.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96069",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141552",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7285,6 +9224,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "457006",
     "name": "FC Almere Winterjas",
     "imageKey": "sp-live-138560",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-winterjas_1000x1000_181788.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93092",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138560",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-winterjas_1000x1000_181789.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93092",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138560-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7370,6 +9335,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484807",
     "name": "FC Almere RUGTAS",
     "imageKey": "sp-live-139144",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-rugtas_1000x1000_182866.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93673",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139144",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-rugtas_1000x1000_182867.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93673",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139144-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7441,6 +9432,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484838",
     "name": "FC Almere Junior Sportas",
     "imageKey": "sp-live-141554",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-junior-sportas_1000x1000_188311.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96071",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141554",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7512,6 +9517,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484835",
     "name": "FC Almere Senior Sporttas",
     "imageKey": "sp-live-141555",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-senior-sporttas_1000x1000_188312.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96070",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141555",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7583,6 +9602,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "154004",
     "name": "FC Almere WINDJACK",
     "imageKey": "sp-live-132153",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-windjack_1000x1000_168571.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86687",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132153",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-windjack_1000x1000_168572.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "86687",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132153-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7668,6 +9713,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "120008",
     "name": "FC Almere WEDSTRIJD SHORT",
     "imageKey": "sp-live-132155",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-wedstrijd-short_1000x1000_166561.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86690",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132155",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-wedstrijd-short_1000x1000_166641.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "86690",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132155-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-shortsNumber",
@@ -7745,6 +9816,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108013/132002",
     "name": "FC Almere Trainingspak",
     "imageKey": "sp-live-115899",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-trainingspak_1000x1000_111254.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "70552",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115899",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-trainingspak_1000x1000_111255.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "70552",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115899-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7828,6 +9925,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108011",
     "name": "FC Almere Trainingstop",
     "imageKey": "sp-live-115526",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-trainingstop_1000x1000_111206.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "70181",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115526",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-trainingstop_1000x1000_111207.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "70181",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115526-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -7913,6 +10036,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160005",
     "name": "FC Almere Inloopshirt",
     "imageKey": "sp-live-115525",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-inloopshirt_1000x1000_111204.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "70180",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115525",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-inloopshirt_1000x1000_111205.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "70180",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115525-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -8000,6 +10149,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108024",
     "name": "FC Almere SELECTIE TOP FC ALMERE",
     "imageKey": "sp-live-133227",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-top-fc-almere_1000x1000_168577.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87772",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-133227",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-top-fc-almere_1000x1000_168578.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87772",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-133227-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -8083,6 +10258,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160009",
     "name": "FC Almere SELECTIE SHIRT FC ALMERE",
     "imageKey": "sp-live-133226",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-shirt-fc-almere_1000x1000_168575.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87771",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-133226",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/fc-almere-selectie-shirt-fc-almere_1000x1000_168576.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87771",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-133226-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -8166,6 +10367,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "132005",
     "name": "Hummel Tulsa Pants",
     "imageKey": "sp-live-128376-fc-almere",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155969.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-fc-almere",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155970.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-fc-almere-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Almere",
     "profileId": "profile-source-fc-almere-initials",
@@ -8245,6 +10472,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410014",
     "name": "SV Huizen Training Shirt",
     "imageKey": "sp-live-131247",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-shirt_1000x1000_165329.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85792",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131247",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-shirt_1000x1000_165060.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85792",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131247-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8334,6 +10587,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "SV Huizen Training Short",
     "imageKey": "sp-live-131253",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-short_1000x1000_165068.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85798",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131253",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-short_1000x1000_165069.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85798",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131253-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8419,6 +10698,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408038",
     "name": "SV Huizen Training Top",
     "imageKey": "sp-live-131246",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-top_1000x1000_165058.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85797",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131246",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-training-top_1000x1000_165059.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85797",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131246-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8508,6 +10813,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408037",
     "name": "SV Huizen Full Zip Jack",
     "imageKey": "sp-live-131245",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-full-zip-jack_1000x1000_165445.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85796",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131245",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8593,6 +10912,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432011",
     "name": "SV Huizen Trainingsbroek",
     "imageKey": "sp-live-131252",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-trainingsbroek_1000x1000_165066.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85799",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131252",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-trainingsbroek_1000x1000_165067.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85799",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131252-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8680,6 +11025,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408029",
     "name": "SV Huizen Regenjas",
     "imageKey": "sp-live-131248",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-regenjas_1000x1000_165330.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85795",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131248",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-regenjas_1000x1000_165061.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85795",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131248-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8769,6 +11140,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484838",
     "name": "SV Huizen Pro Backpack Junior",
     "imageKey": "sp-live-131250",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pro-backpack-junior_1000x1000_165332.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85791",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131250",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pro-backpack-junior_1000x1000_165063.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85791",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131250-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8840,6 +11237,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484837",
     "name": "SV Huizen Pro Bag Senior",
     "imageKey": "sp-live-131249",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pro-bag-senior_1000x1000_165331.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85793",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131249",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pro-bag-senior_1000x1000_165062.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "85793",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131249-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8911,6 +11334,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410014",
     "name": "SV Huizen SHIRT TRAINERS",
     "imageKey": "sp-live-132977",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-shirt-trainers_1000x1000_168546.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87529",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132977",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-shirt-trainers_1000x1000_168547.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87529",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132977-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -8992,6 +11441,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "422004",
     "name": "SV Huizen SHORT TRAINERS",
     "imageKey": "sp-live-132978",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-short-trainers_1000x1000_168548.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87526",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132978",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-short-trainers_1000x1000_168549.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87526",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132978-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -9071,6 +11546,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408038",
     "name": "SV Huizen TOP 1/4 ZIP TRAINERS",
     "imageKey": "sp-live-132979",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-top-1-4-zip-trainers_1000x1000_168550.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87528",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132979",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-top-1-4-zip-trainers_1000x1000_168551.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87528",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132979-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -9152,6 +11653,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432011",
     "name": "SV Huizen PANT TRAINERS",
     "imageKey": "sp-live-132980",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pant-trainers_1000x1000_168552.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87530",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132980",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-pant-trainers_1000x1000_168553.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87530",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132980-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -9233,6 +11760,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "454002",
     "name": "SV Huizen REGENJAS TRAINERS",
     "imageKey": "sp-live-132982",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-regenjas-trainers_1000x1000_168556.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87524",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132982",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-regenjas-trainers_1000x1000_168557.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87524",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132982-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -9312,6 +11865,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "457006",
     "name": "SV Huizen WINTERJAS TRAINERS",
     "imageKey": "sp-live-132981",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-winterjas-trainers_1000x1000_168554.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "87527",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132981",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sv-huizen-winterjas-trainers_1000x1000_168555.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "87527",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132981-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "FC Huizen",
     "profileId": "profile-source-fc-huizen-initials",
@@ -9393,6 +11972,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "MHC LELY LADY THUIS",
     "name": "MHC Lelystad Wedstrijdshirt Thuis",
     "imageKey": "sp-live-101119",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-thuis_1000x1000_55506.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "44018",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-101119",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-thuis_1000x1000_55671.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "44018",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-101119-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "MHC Lelystad",
     "profileId": "profile-mhc-shirt-home",
@@ -9482,6 +12087,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "LADY AWAY",
     "name": "MHC Lelystad Wedstrijdshirt Uit",
     "imageKey": "sp-live-100664",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-uit_1000x1000_55504.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "43564",
+        "sourceColorId": "12022",
+        "colorLabel": "WIT/ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-100664",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-uit_1000x1000_55634.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "43564",
+        "sourceColorId": "12022",
+        "colorLabel": "WIT/ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-100664-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "MHC Lelystad",
     "profileId": "profile-mhc-shirt-away",
@@ -9569,6 +12200,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "MHC LELY HEREN THUIS",
     "name": "MHC Lelystad Wedstrijdshirt Thuis",
     "imageKey": "sp-live-101118",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-thuis_1000x1000_55505.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "44017",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-101118",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-thuis_1000x1000_55670.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "44017",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-101118-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "MHC Lelystad",
     "profileId": "profile-mhc-shirt-home",
@@ -9658,6 +12315,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "AWAY SHIRT",
     "name": "MHC Lelystad Wedstrijdshirt Uit",
     "imageKey": "sp-live-100655",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-uit_1000x1000_55503.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "43554",
+        "sourceColorId": "12022",
+        "colorLabel": "WIT/ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-100655",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/mhc-lelystad-wedstrijdshirt-uit_1000x1000_55633.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "43554",
+        "sourceColorId": "12022",
+        "colorLabel": "WIT/ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-100655-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "MHC Lelystad",
     "profileId": "profile-mhc-shirt-away",
@@ -9743,6 +12426,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "120007",
     "name": "Najaden WEDSTRIJD SHORT",
     "imageKey": "sp-live-134193",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/najaden-wedstrijd-short_1000x1000_170223.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "88735",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-134193",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/najaden-wedstrijd-short_1000x1000_170224.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "88735",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-134193-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Najaden",
     "profileId": "profile-source-najaden-shortsNumber",
@@ -9826,6 +12535,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "110007",
     "name": "Najaden WEDSTRIJD SHIRT",
     "imageKey": "sp-live-131029",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/najaden-wedstrijd-shirt_1000x1000_163538.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "85578",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-131029",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Najaden",
     "profileId": "profile-source-najaden-backNumber",
@@ -9911,6 +12634,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "123456",
     "name": "SC Buitenboys WEDSTRIJD SHIRT",
     "imageKey": "sp-live-141598",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijd-shirt_1000x1000_188370.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "96113",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141598",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijd-shirt_1000x1000_188371.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "96113",
+        "sourceColorId": "12020",
+        "colorLabel": "WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-141598-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
@@ -9999,6 +12748,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "SC Buitenboys WEDSTRIJD SHORT",
     "imageKey": "sp-live-140294",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijd-short_1000x1000_188351.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94828",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140294",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijd-short_1000x1000_188352.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94828",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140294-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-shortsNumber",
@@ -10087,6 +12862,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410019",
     "name": "SC Buitenboys RESERVE SHIRT",
     "imageKey": "sp-live-140305",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-shirt_1000x1000_188368.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94830",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140305",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-shirt_1000x1000_188369.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94830",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140305-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
@@ -10173,6 +12974,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "420002",
     "name": "SC Buitenboys RESERVE SHORT",
     "imageKey": "sp-live-140295",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-short_1000x1000_188353.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94836",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140295",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-short_1000x1000_188354.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94836",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140295-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-shortsNumber",
@@ -10260,6 +13087,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "410015",
     "name": "SC Buitenboys TRAINING SHIRT",
     "imageKey": "sp-live-140298",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-training-shirt_1000x1000_188358.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94823",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140298",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-training-shirt_1000x1000_188359.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94823",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140298-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10365,6 +13218,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408040",
     "name": "SC Buitenboys ZIP TOP",
     "imageKey": "sp-live-140300",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-zip-top_1000x1000_188362.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94833",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140300",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-zip-top_1000x1000_188363.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94833",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140300-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10452,6 +13331,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "408039",
     "name": "SC Buitenboys FULL ZIP JACK",
     "imageKey": "sp-live-140299",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-full-zip-jack_1000x1000_188360.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94818",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140299",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-full-zip-jack_1000x1000_188361.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94818",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140299-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10539,6 +13444,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "432013",
     "name": "Stanno Stadio Pants",
     "imageKey": "sp-live-140306-sc-buitenboys",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186394.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-sc-buitenboys",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/stanno-stadio-pants_1000x1000_186395.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94841",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140306-sc-buitenboys-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10630,6 +13561,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "415009",
     "name": "SC Buitenboys KEEPER SET",
     "imageKey": "sp-live-140296",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-keeper-set_1000x1000_188355.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94851",
+        "sourceColorId": "12066",
+        "colorLabel": "ORANJE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140296",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-keeper-set_1000x1000_188356.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94851",
+        "sourceColorId": "12066",
+        "colorLabel": "ORANJE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140296-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
@@ -10717,6 +13674,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "454002",
     "name": "SC Buitenboys REGENJAS",
     "imageKey": "sp-live-140301",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-regenjas_1000x1000_188364.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94825",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140301",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-regenjas_1000x1000_188365.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94825",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140301-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10804,6 +13787,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "457006",
     "name": "SC Buitenboys Winterjas",
     "imageKey": "sp-live-138563",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-winterjas_1000x1000_181790.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93102",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138563",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-winterjas_1000x1000_181791.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93102",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138563-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10887,6 +13896,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "456004",
     "name": "SC Buitenboys Prime Padded Winterjas",
     "imageKey": "sp-live-138570",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-prime-padded-winterjas_1000x1000_181792.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93106",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138570",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-prime-padded-winterjas_1000x1000_181793.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93106",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138570-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -10972,6 +14007,68 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484807",
     "name": "SC Buitenboys RUGTAS",
     "imageKey": "sp-live-139143",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-rugtas_1000x1000_182864.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93672",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139143",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-rugtas_1000x1000_188348.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93672",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-rugtas_1000x1000_182865.webp",
+        "sourceIndex": 2,
+        "sourceProductId": "93672",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "ALTERNATIVE",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-rugtas_1000x1000_188349.webp",
+        "sourceIndex": 3,
+        "sourceProductId": "93672",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": null,
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-rugtas_1000x1000_188350.webp",
+        "sourceIndex": 4,
+        "sourceProductId": "93672",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-139143-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11043,6 +14140,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "484838",
     "name": "SC Buitenboys PRO BAG",
     "imageKey": "sp-live-140302",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-pro-bag_1000x1000_188366.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "94835",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140302",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-pro-bag_1000x1000_188367.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "94835",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140302-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11114,6 +14237,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108024",
     "name": "SC Buitenboys Trainingstop",
     "imageKey": "sp-live-128294",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-trainingstop_1000x1000_156478.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82872",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128294",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11201,6 +14338,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160009",
     "name": "SC Buitenboys Trainingsshirt",
     "imageKey": "sp-live-128292",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-trainingsshirt_1000x1000_156476.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82871",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128292",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11282,6 +14433,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108023",
     "name": "SC Buitenboys Trainingspak",
     "imageKey": "sp-live-128293",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-trainingspak_1000x1000_156477.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82869",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128293",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11363,6 +14528,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160009",
     "name": "SC Buitenboys Reserve Shirt",
     "imageKey": "sp-live-128289",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-shirt_1000x1000_156473.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82867",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128289",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
@@ -11438,6 +14617,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "120007",
     "name": "SC Buitenboys Reserve Short",
     "imageKey": "sp-live-128290",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-reserve-short_1000x1000_156474.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82866",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128290",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-shortsNumber",
@@ -11513,6 +14706,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "132005",
     "name": "Hummel Tulsa Pants",
     "imageKey": "sp-live-128376-sc-buitenboys",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155969.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-sc-buitenboys",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155970.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-sc-buitenboys-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-initials",
@@ -11592,6 +14811,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "694193",
     "name": "SC Buitenboys Wedstrijdshirt",
     "imageKey": "sp-live-123456",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijdshirt_1000x1000_145017.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78042",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123456",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijdshirt_1000x1000_145018.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "78042",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123456-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-backNumber",
@@ -11675,6 +14920,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "120007",
     "name": "SC Buitenboys Wedstrijdshort",
     "imageKey": "sp-live-4300-20-2",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijdshort_1000x1000_44325.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "30252",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4300-20-2",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sc-buitenboys-wedstrijdshort_1000x1000_44326.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "30252",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4300-20-2-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Buitenboys",
     "profileId": "profile-source-sc-buitenboys-shortsNumber",
@@ -11752,6 +15023,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108024",
     "name": "Geinburgia ZIP TOP",
     "imageKey": "sp-live-132401",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/geinburgia-zip-top_1000x1000_166526.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86931",
+        "sourceColorId": "12030",
+        "colorLabel": "BLAUW",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132401",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -11835,6 +15120,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "132005",
     "name": "Hummel Tulsa Pants",
     "imageKey": "sp-live-128376-sc-geinburgia",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155969.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-sc-geinburgia",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hummel-tulsa-pants_1000x1000_155970.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "82953",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-128376-sc-geinburgia-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -11914,6 +15225,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "TRAININGSPAK",
     "name": "Geinburgia Geinburgia Trainingspak",
     "imageKey": "sp-live-4500-21-3",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/geinburgia-geinburgia-trainingspak_1000x1000_57177.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "45132",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-4500-21-3",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -11993,6 +15318,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "108009",
     "name": "Geinburgia 1/4 Zip Trainingstop",
     "imageKey": "sp-live-106168",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/geinburgia-1-4-zip-trainingstop_1000x1000_78832.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "60958",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-106168",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -12076,6 +15415,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "160003",
     "name": "Geinburgia TRAINING SHIRT",
     "imageKey": "sp-live-106169",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/geinburgia-training-shirt_1000x1000_78833.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "60959",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-106169",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -12149,6 +15502,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "163002",
     "name": "Geinburgia Poloshirt",
     "imageKey": "sp-live-106166",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/geinburgia-poloshirt_1000x1000_78830.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "60956",
+        "sourceColorId": "12031",
+        "colorLabel": "BLAUW/WIT",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-106166",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "SC Geinburgia",
     "profileId": "profile-source-sc-geinburgia-initials",
@@ -12226,6 +15593,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "CM21200",
     "name": "Sporting Almere WEDSTRIJDSHIRT",
     "imageKey": "sp-live-124370",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-wedstrijdshirt_1000x1000_145928.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78951",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-124370",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-wedstrijdshirt_1000x1000_145929.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "78951",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-124370-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-backNumber",
@@ -12315,6 +15708,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS2008",
     "name": "Sporting Almere WEDSTRIJD/TRAINING SHORT",
     "imageKey": "sp-live-123545",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-wedstrijd-training-short_1000x1000_145829.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78130",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123545",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-shortsNumber",
@@ -12404,6 +15811,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS1016",
     "name": "Sporting Almere TRAINING SHIRT",
     "imageKey": "sp-live-123734",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-training-shirt_1000x1000_145857.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78312",
+        "sourceColorId": "12066",
+        "colorLabel": "ORANJE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123734",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12493,6 +15914,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS3007",
     "name": "Sporting Almere Training Top",
     "imageKey": "sp-live-123732",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-training-top_1000x1000_145855.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78314",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123732",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-training-top_1000x1000_145856.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "78314",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123732-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12582,6 +16029,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS2511",
     "name": "Sporting Almere TRAININGSBROEK",
     "imageKey": "sp-live-123548",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-trainingsbroek_1000x1000_145832.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78129",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123548",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12671,6 +16132,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS4514",
     "name": "Sporting Almere Wind/Regenjack",
     "imageKey": "sp-live-123737",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-wind-regenjack_1000x1000_146845.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78316",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123737",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12756,6 +16231,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8008",
     "name": "Sporting Almere Junior Sportas",
     "imageKey": "sp-live-123739",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-junior-sportas_1000x1000_145859.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78315",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123739",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-junior-sportas_1000x1000_145860.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "78315",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123739-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12827,6 +16328,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8009",
     "name": "Sporting Almere Senior Sporttas",
     "imageKey": "sp-live-123740",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-senior-sporttas_1000x1000_145861.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78318",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123740",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-initials",
@@ -12898,6 +16413,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "1518",
     "name": "Sporting Almere Keepershirt",
     "imageKey": "sp-live-123735",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/sporting-almere-keepershirt_1000x1000_145858.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "78313",
+        "sourceColorId": "12070",
+        "colorLabel": "GROEN",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-123735",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Sporting Almere",
     "profileId": "profile-source-sporting-almere-backNumber",
@@ -12973,6 +16502,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8626",
     "name": "VVA/Spartaan Zip top",
     "imageKey": "sp-live-140841",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-zip-top_1000x1000_188176.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95361",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140841",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13058,6 +16601,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "9326",
     "name": "VVA/Spartaan Full zip top",
     "imageKey": "sp-live-140830",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-full-zip-top_1000x1000_188170.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95351",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140830",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13141,6 +16698,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6126",
     "name": "VVA/Spartaan Training shirt",
     "imageKey": "sp-live-140823",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-training-shirt_1000x1000_188167.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95348",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140823",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13224,6 +16795,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "4400",
     "name": "VVA/Spartaan Training short",
     "imageKey": "sp-live-140824",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-training-short_1000x1000_188168.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95342",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140824",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13311,6 +16896,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "8400",
     "name": "VVA/Spartaan Trainings broek",
     "imageKey": "sp-live-140832",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-trainings-broek_1000x1000_188171.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95341",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140832",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13394,6 +16993,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "1901",
     "name": "VVA/Spartaan Sporttas",
     "imageKey": "sp-live-140833",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-sporttas_1000x1000_188172.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95355",
+        "sourceColorId": "12081",
+        "colorLabel": "ZWART/ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140833",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13465,6 +17078,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6824",
     "name": "VVA/Spartaan Zip top",
     "imageKey": "sp-live-140835",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-zip-top_1000x1000_188174.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95352",
+        "sourceColorId": "12078",
+        "colorLabel": "WIT/ROZE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140835",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13550,6 +17177,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "6124",
     "name": "VVA/Spartaan Training shirt",
     "imageKey": "sp-live-140834",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-training-shirt_1000x1000_188173.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "95339",
+        "sourceColorId": "12078",
+        "colorLabel": "WIT/ROZE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-140834",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13635,6 +17276,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "1816",
     "name": "VVA/Spartaan Rugtas",
     "imageKey": "sp-live-115671",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/vva-spartaan-rugtas_1000x1000_188122.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "70325",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-115671",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "VVA / Spartaan",
     "profileId": "profile-source-vva-spartaan-initials",
@@ -13706,6 +17361,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IS1016/IJ1030",
     "name": "Wooter Masterclass Shirt",
     "imageKey": "sp-live-132386",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-masterclass-shirt_1000x1000_166511.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86941",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132386",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -13779,6 +17448,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IJ7676/IJ7674",
     "name": "Wooter Pro Shirt",
     "imageKey": "sp-live-132385",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-shirt_1000x1000_166510.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86928",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132385",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -13862,6 +17545,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IR9376/IR9368",
     "name": "Wooter Pro Short",
     "imageKey": "sp-live-132394",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-short_1000x1000_166519.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86932",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132394",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -13943,6 +17640,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IJ9963/IJ9952",
     "name": "Wooter Pro Trainingstop",
     "imageKey": "sp-live-132388",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-trainingstop_1000x1000_166513.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86942",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132388",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14030,6 +17741,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IP1953/IJ7667",
     "name": "Wooter Pro Trainingsbroek",
     "imageKey": "sp-live-132391",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-trainingsbroek_1000x1000_166516.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86940",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132391",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14109,6 +17834,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IM8806/IM8798",
     "name": "Wooter Pro Windbreaker",
     "imageKey": "sp-live-132397",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-windbreaker_1000x1000_166522.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86947",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132397",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14194,6 +17933,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "HS9758",
     "name": "Wooter PRO RUGTAS",
     "imageKey": "sp-live-132379",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-pro-rugtas_1000x1000_166504.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86927",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132379",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14265,6 +18018,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IS1018/IS1029",
     "name": "Wooter Academy Shirt",
     "imageKey": "sp-live-132384",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-shirt_1000x1000_166509.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86946",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132384",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14340,6 +18107,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IR9377/IR9369",
     "name": "Wooter Academy Short",
     "imageKey": "sp-live-132393",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-short_1000x1000_166518.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86938",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132393",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14419,6 +18200,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IS1044/IR9360",
     "name": "Wooter Academy Trainingstop",
     "imageKey": "sp-live-132387",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-trainingstop_1000x1000_166512.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86943",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132387",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14504,6 +18299,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "HB0581/H57510",
     "name": "Wooter Entrada 22 All-Weather Jack",
     "imageKey": "sp-live-125091",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-entrada-22-all-weather-jack_1000x1000_148334.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "79661",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-125091",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-entrada-22-all-weather-jack_1000x1000_148335.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "79661",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-125091-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14579,6 +18400,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IR9344/IS1001",
     "name": "Wooter Academy Trainingsbroek",
     "imageKey": "sp-live-132390",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-trainingsbroek_1000x1000_166515.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86936",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132390",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14666,6 +18501,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IM8812/IM8797",
     "name": "Wooter Academy Windbreaker",
     "imageKey": "sp-live-132396",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-windbreaker_1000x1000_166521.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86944",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132396",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14749,6 +18598,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "IB8646",
     "name": "Wooter Academy Rugtas",
     "imageKey": "sp-live-132378",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-rugtas_1000x1000_166503.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "86925",
+        "sourceColorId": "12041",
+        "colorLabel": "MARINE",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-132378",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14820,6 +18683,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "CE9057 CE9058",
     "name": "Wooter Academy Winterjas",
     "imageKey": "sp-live-105851",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/wooter-academy-winterjas_1000x1000_78115.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "60640",
+        "sourceColorId": "12079",
+        "colorLabel": "ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-105851",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Wooter",
     "profileId": "profile-source-wooter-initials",
@@ -14895,6 +18772,20 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS",
     "name": "Hasselbaink Kledingpakket",
     "imageKey": "sp-live-138585",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hasselbaink-kledingpakket_1000x1000_182030.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93114",
+        "sourceColorId": "12053",
+        "colorLabel": "ROOD/ZWART",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138585",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Hasselbaink",
     "profileId": "profile-source-hasselbaink-backNumber",
@@ -14980,6 +18871,32 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
     "supplierArticleNumber": "RS1016",
     "name": "Hasselbaink Shirt",
     "imageKey": "sp-live-138581",
+    "catalogMedia": [
+      {
+        "kind": "FRONT",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hasselbaink-shirt_1000x1000_182023.webp",
+        "sourceIndex": 0,
+        "sourceProductId": "93112",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138581",
+        "checkedAt": "2026-08-28"
+      },
+      {
+        "kind": "BACK",
+        "sourceUrl": "https://www.sportpaleis.nl/img/hasselbaink-shirt_1000x1000_182024.webp",
+        "sourceIndex": 1,
+        "sourceProductId": "93112",
+        "sourceColorId": "12051",
+        "colorLabel": "ROOD",
+        "authority": "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+        "classification": "SOURCE_GALLERY_ORDER_V1",
+        "imageKey": "sp-live-138581-back",
+        "checkedAt": "2026-08-28"
+      }
+    ],
     "category": "Live bedrukartikel",
     "association": "Hasselbaink",
     "profileId": "profile-source-hasselbaink-backNumber",

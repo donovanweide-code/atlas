@@ -1,18 +1,21 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseSportpaleisProductMedia } from "./sportpaleis-website-sync.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INPUT = path.resolve(process.argv[2] ?? path.join(ROOT, "..", ".codex-tmp", "spw-final-prelive-completion", "live-catalog-audit-20260812.json"));
 const GENERATED_CATALOG = path.join(ROOT, "config", "sportpaleis-final-prelive-catalog.generated.mjs");
 const GENERATED_LOGOS = path.join(ROOT, "config", "sportpaleis-association-logos.generated.mjs");
+const EXISTING_CATALOG = path.resolve(process.argv[3] ?? GENERATED_CATALOG);
+const EXISTING_LOGOS = path.resolve(process.argv[4] ?? GENERATED_LOGOS);
 const EVIDENCE = path.join(ROOT, "docs", "sportpaleis-workspace-pilot-001", "FINAL-PRELIVE-LIVE-AUDIT-20260812.json");
 const IMAGE_DIR = path.join(ROOT, "src", "assets", "images", "sportpaleis", "live-catalog");
 const LOGO_DIR = path.join(ROOT, "public", "assets", "organizations", "sportpaleis", "association-logos");
 
 const expectedAssociations = [
-  "Almere'81", "Almere Pioneers", "As,8o", "A.S.C. Waterwijk", "Brouwersports",
+  "Almere'81", "Almerer Pioneers", "As,8o", "A.S.C. Waterwijk", "Brouwersports",
   "Buitenhout MHC", "DCG", "EKVA", "FC Almere", "FC Huizen", "HBSA", "MHC Lelystad",
   "Najaden", "SC Buitenboys", "SC Geinburgia", "Sporting Almere", "VVA / Spartaan",
   "Wooter", "Sloeproeien", "Hasselbaink",
@@ -28,6 +31,10 @@ function slug(value) {
 
 function safeSku(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function canonicalAssociationName(value) {
+  return value === "Almerer Pioneers" ? "Almere Pioneers" : value;
 }
 
 function sha256(bytes) {
@@ -77,7 +84,7 @@ function sourceStatus(product, field) {
   return field ? "VALIDATED" : "DATA_GAP";
 }
 
-function toArticle(product, index, duplicateSkus) {
+function toArticle(product, index, duplicateSkus, sourceMedia = []) {
   const option = product.fields[0];
   const field = canonicalField(product, option);
   const sku = String(product.productInfo?.Artikelnummer ?? "").trim();
@@ -86,8 +93,14 @@ function toArticle(product, index, duplicateSkus) {
   invariant(product.image, `Productafbeelding ontbreekt: ${product.sourceUrl}`);
   const identity = duplicateSkus.has(sku) ? `${safeSku(sku)}-${slug(product.association)}` : safeSku(sku);
   const imageKey = `sp-live-${identity}`;
+  const catalogMedia = sourceMedia.map((media) => ({
+    ...media,
+    imageKey: media.kind === "FRONT" ? imageKey : media.kind === "BACK" ? `${imageKey}-back` : null,
+    checkedAt: "2026-08-28",
+  }));
   const humanTruth = HUMAN_ARTICLE_TRUTH[sku] ?? {};
-  const canonicalProduct = humanTruth.association ? { ...product, association: humanTruth.association } : product;
+  const canonicalAssociation = humanTruth.association ?? canonicalAssociationName(product.association);
+  const canonicalProduct = { ...product, association: canonicalAssociation, title: product.title.replace(/^Almerer Pioneers\b/u, "Almere Pioneers") };
   const rawVariantPrices = Object.entries(product.variantPrices ?? {}).filter(([size]) => size !== "__unit");
   const articleUnitPricesBySizeEur = Object.fromEntries(product.sizes.map(({ label }) => {
     const match = rawVariantPrices.find(([size]) => size.localeCompare(label, "nl", { sensitivity: "base" }) === 0);
@@ -101,8 +114,9 @@ function toArticle(product, index, duplicateSkus) {
     id: `sp-live-${identity}`,
     articleNumber: sku,
     supplierArticleNumber,
-    name: product.title,
+    name: canonicalProduct.title,
     imageKey,
+    catalogMedia,
     category: "Live bedrukartikel",
     association: canonicalProduct.association,
     profileId: profileId(canonicalProduct, field),
@@ -151,8 +165,20 @@ async function download(url, target) {
   return bytes;
 }
 
+async function sourceText(url) {
+  const response = await fetch(url, { headers: { "User-Agent": "WBD-Sportpaleis-prelive-source-capture/1.0" } });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Bronpagina ${response.status}: ${url}`);
+  const body = await response.text();
+  invariant(Buffer.byteLength(body, "utf8") <= 2_500_000, `Bronpagina onverwacht groot: ${url}`);
+  return body;
+}
+
 const inputText = await readFile(INPUT, "utf8");
 const audit = JSON.parse(inputText);
+const existingCatalog = await import(`${pathToFileURL(EXISTING_CATALOG).href}?preserve=${Date.now()}`);
+const existingLogos = await import(`${pathToFileURL(EXISTING_LOGOS).href}?preserve=${Date.now()}`);
+const existingArticlesById = new Map((existingCatalog.SPORTPALEIS_LIVE_PILOT_ARTICLES ?? []).map((article) => [article.id, article]));
 invariant(audit.auditId === "SPW-PRELIVE-LIVE-PRINT-AUDIT-20260812", "Onverwachte audit-ID.");
 invariant(audit.checkedAt === "2026-08-12", "Onverwachte auditdatum.");
 invariant(JSON.stringify(audit.associations.map(({ name }) => name)) === JSON.stringify(expectedAssociations), "De 20 verenigingen of hun volgorde wijken af.");
@@ -176,8 +202,14 @@ const articles = [];
 for (const association of audit.associations) {
   const associationProducts = association.products.filter(({ printRelevance }) => printRelevance === "CONFIRMED_VISIBLE_PERSONALIZATION");
   for (const [index, product] of associationProducts.entries()) {
-    const article = toArticle(product, index, duplicateSkus);
+    const productPage = await sourceText(product.sourceUrl);
+    const sourceMedia = productPage ? parseSportpaleisProductMedia(productPage, product.sourceUrl) : [];
+    const generatedArticle = toArticle(product, index, duplicateSkus, sourceMedia);
+    const previousArticle = existingArticlesById.get(generatedArticle.id);
+    const article = previousArticle ? { ...generatedArticle, ...previousArticle, catalogMedia: generatedArticle.catalogMedia } : generatedArticle;
     await download(product.image, path.join(IMAGE_DIR, `${article.imageKey}.webp`));
+    const back = article.catalogMedia.find(({ kind, imageKey }) => kind === "BACK" && imageKey);
+    if (back) await download(back.sourceUrl, path.join(IMAGE_DIR, `${back.imageKey}.webp`));
     articles.push(article);
   }
 }
@@ -186,10 +218,15 @@ invariant(articles.every(({ supports }) => supports.length > 0), "Een bevestigd 
 
 const logos = {};
 for (const association of audit.associations) {
-  invariant(association.logo?.src?.startsWith("https://www.sportpaleis.nl/img/"), `Ongeldig bronlogo: ${association.name}`);
-  const filename = `${slug(association.name)}.png`;
+  const associationName = canonicalAssociationName(association.name);
+  invariant(association.logo?.src?.startsWith("https://www.sportpaleis.nl/img/"), `Ongeldig bronlogo: ${associationName}`);
+  if (existingLogos.SPORTPALEIS_ASSOCIATION_LOGOS?.[associationName]) {
+    logos[associationName] = existingLogos.SPORTPALEIS_ASSOCIATION_LOGOS[associationName];
+    continue;
+  }
+  const filename = `${slug(associationName)}.png`;
   const bytes = await download(association.logo.src, path.join(LOGO_DIR, filename));
-  logos[association.name] = {
+  logos[associationName] = {
     filename,
     mimeType: "image/png",
     dataBase64: bytes.toString("base64"),
@@ -203,7 +240,7 @@ for (const association of audit.associations) {
 }
 
 const matrix = audit.associations.map((association) => ({
-  association: association.name,
+  association: canonicalAssociationName(association.name),
   productCount: association.products.length,
   confirmedPrintArticleCount: association.products.filter(({ printRelevance }) => printRelevance === "CONFIRMED_VISIBLE_PERSONALIZATION").length,
   humanConfirmationRequiredCount: association.products.filter(({ printRelevance }) => printRelevance === "HUMAN_CONFIRMATION_REQUIRED").length,
@@ -212,7 +249,7 @@ const matrix = audit.associations.map((association) => ({
   sourceUrls: [...new Set(association.products.map(({ sourceUrl }) => new URL(sourceUrl).pathname.split("/")[1]).filter(Boolean))],
   logoSourceUrl: association.logo.src,
 }));
-const uncertainSummary = uncertain.map((product) => ({ association: product.association, articleNumber: product.productInfo?.Artikelnummer ?? null, name: product.title, sourceUrl: product.sourceUrl, status: "HUMAN_CONFIRMATION_REQUIRED" }));
+const uncertainSummary = uncertain.map((product) => ({ association: canonicalAssociationName(product.association), articleNumber: product.productInfo?.Artikelnummer ?? null, name: product.title.replace(/^Almerer Pioneers\b/u, "Almere Pioneers"), sourceUrl: product.sourceUrl, status: "HUMAN_CONFIRMATION_REQUIRED" }));
 
 const catalogModule = `// Gegenereerd door scripts/generate-sportpaleis-final-prelive-catalog.mjs. Niet handmatig wijzigen.\nexport const SPORTPALEIS_FINAL_PRELIVE_AUDIT_ID = ${JSON.stringify(audit.auditId)};\nexport const SPORTPALEIS_LIVE_CATALOG_CHECKED_AT = "2026-08-12";\nexport const SPORTPALEIS_LIVE_CATALOG_SOURCE = "https://www.sportpaleis.nl/verenigingen/";\nexport const SPORTPALEIS_LIVE_PILOT_ARTICLES = ${JSON.stringify(articles, null, 2)};\nexport const SPORTPALEIS_LIVE_HUMAN_CONFIRMATION_REQUIRED_ARTICLES = ${JSON.stringify(uncertainSummary, null, 2)};\nexport const SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS = ${JSON.stringify(matrix, null, 2)};\nexport const SPORTPALEIS_LIVE_ADDITIONAL_ARTICLES = [];\nexport const SPORTPALEIS_LIVE_EXCLUDED_ARTICLES = [];\n`;
 const logoModule = `// Gegenereerd door scripts/generate-sportpaleis-final-prelive-catalog.mjs. Niet handmatig wijzigen.\nexport const SPORTPALEIS_ASSOCIATION_LOGOS = ${JSON.stringify(logos, null, 2)};\n`;

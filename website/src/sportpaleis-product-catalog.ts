@@ -36,6 +36,14 @@ export interface SportpaleisCatalogProduct {
     sourceArticleId: string;
     sourceArticleNumber: string;
     associationNames: string[];
+    media: {
+      kind: "FRONT" | "BACK" | "DETAIL";
+      imageKey: string;
+      sourceUrl?: string;
+      sourceProductId?: string | null;
+      sourceColorId?: string | null;
+      classification?: "SOURCE_GALLERY_ORDER_V1";
+    }[];
   }[];
   sourceAdapterId: string;
 }
@@ -117,6 +125,7 @@ export function buildSportpaleisProductCatalog(articles: readonly CatalogArticle
       sourceArticleId: article.id,
       sourceArticleNumber: article.articleNumber,
       associationNames: [article.association],
+      media: article.catalogMedia?.some(({ imageKey }) => Boolean(imageKey)) ? article.catalogMedia.filter(({ imageKey }) => Boolean(imageKey)).map(({ kind, imageKey, sourceUrl, sourceProductId, sourceColorId, classification }) => ({ kind: kind === "ALTERNATIVE" ? "DETAIL" as const : kind, imageKey: imageKey!, sourceUrl, sourceProductId, sourceColorId, classification })) : [{ kind: "FRONT", imageKey: article.imageKey }],
     });
     else if (!existingVariant.associationNames.includes(article.association)) existingVariant.associationNames.push(article.association);
     product.audiences = [...new Set([...product.audiences, ...audienceFor(article)])];

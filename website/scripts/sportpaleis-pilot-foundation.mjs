@@ -2592,6 +2592,27 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async analyzeProductionEfficiency(token, csrfToken, payload) {
+    const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const selections = Array.isArray(payload.orders) ? payload.orders : [];
+    if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
+    const requestedFoilColor = requiredText(payload.foilColor, "Foliekleur", 80);
+    const state = await this.store.read();
+    const orders = selections.map(({ id, expectedRevision }) => {
+      const order = state.orders.find((candidate) => candidate.id === id);
+      if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+      if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+      const blocker = productionProposalBlockReason(order, state);
+      if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });
+      return order;
+    });
+    const proposal = { groups: buildProductionProposalGroups(state, orders) };
+    const requestedGroups = proposal.groups.filter(({ foilColor }) => foilColor.toLocaleLowerCase("nl-NL") === requestedFoilColor.toLocaleLowerCase("nl-NL"));
+    const currentGroup = requestedGroups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
+    if (!currentGroup) throw Object.assign(new Error(`${requestedFoilColor} is geen beschikbare OPEN foliekleur.`), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_AVAILABLE" });
+    return analyzeProductionEfficiency(state, user, orders, currentGroup, payload.supplement);
+  }
+
   async prepareCurrentProductionGroup(token, csrfToken, payload, idempotencyKey) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
@@ -2625,6 +2646,13 @@ export class SportpaleisPilotService {
         const currentGroup = requestedGroups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
         if (!currentGroup) throw Object.assign(new Error(requestedGroups.length ? "Er is al een andere fysieke kleurstap actief. Rond die eerst af; er is niets opgeslagen." : `${requestedFoilColor} is geen beschikbare OPEN foliekleur; er is niets opgeslagen.`), { statusCode: 409, code: requestedGroups.length ? "PRODUCTION_PHYSICAL_STEP_CONFLICT" : "PRODUCTION_GROUP_NOT_AVAILABLE" });
         if (!managedFoilColor(state, currentGroup.foilColor)) throw Object.assign(new Error("De huidige productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
+        if (payload.supplement) {
+          const efficiency = analyzeProductionEfficiency(state, user, orders, currentGroup, payload.supplement);
+          if (efficiency.status !== "FIT") throw Object.assign(new Error("Deze extra opdruk past niet aantoonbaar in de bestaande veilige folieruimte."), { statusCode: 409, code: "PRODUCTION_SUPPLEMENT_NO_SAFE_CAPACITY" });
+          if (!payload.efficiencyAnalysisHash || payload.efficiencyAnalysisHash !== efficiency.analysisHash) throw Object.assign(new Error("De restcapaciteitscontrole is gewijzigd. Controleer opnieuw; er is niets opgeslagen."), { statusCode: 409, code: "PRODUCTION_EFFICIENCY_ANALYSIS_STALE" });
+          currentGroup.supplements = [efficiency.supplement];
+          currentGroup.efficiencyEvidence = efficiency.evidence;
+        }
         const currentOrders = currentGroup.orders.map(({ id, expectedRevision }) => {
           const order = state.orders.find((candidate) => candidate.id === id);
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
@@ -2635,7 +2663,15 @@ export class SportpaleisPilotService {
         });
         const sequence = state.nextProductionJobSequence;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, currentOrders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { lineRefs: currentGroup.productionLineRefs, foilColor: currentGroup.foilColor, sourceChannel: currentGroup.sourceChannel, groupId: currentGroup.id, groupLabel: currentGroup.label });
+        const snapshot = buildProductionJobSnapshot(state, currentOrders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, {
+          lineRefs: currentGroup.productionLineRefs,
+          foilColor: currentGroup.foilColor,
+          sourceChannel: currentGroup.sourceChannel,
+          groupId: currentGroup.id,
+          groupLabel: currentGroup.label,
+          supplements: currentGroup.supplements ?? [],
+          efficiencyEvidence: currentGroup.efficiencyEvidence,
+        });
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.nextProductionJobSequence += 1;
@@ -2651,7 +2687,7 @@ export class SportpaleisPilotService {
           syncOpenProposalOrderRevisions(state, order);
         }
         audit(state, user.id, "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), hardwareSendPerformed: false });
-        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, foilColor: currentGroup.foilColor, physicalStepSelectedBy: user.name, snapshotHash: job.snapshotHash, hardwareSendPerformed: false });
+        audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, foilColor: currentGroup.foilColor, physicalStepSelectedBy: user.name, snapshotHash: job.snapshotHash, ...(currentGroup.efficiencyEvidence ? { efficiencyAnalysisHash: currentGroup.efficiencyEvidence.analysisHash, productionSupplementIds: currentGroup.supplements.map(({ id }) => id), customerOrderLinesCreatedForSupplement: false } : {}), hardwareSendPerformed: false });
         return { proposal, job };
       });
       return { state, value: outcome };
@@ -5876,7 +5912,8 @@ function managedFontPhysicalOrientation() {
 
 function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
   const digits = line.type === "NUMBER" && /^\d{2,4}$/u.test(line.content) ? Array.from(line.content) : null;
-  const baseId = `${order.id}-${line.itemId ?? line.id}-${line.content}-${copy}`;
+  const sourceOrderId = line.productionSupplement?.customerOrderLine === false ? `SUPPLEMENT:${line.id}` : order.id;
+  const baseId = `${sourceOrderId}-${line.itemId ?? line.id}-${line.content}-${copy}`;
   const piece = (content, id = baseId) => createManagedFontProductionPiece({
     fontRecord: font,
     bytes,
@@ -5884,8 +5921,8 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
     widthMm: line.widthMm,
     heightMm: line.heightMm,
     id,
-    sourceOrderId: order.id,
-    product: item?.product ?? "Productiefont",
+    sourceOrderId,
+    product: line.productionSupplement?.customerOrderLine === false ? "Interne folie-opvulling" : item?.product ?? "Productiefont",
     association: item?.association ?? order.association,
     foilColor,
     requestedHeightAxis: managedFontPhysicalOrientation(line),
@@ -5973,6 +6010,73 @@ function buildProductionProposalGroups(state, orders) {
   });
 }
 
+function productionEfficiencySupplement(state, user, payload, foilColor) {
+  const type = allowedValue(payload?.type, ["TEXT", "INITIALS", "NUMBER"], "Opvullingstype");
+  const content = normalizeProductionContent(type, requiredText(payload?.content, "Inhoud", 160));
+  const heightMm = Number(payload?.heightMm);
+  const quantity = Number(payload?.quantity);
+  const sourceId = requiredText(payload?.sourceId, "Lettertype", 180);
+  const identity = sha256(JSON.stringify({ type, content, heightMm, quantity, sourceId, foilColor })).slice(0, 24).toLowerCase();
+  const [line] = validateProductionLines([{
+    id: `production-supplement-${identity}`,
+    type,
+    content,
+    sourceId,
+    // Managed font geometry is height-led and derives its true contour width.
+    // This legacy width value is only a validation envelope, never a stretch.
+    widthMm: Math.min(430, Math.max(heightMm, heightMm * Math.max(1, Array.from(content).length * 0.7))),
+    heightMm,
+    foilColor,
+    quantity,
+    previewLabel: content,
+    provenance: "Productie · geometrisch bewezen folie-opvulling · geen klantorderregel",
+  }], state, user, "CUSTOM");
+  if (line.validation.status !== "VALID") throw Object.assign(new Error(line.validation.reason || "De extra opdruk is niet veilig uitvoerbaar."), { statusCode: 409, code: "PRODUCTION_SUPPLEMENT_NOT_READY" });
+  if (String(line.foilColor).toLocaleLowerCase("nl-NL") !== String(foilColor).toLocaleLowerCase("nl-NL")) throw Object.assign(new Error("De extra opdruk moet exact dezelfde foliekleur gebruiken."), { statusCode: 409, code: "PRODUCTION_SUPPLEMENT_COLOR_MISMATCH" });
+  return {
+    ...line,
+    sourceId,
+    orderId: `production-supplement:${identity}`,
+    productionSupplement: { reason: "GEOMETRY_PROVEN_REST_CAPACITY", customerOrderLine: false },
+  };
+}
+
+function productionLayoutOccupiedArea(snapshot) {
+  return (snapshot.layout.placements ?? []).reduce((sum, placement) => sum + Number(placement.widthMm) * Number(placement.heightMm), 0);
+}
+
+function analyzeProductionEfficiency(state, user, orders, group, payload) {
+  const supplement = productionEfficiencySupplement(state, user, payload, group.foilColor);
+  const checkAt = "2026-08-28T00:00:00.000Z";
+  const baseGroup = { ...group, supplements: [] };
+  const augmentedGroup = { ...group, supplements: [supplement], efficiencyEvidence: { analysisHash: "PENDING" } };
+  const base = buildProductionJobSnapshot(state, orders, "EFFICIENCY-PREFLIGHT", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, baseGroup, { persistArtifacts: false });
+  const augmented = buildProductionJobSnapshot(state, orders, "EFFICIENCY-PREFLIGHT", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, augmentedGroup, { persistArtifacts: false });
+  const baseArea = productionLayoutOccupiedArea(base);
+  const augmentedArea = productionLayoutOccupiedArea(augmented);
+  const rollArea = Math.max(1, Number(base.layout.configuredWidthMm ?? base.productionGroup.workingWidthMm) * Number(base.layout.usedLengthMm));
+  const fits = Number(augmented.layout.usedLengthMm) <= Number(base.layout.usedLengthMm) + 0.001
+    && Number(augmented.layout.objectCount) > Number(base.layout.objectCount);
+  const historyMatches = (state.productionJobs ?? []).filter(({ status }) => status === "COMPLETED").flatMap(({ snapshot }) => snapshot.productionLines ?? []).filter((line) => line.type === supplement.type && line.content === supplement.content && String(line.foilColor ?? "").toLocaleLowerCase("nl-NL") === String(group.foilColor).toLocaleLowerCase("nl-NL")).reduce((sum, line) => sum + Number(line.quantity), 0);
+  const evidence = {
+    baseUsedWidthMm: base.layout.usedWidthMm,
+    baseUsedLengthMm: base.layout.usedLengthMm,
+    augmentedUsedWidthMm: augmented.layout.usedWidthMm,
+    augmentedUsedLengthMm: augmented.layout.usedLengthMm,
+    utilizationBeforePercent: Math.round((baseArea / rollArea) * 10_000) / 100,
+    utilizationAfterPercent: Math.round((augmentedArea / rollArea) * 10_000) / 100,
+    customerOrderLinesCreated: false,
+  };
+  const analysisHash = sha256(JSON.stringify({
+    orderRevisions: orders.map(({ id, revision }) => ({ id, revision })),
+    group: { foilColor: group.foilColor, lineRefs: group.productionLineRefs },
+    supplement,
+    evidence,
+    fits,
+  })).toUpperCase();
+  return { status: fits ? "FIT" : "NO_SAFE_REST_CAPACITY", analysisHash, supplement, evidence: { ...evidence, analysisHash }, historyEvidence: { matchingCompletedObjects: historyMatches, source: "IMMUTABLE_COMPLETED_PRODUCTION_JOBS" } };
+}
+
 export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg) {
   const expectedIds = pieces.map(({ id }) => String(id));
   const actualIds = cutJob?.productionGeometry?.groups?.map(({ sourcePieceId }) => String(sourcePieceId)) ?? [];
@@ -6007,7 +6111,7 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
   return { expectedInstances: expected, actualInstances: actual };
 }
 
-function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot) {
+function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, options = {}) {
   const generationStartedAt = performance.now();
   const millisecondsSince = (startedAt) => Math.round((performance.now() - startedAt) * 10) / 10;
   if (!productionLines.length || productionLines.some((line) => !["PRODUCTION_SOURCE", "FONT", "PRODUCTION_ELEMENT"].includes(line.source?.kind) || line.validation?.status !== "VALID")) return null;
@@ -6015,8 +6119,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     const order = orders.find(({ id }) => id === line.orderId)
       ?? orders.find(({ items }) => items.some(({ id }) => id === line.itemId))
       ?? orders[0];
-    if (order) assertPioneersNumberSource(state, order, line);
-    if (order) assertScBuitenboysShortSource(state, order, line);
+    if (order && !line.productionSupplement) assertPioneersNumberSource(state, order, line);
+    if (order && !line.productionSupplement) assertScBuitenboysShortSource(state, order, line);
   }
   const sourceResolutionStartedAt = performance.now();
   const resolved = productionLines.map((line) => {
@@ -6111,13 +6215,15 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
   const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
   const persistenceStartedAt = performance.now();
-  mkdirSync(absoluteDirectory, { recursive: true });
-  if (path.resolve(absolutePath).startsWith(`${absoluteDirectory}${path.sep}`) === false) throw new Error("Ongeldige productiebestandlocatie.");
-  try { writeFileSync(absolutePath, bytes, { flag: "wx" }); }
-  catch (error) {
-    if (error?.code !== "EEXIST" || sha256(readFileSync(absolutePath)).toUpperCase() !== artifactHash) throw error;
+  if (options.persist !== false) {
+    mkdirSync(absoluteDirectory, { recursive: true });
+    if (path.resolve(absolutePath).startsWith(`${absoluteDirectory}${path.sep}`) === false) throw new Error("Ongeldige productiebestandlocatie.");
+    try { writeFileSync(absolutePath, bytes, { flag: "wx" }); }
+    catch (error) {
+      if (error?.code !== "EEXIST" || sha256(readFileSync(absolutePath)).toUpperCase() !== artifactHash) throw error;
+    }
   }
-  const persistenceMs = millisecondsSince(persistenceStartedAt);
+  const persistenceMs = options.persist === false ? 0 : millisecondsSince(persistenceStartedAt);
   return {
     cutJob,
     preview,
@@ -6129,15 +6235,16 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   };
 }
 
-function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined) {
+function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined, options = {}) {
   const snapshotStartedAt = performance.now();
   const allProductionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id, ...(productionDecorationIdentity(order, line) ? { decorationIdentity: productionDecorationIdentity(order, line) } : {}) })) : order.items.map((item, index) => ({ ...lineFromOrderItem(state, order, item, index), orderId: order.id })));
   const selectedLineKeys = productionGroup?.lineRefs ? new Set(productionGroup.lineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`)) : null;
   const selectedLineOrder = productionGroup?.lineRefs ? new Map(productionGroup.lineRefs.map(({ orderId, lineId }, index) => [`${orderId}|${lineId}`, index])) : null;
-  const productionLines = selectedLineKeys
+  const orderProductionLines = selectedLineKeys
     ? allProductionLines.filter(({ orderId, id }) => selectedLineKeys.has(`${orderId}|${id}`)).sort((left, right) => selectedLineOrder.get(`${left.orderId}|${left.id}`) - selectedLineOrder.get(`${right.orderId}|${right.id}`))
     : allProductionLines;
-  if (selectedLineKeys && (productionLines.length !== selectedLineKeys.size || productionLines.length === 0)) throw Object.assign(new Error("De opgeslagen productiegroep verwijst niet meer exact naar dezelfde productieregels."), { statusCode: 409, code: "PRODUCTION_GROUP_STALE" });
+  if (selectedLineKeys && (orderProductionLines.length !== selectedLineKeys.size || orderProductionLines.length === 0)) throw Object.assign(new Error("De opgeslagen productiegroep verwijst niet meer exact naar dezelfde productieregels."), { statusCode: 409, code: "PRODUCTION_GROUP_STALE" });
+  const productionLines = [...orderProductionLines, ...structuredClone(productionGroup?.supplements ?? [])];
   const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
   const layout = rectangleNesting(productionLines, defaults);
   const fontIds = new Set(productionLines.filter(({ source }) => source.kind === "FONT").map(({ source }) => source.id));
@@ -6148,7 +6255,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     const source = sourceLayers.physicallyProvenContour ?? sourceLayers.validatedCutContour; if (!source) return [];
     return [{ id: source.sourceId || id, version: source.version, proofStatus: sourceLayers.physicallyProvenContour ? "PHYSICALLY_VALIDATED" : "GEOMETRY_VALIDATED", immutable: true }];
   });
-  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot);
+  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, { persist: options.persistArtifacts !== false });
   if (productionArtifact) sourceContours.push(...productionArtifact.sources.map(({ id, version, sourceProofStatus }) => ({ id, version, proofStatus: sourceProofStatus, immutable: true })));
   const firstProfile = orders.flatMap(({ items }) => items).map(({ productionProfileId }) => state.productionProfiles.find(({ id }) => id === productionProfileId)).find(Boolean);
   const abMirrorAccepted = state.productionJobs.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS");
@@ -6159,7 +6266,9 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     association: [...new Set(orders.map(({ association }) => association))].join(" · "),
     orderIds: orders.map(({ id }) => id),
     elements: productionLines.map(({ type, content, quantity, widthMm, heightMm }) => ({ type, value: content, quantity, widthMm, heightMm })),
-    productionLines: structuredClone(productionLines), fontSources, logoSources,
+    productionLines: structuredClone(productionLines),
+    ...(productionGroup?.supplements?.length ? { productionSupplements: productionGroup.supplements.map((line) => ({ id: line.id, type: line.type, value: line.content, quantity: line.quantity, foilColor: line.foilColor, sourceId: line.source.id, sourceVersion: line.source.version, reason: "GEOMETRY_PROVEN_REST_CAPACITY", customerOrderLine: false, analysisHash: productionGroup.efficiencyEvidence.analysisHash })) } : {}),
+    fontSources, logoSources,
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
@@ -6828,6 +6937,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/production-proposals" && method === "POST") {
         json(response, 201, await service.createProductionProposal(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/production-proposals/efficiency-check" && method === "POST") {
+        json(response, 200, await service.analyzeProductionEfficiency(token, csrf, await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/production-proposals/current-job" && method === "POST") {

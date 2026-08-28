@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService, setSportpaleisTeamwearPilotExposure } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { buildSportpaleisProductCatalog } from "../src/sportpaleis-product-catalog.ts";
+import { normalizeProposalItems } from "../src/sportpaleis/teamkit-proposals.mjs";
+import { generateProposalPdf, proposalSnapshot, renderProposalPreview } from "../src/sportpaleis/teamkit-proposals.mjs";
 import {
   buildTeamwearComposition,
   buildTeamwearAssetLibrary,
@@ -47,6 +51,67 @@ test("centrale Teamwear-catalogus bundelt merken, varianten en bounded discovery
   const scale = catalogScaleProbe(catalog, 5_200);
   assert.equal(scale.total, 5_200);
   assert.ok(scale.products.length <= 24);
+});
+
+test("één catalogusvariant draagt exact dezelfde voor-/achterbron naar Teamwear-compositie en export", () => {
+  const article = {
+    id: "sp-live-variant-black", articleNumber: "93035", supplierArticleNumber: "VAR-93035", name: "Almere Pioneers Varsity Jacket", imageKey: "sp-live-variant-black", category: "Jacks", association: "Almere Pioneers", profileId: "profile-none", supports: [], active: true, availableSizes: ["M", "L"],
+    catalogProvenance: { authority: "SPORTPALEIS_LIVE", url: "https://www.sportpaleis.nl/almere-pioneers-varsity-jacket_93035.html", imageUrl: "https://www.sportpaleis.nl/img/181520.webp", checkedAt: "2026-08-28" },
+    catalogMedia: [
+      { kind: "FRONT", imageKey: "sp-live-variant-black", sourceUrl: "https://www.sportpaleis.nl/img/181520.webp", sourceIndex: 0, sourceProductId: "93035", sourceColorId: "12079", colorLabel: "ZWART", authority: "SPORTPALEIS_LIVE_PRODUCT_GALLERY", classification: "SOURCE_GALLERY_ORDER_V1", checkedAt: "2026-08-28" },
+      { kind: "BACK", imageKey: "sp-live-variant-black-back", sourceUrl: "https://www.sportpaleis.nl/img/181521.webp", sourceIndex: 3, sourceProductId: "93035", sourceColorId: "12079", colorLabel: "ZWART", authority: "SPORTPALEIS_LIVE_PRODUCT_GALLERY", classification: "SOURCE_GALLERY_ORDER_V1", checkedAt: "2026-08-28" },
+    ],
+  };
+  const product = buildSportpaleisProductCatalog([article])[0];
+  assert.deepEqual(product.variants[0].media.map(({ kind, imageKey }) => [kind, imageKey]), [["FRONT", "sp-live-variant-black"], ["BACK", "sp-live-variant-black-back"]]);
+  assert.equal(product.variants[0].media[1].sourceColorId, "12079");
+  const teamwear = buildTeamwearCatalog({ articles: [article] }).find(({ variants }) => variants.some(({ sourceArticleId }) => sourceArticleId === article.id));
+  assert.ok(teamwear);
+  const snapshot = {
+    catalogProductId: teamwear.id, brand: teamwear.brand, supplierName: teamwear.supplierName, supplierArticleName: teamwear.supplierArticleName, supplierArticleNumber: teamwear.supplierArticleNumber, category: teamwear.category, collection: teamwear.collection, audience: teamwear.audiences, colorLabel: "ZWART", imageKey: "sp-live-variant-black", backImageKey: "sp-live-variant-black-back", frontSourceUrl: "https://www.sportpaleis.nl/img/181520.webp", backSourceUrl: "https://www.sportpaleis.nl/img/181521.webp", sourceProductId: "93035", sourceColorId: "12079", mediaClassification: "SOURCE_GALLERY_ORDER_V1", advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "sportpaleis-existing", sourceStatus: "AUTHORITATIVE",
+  };
+  const proposal = { id: "proposal-front-back", proposalNumber: "TKV-FRONT-BACK", currentRevision: 1, items: [{ id: "jacket", articleId: article.id, productName: article.name, color: "ZWART", catalogSnapshot: snapshot, placements: [{ id: "back-34", kind: "BACK_NUMBER", label: "Rugnummer", text: "34", side: "BACK", preset: "BACK_UPPER", widthPercent: 22, productionAssetId: null, assetVersion: null, sourceId: null, physicalSizeOverride: null }] }] };
+  proposal.items = normalizeProposalItems(proposal.items);
+  assert.equal(proposal.items[0].catalogSnapshot.backSourceUrl, "https://www.sportpaleis.nl/img/181521.webp");
+  assert.equal(proposal.items[0].catalogSnapshot.sourceColorId, "12079");
+  const composition = buildTeamwearComposition(proposal);
+  assert.deepEqual(composition.items[0].media, { frontImageKey: "sp-live-variant-black", backImageKey: "sp-live-variant-black-back" });
+  assert.equal(composition.items[0].placements[0].side, "BACK");
+  assert.deepEqual(teamwearSquareProductRenderSpec(proposal).composition, composition);
+
+  const missingBack = buildSportpaleisProductCatalog([{ ...article, id: "front-only", articleNumber: "front-only", catalogMedia: [article.catalogMedia[0]] }])[0];
+  assert.equal(missingBack.variants[0].media.some(({ kind }) => kind === "BACK"), false, "ontbrekende achterkant wordt nooit uit de voorkant verzonnen");
+});
+
+test("synccatalogus → revision-preview → PDF gebruikt dezelfde echte front/back-bron en rugplaatsing", async (context) => {
+  const { state } = await fixture(context);
+  const article = state.articles.find(({ id }) => id === "sp-live-138505");
+  assert.ok(article);
+  const front = article.catalogMedia.find(({ kind }) => kind === "FRONT");
+  const back = article.catalogMedia.find(({ kind }) => kind === "BACK");
+  assert.ok(front?.imageKey && back?.imageKey);
+  assert.equal(front.sourceProductId, back.sourceProductId);
+  assert.equal(front.sourceColorId, back.sourceColorId);
+  assert.equal(front.colorLabel, back.colorLabel);
+  const snapshot = {
+    catalogProductId: article.id, brand: "Sportpaleis", supplierName: "Sportpaleis", supplierArticleName: article.name, supplierArticleNumber: article.supplierArticleNumber ?? article.articleNumber, category: article.category, collection: null, audience: [], colorLabel: front.colorLabel, imageKey: front.imageKey, backImageKey: back.imageKey, frontSourceUrl: front.sourceUrl, backSourceUrl: back.sourceUrl, sourceProductId: front.sourceProductId, sourceColorId: front.sourceColorId, mediaClassification: front.classification, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "sportpaleis-existing", sourceStatus: "AUTHORITATIVE",
+  };
+  const proposal = {
+    id: "proposal-real-front-back", proposalNumber: "TKV-REAL-FRONT-BACK", currentRevision: 2, title: "Pioneers varsity", type: "TEAMKIT", customer: { name: "Almere Pioneers" }, association: { id: "association-03", name: "Almere Pioneers" }, team: "Selectie", season: "2026/2027", category: null, deadline: null, notes: null, sources: [],
+    items: normalizeProposalItems([{ id: "jacket", articleId: article.id, articleNumber: article.articleNumber, productName: article.name, color: front.colorLabel, quantity: 1, sizes: ["M"], catalogSnapshot: snapshot, placements: [{ id: "back-34", kind: "BACK_NUMBER", label: "Rugnummer", side: "BACK", preset: "BACK_UPPER", text: "34", widthPercent: 24, route: "NOG_TE_BEPALEN" }] }]),
+  };
+  const revisionSnapshot = proposalSnapshot(proposal, state);
+  const garmentSources = revisionSnapshot.items[0].visualGarmentSources;
+  assert.equal(garmentSources.FRONT.imageKey, front.imageKey);
+  assert.equal(garmentSources.BACK.imageKey, back.imageKey);
+  assert.notEqual(garmentSources.FRONT.sha256, garmentSources.BACK.sha256);
+  assert.equal(revisionSnapshot.items[0].placements[0].side, "BACK");
+  const preview = renderProposalPreview(revisionSnapshot, { customer: true });
+  assert.ok(preview.includes(garmentSources.FRONT.dataUri));
+  assert.ok(preview.includes(garmentSources.BACK.dataUri));
+  const pdf = await generateProposalPdf(revisionSnapshot, false, { state, proposal });
+  assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
+  assert.match(pdf.toString("ascii"), new RegExp(`WBD-COMPOSITION ${createHash("sha256").update(JSON.stringify(revisionSnapshot)).digest("hex").toUpperCase()}`, "u"));
 });
 
 test("pricing-policy invents no discount without an authoritative policy", async (context) => {

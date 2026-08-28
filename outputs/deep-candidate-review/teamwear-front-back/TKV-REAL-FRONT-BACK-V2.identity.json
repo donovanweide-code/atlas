@@ -1,0 +1,21 @@
+{
+  "proposalId": "proposal-real-front-back-evidence",
+  "proposalNumber": "TKV-REAL-FRONT-BACK",
+  "revision": 2,
+  "articleId": "sp-live-138505",
+  "productId": "93035",
+  "colorId": "12079",
+  "colorLabel": "ZWART",
+  "front": {
+    "imageKey": "sp-live-138505",
+    "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181520.webp",
+    "sha256": "946B6BAE0CD56ADD686D19A3D61C05BF2D92B1C967BE5EB4C1871D71D95849B8"
+  },
+  "back": {
+    "imageKey": "sp-live-138505-back",
+    "sourceUrl": "https://www.sportpaleis.nl/img/almere-pioneers-varsity-jacket_1000x1000_181660.webp",
+    "sha256": "9931E8C205AAAF0732FDCF68B3D1C6A09955C6D4C8BCFF1E16182447C5779D57"
+  },
+  "snapshotSha256": "1AAE6889AE75CB7153E3E936F6E05518FAC94A4CD0AB60E1CE4F72D80D75D811",
+  "pdfSha256": "EC75A89E6FA7A02FC295EC43877AFA1F60616F32A7BC1800BDE0AC559638B266"
+}

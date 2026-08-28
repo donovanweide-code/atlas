@@ -72,6 +72,8 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     assert.equal(persisted.validationHistory[0].userId, "kevin");
     const row = articleToMariaDbRow(persisted, "2026-08-10T12:00:00.000Z");
     assert.deepEqual(mariaDbRowToArticle(row).validation, persisted.validation);
+    assert.ok(persisted.catalogMedia.some(({ kind }) => kind === "BACK"));
+    assert.deepEqual(mariaDbRowToArticle(row).catalogMedia, persisted.catalogMedia, "front/back-bronwaarheid overleeft de bestaande catalogusmetadata-persistence");
   });
 
   let profile;

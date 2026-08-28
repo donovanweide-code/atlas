@@ -1795,3 +1795,7 @@ body.sp-mobile-nav-open .sp-mobile-nav{pointer-events:none}
 
 /* Teamwear's outer grid must shrink to the actual mobile viewport. */
 .sp-club-experience{grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%}
+
+/* Production efficiency stays optional and only appears after a real geometry check. */
+.sp-production-efficiency{margin-top:12px;border-top:1px solid var(--sp-grey-200);padding-top:10px}.sp-production-efficiency>summary{display:flex;align-items:center;width:max-content;min-height:40px;color:var(--sp-red);font-size:13px;font-weight:850;cursor:pointer}.sp-production-efficiency form{display:grid;gap:12px;margin-top:12px}.sp-production-efficiency form>p{margin:0;color:var(--sp-grey-600);font-size:13px}.sp-production-efficiency-fields{display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));gap:10px}.sp-production-efficiency-fields label{display:grid;gap:5px;font-size:12px;font-weight:800}.sp-production-efficiency-result{margin-top:12px}.sp-production-efficiency-result p{margin:4px 0 0}
+@media(max-width:700px){.sp-production-efficiency-fields{grid-template-columns:1fr}.sp-production-efficiency>summary{min-height:44px}.sp-production-efficiency form>.sp-button{width:100%;min-height:48px}}

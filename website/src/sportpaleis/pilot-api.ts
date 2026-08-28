@@ -588,11 +588,19 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async prepareCurrentProductionGroup(orders: readonly WorkspaceOrder[], foilColor: string): Promise<{ duplicate: boolean; value: { proposal: ProductionProposal; job: ProductionJob } }> {
+  async analyzeProductionEfficiency(orders: readonly WorkspaceOrder[], foilColor: string, supplement: { type: "TEXT" | "INITIALS" | "NUMBER"; content: string; sourceId: string; heightMm: number; quantity: number }): Promise<{ status: "FIT" | "NO_SAFE_REST_CAPACITY"; analysisHash: string; supplement: Record<string, unknown>; evidence: { baseUsedWidthMm: number; baseUsedLengthMm: number; augmentedUsedWidthMm: number; augmentedUsedLengthMm: number; utilizationBeforePercent: number; utilizationAfterPercent: number; customerOrderLinesCreated: false; analysisHash: string }; historyEvidence: { matchingCompletedObjects: number; source: "IMMUTABLE_COMPLETED_PRODUCTION_JOBS" } }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-proposals/efficiency-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor, supplement }),
+    }));
+  }
+
+  async prepareCurrentProductionGroup(orders: readonly WorkspaceOrder[], foilColor: string, efficiency?: { supplement: Record<string, unknown>; analysisHash: string }): Promise<{ duplicate: boolean; value: { proposal: ProductionProposal; job: ProductionJob } }> {
     return responseBody(await this.#mutatingFetch(`${API}/production-proposals/current-job`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-current-group") },
-      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor }),
+      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor, ...(efficiency ? { supplement: efficiency.supplement, efficiencyAnalysisHash: efficiency.analysisHash } : {}) }),
     }));
   }
 

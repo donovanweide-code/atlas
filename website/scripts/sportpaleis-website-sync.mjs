@@ -85,6 +85,46 @@ export function parseSportpaleisProductionRelevance(html) {
     : { status: "NOT_RELEVANT", fields: [], evidence: "NO_PUBLIC_PERSONALIZATION_FIELDS" };
 }
 
+/**
+ * Reads the ordered product gallery that already ships with the official
+ * Sportpaleis product page. The source convention is front-first/back-last;
+ * intermediate entries remain alternatives because the storefront may expose
+ * both square and cropped variants. All entries belong to the same selected
+ * product/color context, so no cross-model or cross-color lookup is allowed.
+ */
+export function parseSportpaleisProductMedia(html, sourceUrl) {
+  const body = String(html ?? "");
+  const gallery = body.match(/<div\s+id="mainImage"(?:\s[^>]*)?>[\s\S]*?(?=<div\s+id="thumbnails"(?:\s[^>]*)?>)/iu)?.[0] ?? "";
+  const sourceContextMatch = body.match(/data-refresher-object='(\{"productId":[^']+\})'/iu);
+  let sourceContext = {};
+  try { sourceContext = sourceContextMatch ? JSON.parse(decodeHtml(sourceContextMatch[1])) : {}; } catch { sourceContext = {}; }
+  const productLayerMatch = body.match(/data-layer-product-detail='([^']+)'/iu);
+  let colorLabel = null;
+  try { colorLabel = productLayerMatch ? JSON.parse(decodeHtml(productLayerMatch[1]))?.ecommerce?.detail?.products?.[0]?.variant ?? null : null; } catch { colorLabel = null; }
+  const entries = [];
+  for (const match of gallery.matchAll(/data-image-details='([^']+)'/giu)) {
+    let details;
+    try { details = JSON.parse(decodeHtml(match[1])); } catch { continue; }
+    const candidate = details?.resolution?.low?.url ?? details?.resolution?.high?.url;
+    if (!candidate) continue;
+    const url = absoluteUrl(candidate, sourceUrl);
+    const parsed = new URL(url);
+    if (parsed.hostname !== "www.sportpaleis.nl" || !parsed.pathname.startsWith("/img/")) continue;
+    entries.push({ sourceIndex: Number(details.index ?? entries.length), sourceUrl: url });
+  }
+  const ordered = [...new Map(entries.sort((left, right) => left.sourceIndex - right.sourceIndex).map((entry) => [entry.sourceUrl, entry])).values()];
+  return ordered.map((entry, index) => ({
+    kind: index === 0 ? "FRONT" : index === ordered.length - 1 ? "BACK" : "ALTERNATIVE",
+    sourceUrl: entry.sourceUrl,
+    sourceIndex: entry.sourceIndex,
+    sourceProductId: sourceContext.productId == null ? null : String(sourceContext.productId),
+    sourceColorId: sourceContext.colorId == null ? null : String(sourceContext.colorId),
+    colorLabel: colorLabel == null ? null : String(colorLabel),
+    authority: "SPORTPALEIS_LIVE_PRODUCT_GALLERY",
+    classification: "SOURCE_GALLERY_ORDER_V1",
+  }));
+}
+
 export function parseSportpaleisAssociationPage(html, sourceUrl) {
   const body = String(html ?? "");
   const declaredCount = Number(body.match(/<span class="count">\s*([0-9]+)\s*<\/span>\s*Producten/iu)?.[1] ?? 0);
@@ -179,12 +219,13 @@ export function createSportpaleisWebsiteSource({ fetcher = globalThis.fetch } = 
         if (declaredCount > 0 && articles.size !== declaredCount) throw Object.assign(new Error(`Verenigingspagina ${entry.url} meldt ${declaredCount} artikelen, maar ${articles.size} zijn volledig gelezen.`), { code: "WEBSITE_SYNC_INCOMPLETE" });
         const classified = await mapConcurrent([...articles.values()], 4, async (article) => {
           const cached = relevanceIndex[article.sourceIdentifier];
+          const productPage = await fetchText(fetcher, article.url);
           const productionRelevance = knownProductionArticleIds.has(article.sourceIdentifier)
             ? { status: "RELEVANT", fields: [], evidence: "WORKSPACE_PRODUCTION_CONFIGURATION" }
             : cached?.fingerprint === article.fingerprint
               ? cached.productionRelevance
-              : parseSportpaleisProductionRelevance(await fetchText(fetcher, article.url));
-          return { ...article, storefrontStatus: "LIVE", productionRelevance };
+              : parseSportpaleisProductionRelevance(productPage);
+          return { ...article, storefrontStatus: "LIVE", productionRelevance, catalogMedia: parseSportpaleisProductMedia(productPage, article.url) };
         });
         const result = { sourceIdentifier: entry.url, name: associationName, url: entry.url, lastModified: entry.lastModified, storefrontStatus: "LIVE", articles: classified.sort((left, right) => left.sourceIdentifier.localeCompare(right.sourceIdentifier)) };
         return { ...result, fingerprint: sha256(JSON.stringify(result)) };

@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { reconcileSportpaleisEmployeeDirectory, SPORTPALEIS_UNVERIFIED_SALES_CODES } from "../scripts/sportpaleis-employee-directory.mjs";
 import { createSportpaleisWebshopIntakeState, normalizeDividePersonalization, parseSportpaleisDividePdfText, reconcileSportpaleisDivideRevision } from "../scripts/sportpaleis-divide-import.mjs";
-import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
+import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductMedia, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
@@ -27,6 +27,24 @@ function productCard({ sourceId = "137294", websiteId = "99601", name = "Trainin
   const layer = JSON.stringify({ name, category: association, brand: "Testmerk", price, itemgroupid: `${sourceId}-1` });
   return `<div class="item" data-product-id="${websiteId}" data-layer-product='${layer}'><a href="/product/${sourceId}/" title="${name}"><img src="/media/${sourceId}.jpg"></a></div>`;
 }
+
+test("officiële productgalerij bewaart front/back/alternatief binnen exact dezelfde product- en kleurcontext", () => {
+  const detail = JSON.stringify({ ecommerce: { detail: { products: [{ variant: "ZWART" }] } } });
+  const media = [
+    [0, "181520.webp"],
+    [1, "181659.webp"],
+    [2, "181660.webp"],
+    [3, "181521.webp"],
+  ].map(([index, file]) => `<button data-image-details='${JSON.stringify({ index, resolution: { low: { url: `/img/${file}` } } })}'></button>`).join("");
+  const html = `<main data-refresher-object='{"productId":93035,"colorId":12079}' data-layer-product-detail='${detail}'><div id="mainImage">${media}</div><div id="thumbnails"></div></main>`;
+  const result = parseSportpaleisProductMedia(html, "https://www.sportpaleis.nl/almere-pioneers-varsity-jacket_93035.html");
+  assert.deepEqual(result.map(({ kind, sourceIndex }) => [kind, sourceIndex]), [["FRONT", 0], ["ALTERNATIVE", 1], ["ALTERNATIVE", 2], ["BACK", 3]]);
+  assert.equal(result[0].sourceProductId, "93035");
+  assert.equal(result[0].sourceColorId, "12079");
+  assert.equal(result[0].colorLabel, "ZWART");
+  assert.equal(result.every(({ authority }) => authority === "SPORTPALEIS_LIVE_PRODUCT_GALLERY"), true);
+  assert.equal(result.at(-1).sourceUrl, "https://www.sportpaleis.nl/img/181521.webp");
+});
 
 test("officiële websitebron parseert stabiele verenigingen, paginatie en gestructureerde artikeldata", async () => {
   const sitemap = `<urlset><url><loc>https://www.sportpaleis.nl/verenigingen/a-s-c-waterwijk/</loc><lastmod>2026-08-20</lastmod></url><url><loc>https://www.sportpaleis.nl/over-ons/</loc></url></urlset>`;
