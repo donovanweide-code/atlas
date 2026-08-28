@@ -31,14 +31,16 @@ test("Webshop scheidt dagelijks orderwerk van importbeheer", async () => {
   assert.match(admin, /Geavanceerd · planning en bronstatus/u);
 });
 
-test("foto-entrypoint is geparkeerd terwijl document- en evidencefoundation behouden blijven", async () => {
+test("foto-entrypoint bewaart iedere foto als afzonderlijke intake en behoudt document/evidencefoundation", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const intake = source.slice(source.indexOf("function quickProductionIntake"), source.indexOf("function proofLabel"));
-  assert.match(intake, /Order uit document/u);
-  assert.match(intake, /application\/pdf,text\/plain,message\/rfc822/u);
+  assert.match(intake, /Order uit foto of document/u);
+  assert.match(intake, /image\/jpeg,image\/png,image\/webp,application\/pdf,text\/plain,message\/rfc822/u);
   assert.match(intake, /sourceKind === "PHOTO"/u, "bestaande evidence kan nog steeds worden geopend");
-  assert.doesNotMatch(intake, /capture="environment"/u);
-  assert.doesNotMatch(intake, /Foto maken/u);
+  assert.match(intake, /capture="environment"/u);
+  assert.match(intake, /Foto maken/u);
+  assert.match(intake, /Iedere gekozen foto wordt een afzonderlijke intake met eigen bewijs/u);
+  assert.match(source, /for \(const file of files\)/u, "meerdere bronnen lopen als afzonderlijke server-intakes door dezelfde veilige route");
 });
 
 test("artikel 140298 toont Initialen direct en aanvullende nummers via progressive disclosure", async () => {

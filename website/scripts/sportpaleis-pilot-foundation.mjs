@@ -57,6 +57,12 @@ import {
   publicQuickProductionIntake,
   quickIntakeOrderPayload,
 } from "../src/sportpaleis/quick-production-intake.mjs";
+import {
+  createVisualStudioComposition,
+  submitVisualStudioReview,
+  updateVisualStudioComposition,
+  validateVisualStudioCompositions,
+} from "../src/sportpaleis/visual-studio.mjs";
 import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
 import {
   approvedFulfillmentTasks,
@@ -531,6 +537,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     productionProposals: [],
     teamkitProposals: [],
     quickProductionIntakes: [],
+    visualCompositions: [],
     preferences: {},
     audit: [{
       id: "audit-production-bootstrap",
@@ -782,6 +789,7 @@ export function migrateSportpaleisPilotState(input) {
     if (proposal.association) proposal.association.name = canonicalAssociationName(proposal.association.name);
   }
   state.quickProductionIntakes ??= [];
+  state.visualCompositions ??= [];
   const goldenJobs = createGoldenProductionJobs();
   for (const goldenJob of goldenJobs) if (!state.productionJobs.some(({ id }) => id === goldenJob.id)) state.productionJobs.push(goldenJob);
   const highestJobSequence = state.productionJobs.reduce((highest, { jobNumber }) => Math.max(highest, Number(String(jobNumber ?? "").match(/(\d+)$/u)?.[1] ?? 0)), 0);
@@ -922,6 +930,7 @@ export function validateSportpaleisPilotState(input) {
   state.teamkitProposals ??= [];
   for (const proposal of state.teamkitProposals) { proposal.approvalHistory ??= []; proposal.productionSizing ??= null; }
   state.quickProductionIntakes ??= [];
+  state.visualCompositions ??= [];
   state.nextProductionJobSequence ??= 1;
   state.nextTeamkitOrderSequence ??= 1;
   if (!Number.isInteger(state.nextTeamkitOrderSequence) || state.nextTeamkitOrderSequence < 1) throw new Error("Ongeldige Teamkit-ordernummerreeks.");
@@ -1015,6 +1024,7 @@ export function validateSportpaleisPilotState(input) {
     if (!intake.source?.immutable || sha256(Buffer.from(intake.source.dataBase64, "base64")) !== intake.source.sha256 || !["HUMAN_CHECK", "ACCEPTED"].includes(intake.status)) throw new Error("Quick Production Intake-bron is gewijzigd of onvolledig.");
     if (intake.status === "ACCEPTED" && (!intake.orderId || !state.orders.some(({ id }) => id === intake.orderId))) throw new Error("Verwerkte Quick Production Intake mist de canonieke order.");
   }
+  validateVisualStudioCompositions(state.visualCompositions);
   for (const user of state.users) {
     if (!ROLE.has(user.role) || (user.status !== "Uitgenodigd" && !user.password?.hash)) throw new Error("Ongeldige gebruiker in datastore.");
   }
@@ -2057,6 +2067,7 @@ export class SportpaleisPilotService {
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
+      visualCompositions: ["admin", "operator"].includes(user.role) ? structuredClone(state.visualCompositions).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
       associations: structuredClone(state.associations),
@@ -2792,6 +2803,56 @@ export class SportpaleisPilotService {
         return publicQuickProductionIntake(intake);
       });
       return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async createVisualComposition(token, csrfToken, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_VISUAL_COMPOSITION", () => {
+        const article = state.articles.find(({ id }) => id === String(payload.articleId ?? ""));
+        const requestedAssetIds = [...new Set(Array.isArray(payload.assetIds) ? payload.assetIds.map(String) : [])];
+        const assets = requestedAssetIds.map((id) => state.productionElements.find((asset) => asset.id === id && asset.lifecycleStatus === "PRODUCTION_READY")).filter(Boolean);
+        if (assets.length !== requestedAssetIds.length) throw Object.assign(new Error("Een gekozen Bibliotheekbron is niet productieklaar."), { statusCode: 409, code: "VISUAL_ASSET_NOT_READY" });
+        const composition = createVisualStudioComposition({ id: `visual-${randomBytes(8).toString("hex")}`, now: iso(), user, concept: payload.concept, title: payload.title, artDirection: payload.artDirection, article, assets, sources: state.productionAssetSources ?? [] });
+        state.visualCompositions.unshift(composition);
+        audit(state, user.id, "Visual Studio-compositie aangemaakt", composition.id, { articleId: composition.productRef.articleId, assetIds: composition.assetRefs.map(({ assetId }) => assetId), compositionHash: composition.compositionHash, publicPublishingPerformed: false });
+        return structuredClone(composition);
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async updateVisualComposition(token, csrfToken, compositionId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const index = state.visualCompositions.findIndex(({ id }) => id === compositionId);
+      if (index < 0) throw Object.assign(new Error("Visual Studio-compositie niet gevonden."), { statusCode: 404, code: "VISUAL_COMPOSITION_NOT_FOUND" });
+      const updated = updateVisualStudioComposition(state.visualCompositions[index], payload, user, iso());
+      state.visualCompositions[index] = updated;
+      audit(state, user.id, "Visual Studio automatisch opgeslagen", updated.id, { revision: updated.revision, compositionHash: updated.compositionHash, publicPublishingPerformed: false });
+      return { state, value: structuredClone(updated) };
+    });
+    return result.value;
+  }
+
+  async submitVisualCompositionReview(token, csrfToken, compositionId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const index = state.visualCompositions.findIndex(({ id }) => id === compositionId);
+      if (index < 0) throw Object.assign(new Error("Visual Studio-compositie niet gevonden."), { statusCode: 404, code: "VISUAL_COMPOSITION_NOT_FOUND" });
+      const updated = submitVisualStudioReview(state.visualCompositions[index], payload.expectedRevision, user, iso());
+      state.visualCompositions[index] = updated;
+      audit(state, user.id, "Visual Studio-varianten klaar voor Human Review", updated.id, { revision: updated.revision, compositionHash: updated.compositionHash, channelHashes: updated.channels.map(({ channel, renderHash }) => ({ channel, renderHash })), publicPublishingPerformed: false });
+      return { state, value: structuredClone(updated) };
     });
     return result.value;
   }
@@ -6412,6 +6473,20 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/quick-production-intakes" && method === "POST") {
         json(response, 201, await service.createQuickProductionIntake(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/visual-compositions" && method === "POST") {
+        json(response, 201, await service.createVisualComposition(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const visualCompositionMatch = route.match(/^\/api\/sportpaleis\/v1\/visual-compositions\/([^/]+)$/);
+      if (visualCompositionMatch && method === "PATCH") {
+        json(response, 200, await service.updateVisualComposition(token, csrf, decodeURIComponent(visualCompositionMatch[1]), await readJson(request)));
+        return true;
+      }
+      const visualCompositionReviewMatch = route.match(/^\/api\/sportpaleis\/v1\/visual-compositions\/([^/]+)\/review$/);
+      if (visualCompositionReviewMatch && method === "POST") {
+        json(response, 200, await service.submitVisualCompositionReview(token, csrf, decodeURIComponent(visualCompositionReviewMatch[1]), await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/webshop-intakes/mail-document" && method === "POST") {
