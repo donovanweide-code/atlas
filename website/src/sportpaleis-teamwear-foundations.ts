@@ -249,6 +249,24 @@ export function buildTeamwearRelationships(state: PilotBootstrap): TeamwearRelat
   return [...contexts.values()].sort((left, right) => left.name.localeCompare(right.name, "nl-NL"));
 }
 
+export function rankTeamwearRelationships(contexts: readonly TeamwearRelationshipContext[], query = "", limit = 8): TeamwearRelationshipContext[] {
+  const normalized = (value: string) => value.normalize("NFKC").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, " ").trim();
+  const needle = normalized(query);
+  const tokens = needle.split(" ").filter(Boolean);
+  const deduplicated = new Map<string, TeamwearRelationshipContext>();
+  for (const context of contexts) {
+    const key = `${normalized(context.name)}|${normalized(context.associationName ?? "")}|${context.kind === "TEAM" ? normalized(context.subtitle) : ""}`;
+    const existing = deduplicated.get(key);
+    if (!existing || (existing.id.startsWith("order:") && context.id.startsWith("association:"))) deduplicated.set(key, context);
+  }
+  return [...deduplicated.values()].map((context) => {
+    const name = normalized(context.name); const searchable = normalized(`${context.name} ${context.subtitle} ${context.associationName ?? ""} ${context.searchableTerms}`);
+    const matches = !tokens.length || tokens.every((token) => searchable.includes(token));
+    const score = !matches ? -1 : !needle ? (context.kind === "ASSOCIATION" ? 70 : context.kind === "TEAM" ? 60 : 40) : name === needle ? 120 : name.startsWith(needle) ? 100 : searchable.startsWith(needle) ? 85 : tokens.reduce((total, token) => total + (name.includes(token) ? 18 : searchable.includes(token) ? 8 : 0), 0);
+    return { context, score };
+  }).filter(({ score }) => score >= 0).sort((left, right) => right.score - left.score || left.context.name.localeCompare(right.context.name, "nl-NL")).slice(0, Math.max(1, Math.min(250, limit))).map(({ context }) => context);
+}
+
 export function buildTeamwearAssetLibrary(state: PilotBootstrap, proposal?: TeamkitProposal): TeamwearAssetLibraryEntry[] {
   const entries = new Map<string, TeamwearAssetLibraryEntry>();
   for (const association of state.associations) if (association.workspaceLogo) entries.set(`sha:${association.workspaceLogo.sha256}`, { id: `association-logo:${association.id}`, name: `${association.name} clublogo`, kind: "CLUB_LOGO", masterRef: association.workspaceLogo.sha256, version: String(association.revision ?? 1), previewKind: "ASSOCIATION_LOGO", contextIds: [`association:${association.id}`], internalOnly: true, customerContextIds: [`association:${association.id}`], sourceProposalId: null, sourceId: null, productionAssetId: null });

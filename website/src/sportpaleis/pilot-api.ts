@@ -315,7 +315,7 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async createVisualComposition(input: { concept: SportpaleisVisualComposition["concept"]; title: string; artDirection: string; articleId: string; assetIds: string[] }): Promise<{ duplicate: boolean; value: SportpaleisVisualComposition }> {
+  async createVisualComposition(input: { concept: SportpaleisVisualComposition["concept"]; title: string; artDirection: string; articleId: string; assetIds: string[]; sourceIntent: NonNullable<SportpaleisVisualComposition["sourceRef"]>["intent"]; sourceFile?: { filename: string; mimeType: string; dataBase64: string } }): Promise<{ duplicate: boolean; value: SportpaleisVisualComposition }> {
     return responseBody(await this.#mutatingFetch(`${API}/visual-compositions`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("visual-composition") }, body: JSON.stringify(input) }));
   }
 

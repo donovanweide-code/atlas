@@ -77,6 +77,7 @@ function truthPayload(composition) {
     artDirection: composition.artDirection,
     directionId: composition.directionId,
     productRef: composition.productRef,
+    sourceRef: composition.sourceRef ?? null,
     assetRefs: composition.assetRefs,
     geometry: composition.geometry,
   };
@@ -113,7 +114,7 @@ export function finalizeVisualStudioComposition(input) {
   const withinBounds = input.geometry.product.xPercent >= 18 && input.geometry.product.xPercent <= 82
     && input.geometry.product.yPercent >= 18 && input.geometry.product.yPercent <= 82
     && input.geometry.assets.every(({ xPercent, yPercent }) => xPercent >= 8 && xPercent <= 92 && yPercent >= 8 && yPercent <= 92);
-  const warnings = [!input.assetRefs.length ? "Voeg minimaal één gecontroleerde Bibliotheekbron toe." : "", !input.artDirection ? "Leg de art-direction kort vast." : "", !withinBounds ? "Een element valt buiten de veilige compositieruimte." : ""].filter(Boolean);
+  const warnings = [!input.artDirection ? "Leg de art-direction kort vast." : "", !withinBounds ? "Een element valt buiten de veilige compositieruimte." : ""].filter(Boolean);
   return {
     ...normalized,
     channels,
@@ -122,21 +123,52 @@ export function finalizeVisualStudioComposition(input) {
   };
 }
 
-export function createVisualStudioComposition({ id, now, user, concept, title, artDirection, article, assets, sources }) {
-  if (!article) throw Object.assign(new Error("Kies een bestaand Sportpaleis-product."), { statusCode: 400, code: "VISUAL_PRODUCT_REQUIRED" });
+export function visualStudioUploadedSourceRef(source, matchedArticle = null) {
+  if (!source?.filename || !source?.mimeType || !source?.sha256 || !source?.bytes) throw Object.assign(new Error("De aangeleverde beeldbron is onvolledig."), { statusCode: 400, code: "VISUAL_SOURCE_INVALID" });
+  const snapshot = {
+    kind: "UPLOADED_IMAGE",
+    filename: String(source.filename),
+    mimeType: String(source.mimeType),
+    bytes: Number(source.bytes),
+    sha256: String(source.sha256),
+    intent: String(source.intent ?? "PRODUCT_ONLY"),
+    matchedArticleId: matchedArticle?.id ?? null,
+    matchConfidence: matchedArticle ? "HIGH" : "NONE",
+    pixelPolicy: source.intent === "PRESERVE_SOURCE" ? "PRESERVE_ORIGINAL" : "NON_DESTRUCTIVE_COMPOSITION",
+  };
+  return { ...snapshot, sourceHash: hash(snapshot) };
+}
+
+function uploadedProductRef(sourceRef, matchedArticle) {
+  if (matchedArticle) return visualStudioProductRef(matchedArticle);
+  const name = sourceRef.filename.replace(/\.[^.]+$/u, "").replaceAll(/[-_]+/gu, " ").trim() || "Aangeleverde bron";
+  const snapshot = { articleId: `direct-source:${sourceRef.sha256}`, articleRevision: 1, articleNumber: "DIRECTE BRON", name, imageKey: "" };
+  return { ...snapshot, sourceHash: hash({ ...snapshot, sourceSha256: sourceRef.sha256 }) };
+}
+
+export function createVisualStudioComposition({ id, now, user, concept, title, artDirection, article, uploadedSource = null, assets, sources }) {
+  if (!article && !uploadedSource) throw Object.assign(new Error("Kies een bestaand product of voeg direct een beeldbron toe."), { statusCode: 400, code: "VISUAL_SOURCE_REQUIRED" });
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   const assetRefs = assets.map((asset) => visualStudioAssetRef(asset, sourceById.get(asset.sourceId)));
   const selectedDirectionId = directionId(undefined, concept);
   const selectedDirection = VISUAL_STUDIO_DIRECTIONS.find(({ id: candidateId }) => candidateId === selectedDirectionId);
+  const sourceRef = uploadedSource ? visualStudioUploadedSourceRef(uploadedSource, article) : null;
+  const productRef = sourceRef ? uploadedProductRef(sourceRef, article) : visualStudioProductRef(article);
+  const sourceRespectDirection = sourceRef?.intent === "PRESERVE_SOURCE"
+    ? "Bestaande bron visueel intact laten; alleen tekst en kanaalcompositie eromheen aanpassen."
+    : sourceRef?.intent === "PRODUCT_WITH_BRAND"
+      ? "Product en merkbron professioneel combineren zonder de aangeleverde bron destructief te wijzigen."
+      : selectedDirection?.promise;
   return finalizeVisualStudioComposition({
     id,
     revision: 1,
     status: "DRAFT",
     concept: ["SEASON_START", "PRODUCT_FOCUS", "CLUB_MOMENT"].includes(concept) ? concept : "PRODUCT_FOCUS",
-    title: text(title || article.name, 120),
-    artDirection: text(artDirection || selectedDirection?.promise, 500),
+    title: text(title || productRef.name, 120),
+    artDirection: text(artDirection || sourceRespectDirection, 500),
     directionId: selectedDirectionId,
-    productRef: visualStudioProductRef(article),
+    productRef,
+    sourceRef,
     assetRefs,
     geometry: normalizedGeometry({}, assetRefs),
     createdAt: now,

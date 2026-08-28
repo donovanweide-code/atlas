@@ -661,6 +661,18 @@ export interface SportpaleisVisualComposition {
     imageKey: string;
     sourceHash: string;
   };
+  sourceRef?: {
+    kind: "UPLOADED_IMAGE";
+    filename: string;
+    mimeType: string;
+    bytes: number;
+    sha256: string;
+    intent: "PRESERVE_SOURCE" | "PRODUCT_ONLY" | "PRODUCT_WITH_BRAND" | "CAMPAIGN_BRIEF" | "CHANNEL_TRANSLATION";
+    matchedArticleId: string | null;
+    matchConfidence: "HIGH" | "NONE";
+    pixelPolicy: "PRESERVE_ORIGINAL" | "NON_DESTRUCTIVE_COMPOSITION";
+    sourceHash: string;
+  } | null;
   assetRefs: {
     assetId: string;
     name: string;

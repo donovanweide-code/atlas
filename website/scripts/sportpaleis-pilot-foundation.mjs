@@ -1030,6 +1030,10 @@ export function validateSportpaleisPilotState(input) {
     if (intake.status === "ACCEPTED" && (!intake.orderId || !state.orders.some(({ id }) => id === intake.orderId))) throw new Error("Verwerkte Quick Production Intake mist de canonieke order.");
   }
   validateVisualStudioCompositions(state.visualCompositions);
+  for (const composition of state.visualCompositions) {
+    if (!composition.sourceRef) continue;
+    if (!composition.sourceDataBase64 || sha256(Buffer.from(composition.sourceDataBase64, "base64")) !== composition.sourceRef.sha256) throw new Error("Creative Studio-bron is gewijzigd buiten de immutable compositie.");
+  }
   if (new Set(state.creativeVectorDrafts.map(({ id }) => id)).size !== state.creativeVectorDrafts.length) throw new Error("Dubbel Creative Studio-vectorvoorstel.");
   for (const draft of state.creativeVectorDrafts) {
     if (draft.status !== "HUMAN_REVIEW_REQUIRED" || draft.engine !== "VTRACER_WASM_1_0_0_ALPHA_3" || draft.evidence?.canonicalPromotionPerformed !== false) throw new Error("Ongeldig Creative Studio-vectorvoorstel.");
@@ -2077,7 +2081,7 @@ export class SportpaleisPilotService {
       productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
-      visualCompositions: ["admin", "operator"].includes(user.role) ? structuredClone(state.visualCompositions).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
+      visualCompositions: ["admin", "operator"].includes(user.role) ? state.visualCompositions.map(publicVisualComposition).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
       creativeVectorDrafts: ["admin", "operator"].includes(user.role) ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
@@ -2824,18 +2828,41 @@ export class SportpaleisPilotService {
     assertRole(user, ["admin", "operator"]);
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_VISUAL_COMPOSITION", () => {
-        const article = state.articles.find(({ id }) => id === String(payload.articleId ?? ""));
+        const uploaded = payload.sourceFile && typeof payload.sourceFile === "object" ? payload.sourceFile : null;
+        let uploadedSource = null;
+        if (uploaded) {
+          const filename = requiredText(uploaded.filename, "Bestandsnaam", 180);
+          const mimeType = allowedValue(uploaded.mimeType, ["image/png", "image/jpeg", "image/webp"], "Beeldtype");
+          const bytes = Buffer.from(requiredText(uploaded.dataBase64, "Beeldbron", 12 * 1024 * 1024), "base64");
+          if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error("Gebruik een PNG, JPEG of WebP tot 8 MB."), { statusCode: 413, code: "VISUAL_SOURCE_SIZE" });
+          const intent = allowedValue(payload.sourceIntent, ["PRESERVE_SOURCE", "PRODUCT_ONLY", "PRODUCT_WITH_BRAND", "CAMPAIGN_BRIEF", "CHANNEL_TRANSLATION"], "Bronintentie");
+          uploadedSource = { filename, mimeType, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), intent, dataBase64: bytes.toString("base64") };
+        }
+        const requestedArticle = state.articles.find(({ id }) => id === String(payload.articleId ?? ""));
+        const article = requestedArticle ?? (uploadedSource ? matchingCreativeArticle(state.articles.filter(({ active }) => active), uploadedSource.filename) : null);
         const requestedAssetIds = [...new Set(Array.isArray(payload.assetIds) ? payload.assetIds.map(String) : [])];
         const assets = requestedAssetIds.map((id) => state.productionElements.find((asset) => asset.id === id && asset.lifecycleStatus === "PRODUCTION_READY")).filter(Boolean);
         if (assets.length !== requestedAssetIds.length) throw Object.assign(new Error("Een gekozen Bibliotheekbron is niet productieklaar."), { statusCode: 409, code: "VISUAL_ASSET_NOT_READY" });
-        const composition = createVisualStudioComposition({ id: `visual-${randomBytes(8).toString("hex")}`, now: iso(), user, concept: payload.concept, title: payload.title, artDirection: payload.artDirection, article, assets, sources: state.productionAssetSources ?? [] });
+        const composition = createVisualStudioComposition({ id: `visual-${randomBytes(8).toString("hex")}`, now: iso(), user, concept: payload.concept, title: payload.title, artDirection: payload.artDirection, article, uploadedSource, assets, sources: state.productionAssetSources ?? [] });
+        if (uploadedSource) composition.sourceDataBase64 = uploadedSource.dataBase64;
         state.visualCompositions.unshift(composition);
-        audit(state, user.id, "Visual Studio-compositie aangemaakt", composition.id, { articleId: composition.productRef.articleId, assetIds: composition.assetRefs.map(({ assetId }) => assetId), compositionHash: composition.compositionHash, publicPublishingPerformed: false });
-        return structuredClone(composition);
+        audit(state, user.id, "Visual Studio-compositie aangemaakt", composition.id, { articleId: composition.sourceRef?.matchedArticleId ?? composition.productRef.articleId, sourceKind: composition.sourceRef?.kind ?? "CATALOG_ARTICLE", sourceSha256: composition.sourceRef?.sha256 ?? null, sourceIntent: composition.sourceRef?.intent ?? null, assetIds: composition.assetRefs.map(({ assetId }) => assetId), compositionHash: composition.compositionHash, publicPublishingPerformed: false });
+        return publicVisualComposition(composition);
       });
       return { state, value: outcome };
     });
     return result.value;
+  }
+
+  async visualCompositionSource(token, compositionId) {
+    const { user } = await this.authenticate(token);
+    assertRole(user, ["admin", "operator"]);
+    const state = await this.store.read();
+    const composition = state.visualCompositions.find(({ id }) => id === compositionId);
+    if (!composition?.sourceRef || !composition.sourceDataBase64) throw Object.assign(new Error("Directe beeldbron niet gevonden."), { statusCode: 404, code: "VISUAL_SOURCE_NOT_FOUND" });
+    const bytes = Buffer.from(composition.sourceDataBase64, "base64");
+    if (createHash("sha256").update(bytes).digest("hex") !== composition.sourceRef.sha256) throw Object.assign(new Error("De immutable beeldbron wijkt af van de vastgelegde hash."), { statusCode: 409, code: "VISUAL_SOURCE_HASH_MISMATCH" });
+    return { mimeType: composition.sourceRef.mimeType, bytes, filename: composition.sourceRef.filename, sha256: composition.sourceRef.sha256, cacheControl: "private, no-store" };
   }
 
   async updateVisualComposition(token, csrfToken, compositionId, payload) {
@@ -2848,7 +2875,7 @@ export class SportpaleisPilotService {
       const updated = updateVisualStudioComposition(state.visualCompositions[index], payload, user, iso());
       state.visualCompositions[index] = updated;
       audit(state, user.id, "Visual Studio automatisch opgeslagen", updated.id, { revision: updated.revision, compositionHash: updated.compositionHash, publicPublishingPerformed: false });
-      return { state, value: structuredClone(updated) };
+      return { state, value: publicVisualComposition(updated) };
     });
     return result.value;
   }
@@ -2863,7 +2890,7 @@ export class SportpaleisPilotService {
       const updated = submitVisualStudioReview(state.visualCompositions[index], payload.expectedRevision, user, iso());
       state.visualCompositions[index] = updated;
       audit(state, user.id, "Visual Studio-varianten klaar voor Human Review", updated.id, { revision: updated.revision, compositionHash: updated.compositionHash, channelHashes: updated.channels.map(({ channel, renderHash }) => ({ channel, renderHash })), publicPublishingPerformed: false });
-      return { state, value: structuredClone(updated) };
+      return { state, value: publicVisualComposition(updated) };
     });
     return result.value;
   }
@@ -5103,6 +5130,23 @@ function publicCreativeVectorDraft(draft) {
   });
 }
 
+function publicVisualComposition(composition) {
+  return structuredClone((({ sourceDataBase64: _sourceDataBase64, ...metadata }) => metadata)(composition));
+}
+
+function matchingCreativeArticle(articles, filename) {
+  const normalized = String(filename ?? "").replace(/\.[^.]+$/u, "").normalize("NFKC").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, " ").trim();
+  if (!normalized) return null;
+  const compact = normalized.replaceAll(" ", "");
+  const matches = articles.filter((article) => {
+    const articleNumber = String(article.articleNumber ?? "").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
+    if (articleNumber.length >= 4 && compact.includes(articleNumber)) return true;
+    const meaningfulNameTokens = String(article.name ?? "").normalize("NFKC").toLocaleLowerCase("nl-NL").split(/[^a-z0-9]+/gu).filter((token) => token.length >= 4);
+    return meaningfulNameTokens.length >= 2 && meaningfulNameTokens.every((token) => normalized.includes(token));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function publicProductionElement(element) {
   return structuredClone({
     ...element,
@@ -6396,7 +6440,7 @@ function json(response, statusCode, payload) {
 }
 
 function binary(response, statusCode, payload) {
-  securityHeaders(response); if (payload.allowSameOriginFrame === true) { response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'"); response.setHeader("X-Frame-Options", "SAMEORIGIN"); } response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `${payload.disposition === "attachment" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); response.end(payload.bytes);
+  securityHeaders(response); if (payload.allowSameOriginFrame === true) { response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'"); response.setHeader("X-Frame-Options", "SAMEORIGIN"); } response.statusCode = statusCode; response.setHeader("Content-Type", payload.mimeType); response.setHeader("Content-Length", payload.bytes.length); response.setHeader("Content-Disposition", `${payload.disposition === "attachment" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(payload.filename)}`); response.setHeader("ETag", `\"${payload.sha256}\"`); if (payload.cacheControl) response.setHeader("Cache-Control", payload.cacheControl); response.end(payload.bytes);
 }
 
 function cookieHeader(token, secure, clear = false, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
@@ -6540,6 +6584,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/visual-compositions" && method === "POST") {
         json(response, 201, await service.createVisualComposition(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const visualCompositionSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/visual-compositions\/([^/]+)\/source$/);
+      if (visualCompositionSourceMatch && method === "GET") {
+        binary(response, 200, await service.visualCompositionSource(token, decodeURIComponent(visualCompositionSourceMatch[1])));
         return true;
       }
       const visualCompositionMatch = route.match(/^\/api\/sportpaleis\/v1\/visual-compositions\/([^/]+)$/);

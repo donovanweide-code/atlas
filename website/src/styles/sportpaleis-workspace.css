@@ -72,6 +72,10 @@
 .sp-visual-start form>label,.sp-visual-start .sp-form-grid>label{display:grid;min-width:0;gap:7px;font-weight:750}
 .sp-visual-start input:not([type="radio"]):not([type="checkbox"]),.sp-visual-start select,.sp-visual-start textarea{box-sizing:border-box;width:100%;min-width:0}
 .sp-visual-start textarea{resize:vertical}
+.sp-visual-source-dropzone{display:grid;justify-items:center;gap:8px;padding:28px 18px;border:1.5px dashed #aeb3b8;border-radius:16px;background:#fafafa;text-align:center;cursor:pointer;transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.sp-visual-source-dropzone:hover,.sp-visual-source-dropzone:focus-visible,.sp-visual-source-dropzone.is-dragging{border-color:#c90025;background:#fff4f5;transform:translateY(-1px);outline:none}
+.sp-visual-source-dropzone.has-source{border-style:solid;border-color:#16805a;background:#f1fbf7}
+.sp-visual-source-dropzone>span,.sp-visual-source-dropzone>output{color:#62676d;font-size:.8rem}.sp-visual-source-dropzone>output{font-weight:800}
 .sp-visual-start fieldset{min-width:0}
 .sp-visual-concepts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .sp-visual-concepts label{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:16px;border:1px solid #d9d9d9;border-radius:14px;cursor:pointer}

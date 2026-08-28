@@ -23,8 +23,8 @@ test("Teamwear-begeleiding, contextassets en garment surfaces blijven in de fina
   assert.match(experience, /studio-filter-assets[\s\S]*CLUB_LOGO[\s\S]*SPONSOR[\s\S]*NAME[\s\S]*BACK_NUMBER[\s\S]*FREE_TEXT/u);
   assert.match(experience, /aria-label="Collectie in Studio"/u);
   assert.match(experience, /GARMENT_SURFACE_V1/u);
-  assert.match(workspace, /Bestaande klant, vereniging of team/u);
-  assert.match(workspace, /Contact, planning en overige gegevens/u);
+  assert.match(workspace, /Zoek op naam, vereniging, team of order/u);
+  assert.match(workspace, /Alleen indien nodig: team, contact of planning/u);
   assert.match(workspace, /Naar collectie/u);
   assert.match(styles, /GARMENT_SURFACE_V1/u);
   assert.match(styles, /LEFT_SLEEVE[\s\S]*RIGHT_SLEEVE[\s\S]*FRONT_TORSO[\s\S]*BACK_TORSO/u);
