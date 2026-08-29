@@ -14,7 +14,7 @@ export interface TeamwearCatalogProduct extends SportpaleisCatalogProduct {
   advicePriceEur: number | null;
   sourceStatus: "AUTHORITATIVE" | "MIXED_VARIANT_AUTHORITY" | "CONTROLLED_FIXTURE" | "DATA_GAP";
   syncStatus: "CURRENT" | "REVIEW_REQUIRED" | "NOT_CONNECTED";
-  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null; sourceStatus?: "AUTHORITATIVE" | "DATA_GAP" })[];
+  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null; sourceStatus?: "AUTHORITATIVE" | "DATA_GAP"; advicePriceEur?: number | null })[];
 }
 
 export interface TeamwearPriceQuote {
@@ -224,17 +224,22 @@ export function queryTeamwearCatalog(products: readonly TeamwearCatalogProduct[]
   const needle = input.query?.trim().toLocaleLowerCase("nl-NL") ?? ""; const brand = input.brand?.toLocaleLowerCase("nl-NL");
   const filtered = products.filter((product) => (!brand || product.brand.toLocaleLowerCase("nl-NL") === brand) && (!input.use || product.use === input.use)
     && (!input.audience || product.audiences.includes(input.audience) || (["MEN", "WOMEN"].includes(input.audience) && product.audiences.includes("UNISEX")))
-    && (!needle || `${product.brand} ${product.model} ${product.supplierArticleNumber} ${product.category} ${product.collection ?? ""}`.toLocaleLowerCase("nl-NL").includes(needle)));
+    && (!needle || `${product.brand} ${product.model} ${product.supplierArticleNumber} ${product.variants.map(({ sourceArticleNumber }) => sourceArticleNumber).join(" ")} ${product.category} ${product.collection ?? ""}`.toLocaleLowerCase("nl-NL").includes(needle))).map((product) => {
+      const exactVariant = needle ? product.variants.find(({ sourceArticleNumber }) => sourceArticleNumber.trim().toLocaleLowerCase("nl-NL") === needle) : null;
+      return exactVariant ? { ...product, matchedVariantId: exactVariant.id } : { ...product };
+    });
   const offset = Math.max(0, input.offset ?? 0); const limit = Math.max(1, Math.min(48, input.limit ?? 12));
   return { products: filtered.slice(offset, offset + limit), total: filtered.length, nextOffset: offset + limit < filtered.length ? offset + limit : null, bounded: true as const };
 }
 
-export function resolveTeamwearPrice(product: TeamwearCatalogProduct, quantity = 10, relationshipId?: string | null): TeamwearPriceQuote {
-  if (product.advicePriceEur == null) return { advicePriceEur: null, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
+export function resolveTeamwearPrice(product: TeamwearCatalogProduct, quantity = 10, relationshipId?: string | null, variantId?: string | null): TeamwearPriceQuote {
+  const variantPrice = product.variants.find(({ id }) => id === variantId)?.advicePriceEur;
+  const advicePriceEur = typeof variantPrice === "number" ? variantPrice : product.advicePriceEur;
+  if (advicePriceEur == null) return { advicePriceEur: null, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
   // Een catalogusprijs is geen bewijs voor een Sportpaleis-klantprijs. Zonder
   // expliciete, beheerbare prijsafspraak blijft de offerteprijs bewust open.
   void quantity; void relationshipId;
-  return { advicePriceEur: product.advicePriceEur, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
+  return { advicePriceEur, effectivePriceEur: null, label: null, minimumQuantity: null, policyRef: null, relationshipOverrideApplied: false };
 }
 
 export function buildTeamwearRelationships(state: PilotBootstrap): TeamwearRelationshipContext[] {

@@ -119,12 +119,9 @@ test("Operational Review 007B — winkel, productie, beheer en barcodefoundation
     assert.equal(article.association, "A.S.C. Waterwijk");
   });
 
-  await context.test("afhalen is een aparte gebeurtenis na gereedmelden", async () => {
+  await context.test("afhalen blijft fail-closed wanneer een legacy Gereed-status immutable closure mist", async () => {
     const done = (await service.bootstrap(storeUser.token)).orders.find(({ stage }) => stage === "DONE");
-    const pickupReady = (await service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, done.id, { action: "READY_FOR_PICKUP", expectedRevision: done.revision }, "review-007b-ready-for-pickup")).value;
-    const picked = await service.confirmPickup(storeUser.token, storeUser.csrfToken, pickupReady.id, {}, pickupReady.revision);
-    assert.ok(pickupReady.eventHistory.some(({ type }) => type === "READY_FOR_PICKUP"));
-    assert.equal(picked.pickup.status, "PICKED_UP"); assert.equal(picked.eventHistory.at(-1).type, "PICKED_UP");
+    await assert.rejects(service.recordOperationalEvent(storeUser.token, storeUser.csrfToken, done.id, { action: "READY_FOR_PICKUP", expectedRevision: done.revision }, "review-007b-ready-for-pickup"), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
   });
 
   await context.test("barcode blijft uit en alleen expliciete lokale emulatie kan lezen", async () => {

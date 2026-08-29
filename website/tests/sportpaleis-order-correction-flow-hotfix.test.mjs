@@ -74,7 +74,7 @@ test("contact-only correcties behouden vereniging, artikel, bedrukking en produc
   assert.deepEqual(chronological[0].details.changes.map(({ field, from, to }) => ({ field, from, to })), [{ field: "customer", from: "Oude klantnaam", to: "Nieuwe klantnaam" }]);
   assert.deepEqual(chronological[1].details.changes.map(({ field, from, to }) => ({ field, from, to })), [{ field: "customerEmail", from: "oud@example.nl", to: "nieuw@example.nl" }]);
   assert.deepEqual(chronological[2].details.changes.map(({ field, from, to }) => ({ field, from, to })), [{ field: "customerEmail", from: "nieuw@example.nl", to: "" }]);
-  assert.ok(reopened.eventHistory.slice(-3).every(({ userId, userName, at, details }) => userId === "patrick" && userName === "Patrick" && Boolean(at) && details.productionImpact === false));
+  assert.ok(reopened.eventHistory.filter(({ type }) => type === "ORDER_UPDATED").slice(-3).every(({ userId, userName, at, details }) => userId === "patrick" && userName === "Patrick" && Boolean(at) && details.productionImpact === false));
 });
 
 test("correctie-UX houdt opslaan bereikbaar, contact compact en e-mail optioneel", async () => {

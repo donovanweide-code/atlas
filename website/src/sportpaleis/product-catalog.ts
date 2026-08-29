@@ -36,6 +36,7 @@ export interface SportpaleisCatalogProduct {
     sourceArticleId: string;
     sourceArticleNumber: string;
     associationNames: string[];
+    advicePriceEur?: number | null;
     media: {
       kind: "FRONT" | "BACK" | "DETAIL";
       imageKey: string;
@@ -46,6 +47,7 @@ export interface SportpaleisCatalogProduct {
     }[];
   }[];
   sourceAdapterId: string;
+  matchedVariantId?: string;
 }
 
 export interface SportpaleisCatalogPage {
@@ -125,6 +127,7 @@ export function buildSportpaleisProductCatalog(articles: readonly CatalogArticle
       sourceArticleId: article.id,
       sourceArticleNumber: article.articleNumber,
       associationNames: [article.association],
+      advicePriceEur: typeof article.priceConfiguration?.articleUnitPriceEur === "number" ? article.priceConfiguration.articleUnitPriceEur : null,
       media: article.catalogMedia?.some(({ imageKey }) => Boolean(imageKey)) ? article.catalogMedia.filter(({ imageKey }) => Boolean(imageKey)).map(({ kind, imageKey, sourceUrl, sourceProductId, sourceColorId, classification }) => ({ kind: kind === "ALTERNATIVE" ? "DETAIL" as const : kind, imageKey: imageKey!, sourceUrl, sourceProductId, sourceColorId, classification })) : [{ kind: "FRONT", imageKey: article.imageKey }],
     });
     else if (!existingVariant.associationNames.includes(article.association)) existingVariant.associationNames.push(article.association);
@@ -143,7 +146,10 @@ function audienceMatches(product: SportpaleisCatalogProduct, audience: Sportpale
 export function querySportpaleisProductCatalog(products: readonly SportpaleisCatalogProduct[], input: { associationName?: string | null; audience?: SportpaleisCatalogAudience | null; query?: string; limit?: number; offset?: number } = {}): SportpaleisCatalogPage {
   const query = input.query?.trim().toLocaleLowerCase("nl-NL") ?? "";
   const association = input.associationName?.trim().toLocaleLowerCase("nl-NL") ?? "";
-  const filtered = products.filter((product) => audienceMatches(product, input.audience ?? null) && (!query || `${product.brand} ${product.model} ${product.category} ${product.variants.map(({ sourceArticleNumber }) => sourceArticleNumber).join(" ")}`.toLocaleLowerCase("nl-NL").includes(query)) && (!association || product.variants.some(({ associationNames }) => associationNames.some((name) => name.toLocaleLowerCase("nl-NL") === association))));
+  const filtered = products.filter((product) => audienceMatches(product, input.audience ?? null) && (!query || `${product.brand} ${product.model} ${product.category} ${product.variants.map(({ sourceArticleNumber }) => sourceArticleNumber).join(" ")}`.toLocaleLowerCase("nl-NL").includes(query)) && (!association || product.variants.some(({ associationNames }) => associationNames.some((name) => name.toLocaleLowerCase("nl-NL") === association)))).map((product) => {
+    const exactVariant = query ? product.variants.find(({ sourceArticleNumber }) => sourceArticleNumber.trim().toLocaleLowerCase("nl-NL") === query) : null;
+    return exactVariant ? { ...product, matchedVariantId: exactVariant.id } : { ...product };
+  });
   const offset = Math.max(0, input.offset ?? 0); const limit = Math.max(1, Math.min(48, input.limit ?? 12));
   return { products: filtered.slice(offset, offset + limit), total: filtered.length, hasMore: offset + limit < filtered.length };
 }

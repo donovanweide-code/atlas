@@ -177,7 +177,7 @@ test("herstelkeuze kan vóór bevestiging worden gewijzigd en ingetrokken met au
 
 test("Today projecteert alleen echte menselijke Teamwear-aandacht en telt sync-aandacht mee", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /proposal\.status === "CUSTOMER_FEEDBACK" \|\| proposal\.fulfillmentTasks\.some\(\(\{ status \}\) => \["HUMAN_CHECK", "RETURNED"\]\.includes\(status\)\)/u);
+  assert.match(source, /\["READY_FOR_DESIGN", "READY_FOR_REVIEW", "CUSTOMER_FEEDBACK"\]\.includes\(proposal\.status\) \|\| proposal\.fulfillmentTasks\.some\(\(\{ status \}\) => \["HUMAN_CHECK", "RETURNED"\]\.includes\(status\)\)/u);
   assert.doesNotMatch(source, /proposal\.status === "WAITING_FOR_CUSTOMER_INPUT"[^\n]*teamwearAttention/u);
   assert.match(source, /attention\.length \+ teamwearAttention\.length \+ webshopAttention\.length \+ Number\(syncAttentionCount > 0\)/u);
   assert.match(source, /syncAttentionCount \? `\$\{BASE\}\/beheer\/synchronisatie`/u);

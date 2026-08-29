@@ -177,7 +177,7 @@ test("SC Buitenboys shortnummer 19 materialiseert exact eenmaal naast bestaande 
   assert.equal(shortLines[0].quantity, 1);
   assert.equal(shortLines[0].content, "19");
   assert.deepEqual(shortLines[0].decorationIdentity, {
-    orderId: created.id, itemId: shortLines[0].itemId, articleNumber: "140294", decorationType: "shortsNumber", placement: "shortsNumber", value: "19", foilColor: "Wit", productionProfileId: "profile-source-sc-buitenboys-shortsNumber",
+    orderId: created.id, itemId: shortLines[0].itemId, articleNumber: "140294", decorationType: "shortsNumber", placement: "shortsNumber", value: "19", foilColor: "Wit", productionProfileId: "profile-source-sc-buitenboys-shortsNumber", occurrenceId: shortLines[0].variantId, targetGroup: null,
   });
   assert.equal(initialsLines.length, 1);
   assert.equal(initialsLines[0].quantity, 1);

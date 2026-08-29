@@ -46,20 +46,15 @@ test("R20 fulfillment transitions delen één centrale invariant voor handmatig,
   const pickup = await createOrder(service, admin, "pickup");
   await forceDone(store, pickup.id, "PICKUP");
   let current = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === pickup.id);
-  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "PICKED_UP", expectedRevision: current.revision }, "r20-pickup-too-early"), (error) => error.code === "ORDER_NOT_READY_FOR_PICKUP");
-  const ready = (await service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "READY_FOR_PICKUP", expectedRevision: current.revision }, "r20-pickup-ready")).value;
-  const picked = await service.confirmPickup(admin.token, admin.csrfToken, ready.id, {}, ready.revision);
-  assert.equal(picked.fulfillment.status, "PICKED_UP");
-  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, picked.id, { action: "READY_FOR_PICKUP", expectedRevision: picked.revision }, "r20-pickup-rewind"), (error) => error.code === "FULFILLMENT_ALREADY_ADVANCED");
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "PICKED_UP", expectedRevision: current.revision }, "r20-pickup-too-early"), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "READY_FOR_PICKUP", expectedRevision: current.revision }, "r20-pickup-ready"), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
 
   const delivery = await createOrder(service, admin, "delivery");
   await forceDone(store, delivery.id, "DELIVERY");
   current = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === delivery.id);
-  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "READY_FOR_PICKUP", expectedRevision: current.revision }, "r20-delivery-as-pickup"), (error) => error.code === "FULFILLMENT_MODE_CONFLICT");
-  await assert.rejects(service.confirmPickup(admin.token, admin.csrfToken, current.id, {}, current.revision), (error) => error.code === "FULFILLMENT_MODE_CONFLICT");
-  const delivered = (await service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "DELIVERED", expectedRevision: current.revision }, "r20-delivered")).value;
-  assert.equal(delivered.fulfillment.status, "DELIVERED");
-  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, delivered.id, { action: "DELIVERED", expectedRevision: delivered.revision }, "r20-delivered-twice"), (error) => error.code === "FULFILLMENT_ALREADY_ADVANCED");
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "READY_FOR_PICKUP", expectedRevision: current.revision }, "r20-delivery-as-pickup"), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
+  await assert.rejects(service.confirmPickup(admin.token, admin.csrfToken, current.id, {}, current.revision), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
+  await assert.rejects(service.recordOperationalEvent(admin.token, admin.csrfToken, current.id, { action: "DELIVERED", expectedRevision: current.revision }, "r20-delivered"), (error) => error.code === "PRODUCTION_CLOSURE_NOT_CONFIRMED");
 });
 
 test("R20 Guided Setup gebruikt verenigingscontext en dubbele kernacties zijn verwijderd", async () => {
@@ -80,7 +75,7 @@ test("R20 Guided Setup gebruikt verenigingscontext en dubbele kernacties zijn ve
   assert.doesNotMatch(orders, /href="\$\{BASE\}\/orders\/nieuw"/u, "Orders gebruikt alleen de volledige ordertypekiezer");
   assert.doesNotMatch(execution, /sp-button--wide[^>]+productie\/historie/u, "Historie staat alleen in de productiecontextnavigatie");
 
-  assert.match(service, /function applyCanonicalFulfillmentTransition\(order, action, user, at/u);
+  assert.match(service, /function applyCanonicalFulfillmentTransition\(state, order, action, user, at/u);
   assert.equal((service.match(/applyCanonicalFulfillmentTransition\(/gu) ?? []).length, 3, "beide publieke mutatiepaden gebruiken één centrale transition-writer");
 });
 
