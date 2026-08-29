@@ -368,7 +368,7 @@ export function proposalPlacementVisualBytes(placement, proposal, state) {
 }
 async function drawPdfGarment(context, item, side, x, y, width, height, state, proposal) {
   context.fillStyle = "#f3f4f4"; context.fillRect(x, y, width, height);
-  const visual = garmentVisualBytes(item, state, side);
+  const visual = garmentVisualBytes(item, state, side, proposal);
   if (side === "FRONT" && !visual) throw error(`De gecontroleerde garment-preview voor ${item.productName} ontbreekt.`, "TEAMKIT_GARMENT_VISUAL_REQUIRED", 409);
   const expectedVisual = item.visualGarmentSources?.[side] ?? (side === "FRONT" ? item.visualGarmentSource : null);
   if (expectedVisual?.sha256 && expectedVisual.sha256 !== visual?.sha256) throw error("De garment-preview wijkt af van de opgeslagen proposal-revision.", "TEAMKIT_GARMENT_VISUAL_REVISION_MISMATCH", 409);

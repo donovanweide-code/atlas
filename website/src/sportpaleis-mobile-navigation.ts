@@ -39,19 +39,15 @@ export function toggleMobileNavigation(elements: MobileNavigationElements): bool
  */
 export function bindMobileNavigationBackdrop(backdrop: HTMLButtonElement | null, dismiss: () => void): () => void {
   if (!backdrop) return () => undefined;
-  let dismissedByPointer = false;
   const onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    dismissedByPointer = true;
-    dismiss();
   };
   const onClick = (event: MouseEvent): void => {
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (!dismissedByPointer) dismiss();
-    dismissedByPointer = false;
+    dismiss();
   };
   backdrop.addEventListener("pointerdown", onPointerDown);
   backdrop.addEventListener("click", onClick);

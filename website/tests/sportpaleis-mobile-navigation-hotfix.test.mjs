@@ -90,6 +90,7 @@ test("exact Human regression: Menu sluiten consumes the pointer sequence before 
   handlers.get("pointerdown")(pointer);
   assert.equal(pointer.prevented, true);
   assert.equal(pointer.stopped, true, "hit testing may not move to the underlying route during the Human tap");
+  assert.equal(dismissed, 0, "de backdrop blijft tot de echte click bestaan zodat Chrome geen nieuw click-target kiest");
   const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
   handlers.get("click")(click);
   assert.equal(click.prevented, true);
