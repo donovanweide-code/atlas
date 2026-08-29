@@ -60,3 +60,29 @@ De officiële Chrome-binding kon de native filechooser openen, maar `setFiles` w
 
 De generieke Review Runtime en Review Entry Gate zijn bewezen. R2.2 zelf is niet volledig end-to-end gereviewd als PASS: drie functionele/interactieve productfindings en één browser-uploadassurancebeperking blijven open. Er is geen R2.2-code gewijzigd en geen productie gemuteerd.
 
+## Aanvullende Human Product Truth — volgende Teamwear-productronde
+
+Deze finding verandert het R2.2-verdict niet en autoriseert nog geen implementatie.
+
+De primaire Teamwear-job is:
+
+`artikel/productbeeld kiezen → logo en bedrukking plaatsen → maten/aantallen → voorstel/preview → akkoord`
+
+De volgende productronde moet daarom eerst opnieuw vanuit deze taak worden ontworpen, niet vanuit uitbreiding van de huidige Collectie.
+
+- Een artikel hoeft geen permanent Teamwear-catalogusrecord te zijn voordat het gebruikt kan worden.
+- Clipboard, copy/paste, drag/drop, upload en een officiële leverancierscatalogus/PDF zijn gelijkwaardige first-class bronroutes.
+- Een officiële catalogus/PDF moet bij voorkeur binnen Workspace bekeken kunnen worden; WBD hoeft de volledige leverancierscatalogus niet zonder noodzaak te dupliceren.
+- Verenigingscontext versnelt logo’s, sponsors, kleuren, afspraken, historie en productiecontext, maar impliceert geen vooraf ingerichte kledingcollectie.
+- Na keuze worden het concrete productbeeld, relevante artikelcontext en provenance aan het voorstel vastgelegd als evidence voor akkoord.
+- Fictieve/mock-productbeelden en bestaande verenigingsproductkaarten blijven alleen wanneer ze aantoonbaar een echte taak ondersteunen.
+
+### Productspecifieke bedrukbare zones
+
+Ontbrekende data is alleen aandacht wanneer die voor het concrete product én de concrete opdracht noodzakelijk is.
+
+- Rugtas: een niet-bedrukte achterkant is bij Sportpaleis `NOT_APPLICABLE`, niet “achterzijde ontbreekt”.
+- Sporttas: twee bedrukbare zijden kunnen bestaan; de tweede zijde is alleen ontbrekend wanneer de concrete opdracht die vereist.
+- Product Truth legt toegestane/relevante zones per producttype vast. De opdracht bepaalt vervolgens welke daarvan werkelijk nodig zijn.
+
+Voor implementatie moet de volgende productronde eerst expliciet bepalen wat verdwijnt, wat wordt vereenvoudigd, welke bestaande capabilities worden hergebruikt en wat de kortste professionele route naar een goedgekeurd voorstel is.
