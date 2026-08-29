@@ -59,3 +59,15 @@ test("bekende catalogus blijft een versneller en verdwijnt uit de primaire Studi
   assert.doesNotMatch(currentStudio, /<strong>Catalogus<\/strong>/u);
   assert.match(currentStudio, /<summary>Meer artikelen<\/summary>/u);
 });
+
+test("een directe frontbron erft nooit stil een achterkant van een bekend artikel", () => {
+  assert.match(workspace, /const knownBack = directFrontSourceId \? null : knownArticle\?\.catalogMedia/u);
+  assert.match(workspace, /directFrontSourceId, directBackSourceId/u);
+  assert.match(experience, /const direct = proposalSourcePreview\(proposal, item\.catalogSnapshot\?\.directBackSourceId/u);
+});
+
+test("catalogusregeneratie cachet voor- en achterkant uit dezelfde actuele gallery", async () => {
+  const generator = await readFile(new URL("../scripts/generate-sportpaleis-final-prelive-catalog.mjs", import.meta.url), "utf8");
+  assert.match(generator, /const front = article\.catalogMedia\.find\(\(\{ kind, imageKey \}\) => kind === "FRONT" && imageKey\)/u);
+  assert.match(generator, /download\(front\?\.sourceUrl \?\? product\.image/u);
+});

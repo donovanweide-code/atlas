@@ -207,7 +207,8 @@ for (const association of audit.associations) {
     const generatedArticle = toArticle(product, index, duplicateSkus, sourceMedia);
     const previousArticle = existingArticlesById.get(generatedArticle.id);
     const article = previousArticle ? { ...generatedArticle, ...previousArticle, catalogMedia: generatedArticle.catalogMedia } : generatedArticle;
-    await download(product.image, path.join(IMAGE_DIR, `${article.imageKey}.webp`));
+    const front = article.catalogMedia.find(({ kind, imageKey }) => kind === "FRONT" && imageKey);
+    await download(front?.sourceUrl ?? product.image, path.join(IMAGE_DIR, `${article.imageKey}.webp`));
     const back = article.catalogMedia.find(({ kind, imageKey }) => kind === "BACK" && imageKey);
     if (back) await download(back.sourceUrl, path.join(IMAGE_DIR, `${back.imageKey}.webp`));
     articles.push(article);

@@ -10,6 +10,8 @@ This candidate succeeds immutable R2.3 after interactive Chrome review proved fi
 - Allow a back placement to activate the controlled back-view placeholder only for products that permit a back side; backpacks remain fail-closed.
 - Pass the immutable proposal source into PDF garment rendering so Studio, preview and PDF use the same bytes and hash.
 - Keep the mobile navigation backdrop present until the click is consumed, preventing the same tap from reaching bottom navigation.
+- Never inherit a catalog back image when the front is a separate pasted/direct source; an unproven cross-source pair stays fail-closed.
+- Make future catalog regeneration cache front and back from the same current gallery source set.
 
 ## Preserved boundaries
 
@@ -21,9 +23,13 @@ This candidate succeeds immutable R2.3 after interactive Chrome review proved fi
 
 ## Automated evidence before immutable packaging
 
-- Targeted Teamwear/mobile/Proposal regression: 16/16 PASS.
-- Full Sportpaleis regression: 529/529 PASS.
+- Targeted Teamwear/mobile/Proposal regression: 23/23 PASS.
+- Full Sportpaleis regression: 531/531 PASS.
 - Public production build: PASS.
 - Workspace production build: PASS.
+
+The repository-wide suite reports 1021/1025 PASS. Its four failures are pre-existing,
+out-of-scope WBD Mail/Web-Push evidence-fixture absences in this isolated checkout;
+no Sportpaleis test failed.
 
 Real Chrome acceptance is required against the packaged R2.4 artifact before any deployment readiness claim.
