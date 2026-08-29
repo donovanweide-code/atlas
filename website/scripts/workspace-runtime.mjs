@@ -327,6 +327,8 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
           reviewPrincipalIds: config.reviewPrincipalIds,
           activeReviewCandidateIds: config.activeReviewCandidateIds,
+          reviewAccessEnabled: config.reviewAccessEnabled,
+          reviewAccessIssuerPrincipalIds: config.reviewAccessIssuerPrincipalIds,
         });
         await service.initialize();
         return createSportpaleisPilotRequestHandler(service, {

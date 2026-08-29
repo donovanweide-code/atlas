@@ -17,6 +17,8 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   releaseId: string,
  *   reviewPrincipalIds: readonly string[],
  *   activeReviewCandidateIds: readonly string[],
+ *   reviewAccessEnabled: boolean,
+ *   reviewAccessIssuerPrincipalIds: readonly string[],
  *   distDir: string,
  *   logLevel: LogLevel,
  *   productionDatabases: Readonly<{
@@ -60,6 +62,8 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   WBD_WORKSPACE_BASE_URL: { phase: "WBD Owner V1", requiredInProduction: true, secret: false },
   RELEASE_ID: { phase: "WS.1", requiredInProduction: true, secret: false },
   SPORTPALEIS_REVIEW_PRINCIPAL_IDS: { phase: "Sportpaleis Review Mode V1", requiredInProduction: false, secret: false },
+  WBD_REVIEW_ACCESS_ENABLED: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
+  WBD_REVIEW_ACCESS_ISSUER_IDS: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
   WORKSPACE_DB_HOST: { phase: "production persistence", requiredInProduction: true, secret: false },
@@ -209,6 +213,20 @@ export function parseWorkspaceRuntimeConfig(env) {
   if (activeReviewCandidateIds.some((entry) => !/^[a-z0-9][a-z0-9-]{0,127}$/u.test(entry))) {
     throw new WorkspaceRuntimeConfigError("SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS bevat een ongeldige candidate ID.");
   }
+  const reviewAccessEnabled = value(env, "WBD_REVIEW_ACCESS_ENABLED") === "true";
+  if (value(env, "WBD_REVIEW_ACCESS_ENABLED") && !new Set(["true", "false"]).has(value(env, "WBD_REVIEW_ACCESS_ENABLED"))) {
+    throw new WorkspaceRuntimeConfigError("WBD_REVIEW_ACCESS_ENABLED moet true of false zijn.");
+  }
+  const reviewAccessIssuerPrincipalIds = Object.freeze(value(env, "WBD_REVIEW_ACCESS_ISSUER_IDS")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean));
+  if (reviewAccessIssuerPrincipalIds.some((entry) => !/^user-[a-f0-9]{16}$/u.test(entry))) {
+    throw new WorkspaceRuntimeConfigError("WBD_REVIEW_ACCESS_ISSUER_IDS bevat een ongeldige canonical principal ID.");
+  }
+  if (reviewAccessEnabled && (!reviewAccessIssuerPrincipalIds.length || !activeReviewCandidateIds.length)) {
+    throw new WorkspaceRuntimeConfigError("Tijdelijke reviewtoegang vereist een Human GO-issuer en een actieve immutable candidate.");
+  }
 
   const logLevel = value(env, "LOG_LEVEL") || "info";
   if (!new Set(["debug", "info", "warn", "error"]).has(logLevel)) {
@@ -247,6 +265,8 @@ export function parseWorkspaceRuntimeConfig(env) {
     releaseId,
     reviewPrincipalIds,
     activeReviewCandidateIds,
+    reviewAccessEnabled,
+    reviewAccessIssuerPrincipalIds,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,
     productionDatabases,

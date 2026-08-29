@@ -37,6 +37,11 @@ import {
   verifyWorkspacePassword,
 } from "./workspace-auth-foundation.mjs";
 import {
+  ensureWbdReviewDeveloperAccessState,
+  WBD_REVIEW_DEVELOPER_PRINCIPAL,
+  WbdReviewDeveloperAccessPolicy,
+} from "./wbd-review-developer-access.mjs";
+import {
   reconcileSportpaleisEmployeeDirectory,
 } from "./sportpaleis-employee-directory.mjs";
 import {
@@ -432,11 +437,12 @@ async function verifyPin(pin, record) {
 
 function publicUser(user) {
   const workContexts = user.workContexts ?? workContextsForRole(user.role);
+  const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
   return {
     id: user.id,
     name: user.name,
     initials: user.initials,
-    role: user.role,
+    role: reviewDeveloper ? "admin" : user.role,
     email: user.email,
     status: user.status,
     seatType: user.seatType,
@@ -445,6 +451,7 @@ function publicUser(user) {
     workContexts,
     defaultContext: workContexts.includes(user.defaultContext) ? user.defaultContext : workContexts[0],
     quickAuth: user.quickPin?.hash ? { mode: "PIN", pinEnrolled: true } : { mode: "PASSWORD", pinEnrolled: false },
+    ...(reviewDeveloper ? { principalType: user.principalType, candidateId: user.candidateId } : {}),
   };
 }
 
@@ -541,6 +548,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     quickProductionIntakes: [],
     visualCompositions: [],
     creativeVectorDrafts: [],
+    reviewDeveloperAccess: { grants: [] },
     preferences: {},
     audit: [{
       id: "audit-production-bootstrap",
@@ -793,6 +801,7 @@ export function migrateSportpaleisPilotState(input) {
   }
   state.quickProductionIntakes ??= [];
   state.visualCompositions ??= [];
+  ensureWbdReviewDeveloperAccessState(state);
   state.visualCompositions = state.visualCompositions.map(upgradeVisualStudioComposition);
   state.creativeVectorDrafts ??= [];
   const goldenJobs = createGoldenProductionJobs();
@@ -1768,6 +1777,10 @@ const SPORTPALEIS_REVIEW_CANDIDATES = Object.freeze([Object.freeze({
 })]);
 
 function reviewModeAllowed(user, principalIds, reviewCandidates) {
+  if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
+    return user.scopes?.includes("candidate.review.read")
+      && reviewCandidates.some(({ id }) => id === user.candidateId);
+  }
   return reviewCandidates.length > 0
     && user.role === "admin"
     && user.seatType === "customer"
@@ -1776,7 +1789,7 @@ function reviewModeAllowed(user, principalIds, reviewCandidates) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [] }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -1793,7 +1806,17 @@ export class SportpaleisPilotService {
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
     this.reviewPrincipalIds = new Set(reviewPrincipalIds);
     const activeCandidateIds = new Set(activeReviewCandidateIds);
-    this.reviewCandidates = SPORTPALEIS_REVIEW_CANDIDATES.filter(({ id }) => activeCandidateIds.has(id));
+    const knownReviewCandidates = new Map(SPORTPALEIS_REVIEW_CANDIDATES.map((candidate) => [candidate.id, candidate]));
+    this.reviewCandidates = [...activeCandidateIds].map((id) => knownReviewCandidates.get(id) ?? Object.freeze({
+      id,
+      title: id,
+      status: "CANDIDATE",
+      stateBoundary: "DISPOSABLE_SESSION_ONLY",
+      capabilities: Object.freeze({ fullWorkspace: "READ_SAFE", safeInteraction: "CANDIDATE_STATE_ONLY", orders: "FORBIDDEN", production: "FORBIDDEN", mail: "FORBIDDEN", externalApis: "FORBIDDEN" }),
+    }));
+    this.reviewDeveloperAccessPolicy = reviewAccessEnabled === true
+      ? new WbdReviewDeveloperAccessPolicy({ issuerPrincipalIds: reviewAccessIssuerPrincipalIds, allowedCandidateIds: activeReviewCandidateIds, tenantId: "sportpaleis" })
+      : null;
   }
 
   async initialize() {
@@ -1812,6 +1835,76 @@ export class SportpaleisPilotService {
       productionMutationAuthority: false,
       candidates: this.reviewCandidates,
     };
+  }
+
+  async issueReviewDeveloperGrant(token, csrfToken, payload, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
+    const { user } = await this.authenticate(token, now);
+    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) throw Object.assign(new Error("Een tijdelijke reviewer kan geen nieuwe toegang uitgeven."), { statusCode: 403, code: "REVIEW_GRANT_CHAIN_FORBIDDEN" });
+    await this.#assertCsrf(token, csrfToken);
+    const result = await this.store.mutate(async (state) => {
+      const issued = this.reviewDeveloperAccessPolicy.issueGrant(state, {
+        issuer: user,
+        tenantId: "sportpaleis",
+        candidateId: payload.candidateId,
+        scopes: payload.scopes,
+        humanGoReference: payload.humanGoReference,
+        ttlMs: payload.ttlMs,
+      }, now);
+      return { state, value: issued };
+    });
+    return {
+      grant: result.value.grant,
+      activationPath: `/workspace/sportpaleis/review-toegang#token=${result.value.activationToken}&candidate=${encodeURIComponent(result.value.grant.candidateId)}`,
+      delivery: "LOCAL_HANDOFF_ONLY",
+    };
+  }
+
+  async activateReviewDeveloperGrant(payload, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
+    const result = await this.store.mutate(async (state) => {
+      const activated = this.reviewDeveloperAccessPolicy.activateGrant(state, {
+        activationToken: payload.activationToken,
+        tenantId: "sportpaleis",
+        candidateId: payload.candidateId,
+      }, now);
+      return { state, value: activated };
+    });
+    return { ...result.value, cookieMaxAgeSeconds: Math.max(0, Math.floor((new Date(result.value.expiresAt).getTime() - now.getTime()) / 1_000)) };
+  }
+
+  async revokeReviewDeveloperGrant(token, csrfToken, grantId, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
+    const { user } = await this.authenticate(token, now);
+    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) throw Object.assign(new Error("Een tijdelijke reviewer kan geen toegang beheren."), { statusCode: 403, code: "REVIEW_GRANT_CHAIN_FORBIDDEN" });
+    await this.#assertCsrf(token, csrfToken);
+    const result = await this.store.mutate(async (state) => ({ state, value: this.reviewDeveloperAccessPolicy.revokeGrant(state, { issuer: user, grantId }, now) }));
+    return result.value;
+  }
+
+  async assertTemporaryReviewRequest(token, { method, route }, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy || !token) return null;
+    const state = await this.store.read();
+    let context;
+    try {
+      context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
+    } catch (cause) {
+      if (cause?.code === "REVIEW_SESSION_UNKNOWN") return null;
+      throw cause;
+    }
+    if (method !== "GET") throw Object.assign(new Error("De tijdelijke Codex-principal heeft geen productie- of beheerwrite-authority."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
+    const result = await this.store.mutate(async (next) => ({
+      state: next,
+      value: this.reviewDeveloperAccessPolicy.authorizeCapability(next, {
+        sessionToken: token,
+        tenantId: "sportpaleis",
+        candidateId: context.grant.candidateId,
+        capability: "candidate.review.read",
+        method,
+        route,
+      }, now),
+    }));
+    return result.value;
   }
 
   async login({ email, password, deviceMode = "SHARED", remoteAddress = "unknown", now = new Date() }) {
@@ -1948,9 +2041,26 @@ export class SportpaleisPilotService {
     if (!token) throw Object.assign(new Error("Aanmelding vereist."), { statusCode: 401, code: "UNAUTHENTICATED" });
     const state = await this.store.read();
     const session = state.sessions.find(({ idHash }) => safeEqualHex(idHash, sha256(token)));
-    if (!session || new Date(session.expiresAt).getTime() <= now.getTime()) {
+    if (!session) {
+      if (this.reviewDeveloperAccessPolicy) {
+        try {
+          const context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
+          const user = {
+            ...context.principal,
+            email: "codex-review@internal.invalid",
+            status: "Actief",
+            workContexts: ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"],
+            defaultContext: "ALL",
+            featureExposure: { teamwearExperiencePilot: true },
+          };
+          return { state, session: { ...context.session, reviewGrantId: context.grant.id, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT" }, user, reviewGrant: context.grant };
+        } catch (cause) {
+          if (cause?.code !== "REVIEW_SESSION_UNKNOWN") throw cause;
+        }
+      }
       throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
     }
+    if (new Date(session.expiresAt).getTime() <= now.getTime()) throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
     const user = state.users.find(({ id }) => id === session.userId);
     if (!user || user.status !== "Actief") throw Object.assign(new Error("Gebruiker is niet actief."), { statusCode: 401, code: "UNAUTHENTICATED" });
     return { state, session, user };
@@ -1958,6 +2068,13 @@ export class SportpaleisPilotService {
 
   async issueSessionView(token) {
     const { user, session } = await this.authenticate(token);
+    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
+      const result = await this.store.mutate(async (state) => {
+        const rotated = this.reviewDeveloperAccessPolicy.rotateSessionCsrf(state, { sessionToken: token, tenantId: "sportpaleis", candidateId: user.candidateId });
+        return { state, value: rotated };
+      });
+      return { user: publicUser(user), csrfToken: result.value.csrfToken, expiresAt: result.value.session.expiresAt, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT", demo: false };
+    }
     const csrfToken = randomBytes(24).toString("base64url");
     await this.store.mutate(async (state) => {
       const active = state.sessions.find(({ idHash }) => idHash === session.idHash);
@@ -1974,7 +2091,11 @@ export class SportpaleisPilotService {
     return this.login(input);
   }
 
-  async logout(token, user, csrfToken) {
+  async logout(token, user, csrfToken, now = new Date()) {
+    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
+      await this.store.mutate(async (state) => ({ state, value: this.reviewDeveloperAccessPolicy.completeSession(state, { sessionToken: token, csrfToken, tenantId: "sportpaleis", candidateId: user.candidateId }, now) }));
+      return;
+    }
     await this.#assertCsrf(token, csrfToken);
     await this.store.mutate(async (state) => {
       state.sessions = state.sessions.filter(({ idHash }) => idHash !== sha256(token));
@@ -1985,6 +2106,9 @@ export class SportpaleisPilotService {
 
   async fastSwitch(token, csrfToken, payload, now = new Date()) {
     const { user: currentUser, session } = await this.authenticate(token, now);
+    if (currentUser.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
+      throw Object.assign(new Error("De tijdelijke Codex-principal mag geen gebruikersidentiteit overnemen."), { statusCode: 403, code: "REVIEW_IDENTITY_SWITCH_FORBIDDEN" });
+    }
     await this.#assertCsrf(token, csrfToken);
     const state = await this.store.read();
     const target = state.users.find(({ id, status, seatType }) => id === payload.targetUserId && status === "Actief" && seatType === "customer");
@@ -2037,7 +2161,8 @@ export class SportpaleisPilotService {
 
   async bootstrap(token) {
     const { state, user, session } = await this.authenticate(token);
-    const admin = user.role === "admin";
+    const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
+    const admin = user.role === "admin" || reviewDeveloper;
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
@@ -2107,7 +2232,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: this.uploadsEnabled, productionAssetUploadsEnabled: this.productionAssetUploadsEnabled, fontUploadsEnabled: admin && this.fontUploadsEnabled, mailMode: this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -6603,6 +6728,12 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.completePasswordReset(await readJson(request)));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/auth/review-access/activate" && method === "POST") {
+        const result = await service.activateReviewDeveloperGrant(await readJson(request));
+        response.setHeader("Set-Cookie", cookieHeader(result.sessionToken, service.secureCookies, false, result.cookieMaxAgeSeconds));
+        json(response, 200, { user: publicUser(result.principal), csrfToken: result.csrfToken, expiresAt: result.expiresAt, grant: result.grant, releaseId: service.releaseId });
+        return true;
+      }
       if (route === "/api/sportpaleis/v1/auth/login" && method === "POST") {
         const result = await service.loginWithPersistedCsrf({ ...(await readJson(request)), remoteAddress: request.socket.remoteAddress });
         response.setHeader("Set-Cookie", cookieHeader(result.token, service.secureCookies, false, result.cookieMaxAgeSeconds));
@@ -6630,6 +6761,16 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, { ok: true });
         return true;
       }
+      if (route === "/api/sportpaleis/v1/admin/review-access/grants" && method === "POST") {
+        json(response, 201, await service.issueReviewDeveloperGrant(token, csrf, await readJson(request)));
+        return true;
+      }
+      const reviewGrantRevokeMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/review-access\/grants\/([^/]+)\/revoke$/);
+      if (reviewGrantRevokeMatch && method === "POST") {
+        json(response, 200, await service.revokeReviewDeveloperGrant(token, csrf, decodeURIComponent(reviewGrantRevokeMatch[1])));
+        return true;
+      }
+      if (typeof service.assertTemporaryReviewRequest === "function") await service.assertTemporaryReviewRequest(token, { method, route });
       if (route === "/api/sportpaleis/v1/auth/switch" && method === "POST") {
         const result = await service.fastSwitch(token, csrf, { ...(await readJson(request)), remoteAddress: request.socket.remoteAddress });
         response.setHeader("Set-Cookie", cookieHeader(result.token, service.secureCookies, false, result.cookieMaxAgeSeconds));

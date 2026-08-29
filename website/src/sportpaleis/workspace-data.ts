@@ -105,6 +105,9 @@ export interface SportpaleisUser {
   recovery?: { state: "NONE" | "REQUESTED" | "LINK_ISSUED"; requestedAt: string | null; expiresAt: string | null };
   /** Server-authoritative, per-principal exposure. Never inferred from a URL or client role. */
   featureExposure?: { teamwearExperiencePilot?: boolean };
+  /** Present only for the short-lived WBD review/development principal. */
+  principalType?: "REVIEW_DEVELOPER";
+  candidateId?: string;
   invitation?: {
     state: "VALID" | "EXPIRED" | "MISSING" | "AMBIGUOUS";
     expiresAt: string | null;

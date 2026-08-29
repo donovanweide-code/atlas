@@ -1601,6 +1601,7 @@ function employeeAdmin(state: PilotBootstrap): string {
 }
 
 function activationPage(message = ""): string { document.title = "Account activeren — Sportpaleis Workspace"; return `<main class="sp-login"><section class="sp-login__brand"><img class="sp-login__logo" src="${SPORTPALEIS_OFFICIAL_LOGO}" alt="Sport 2000 Sportpaleis"><p>Activeer uw persoonlijke Sportpaleis-account.</p></section><section class="sp-login__panel"><form data-activation-form><p class="sp-eyebrow">ACCOUNT ACTIVEREN</p><h1>Kies een wachtwoord</h1>${message ? `<div class="sp-form-error">${esc(message)}</div>` : ""}<label>Nieuw wachtwoord<input name="password" type="password" minlength="12" required autocomplete="new-password"></label><label>Herhaal wachtwoord<input name="passwordConfirm" type="password" minlength="12" required autocomplete="new-password"></label><button class="sp-button sp-button--primary sp-button--wide">Account activeren</button><p>De link is eenmalig en verloopt na 24 uur.</p></form></section></main>`; }
+function reviewAccessPage(message = ""): string { document.title = "Tijdelijke reviewtoegang — Sportpaleis Workspace"; return `<main class="sp-login"><section class="sp-login__brand"><img class="sp-login__logo" src="${SPORTPALEIS_OFFICIAL_LOGO}" alt="Sport 2000 Sportpaleis"><p>Gecontroleerde WBD review- en ontwikkeltoegang.</p></section><section class="sp-login__panel"><p class="sp-eyebrow">TIJDELIJKE REVIEWTOEGANG</p><h1>${message ? "Toegang geweigerd" : "Toegang veilig controleren…"}</h1>${message ? `<div class="sp-form-error" role="alert">${esc(message)}</div><p>Deze link is ongeldig, verlopen, ingetrokken of valt buiten de geautoriseerde Candidate.</p>` : `<p role="status">Autorisatie, Candidate en verloopmoment worden veilig gecontroleerd.</p>`}<a data-link href="${BASE}/overzicht">Terug naar inloggen</a></section></main>`; }
 function recoveryRequestPage(message = ""): string { document.title = "Wachtwoord herstellen — Sportpaleis Workspace"; return `<main class="sp-login"><section class="sp-login__brand"><img class="sp-login__logo" src="${SPORTPALEIS_OFFICIAL_LOGO}" alt="Sport 2000 Sportpaleis"><p>Veilig toegang herstellen zonder accountgegevens prijs te geven.</p></section><section class="sp-login__panel"><form data-recovery-request-form><p class="sp-eyebrow">TOEGANG HERSTELLEN</p><h1>Wachtwoord vergeten?</h1>${message ? `<div class="sp-action-notice" role="status">${esc(message)}</div>` : ""}<p>Vul uw zakelijke e-mailadres in. Als daar een actief account bij hoort, kan de beheerder een eenmalige herstellink klaarzetten.</p><label>E-mailadres<input name="email" type="email" required autocomplete="username"></label><button class="sp-button sp-button--primary sp-button--wide">Herstel aanvragen</button><a data-link href="${BASE}/overzicht">Terug naar inloggen</a></form></section></main>`; }
 function recoveryCompletePage(message = ""): string { document.title = "Nieuw wachtwoord — Sportpaleis Workspace"; return `<main class="sp-login"><section class="sp-login__brand"><img class="sp-login__logo" src="${SPORTPALEIS_OFFICIAL_LOGO}" alt="Sport 2000 Sportpaleis"><p>De eenmalige herstellink verloopt na 30 minuten.</p></section><section class="sp-login__panel"><form data-recovery-complete-form><p class="sp-eyebrow">TOEGANG HERSTELLEN</p><h1>Kies een nieuw wachtwoord</h1>${message ? `<div class="sp-form-error">${esc(message)}</div>` : ""}<label>Nieuw wachtwoord<input name="password" type="password" minlength="12" required autocomplete="new-password"></label><label>Herhaal wachtwoord<input name="passwordConfirm" type="password" minlength="12" required autocomplete="new-password"></label><button class="sp-button sp-button--primary sp-button--wide">Wachtwoord opslaan</button><a data-link href="${BASE}/overzicht">Terug naar inloggen</a></form></section></main>`; }
 
@@ -1799,7 +1800,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   const render = (options: { preserveScroll?: boolean; focusArticleId?: string } = {}): void => {
     reviewCandidateCleanup?.(); reviewCandidateCleanup = null; const reviewLoadSequence = ++reviewCandidateLoadSequence;
     const savedScroll = options.preserveScroll ? { x: scrollX, y: scrollY } : undefined;
-    if (!state) { const current = path(); app.innerHTML = current === `${BASE}/activeren` ? activationPage(activationNotice) : current === `${BASE}/wachtwoord-vergeten` ? recoveryRequestPage(activationNotice) : current === `${BASE}/wachtwoord-herstellen` ? recoveryCompletePage(activationNotice) : login(notice, demoEnabled); return; }
+    if (!state) { const current = path(); app.innerHTML = current === `${BASE}/activeren` ? activationPage(activationNotice) : current === `${BASE}/review-toegang` ? reviewAccessPage(activationNotice) : current === `${BASE}/wachtwoord-vergeten` ? recoveryRequestPage(activationNotice) : current === `${BASE}/wachtwoord-herstellen` ? recoveryCompletePage(activationNotice) : login(notice, demoEnabled); return; }
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
     syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
@@ -2648,7 +2649,27 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   addEventListener("resize", () => syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches), { passive: true });
   window.setInterval(() => { if (document.visibilityState === "visible") void checkSharedRevision("interval"); }, SHARED_STATUS_POLL_MS);
   addEventListener("popstate", () => { sharedSyncFormDirty = false; deferredSharedRevision = null; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); }); if (location.pathname === BASE || location.pathname === `${BASE}/` || (!BASE && location.pathname === "/")) history.replaceState({}, "", `${BASE}/overzicht`);
-  void api.demoOptions().then((value) => { demoEnabled = value.enabled; return api.session(); }).then(refresh).catch(() => render());
+  const initialize = async (): Promise<void> => {
+    if (path() === `${BASE}/review-toegang`) {
+      const handoff = new URLSearchParams(location.hash.replace(/^#/, ""));
+      const activationToken = handoff.get("token") ?? "";
+      const candidateId = handoff.get("candidate") ?? "";
+      if (!activationToken || !candidateId) throw new Error("De tijdelijke reviewlink mist een geldige Candidate of eenmalige autorisatie.");
+      try {
+        await api.activateReviewAccess(activationToken, candidateId);
+        history.replaceState({}, "", FULL_WORKSPACE_REVIEW_ROUTE);
+        activationNotice = "";
+      } catch (error) {
+        history.replaceState({}, "", `${BASE}/review-toegang`);
+        throw error;
+      }
+    }
+    const options = await api.demoOptions();
+    demoEnabled = options.enabled;
+    await api.session();
+    await refresh();
+  };
+  void initialize().catch((error) => { activationNotice = path() === `${BASE}/review-toegang` ? message(error) : ""; render(); });
 }
 
 export function renderSportpaleisWorkspaceError(app: HTMLDivElement): void { app.innerHTML = `<main class="sp-fatal"><h1>Workspace tijdelijk niet beschikbaar</h1><p>Gebruik de bestaande productieroute.</p></main>`; }

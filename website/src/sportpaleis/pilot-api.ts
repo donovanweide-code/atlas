@@ -69,7 +69,7 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     uploadsEnabled: boolean;
     productionAssetUploadsEnabled: boolean;
     fontUploadsEnabled: boolean;
-    mailMode: "capture";
+    mailMode: "capture" | "disabled";
     hardwareSendEnabled: false;
     barcodeEnabled: false;
     barcodeHardwareValidated: false;
@@ -81,6 +81,8 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     teamwearExperiencePilot: boolean;
     /** Exact server-side principal decision. Candidate code is lazy and has no production mutation authority. */
     reviewMode: boolean;
+    /** Human-GO scoped, short-lived Codex review principal. Never a customer seat. */
+    reviewDeveloper?: boolean;
   };
   productionInventory: SportpaleisProductionInventoryView[];
   productionHistory?: { total: number; loaded: number; pageSize: number; bounded: true };
@@ -205,6 +207,18 @@ export class SportpaleisPilotApi {
     }));
     this.#csrfToken = result.csrfToken;
     return result.user;
+  }
+
+  async activateReviewAccess(activationToken: string, candidateId: string): Promise<{ user: SportpaleisUser; expiresAt: string }> {
+    const result = await responseBody<{ user: SportpaleisUser; csrfToken: string; expiresAt: string }>(await fetch(`${API}/auth/review-access/activate`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activationToken, candidateId }),
+    }));
+    this.#csrfToken = result.csrfToken;
+    readonlyCache.clear();
+    return { user: result.user, expiresAt: result.expiresAt };
   }
 
   async fastSwitch(targetUserId: string, credential: { authMode: "PIN"; pin: string } | { authMode: "PASSWORD"; password: string }, deviceMode: "SHARED" | "PERSONAL"): Promise<SportpaleisUser> {
