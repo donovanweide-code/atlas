@@ -41,7 +41,6 @@ export function bindMobileNavigationBackdrop(backdrop: HTMLButtonElement | null,
   if (!backdrop) return () => undefined;
   const onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return;
-    event.preventDefault();
     event.stopImmediatePropagation();
   };
   const onClick = (event: MouseEvent): void => {

@@ -88,7 +88,7 @@ test("exact Human regression: Menu sluiten consumes the pointer sequence before 
   const cleanup = bindMobileNavigationBackdrop(backdrop, () => { dismissed += 1; });
   const pointer = { button: 0, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
   handlers.get("pointerdown")(pointer);
-  assert.equal(pointer.prevented, true);
+  assert.equal(pointer.prevented, false, "pointerdown mag de afsluitende Chrome-click niet onderdrukken");
   assert.equal(pointer.stopped, true, "hit testing may not move to the underlying route during the Human tap");
   assert.equal(dismissed, 0, "de backdrop blijft tot de echte click bestaan zodat Chrome geen nieuw click-target kiest");
   const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
