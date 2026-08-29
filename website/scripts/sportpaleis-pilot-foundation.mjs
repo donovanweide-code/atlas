@@ -32,6 +32,7 @@ import {
 } from "../src/sportpaleis/production-assets.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
+import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -111,6 +112,7 @@ const canonicalAssociationName = (value) => String(value ?? "") === LEGACY_PIONE
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "chestNumber", "shortsNumber"];
+const CANONICAL_PRODUCTION_RESOLVER_VERSION = "CANONICAL_PRODUCTION_TRUTH_V1";
 export const SPORTPALEIS_NAAMBALK_HUMAN_PRODUCT_TRUTH = Object.freeze({
   kind: "NAAMBALK",
   semantic: "COMPOSED_APPLICATION",
@@ -191,6 +193,15 @@ const sourceProfileFields = [
   ["shortsNumber", "Shortnummer", "shortsNumber"],
 ];
 const articleProductionProfileField = (articleNumber, field) => articleNumber === "140298" && field === "chestNumber" ? "initials" : field;
+
+export function canonicalProductionProfileForDecoration(state, item, field) {
+  const productionField = articleProductionProfileField(item.articleNumber, field);
+  const baseProfile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
+  const fieldProfileId = `profile-source-${profileSlug(item.association)}-${productionField}`;
+  const fieldProfile = state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(productionField));
+  const profile = baseProfile?.supports?.includes(productionField) ? baseProfile : fieldProfile ?? baseProfile ?? null;
+  return { field, productionField, profile, fieldProfileId };
+}
 for (const association of SPORTPALEIS_ASSOCIATIONS) {
   for (const [field, label, dimensionKey] of sourceProfileFields) {
     const id = `profile-source-${profileSlug(association.name)}-${field}`;
@@ -1373,11 +1384,22 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     if (!PERSONALIZATION_FIELDS.includes(line.personalizationField)) return line;
     const item = items[0];
     const foilColor = line.foilColor ?? item.foilColor;
+    const existingIdentity = line.decorationIdentity ?? {};
     return {
       ...line,
       orderId: id,
       itemId: item.id,
-      decorationIdentity: { orderId: id, itemId: item.id, articleNumber: item.articleNumber || item.id, decorationType: line.personalizationField, placement: line.personalizationField, value: line.content, foilColor, productionProfileId: item.productionProfileId || line.source.id },
+      decorationIdentity: {
+        ...existingIdentity,
+        orderId: id,
+        itemId: item.id,
+        articleNumber: existingIdentity.articleNumber || item.articleNumber || item.id,
+        decorationType: line.personalizationField,
+        placement: existingIdentity.placement || line.personalizationField,
+        value: line.content,
+        foilColor,
+        productionProfileId: existingIdentity.productionProfileId || item.productionProfileId || line.source.id,
+      },
     };
   });
   const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
@@ -1500,9 +1522,14 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
   if (!field) return null;
   const article = state.articles.find(({ id, active }) => id === item.articleId && active);
   const association = article ? state.associations.find(({ name }) => name === article.association) : null;
-  const profile = article ? state.productionProfiles.find(({ id }) => id === article.profileId) : null;
+  const resolution = article ? canonicalProductionProfileForDecoration(state, {
+    articleNumber: article.articleNumber,
+    association: association?.name ?? article.association,
+    productionProfileId: article.profileId,
+  }, field) : null;
+  const profile = resolution?.profile ?? null;
   const proposalAssociationMatches = !revision.snapshot.association.name || association?.name === revision.snapshot.association.name;
-  const applicable = Boolean(article && association && profile && proposalAssociationMatches && article.supports?.includes(field) && profile.supports?.includes(field));
+  const applicable = Boolean(article && association && profile && proposalAssociationMatches && article.supports?.includes(field) && profile.supports?.includes(resolution.productionField));
   const override = placement.physicalSizeOverride ?? null;
   let backNumberProduction = null;
   if (applicable && field === "backNumber") {
@@ -1513,17 +1540,18 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
   const associationHeightMm = dimensionKey ? Number(association?.dimensionsCm?.[dimensionKey]) * 10 : 0;
   const profileHeightMm = Number(String(profile?.sizeLabel ?? "").match(/([\d,.]+)\s*cm/iu)?.[1]?.replace(",", ".")) * 10;
   const resolvedHeightMm = field === "backNumber" ? Number(backNumberProduction?.physicalHeightMm) : associationHeightMm > 0 ? associationHeightMm : profileHeightMm > 0 ? profileHeightMm : 0;
+  const productionGroupId = String(item.productionGroupId ?? "all");
   const variant = {
-    id: placement.id,
+    id: `${placement.id}:${productionGroupId}`,
     quantity: item.quantity,
     personalizationValues: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: backNumberProduction?.sizeClass ?? "", shortsNumber: "", [field]: placement.text },
     backNumberProduction,
   };
-  const derived = applicable ? deriveCatalogProductionLines(state, `teamkit-resolver:${proposal.id}:${revision.number}`, [{ id: item.id, association: association.name, productionProfileId: profile.id, sourceProvenance: provenance, variants: [variant] }])[0] : null;
+  const derived = applicable ? resolveCanonicalProductionLines(state, `teamkit-resolver:${proposal.id}:${revision.number}`, [{ id: item.id, articleNumber: article.articleNumber, association: association.name, productionProfileId: article.profileId, foilColor: effectiveCatalogFoilColor(article, association, profile), sourceProvenance: provenance, variants: [variant] }]).find(({ personalizationField }) => personalizationField === field) : null;
   const fields = [];
   if (!applicable || !derived || derived.validation.status !== "VALID") fields.push("SOURCE");
   if (!override && !(resolvedHeightMm > 0)) fields.push("DIMENSIONS");
-  const visualFoilOverride = ({ "#ffffff": "Wit", "#101419": "Zwart", "#d3172f": "Rood" })[String(placement.colorOverride ?? "").toLocaleLowerCase("nl-NL")];
+  const visualFoilOverride = managedFoilColorFromStudioValue(state, placement.colorOverride);
   const requestedFoil = applicable ? visualFoilOverride ?? effectiveCatalogFoilColor(article, association, profile) : "";
   const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
   if (!foilColor || Boolean(placement.colorOverride && !visualFoilOverride)) fields.push("FOIL_COLOR");
@@ -1539,9 +1567,9 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
         : profileHeightMm > 0
           ? `Productieprofiel ${profile.id}@${profile.revision ?? 1} · ${profile.sizeLabel}`
           : "Geen toepasselijke server-authoritative productiemaat gevonden";
-  const context = { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: article?.id ?? null, associationName: association?.name ?? null, profileId: profile?.id ?? null, profileRevision: profile?.revision ?? null, fontProfile: profile?.fontProfile ?? null, sizeLabel: profile?.sizeLabel ?? null, mirror: profile?.mirror ?? null, measurementSource, measurementEvidence, explicitOverride: override };
+  const context = { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: article?.id ?? null, associationName: association?.name ?? null, profileId: profile?.id ?? null, profileRevision: profile?.revision ?? null, fontProfile: profile?.fontProfile ?? null, sizeLabel: profile?.sizeLabel ?? null, mirror: profile?.mirror ?? null, productionGroupId, productionSizeClass: backNumberProduction?.sizeClass ?? null, deferredBySizing: field === "backNumber" && !(item.sizes ?? []).length, measurementSource, measurementEvidence, explicitOverride: override };
   const base = {
-    id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"),
+    id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}-${productionGroupId}`.replace(/[^a-zA-Z0-9_-]/gu, "-"),
     type: derived?.type ?? ({ NAME: "TEXT", INITIALS: "INITIALS", BACK_NUMBER: "NUMBER", SHORT_NUMBER: "NUMBER" })[placement.kind],
     content: String(placement.text ?? placement.label).trim(),
     sourceId: derived?.source?.id ?? profile?.id ?? null,
@@ -1551,6 +1579,20 @@ function teamkitProfileProductionLine(state, proposal, revision, item, placement
     heightMm: Math.round(heightMm * 1000) / 1000,
     foilColor: foilColor ?? undefined,
     quantity: item.quantity,
+    personalizationField: field,
+    decorationIdentity: {
+      orderId: `teamkit:${proposal.id}:${revision.number}`,
+      itemId: item.id,
+      articleNumber: article?.articleNumber ?? item.articleNumber ?? item.id,
+      decorationType: field,
+      placement: placement.preset,
+      value: String(placement.text ?? placement.label).trim(),
+      foilColor: foilColor ?? (requestedFoil || "Onbekend"),
+      productionProfileId: profile?.id ?? "profile-data-gap",
+      assetId: derived?.source?.id ?? null,
+      assetVersion: derived?.source?.version ?? null,
+      targetGroup: productionGroupId,
+    },
     previewLabel: placement.label,
     provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`,
     teamkitProductionContext: context,
@@ -1566,17 +1608,18 @@ function teamkitProductionLine(state, proposal, revision, item, placement, task)
   const profileLine = teamkitProfileProductionLine(state, proposal, revision, item, placement, task, provenance);
   if (profileLine) return profileLine;
   const asset = state.productionElements.find(({ id }) => id === task.assetRef.productionAssetId);
-  const actualAssetHash = asset?.sourceLayers?.vectorSource?.sha256 ?? asset?.sourceLayers?.validatedCutContour?.sha256 ?? null;
+  const actualAssetHash = asset?.sourceLayers?.physicallyProvenContour?.sha256 ?? asset?.sourceLayers?.validatedCutContour?.sha256 ?? asset?.sourceLayers?.vectorSource?.sha256 ?? null;
+  const expectedProductionAsset = task.assetRef.productionAsset ?? (task.assetRef.productionAssetId ? { id: task.assetRef.productionAssetId, version: task.assetRef.version, sha256: task.assetRef.sha256 } : null);
   const sourceMatches = Boolean(asset
     && asset.lifecycleStatus === "PRODUCTION_READY"
     && asset.productionMethod === "SELF_PRODUCED"
-    && (!task.assetRef.version || task.assetRef.version === asset.version)
-    && (!task.assetRef.sha256 || task.assetRef.sha256 === actualAssetHash));
+    && (!expectedProductionAsset?.version || expectedProductionAsset.version === asset.version)
+    && (!expectedProductionAsset?.sha256 || expectedProductionAsset.sha256 === actualAssetHash));
   const override = placement.physicalSizeOverride ?? null;
   const widthMm = Number(override?.widthMm ?? asset?.sizePolicy?.defaultWidthMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.widthMm ?? 0);
   const heightMm = Number(override?.heightMm ?? asset?.sizePolicy?.defaultHeightMm ?? asset?.variants?.find(({ widthMm: width, heightMm: height }) => Number(width) > 0 && Number(height) > 0)?.heightMm ?? 0);
   const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
-  const visualFoilOverride = ({ "#ffffff": "Wit", "#101419": "Zwart", "#d3172f": "Rood" })[String(placement.colorOverride ?? "").toLocaleLowerCase("nl-NL")];
+  const visualFoilOverride = managedFoilColorFromStudioValue(state, placement.colorOverride);
   const requestedFoil = String(visualFoilOverride ?? asset?.defaultFoilColor ?? association?.defaultFoilColor ?? "").trim();
   const foilColor = requestedFoil ? managedFoilColor(state, requestedFoil) : null;
   const fields = [];
@@ -1585,7 +1628,8 @@ function teamkitProductionLine(state, proposal, revision, item, placement, task)
   if (!foilColor || Boolean(placement.colorOverride && !visualFoilOverride)) fields.push("FOIL_COLOR");
   const content = String(placement.text ?? asset?.name ?? placement.label).trim();
   const measurementEvidence = override ? `${proposal.proposalNumber} V${revision.number} · expliciete goedgekeurde maatoverride` : asset ? `Production Asset ${asset.id}@${asset.version ?? asset.revision}` : "Geen toepasselijke productiemaat gevonden";
-  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, associationName: association?.name ?? revision.snapshot.association.name ?? null, profileId: null, profileRevision: null, fontProfile: null, sizeLabel: widthMm > 0 && heightMm > 0 ? `${Math.round(widthMm * 1000) / 1000}×${Math.round(heightMm * 1000) / 1000} mm` : null, mirror: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
+  const productionGroupId = String(item.productionGroupId ?? "all");
+  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}-${productionGroupId}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · voorstelbron ${task.assetRef.proposalSource?.id ?? "niet van toepassing"} · productiebron ${expectedProductionAsset?.id ?? "ontbreekt"} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, decorationIdentity: { orderId: `teamkit:${proposal.id}:${revision.number}`, itemId: item.id, articleNumber: item.articleNumber ?? item.id, decorationType: placement.kind, placement: placement.preset, value: content, foilColor: foilColor ?? (requestedFoil || "Onbekend"), productionProfileId: asset?.id ?? "production-asset-data-gap", assetId: asset?.id ?? null, assetVersion: asset?.version ?? null, targetGroup: productionGroupId }, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, associationName: association?.name ?? revision.snapshot.association.name ?? null, profileId: null, profileRevision: null, fontProfile: null, sizeLabel: widthMm > 0 && heightMm > 0 ? `${Math.round(widthMm * 1000) / 1000}×${Math.round(heightMm * 1000) / 1000} mm` : null, mirror: null, productionGroupId, productionSizeClass: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
   if (!fields.length) return base;
   const labels = { SOURCE: "goedgekeurde productiebron", DIMENSIONS: "fysieke maat in millimeters", FOIL_COLOR: "beheerde foliekleur" };
   const reason = `Controle nodig: ${fields.map((field) => labels[field]).join(", ")} ontbreekt of wijkt af van de goedgekeurde bron.`;
@@ -1595,6 +1639,7 @@ function teamkitProductionLine(state, proposal, revision, item, placement, task)
 function teamkitPlacementRuleFromLine(line) {
   const context = line.teamkitProductionContext ?? {};
   const body = {
+    resolverVersion: CANONICAL_PRODUCTION_RESOLVER_VERSION,
     status: line.dataGap ? "REVIEW_REQUIRED" : "RESOLVED",
     resolver: context.profileId ? "ARTICLE_PROFILE" : context.measurementSource === "PRODUCTION_ASSET" ? "PRODUCTION_ASSET" : "UNRESOLVED",
     articleId: context.articleId ?? null,
@@ -1612,20 +1657,40 @@ function teamkitPlacementRuleFromLine(line) {
     sourceVersion: line.sourceVersion ?? null,
     sourceSha256: line.sourceSha256 ?? null,
     reason: line.dataGap?.reason ?? null,
+    deferredMaterialization: context.deferredBySizing ? ["PRODUCTION_SIZE_CLASS"] : [],
   };
-  return { ...body, ruleHash: proposalSha256(JSON.stringify(body)) };
+  const intentBody = {
+    resolverVersion: body.resolverVersion,
+    articleId: body.articleId,
+    associationName: body.associationName,
+    profileId: body.profileId,
+    profileRevision: body.profileRevision,
+    fontProfile: body.fontProfile,
+    foilColor: body.foilColor,
+    mirror: body.mirror,
+    placement: context.preset ?? null,
+    sourceRole: body.resolver,
+  };
+  const rule = { ...body, intentRuleHash: proposalSha256(JSON.stringify(intentBody)) };
+  return { ...rule, ruleHash: proposalSha256(JSON.stringify(rule)) };
 }
 
 function teamkitPlacementTask(proposal, state, placement) {
   const source = proposal.sources.find(({ id }) => id === placement.sourceId);
   const asset = state.productionElements.find(({ id }) => id === placement.productionAssetId);
+  const productionAssetSha256 = asset?.sourceLayers?.physicallyProvenContour?.sha256
+    ?? asset?.sourceLayers?.validatedCutContour?.sha256
+    ?? asset?.sourceLayers?.vectorSource?.sha256
+    ?? null;
   return {
     id: `proposal-rule-${placement.id}`,
     assetRef: {
-      sourceId: source?.id ?? asset?.sourceId ?? null,
+      sourceId: source?.id ?? null,
       productionAssetId: asset?.id ?? null,
-      version: source ? String(source.version) : asset?.version ?? placement.assetVersion ?? null,
-      sha256: source?.sha256 ?? asset?.sourceLayers?.vectorSource?.sha256 ?? null,
+      version: asset?.version ?? placement.assetVersion ?? null,
+      sha256: productionAssetSha256,
+      proposalSource: source ? { id: source.id, version: String(source.version), sha256: source.sha256, role: "PROPOSAL_EVIDENCE" } : null,
+      productionAsset: asset ? { id: asset.id, version: asset.version ?? String(asset.revision), sha256: productionAssetSha256, role: "PRODUCTION_READY" } : null,
     },
   };
 }
@@ -1633,7 +1698,7 @@ function teamkitPlacementTask(proposal, state, placement) {
 function resolveTeamkitPlacementProductionRules(state, proposal, revisionNumber) {
   const revision = { number: revisionNumber, snapshot: { association: structuredClone(proposal.association) } };
   for (const item of proposal.items) for (const placement of item.placements) {
-    const line = teamkitProductionLine(state, proposal, revision, item, placement, teamkitPlacementTask(proposal, state, placement));
+    const line = teamkitProductionLine(state, proposal, revision, { ...item, sizes: [] }, placement, teamkitPlacementTask(proposal, state, placement));
     placement.productionRule = teamkitPlacementRuleFromLine(line);
   }
 }
@@ -1642,6 +1707,11 @@ function enforceApprovedTeamkitPlacementRule(line, placement) {
   const current = teamkitPlacementRuleFromLine(line); const approved = placement.productionRule;
   const traced = { ...line, teamkitProductionContext: { ...line.teamkitProductionContext, approvedProductionRuleHash: approved?.ruleHash ?? null, currentProductionRuleHash: current.ruleHash } };
   if (approved?.ruleHash === current.ruleHash) return traced;
+  const sizingWasIntentionallyDeferred = approved?.status === "REVIEW_REQUIRED"
+    && approved?.deferredMaterialization?.includes("PRODUCTION_SIZE_CLASS")
+    && approved?.intentRuleHash === current.intentRuleHash
+    && current.status === "RESOLVED";
+  if (sizingWasIntentionallyDeferred) return traced;
   const fields = [...new Set([...(line.dataGap?.fields ?? []), approved ? "APPROVED_RULE_DRIFT" : "APPROVED_RULE"])];
   const reason = approved
     ? approved.status === "REVIEW_REQUIRED"
@@ -1649,6 +1719,45 @@ function enforceApprovedTeamkitPlacementRule(line, placement) {
       : "Productieprofiel, lettertype, foliekleur, maat of bron wijkt af van de approved Teamwear-compositie."
     : "De approved Teamwear-compositie bevat geen immutable productie-instelling.";
   return { ...traced, dataGap: { fields, reason } };
+}
+
+function teamkitPhysicalMaterializationItems(proposal, revision, item) {
+  const sizing = teamkitSizingForItem(proposal, revision, item);
+  if (!sizing) return [];
+  if (sizing.allocationMode !== "PER_SIZE" || !sizing.sizeQuantities.length) return [{ ...item, quantity: sizing.quantity, sizes: sizing.sizes, productionGroupId: "all" }];
+  return sizing.sizeQuantities.map(({ size, quantity }, index) => ({
+    ...item,
+    quantity,
+    sizes: [size],
+    productionGroupId: `size-${index + 1}-${String(size).replace(/[^a-zA-Z0-9_-]/gu, "-")}`,
+  }));
+}
+
+function groupCanonicalTeamkitProductionLines(lines) {
+  const grouped = new Map();
+  for (const line of lines) {
+    const identity = line.decorationIdentity ?? {};
+    const key = JSON.stringify([
+      line.type, line.personalizationField ?? null, identity.articleNumber ?? null,
+      identity.decorationType ?? null, identity.placement ?? null, identity.value ?? line.content,
+      identity.foilColor ?? line.foilColor ?? null, identity.productionProfileId ?? null,
+      line.sourceId ?? null, line.sourceVersion ?? null, line.sourceSha256 ?? null,
+      line.widthMm, line.heightMm, line.teamkitProductionContext?.productionSizeClass ?? null,
+      line.dataGap?.fields ?? null, line.dataGap?.reason ?? null,
+    ]);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.quantity += line.quantity;
+      existing.teamkitProductionContext.materializationGroups.push(line.teamkitProductionContext?.productionGroupId ?? "all");
+      existing.decorationIdentity.targetGroup = existing.teamkitProductionContext.materializationGroups.join("+");
+    } else {
+      grouped.set(key, {
+        ...line,
+        teamkitProductionContext: { ...line.teamkitProductionContext, materializationGroups: [line.teamkitProductionContext?.productionGroupId ?? "all"] },
+      });
+    }
+  }
+  return [...grouped.values()];
 }
 
 function teamkitOrderInput(state, proposal, revision, approvedItem, tasks) {
@@ -1661,7 +1770,12 @@ function teamkitOrderInput(state, proposal, revision, approvedItem, tasks) {
     if (!placement) throw Object.assign(new Error("Een interne afhandelingstaak mist de immutable placement."), { statusCode: 409, code: "TEAMKIT_PLACEMENT_NOT_FOUND" });
     return { placement, task };
   });
-  const productionLines = placements.map(({ placement, task }) => enforceApprovedTeamkitPlacementRule(teamkitProductionLine(state, proposal, revision, item, placement, task), placement));
+  const physicalItems = teamkitPhysicalMaterializationItems(proposal, revision, approvedItem);
+  const canonicalArticleNumber = item.articleNumber ?? item.catalogSnapshot?.supplierArticleNumber ?? item.id;
+  const productionLines = groupCanonicalTeamkitProductionLines(physicalItems.flatMap((physicalItem) => placements.map(({ placement, task }) => {
+    const line = enforceApprovedTeamkitPlacementRule(teamkitProductionLine(state, proposal, revision, physicalItem, placement, task), placement);
+    return line.decorationIdentity ? { ...line, decorationIdentity: { ...line.decorationIdentity, articleNumber: canonicalArticleNumber } } : line;
+  })));
   const association = state.associations.find(({ id, name }) => id === revision.snapshot.association.id || name === revision.snapshot.association.name);
   const printableSummary = placements.map(({ placement }) => `${placement.label}${placement.text ? `: ${placement.text}` : ""}`).join(" · ");
   const teamLabel = [revision.snapshot.association.name, item.team ?? revision.snapshot.team, item.productName].filter(Boolean).join(" · ").slice(0, 120);
@@ -1676,7 +1790,7 @@ function teamkitOrderInput(state, proposal, revision, approvedItem, tasks) {
     externalReference: `${proposal.proposalNumber}/V${revision.number}/${item.articleNumber ?? item.id}`,
     provenance: `Immutable Teamkit approval ${proposal.proposalNumber} V${revision.number} · snapshot ${revision.snapshotHash} · PDF ${proposal.approval.pdfSha256}`,
     internalNote: `Klantakkoord ${proposal.proposalNumber} · V${revision.number}. Productie alleen via bestaande Human GO.`,
-    items: [{ product: item.productName, ...(association ? { association: association.name } : {}), size: sizing.allocationMode === "PER_SIZE" ? sizing.sizeQuantities.map(({ size, quantity }) => `${size} ×${quantity}`).join(" · ") : sizing.sizes.join(", "), quantity: item.quantity, personalization: printableSummary || "Approved Teamkit-bedrukking", foilColor: productionLines.find(({ foilColor }) => foilColor)?.foilColor ?? "Onbekend", deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } }],
+    items: [{ product: item.productName, articleId: item.articleId ?? undefined, articleNumber: canonicalArticleNumber, ...(association ? { association: association.name } : {}), size: sizing.allocationMode === "PER_SIZE" ? "" : sizing.sizes.join(", "), quantity: item.quantity, ...(sizing.allocationMode === "PER_SIZE" ? { variants: sizing.sizeQuantities.map(({ size, quantity }) => ({ size, quantity, deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } })) } : {}), personalization: printableSummary || "Approved Teamkit-bedrukking", foilColor: productionLines.find(({ foilColor }) => foilColor)?.foilColor ?? "Onbekend", deviation: true, overrides: { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" } }],
     productionLines,
   };
 }
@@ -2333,29 +2447,91 @@ export class SportpaleisPilotService {
     return { revision: state.revision };
   }
 
-  async createTeamkitProposal(token, csrfToken, payload) {
+  async searchTeamwearCatalog(token, input = {}) {
+    const { state, user } = await this.authenticate(token);
+    if (user.featureExposure?.teamwearExperiencePilot !== true) throw Object.assign(new Error("Deze Teamwear-pilot is niet voor dit account vrijgegeven."), { statusCode: 403, code: "TEAMWEAR_PILOT_NOT_ENABLED" });
+    const startedAt = performance.now();
+    const useFor = (product) => /tas|sok|kous|accessoire/iu.test(`${product.category} ${product.model}`) ? "ACCESSOIRES" : /polo|presentatie|jas|jacket/iu.test(`${product.category} ${product.model}`) ? "PRESENTATIE" : /training|zip|broek|pants/iu.test(`${product.category} ${product.model}`) ? "TRAINING" : "WEDSTRIJD";
+    const requestedBrand = optional(input.brand, 80).toLocaleLowerCase("nl-NL");
+    const requestedUse = optional(input.use, 40).toLocaleUpperCase();
+    const canonicalProducts = buildSportpaleisProductCatalog(state.articles).filter((product) => (!requestedBrand || product.brand.toLocaleLowerCase("nl-NL") === requestedBrand) && (!requestedUse || useFor(product) === requestedUse));
+    const offset = Math.max(0, Number(input.offset ?? 0)); const limit = Math.max(1, Math.min(48, Number(input.limit ?? 24)));
+    const page = querySportpaleisProductCatalog(canonicalProducts, { query: optional(input.query, 160), audience: optional(input.audience, 40).toLocaleUpperCase() || null, offset, limit });
+    const products = page.products.map((product) => {
+      const sourceArticle = state.articles.find(({ id }) => id === product.variants[0]?.sourceArticleId);
+      const authoritative = product.variants.some(({ sourceArticleId }) => { const article = state.articles.find(({ id }) => id === sourceArticleId); return Boolean(article?.catalogProvenance || article?.teamwearCatalog?.sourceLabel); });
+      return {
+        ...product,
+        supplierName: product.brand === "Stanno" ? "Stanno / Deventrade" : product.brand || "Sportpaleis",
+        supplierArticleName: product.model,
+        supplierArticleNumber: product.variants[0]?.sourceArticleNumber ?? product.id,
+        use: useFor(product),
+        collection: sourceArticle?.teamwearCatalog?.collection ?? null,
+        familyKey: null,
+        advicePriceEur: Number.isFinite(sourceArticle?.priceConfiguration?.articleUnitPriceEur) ? sourceArticle.priceConfiguration.articleUnitPriceEur : null,
+        sourceStatus: authoritative ? "AUTHORITATIVE" : "DATA_GAP",
+        syncStatus: "REVIEW_REQUIRED",
+        variants: product.variants.map((variant) => ({ ...variant, colorHex: null })),
+      };
+    });
+    return { products, total: page.total, nextOffset: page.hasMore ? offset + limit : null, bounded: true, resolver: "CANONICAL_PRODUCT_CATALOG_V1", elapsedMs: Math.round((performance.now() - startedAt) * 1000) / 1000 };
+  }
+
+  async createTeamkitProposal(token, csrfToken, payload, idempotencyKey = null) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator", "store"]);
     const result = await this.store.mutate(async (state) => {
       state.teamkitProposals ??= [];
-      const year = new Date().getUTCFullYear();
-      const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
-      const now = iso(); const id = `teamkit-proposal-${randomBytes(10).toString("hex")}`;
-      const associationName = optional(payload.associationName, 160) || null;
-      const association = associationName ? state.associations.find(({ id: associationId, name }) => associationId === payload.associationId || name === associationName) : null;
-      const requestedCustomerId = optional(payload.customerId, 160) || null;
-      const reusableCustomerId = !association && requestedCustomerId && state.teamkitProposals.some((candidate) => !candidate.association.id && candidate.customer.id === requestedCustomerId) ? requestedCustomerId : null;
-      const proposal = {
-        id, proposalNumber: `PV-${year}-${String(highest + 1).padStart(4, "0")}`, aggregateRevision: 1, currentRevision: 1, status: "DRAFT",
-        title: requiredText(payload.title, "Interne titel", 180), type: optional(payload.type, 120) || "Teamkit",
-        customer: { id: association ? null : reusableCustomerId ?? `customer-context-${randomBytes(10).toString("hex")}`, name: optional(payload.customerName, 160) || requiredText(payload.title, "Werkreferentie", 180), contactName: optional(payload.contactName, 160) || "", email: optionalEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
-        association: { id: association?.id ?? (optional(payload.associationId, 160) || null), name: association?.name ?? associationName },
-        team: optional(payload.team, 120) || null, season: optional(payload.season, 80) || null, category: optional(payload.category, 80) || null, deadline: payload.deadline ? new Date(payload.deadline).toISOString() : null,
-        notes: optional(payload.notes, 1_500) || null, items: [], sources: [], intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
-        customerAccess: null, feedback: [], revisions: [], approval: null, approvalHistory: [], productionSizing: null, fulfillmentTasks: [], createdAt: now, createdBy: { id: user.id, name: user.name, role: user.role }, updatedAt: now, updatedBy: { id: user.id, name: user.name, role: user.role }, archivedAt: null, copiedFrom: null,
+      const create = () => {
+        const year = new Date().getUTCFullYear();
+        const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+        const now = iso(); const id = `teamkit-proposal-${randomBytes(10).toString("hex")}`;
+        const associationName = optional(payload.associationName, 160) || null;
+        const association = associationName ? state.associations.find(({ id: associationId, name }) => associationId === payload.associationId || name === associationName) : null;
+        const requestedCustomerId = optional(payload.customerId, 160) || null;
+        const reusableCustomerId = !association && requestedCustomerId && state.teamkitProposals.some((candidate) => !candidate.association.id && candidate.customer.id === requestedCustomerId) ? requestedCustomerId : null;
+        const proposal = {
+          id, proposalNumber: `PV-${year}-${String(highest + 1).padStart(4, "0")}`, aggregateRevision: 1, currentRevision: 1, status: "DRAFT",
+          title: requiredText(payload.title, "Interne titel", 180), type: optional(payload.type, 120) || "Teamkit",
+          customer: { id: association ? null : reusableCustomerId ?? `customer-context-${randomBytes(10).toString("hex")}`, name: optional(payload.customerName, 160) || requiredText(payload.title, "Werkreferentie", 180), contactName: optional(payload.contactName, 160) || "", email: optionalEmail(payload.customerEmail), phone: optional(payload.customerPhone, 40) || null },
+          association: { id: association?.id ?? (optional(payload.associationId, 160) || null), name: association?.name ?? associationName },
+          team: optional(payload.team, 120) || null, season: optional(payload.season, 80) || null, category: optional(payload.category, 80) || null, deadline: payload.deadline ? new Date(payload.deadline).toISOString() : null,
+          notes: optional(payload.notes, 1_500) || null, items: [], sources: [], intake: { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} },
+          customerAccess: null, feedback: [], revisions: [], approval: null, approvalHistory: [], productionSizing: null, fulfillmentTasks: [], deliveryEvidence: [], createdAt: now, createdBy: { id: user.id, name: user.name, role: user.role }, updatedAt: now, updatedBy: { id: user.id, name: user.name, role: user.role }, archivedAt: null, copiedFrom: null,
+        };
+        const requestedSources = Array.isArray(payload.sources) ? payload.sources : [];
+        if (requestedSources.length > 12) throw Object.assign(new Error("Gebruik maximaal twaalf proposalbronnen per atomaire intake."), { statusCode: 400, code: "PROPOSAL_SOURCE_LIMIT" });
+        const sourceRefs = new Map();
+        for (const upload of requestedSources) {
+          const source = inspectTeamkitProposalSource(upload, { proposalId: id, associationName: proposal.association.name, uploaderKind: "EMPLOYEE", uploaderId: user.id, uploaderName: user.name });
+          if (!proposal.sources.some(({ sha256: hash }) => hash === source.sha256)) proposal.sources.push(source);
+          if (upload.clientRef) sourceRefs.set(requiredText(upload.clientRef, "Lokale bronreferentie", 80), proposal.sources.find(({ sha256: hash }) => hash === source.sha256).id);
+        }
+        if (payload.items !== undefined) {
+          const items = structuredClone(payload.items);
+          for (const item of items) {
+            if (item.catalogSnapshot?.directFrontSourceRef) {
+              if (!sourceRefs.has(item.catalogSnapshot.directFrontSourceRef)) throw Object.assign(new Error("De directe voorkantbron ontbreekt in deze atomaire proposal-intake."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
+              item.catalogSnapshot.directFrontSourceId = sourceRefs.get(item.catalogSnapshot.directFrontSourceRef);
+            }
+            if (item.catalogSnapshot?.directBackSourceRef) {
+              if (!sourceRefs.has(item.catalogSnapshot.directBackSourceRef)) throw Object.assign(new Error("De directe achterkantbron ontbreekt in deze atomaire proposal-intake."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
+              item.catalogSnapshot.directBackSourceId = sourceRefs.get(item.catalogSnapshot.directBackSourceRef);
+            }
+            const directSourceIds = [item.catalogSnapshot?.directFrontSourceId, item.catalogSnapshot?.directBackSourceId].filter(Boolean);
+            if (directSourceIds.some((sourceId) => !proposal.sources.some(({ id: candidate }) => candidate === sourceId))) throw Object.assign(new Error("De directe artikelbron hoort niet bij deze atomaire proposal-intake."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
+            const printableSides = new Set(item.catalogSnapshot?.printableSides ?? ["FRONT", "BACK"]);
+            if ((item.placements ?? []).some(({ side }) => side === "BACK" && !printableSides.has("BACK"))) throw Object.assign(new Error("Deze productsoort heeft geen bedrukbare achterzijde."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE" });
+          }
+          proposal.items = normalizeProposalItems(items);
+          resolveTeamkitPlacementProductionRules(state, proposal, 1);
+        }
+        proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, proposal.sources.length || proposal.items.length ? "Source-first voorstel atomair aangemaakt" : "Voorstel aangemaakt", [], new Date(), state));
+        state.teamkitProposals.unshift(proposal);
+        audit(state, user.id, "Voorstel atomair aangemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, association: proposal.association.name, sourceCount: proposal.sources.length, itemCount: proposal.items.length, idempotencyKey: idempotencyKey ?? null });
+        return publicProposal(proposal);
       };
-      proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, "Voorstel aangemaakt", [], new Date(), state));
-      state.teamkitProposals.unshift(proposal); audit(state, user.id, "Voorstel aangemaakt", proposal.id, { proposalNumber: proposal.proposalNumber, association: proposal.association.name });
-      return { state, value: publicProposal(proposal) };
+      const outcome = idempotencyKey ? idempotent(state, idempotencyKey, user.id, "CREATE_TEAMKIT_PROPOSAL", create) : { duplicate: false, value: create() };
+      return { state, value: outcome.value };
     }); return result.value;
   }
 
@@ -2471,15 +2647,16 @@ export class SportpaleisPilotService {
 
   async setTeamkitProposalStatus(token, csrfToken, proposalId, payload) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
-    const allowed = new Set(["IN_DESIGN", "READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL", "ARCHIVED"]); const status = String(payload.status ?? "");
+    const allowed = new Set(["IN_DESIGN", "READY_FOR_REVIEW", "READY_FOR_APPROVAL", "ARCHIVED"]); const status = String(payload.status ?? "");
+    if (status === "SENT_TO_CUSTOMER") throw Object.assign(new Error("Een voorstel geldt pas als verstuurd nadat de gecontracteerde mailroute deliverybewijs heeft vastgelegd."), { statusCode: 409, code: "PROPOSAL_DELIVERY_EVIDENCE_REQUIRED" });
     if (!allowed.has(status)) throw Object.assign(new Error("Deze status kan alleen via de bijbehorende veilige flow worden gezet."), { statusCode: 400, code: "PROPOSAL_STATUS_INVALID" });
     const result = await this.store.mutate(async (state) => {
       const proposal = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
       if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
       if (proposal.status === "APPROVED" && status !== "ARCHIVED") throw Object.assign(new Error("Een approved proposal blijft immutable."), { statusCode: 409, code: "APPROVED_REVISION_IMMUTABLE" });
-      if (["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(status) && !proposal.items.length) throw Object.assign(new Error("Voeg minimaal één artikel toe voordat dit voorstel naar de klant gaat."), { statusCode: 409, code: "PROPOSAL_ITEMS_REQUIRED" });
+      if (["READY_FOR_REVIEW", "READY_FOR_APPROVAL"].includes(status) && !proposal.items.length) throw Object.assign(new Error("Voeg minimaal één artikel toe voordat dit voorstel naar de klant gaat."), { statusCode: 409, code: "PROPOSAL_ITEMS_REQUIRED" });
       proposal.status = status; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; if (status === "ARCHIVED") proposal.archivedAt = proposal.updatedAt;
-      audit(state, user.id, status === "SENT_TO_CUSTOMER" ? "Voorstel verstuurd" : status === "READY_FOR_APPROVAL" ? "Goedkeuring gevraagd" : status === "ARCHIVED" ? "Voorstel gearchiveerd" : "Voorstelstatus gewijzigd", proposal.id, { status, revision: proposal.currentRevision });
+      audit(state, user.id, status === "READY_FOR_APPROVAL" ? "Goedkeuring gevraagd" : status === "ARCHIVED" ? "Voorstel gearchiveerd" : "Voorstelstatus gewijzigd", proposal.id, { status, revision: proposal.currentRevision });
       return { state, value: publicProposal(proposal) };
     }); return result.value;
   }
@@ -2489,7 +2666,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const source = state.teamkitProposals?.find(({ id }) => id === proposalId); if (!source) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
       const year = new Date().getUTCFullYear(); const highest = state.teamkitProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0); const now = iso();
-      const copy = structuredClone(source); copy.id = `teamkit-proposal-${randomBytes(10).toString("hex")}`; copy.proposalNumber = `PV-${year}-${String(highest + 1).padStart(4, "0")}`; copy.aggregateRevision = 1; copy.currentRevision = 1; copy.status = "DRAFT"; copy.title = optional(payload.title, 180) || `${source.title} — nieuw seizoen`; copy.season = optional(payload.season, 80) || null; copy.customerAccess = null; copy.feedback = []; copy.revisions = []; copy.approval = null; copy.approvalHistory = []; copy.productionSizing = null; copy.fulfillmentTasks = []; copy.intake = { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} }; copy.createdAt = now; copy.createdBy = { id: user.id, name: user.name, role: user.role }; copy.updatedAt = now; copy.updatedBy = { id: user.id, name: user.name, role: user.role }; copy.archivedAt = null; copy.copiedFrom = { proposalId: source.id, approvedRevision: source.approval?.revision ?? source.approvalHistory?.at(-1)?.revision ?? null };
+      const copy = structuredClone(source); copy.id = `teamkit-proposal-${randomBytes(10).toString("hex")}`; copy.proposalNumber = `PV-${year}-${String(highest + 1).padStart(4, "0")}`; copy.aggregateRevision = 1; copy.currentRevision = 1; copy.status = "DRAFT"; copy.title = optional(payload.title, 180) || `${source.title} — nieuw seizoen`; copy.season = optional(payload.season, 80) || null; copy.customerAccess = null; copy.feedback = []; copy.revisions = []; copy.approval = null; copy.approvalHistory = []; copy.productionSizing = null; copy.fulfillmentTasks = []; copy.deliveryEvidence = []; copy.intake = { status: "NOT_REQUESTED", requestedAt: null, openedAt: null, draftSavedAt: null, submittedAt: null, data: {} }; copy.createdAt = now; copy.createdBy = { id: user.id, name: user.name, role: user.role }; copy.updatedAt = now; copy.updatedBy = { id: user.id, name: user.name, role: user.role }; copy.archivedAt = null; copy.copiedFrom = { proposalId: source.id, approvedRevision: source.approval?.revision ?? source.approvalHistory?.at(-1)?.revision ?? null };
       copy.sources = copy.sources.map((item) => ({ ...item, proposalId: copy.id })); copy.revisions.push(createProposalRevision(copy, { id: user.id, name: user.name, role: user.role }, `Gebruikt als basis vanuit ${source.proposalNumber}`, [], new Date(), state));
       state.teamkitProposals.unshift(copy); audit(state, user.id, "Voorstel gekopieerd", copy.id, { sourceProposalId: source.id, sourceApprovedRevision: source.approval?.revision ?? null, proposalNumber: copy.proposalNumber });
       return { state, value: publicProposal(copy) };
@@ -4285,8 +4462,13 @@ export class SportpaleisPilotService {
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role });
     if (!result.duplicate) await this.store.mutate(async (next) => {
       const proposal = next.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) return { state: next, value: undefined };
+      const delivered = ["SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(result.status);
+      const evidence = { id: result.id, templateKey: payload.templateKey, status: result.status, capturedAt: iso(), revision: proposal.currentRevision, delivered };
+      proposal.deliveryEvidence ??= [];
+      proposal.deliveryEvidence.push(evidence);
+      if (payload.templateKey === "PROPOSAL_REVIEW_REQUEST" && delivered && proposal.status === "READY_FOR_REVIEW") proposal.status = "SENT_TO_CUSTOMER";
       proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
-      audit(next, user.id, "Voorstelmail vastgelegd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: result.status === "SMTP_ACCEPTED" });
+      audit(next, user.id, delivered ? "Voorstelmail delivery bewezen" : "Voorstelmail voorbereid — niet verstuurd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: delivered });
       return { state: next, value: undefined };
     });
     return result;
@@ -5656,11 +5838,28 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       fontProfile: optional(requestedTeamkitContext.fontProfile, 180) || null,
       sizeLabel: optional(requestedTeamkitContext.sizeLabel, 180) || null,
       mirror: typeof requestedTeamkitContext.mirror === "boolean" ? requestedTeamkitContext.mirror : null,
+      productionGroupId: optional(requestedTeamkitContext.productionGroupId, 180) || null,
+      productionSizeClass: optional(requestedTeamkitContext.productionSizeClass, 40) || null,
+      materializationGroups: Array.isArray(requestedTeamkitContext.materializationGroups) ? requestedTeamkitContext.materializationGroups.map((value) => requiredText(value, "Teamkit-materialisatiegroep", 180)) : [],
       approvedProductionRuleHash: optional(requestedTeamkitContext.approvedProductionRuleHash, 128) || null,
       currentProductionRuleHash: optional(requestedTeamkitContext.currentProductionRuleHash, 128) || null,
       measurementSource: allowedValue(requestedTeamkitContext.measurementSource, ["PRODUCTION_PROFILE", "PRODUCTION_ASSET", "EXPLICIT_PROPOSAL_OVERRIDE", "DATA_GAP"], "Teamkit-maatbron"),
       measurementEvidence: requiredText(requestedTeamkitContext.measurementEvidence, "Teamkit-maatbewijs", 500),
       explicitOverride: requestedTeamkitContext.explicitOverride ? { widthMm: Number(requestedTeamkitContext.explicitOverride.widthMm), heightMm: Number(requestedTeamkitContext.explicitOverride.heightMm), aspectRatioLocked: true } : null,
+    } : undefined;
+    const requestedIdentity = line.decorationIdentity;
+    const decorationIdentity = requestedIdentity ? {
+      orderId: requiredText(requestedIdentity.orderId, "Productie-identiteit order", 180),
+      itemId: requiredText(requestedIdentity.itemId, "Productie-identiteit artikel", 180),
+      articleNumber: requiredText(requestedIdentity.articleNumber, "Productie-identiteit artikelnummer", 180),
+      decorationType: requiredText(requestedIdentity.decorationType, "Productie-identiteit soort", 80),
+      placement: requiredText(requestedIdentity.placement, "Productie-identiteit plaatsing", 80),
+      value: requiredText(requestedIdentity.value, "Productie-identiteit waarde", 160),
+      foilColor: requiredText(requestedIdentity.foilColor, "Productie-identiteit foliekleur", 80),
+      productionProfileId: requiredText(requestedIdentity.productionProfileId, "Productie-identiteit profiel", 180),
+      assetId: optional(requestedIdentity.assetId, 180) || null,
+      assetVersion: optional(requestedIdentity.assetVersion, 180) || null,
+      targetGroup: optional(requestedIdentity.targetGroup, 500) || null,
     } : undefined;
     const requestedDataGapFields = Array.isArray(line.dataGap?.fields) ? [...new Set(line.dataGap.fields)] : [];
     if (options.allowTeamkitDataGaps === true && requestedDataGapFields.length) {
@@ -5683,6 +5882,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
         validation: { status: "BLOCKED", reason },
         dataGap: { status: "DATA_GAP", fields: requestedDataGapFields, reason },
         ...(personalizationField ? { personalizationField } : {}),
+        ...(decorationIdentity ? { decorationIdentity } : {}),
         ...(teamkitProductionContext ? { teamkitProductionContext } : {}),
       };
     }
@@ -5750,6 +5950,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       quantity,
       ...(canonicalFoilColor ? { foilColor: canonicalFoilColor } : {}),
       ...(personalizationField ? { personalizationField } : {}),
+      ...(decorationIdentity ? { decorationIdentity } : {}),
       preview: { kind: source.kind === "FONT" ? "LIVE_FONT" : "ASSET_REFERENCE", label: optional(line.previewLabel, 160) || content, aspectRatioLocked: ["LOGO", "PRODUCTION_ELEMENT"].includes(type) },
       provenance: optional(line.provenance, 500) || `${orderKind} · handmatig vastgelegd in Workspace`,
       proofStatus,
@@ -5769,7 +5970,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
   return validated;
 }
 
-function deriveCatalogProductionLines(state, orderId, items) {
+export function resolveCanonicalProductionLines(state, orderId, items) {
   const raw = [];
   for (const item of items) {
     const baseProfile = state.productionProfiles.find(({ id }) => id === item.productionProfileId);
@@ -5812,12 +6013,10 @@ function deriveCatalogProductionLines(state, orderId, items) {
       }
       for (const field of [...PERSONALIZATION_FIELDS, "initialsInfix"]) {
         const canonicalField = field === "initialsInfix" ? "initials" : field;
-        const productionProfileField = articleProductionProfileField(item.articleNumber, canonicalField);
+        const { productionField: productionProfileField, profile: resolvedProfile } = canonicalProductionProfileForDecoration(state, item, canonicalField);
         const usesInitialsProfileForChestNumber = field === "chestNumber" && productionProfileField === "initials";
         const fieldProfileId = `profile-source-${profileSlug(item.association)}-${productionProfileField}`;
-        const profile = baseProfile?.supports?.includes(productionProfileField)
-          ? baseProfile
-          : state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(productionProfileField)) ?? baseProfile;
+        const profile = resolvedProfile ?? baseProfile;
         if (initialsInfix && (field === "initials" || field === "initialsInfix")) continue;
         const isNumber = field === "backNumber" || field === "chestNumber" || field === "shortsNumber";
         const lineType = isNumber ? "NUMBER" : field === "initials" ? "INITIALS" : "TEXT";
@@ -5889,6 +6088,8 @@ function deriveCatalogProductionLines(state, orderId, items) {
   }
   return [...grouped.values()];
 }
+
+const deriveCatalogProductionLines = resolveCanonicalProductionLines;
 
 function lineFromOrderItem(state, order, item, index) {
   const value = String(item.personalization ?? item.product).trim();
@@ -6508,6 +6709,20 @@ function managedFoilColor(state, requested) {
   return state.foilRolls?.find(({ color, active }) => active !== false && String(color).trim().toLocaleLowerCase("nl-NL") === normalized)?.color ?? null;
 }
 
+function managedFoilColorFromStudioValue(state, requested) {
+  const normalized = String(requested ?? "").trim().toLocaleLowerCase("nl-NL");
+  if (!normalized) return null;
+  const canonicalStudioColors = {
+    "#ffffff": "Wit", "#fff": "Wit",
+    "#101419": "Zwart", "#151515": "Zwart", "#111111": "Zwart", "#111": "Zwart",
+    "#d3172f": "Rood", "#d71920": "Rood",
+    "#175ec7": "Blauw",
+    "#21884a": "Groen",
+    "#f1d21b": "Geel",
+  };
+  return managedFoilColor(state, canonicalStudioColors[normalized] ?? requested);
+}
+
 function effectiveCatalogFoilColor(article, association, profile) {
   const associationDefault = associationDefaultFoilColor(association);
   if (Object.hasOwn(article, "foilColorOverride")) return String(article.foilColorOverride ?? "").trim() || associationDefault;
@@ -6826,12 +7041,16 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         json(response, 200, await service.currentRevision(token));
         return true;
       }
+      if (route === "/api/sportpaleis/v1/teamwear/catalog" && method === "GET") {
+        json(response, 200, await service.searchTeamwearCatalog(token, Object.fromEntries(requestUrl.searchParams.entries())));
+        return true;
+      }
       // One server-side boundary protects every authenticated Teamwear endpoint.
       // Public customer links remain separately scoped by their unguessable proposal token.
       if (route === "/api/sportpaleis/v1/teamkit-proposals" || route.startsWith("/api/sportpaleis/v1/teamkit-proposals/")) {
         await service.assertTeamwearPilotAccess(token);
       }
-      if (route === "/api/sportpaleis/v1/teamkit-proposals" && method === "POST") { json(response, 201, await service.createTeamkitProposal(token, csrf, await readJson(request))); return true; }
+      if (route === "/api/sportpaleis/v1/teamkit-proposals" && method === "POST") { json(response, 201, await service.createTeamkitProposal(token, csrf, await readJson(request), request.headers["idempotency-key"])); return true; }
       const teamkitProposalMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)$/);
       if (teamkitProposalMatch && method === "PATCH") { json(response, 200, await service.updateTeamkitProposal(token, csrf, decodeURIComponent(teamkitProposalMatch[1]), await readJson(request))); return true; }
       const teamkitCustomerLinkMatch = route.match(/^\/api\/sportpaleis\/v1\/teamkit-proposals\/([^/]+)\/customer-link$/);

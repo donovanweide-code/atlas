@@ -40,7 +40,7 @@
     "fontkit": "^2.0.4",
     "imapflow": "1.7.6",
     "mailparser": "3.9.16",
-    "mariadb": "^3.4.5",
+    "mariadb": "3.5.3",
     "pdfjs-dist": "6.2.108"
   }
 }

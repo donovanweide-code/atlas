@@ -988,6 +988,7 @@ export interface TeamkitProposalPlacement {
   physicalSizeOverride?: { widthMm: number; heightMm: number; aspectRatioLocked: true } | null;
   /** Server-resolved truth stored with the immutable proposal revision. */
   productionRule?: {
+    resolverVersion?: "CANONICAL_PRODUCTION_TRUTH_V1";
     status: "RESOLVED" | "REVIEW_REQUIRED";
     resolver: "ARTICLE_PROFILE" | "PRODUCTION_ASSET" | "UNRESOLVED";
     articleId: string | null;
@@ -1005,6 +1006,8 @@ export interface TeamkitProposalPlacement {
     sourceVersion: string | null;
     sourceSha256: string | null;
     reason: string | null;
+    deferredMaterialization?: "PRODUCTION_SIZE_CLASS"[];
+    intentRuleHash?: string;
     ruleHash: string;
   };
   route: TeamkitFulfillmentRoute;
@@ -1050,6 +1053,9 @@ export interface TeamkitProposalItem {
     /** Direct proposal source used as the product image; no catalog master is implied. */
     directFrontSourceId?: string | null;
     directBackSourceId?: string | null;
+    /** Transient atomic-create aliases; never persisted after server resolution. */
+    directFrontSourceRef?: string | null;
+    directBackSourceRef?: string | null;
     productType?: "UPPER_GARMENT" | "LOWER_GARMENT" | "SPORTS_BAG" | "BACKPACK" | "OTHER";
     printableSides?: ("FRONT" | "BACK")[];
     sourceReference?: string | null;
@@ -1108,7 +1114,14 @@ export interface TeamkitFulfillmentTask {
   associationName: string | null;
   itemId: string;
   placementId: string;
-  assetRef: { sourceId: string | null; productionAssetId: string | null; version: string | null; sha256: string | null };
+  assetRef: {
+    sourceId: string | null;
+    productionAssetId: string | null;
+    version: string | null;
+    sha256: string | null;
+    proposalSource?: { id: string; version: string; sha256: string; role: "PROPOSAL_EVIDENCE" } | null;
+    productionAsset?: { id: string; version: string; sha256: string | null; role: "PRODUCTION_READY" } | null;
+  };
   route: TeamkitFulfillmentRoute;
   kind: "INTERNAL_PRODUCTION" | "EXTERNAL_SUPPLIER" | "ROUTE_DECISION";
   status: "HUMAN_CHECK" | "READY_TO_SEND" | "SENT" | "CONFIRMED" | "RETURNED" | "READY" | "COMPLETED";
@@ -1194,6 +1207,7 @@ export interface TeamkitProposal {
   approvalHistory: TeamkitProposalApproval[];
   productionSizing: TeamkitProductionSizing | null;
   fulfillmentTasks: TeamkitFulfillmentTask[];
+  deliveryEvidence?: Array<{ id: string; templateKey: string; status: string; capturedAt: string; revision: number; delivered: boolean }>;
   createdAt: string;
   createdBy: { id: string; name: string; role: SportpaleisRole };
   updatedAt: string;

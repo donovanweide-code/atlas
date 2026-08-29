@@ -618,8 +618,13 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async createTeamkitProposal(input: { title: string; type?: string; customerId?: string; customerName?: string; contactName?: string; customerEmail?: string; customerPhone?: string; associationId?: string; associationName?: string; team?: string; season?: string; category?: string; deadline?: string; notes?: string }): Promise<TeamkitProposal> {
-    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  async searchTeamwearCatalog(input: { query?: string; brand?: string; use?: string; audience?: string; offset?: number; limit?: number } = {}): Promise<{ products: unknown[]; total: number; nextOffset: number | null; bounded: true; resolver: "CANONICAL_PRODUCT_CATALOG_V1"; elapsedMs: number }> {
+    const query = new URLSearchParams(Object.entries(input).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]));
+    return responseBody(await fetch(`${API}/teamwear/catalog?${query}`, { credentials: "same-origin" }));
+  }
+
+  async createTeamkitProposal(input: { title: string; type?: string; customerId?: string; customerName?: string; contactName?: string; customerEmail?: string; customerPhone?: string; associationId?: string; associationName?: string; team?: string; season?: string; category?: string; deadline?: string; notes?: string; sources?: { clientRef?: string; filename: string; mimeType: string; dataBase64: string }[]; items?: TeamkitProposalItem[] }, operationKey?: string): Promise<TeamkitProposal> {
+    return responseBody(await this.#mutatingFetch(`${API}/teamkit-proposals`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": operationKey || idempotencyKey("teamwear-source-first") }, body: JSON.stringify(input) }));
   }
 
   async updateTeamkitProposal(proposal: TeamkitProposal, input: { title?: string; type?: string; customer?: TeamkitProposal["customer"]; association?: TeamkitProposal["association"]; team?: string | null; season?: string | null; category?: string | null; deadline?: string | null; notes?: string | null; items?: TeamkitProposalItem[]; reason?: string; feedbackIds?: string[]; reopenApproved?: boolean }): Promise<TeamkitProposal> {

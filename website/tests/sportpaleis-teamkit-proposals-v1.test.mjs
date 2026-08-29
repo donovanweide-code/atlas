@@ -99,7 +99,6 @@ test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleid
   const compositionItem = item(proposal.sources[0].id); compositionItem.quantity = null; compositionItem.sizes = []; compositionItem.placements = [compositionItem.placements[0]];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [compositionItem], reason: "Approved ontwerp zonder operationele maatverdeling" });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
-  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "SENT_TO_CUSTOMER", expectedRevision: proposal.aggregateRevision });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Reviewer", customerEmail: "review@example.test" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
@@ -113,7 +112,8 @@ test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleid
   const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
   assert.equal(prepared.orders.length, 1);
   assert.equal(prepared.orders[0].items[0].quantity, 10);
-  assert.equal(prepared.orders[0].items[0].size, "S ×4 · M ×6");
+  assert.equal(prepared.orders[0].items[0].size, "", "Teamwear order gebruikt de variantregels en geen concurrerende samenvattingswaarheid");
+  assert.deepEqual(prepared.orders[0].items[0].variants.map(({ size, quantity }) => ({ size, quantity })), [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }]);
   assert.equal(prepared.orders[0].teamkitContext.productionSizingSnapshotHash, proposal.productionSizing.snapshotHash);
   assert.equal(prepared.orders[0].teamkitContext.productionSizingRevision, 1);
 });
@@ -151,7 +151,6 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   await assert.rejects(service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: staleRevision, title: "Stale wijziging" }), (error) => error.code === "REVISION_CONFLICT");
 
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
-  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "SENT_TO_CUSTOMER", expectedRevision: proposal.aggregateRevision });
   await service.savePublicTeamkitFeedback(customerToken, { revision: 2, kind: "ITEM", targetId: "item-shirt", decision: "CHANGE", message: "Sponsor iets kleiner", customerName: "Mevrouw Voorbeeld" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   const feedbackId = proposal.feedback[0].id;
@@ -160,7 +159,6 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   assert.equal(proposal.currentRevision, 3);
   assert.equal(proposal.feedback[0].status, "PROCESSED");
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
-  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "SENT_TO_CUSTOMER", expectedRevision: proposal.aggregateRevision });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision });
 
   const approved = await service.approvePublicTeamkitProposal(customerToken, { revision: 3, customerName: "Mevrouw Voorbeeld", customerEmail: "team@voorbeeld.nl" });
@@ -201,7 +199,6 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   assert.equal(immutableOldPdf.sha256, finalPdf.sha256);
   assert.ok(proposal.fulfillmentTasks.every(({ approvedRevision }) => approvedRevision === 3));
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
-  proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "SENT_TO_CUSTOMER", expectedRevision: proposal.aggregateRevision });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: 4, customerName: "Mevrouw Voorbeeld", customerEmail: "team@voorbeeld.nl" });
   proposal = (await service.bootstrap(admin.token)).teamkitProposals.find(({ id }) => id === proposal.id);

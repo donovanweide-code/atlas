@@ -88,7 +88,7 @@ function visualProductCard(article: CatalogArticle, proposal: TeamkitProposal, s
   return `<article class="sp-club-product-card"><div class="sp-club-product-card__visual"><img src="${articleImage(snapshot.imageKey)}" alt="${esc(article.name)}"></div><div><p>${esc(group.toLowerCase())}</p><h3>${esc(article.name)}</h3><span>Bestaande clubvariant</span></div><form data-add-teamkit-collection-item data-proposal-id="${esc(proposal.id)}" data-article-id="${esc(article.id)}" data-catalog-snapshot="${esc(JSON.stringify(snapshot))}" data-catalog-product-name="${esc(article.name)}"><button class="sp-button ${selected ? "sp-button--secondary" : "sp-button--primary"}" ${selected ? "disabled" : ""}>${selected ? "In collectie" : "Voeg toe"}</button></form></article>`;
 }
 
-function catalogProductCard(product: TeamwearCatalogProduct, proposal: TeamkitProposal, associationName: string | null, selectedIds: Set<string>): string {
+export function catalogProductCard(product: TeamwearCatalogProduct, proposal: TeamkitProposal, associationName: string | null, selectedIds: Set<string>): string {
   const association = associationName?.toLocaleLowerCase("nl-NL");
   const variant = product.variants.find(({ associationNames }) => associationNames.some((name) => name.toLocaleLowerCase("nl-NL") === association)) ?? product.variants[0];
   const quote = resolveTeamwearPrice(product, 10, teamwearProposalContextId(proposal)); const selected = selectedIds.has(variant.sourceArticleId || product.id); const group = product.use; const audience = product.audiences.join(" "); const reviewOnly = product.sourceStatus !== "AUTHORITATIVE" || !variant.sourceArticleId;

@@ -49,7 +49,7 @@ async function approvedProposal(service, operator, sourceId, asset) {
     { id: "item-external", articleId: null, articleNumber: "EXT-1", productName: "Sporttas", color: "Zwart", quantity: 18, sizes: ["One size"], team: "JO15", notes: null, placements: [placement("placement-external", "EXTERNE_BEDRUKKER", { sourceId, preset: "TAS" })] },
   ];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items, reason: "Approved RC2 productiesnapshot" });
-  for (const status of ["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
+  for (const status of ["READY_FOR_REVIEW", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Mevrouw Team", customerEmail: "team@rc2.test" });
   return (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
 }
@@ -119,7 +119,7 @@ test("Teamkit resolveert bestaande profielmaten en bewaart alleen expliciete ove
   const access = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = access.path.split("/").at(-1);
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   const items = [
-    { id: "profile-initials", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-default", "INITIALS", "AB", { colorOverride: "#101419" })] },
+    { id: "profile-initials", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["L"], team: "Selectie", notes: null, placements: [profilePlacement("initials-default", "INITIALS", "AB", { colorOverride: "#101419" })] },
     { id: "profile-back-number", articleId: "sp-live-137294", articleNumber: "137294", productName: "ASC Waterwijk WEDSTRIJD SHIRT SELECTIE", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("back-default", "BACK_NUMBER", "12")] },
     { id: "profile-explicit-override", articleId: "sp-live-140224", articleNumber: "140224", productName: "ASC Waterwijk FULL ZIP JACK", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-override", "INITIALS", "CD", { physicalSizeOverride: { widthMm: 58, heightMm: 35, aspectRatioLocked: true } })] },
   ];
@@ -134,7 +134,7 @@ test("Teamkit resolveert bestaande profielmaten en bewaart alleen expliciete ove
   assert.equal(draftRules["profile-explicit-override"].physicalWidthMm, 58);
   assert.equal(draftRules["profile-explicit-override"].physicalHeightMm, 35);
   assert.match(proposal.revisions.at(-1).previewHtml, /Schluber · [\d.]+×30 mm · Zwart · Productiecontrole nodig/u, "revision-preview toont dezelfde production truth plus de echte reviewstatus");
-  for (const status of ["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
+  for (const status of ["READY_FOR_REVIEW", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Teamcoördinator", customerEmail: "team@waterwijk.test" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
@@ -169,10 +169,10 @@ test("Teamkit productie faalt gesloten wanneer profiel/font/folie/formaat na app
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Immutable productieregel", customerName: "A.S.C. Waterwijk", contactName: "Teamcoördinator", customerEmail: "team@waterwijk.test", associationName: "A.S.C. Waterwijk", team: "Selectie" });
   const access = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = access.path.split("/").at(-1);
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
-  const items = [{ id: "profile-drift", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["M"], team: "Selectie", notes: null, placements: [profilePlacement("initials-drift", "INITIALS", "AB")] }];
+  const items = [{ id: "profile-drift", articleId: "sp-live-140221", articleNumber: "140221", productName: "ASC Waterwijk TRAINING SHIRT", color: "Blauw", quantity: 1, sizes: ["L"], team: "Selectie", notes: null, placements: [profilePlacement("initials-drift", "INITIALS", "AB")] }];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items, reason: "Productieregel approved" });
   const approvedRule = structuredClone(proposal.items[0].placements[0].productionRule);
-  for (const status of ["READY_FOR_REVIEW", "SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
+  for (const status of ["READY_FOR_REVIEW", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });
   await service.approvePublicTeamkitProposal(customerToken, { revision: proposal.currentRevision, customerName: "Teamcoördinator", customerEmail: "team@waterwijk.test" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   await store.mutate(async (state) => { const profile = state.productionProfiles.find(({ id }) => id === approvedRule.profileId); profile.fontProfile = "Onverwacht gewijzigd profiel"; profile.revision = (profile.revision ?? 1) + 1; return { state, value: null }; });

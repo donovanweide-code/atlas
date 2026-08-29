@@ -411,7 +411,22 @@ export function approvedFulfillmentTasks(proposal, revision, state, now = new Da
     const sizing = proposal.productionSizing?.approvedRevision === revision.number ? proposal.productionSizing.items.find(({ itemId }) => itemId === item.id) : null;
     const quantity = sizing?.quantity ?? item.quantity; const sizes = sizing?.sizes ?? item.sizes;
     const source = proposal.sources.find(({ id }) => id === placement.sourceId); const asset = (state.productionElements ?? []).find(({ id }) => id === placement.productionAssetId);
-    const assetRef = { sourceId: source?.id ?? asset?.sourceId ?? null, productionAssetId: asset?.id ?? null, version: source ? String(source.version) : asset?.version ?? placement.assetVersion ?? null, sha256: source?.sha256 ?? asset?.sourceLayers?.vectorSource?.sha256 ?? null };
+    const productionAssetSha256 = asset?.sourceLayers?.physicallyProvenContour?.sha256
+      ?? asset?.sourceLayers?.validatedCutContour?.sha256
+      ?? asset?.sourceLayers?.vectorSource?.sha256
+      ?? null;
+    // A proposal/source image proves what the customer approved. A production
+    // asset proves what may enter physical output. They can legitimately be
+    // different immutable representations and must therefore never share one
+    // overloaded version/hash pair.
+    const assetRef = {
+      sourceId: source?.id ?? null,
+      productionAssetId: asset?.id ?? null,
+      version: asset?.version ?? placement.assetVersion ?? null,
+      sha256: productionAssetSha256,
+      proposalSource: source ? { id: source.id, version: String(source.version), sha256: source.sha256, role: "PROPOSAL_EVIDENCE" } : null,
+      productionAsset: asset ? { id: asset.id, version: asset.version ?? String(asset.revision), sha256: productionAssetSha256, role: "PRODUCTION_READY" } : null,
+    };
     const missing = [!quantity && "aantal", !sizes.length && "maten", !source && !asset && ["CLUB_LOGO", "SPONSOR"].includes(placement.kind) && "bronbestand", placement.productionRule?.status !== "RESOLVED" && "productie-instelling"].filter(Boolean);
     const route = placement.route; const kind = route === "INTERN_BEDRUKKEN" ? "INTERNAL_PRODUCTION" : route === "EXTERNE_BEDRUKKER" ? "EXTERNAL_SUPPLIER" : "ROUTE_DECISION";
     const attention = route === "NOG_TE_BEPALEN" ? "Bepaal wie deze bedrukking uitvoert." : missing.length ? `Controleer ontbrekend: ${missing.join(", ")}.` : null;
@@ -430,7 +445,7 @@ export function publicProposal(proposal) {
     sources: proposal.sources.map(({ dataBase64: _dataBase64, safePreviewSvg: _safePreviewSvg, ...source }) => source), intake: proposal.intake,
     feedback: proposal.feedback, revisions: proposal.revisions, approval: proposal.approval ? (({ pdfBase64: _pdfBase64, previewHtml: _previewHtml, ...approval }) => approval)(proposal.approval) : null,
     approvalHistory: (proposal.approvalHistory ?? []).map(({ pdfBase64: _pdfBase64, previewHtml: _previewHtml, ...approval }) => approval), productionSizing: proposal.productionSizing ?? null,
-    fulfillmentTasks: proposal.fulfillmentTasks, createdAt: proposal.createdAt, createdBy: proposal.createdBy, updatedAt: proposal.updatedAt, updatedBy: proposal.updatedBy, archivedAt: proposal.archivedAt, copiedFrom: proposal.copiedFrom,
+    fulfillmentTasks: proposal.fulfillmentTasks, deliveryEvidence: proposal.deliveryEvidence ?? [], createdAt: proposal.createdAt, createdBy: proposal.createdBy, updatedAt: proposal.updatedAt, updatedBy: proposal.updatedBy, archivedAt: proposal.archivedAt, copiedFrom: proposal.copiedFrom,
   });
 }
 
