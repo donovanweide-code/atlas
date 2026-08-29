@@ -44,7 +44,7 @@ test("Teamwear bewaart collectiecontext en maakt personen, maten, aantallen en p
   assert.equal(handoff.proposalId, proposal.id);
   assert.deepEqual(handoff.articleIds, ["sp-live-137294", "sp-live-140294"]);
   assert.deepEqual(handoff.missing, ["personen", "maten", "aantallen", "individuele personalisatie"]);
-  assert.match(teamwearExperienceSource, /name="itemQuantity" value="\$\{item\.quantity \?\? ""\}"/u);
+  assert.match(teamwearExperienceSource, /name="itemQuantity" type="number"[\s\S]*value="\$\{item\.quantity \?\? ""\}"/u);
   assert.match(teamwearExperienceSource, /name="itemSizes" value="\$\{esc\(item\.sizes\.join\(", "\)\)\}"/u);
   assert.match(workspaceSource, /data-teamwear-sizing-form data-proposal-id="\$\{esc\(proposal\.id\)\}"/u);
   assert.match(workspaceSource, /data-teamwear-size-quantity/u);
@@ -66,11 +66,14 @@ test("Teamwear fulfillment heeft één atomair en idempotent overgangspad naar W
   assert.match(serviceSource, /plotJobCreated: false/u);
 });
 
-test("Teamwear leidt nooit naar maten vóór het voorstel expliciet is goedgekeurd", () => {
-  assert.match(teamwearExperienceSource, /step\(4, "Voorstel & akkoord", "#klantpreview", approved, hasDesign && !approved\)/u);
-  assert.match(teamwearExperienceSource, /step\(5, "Maten & aantallen"[^\n]+Boolean\(approved && !hasSizing\)\)/u);
+test("Teamwear bewaart globale maten en aantallen in dezelfde voorstelrevision en houdt productie na akkoord", () => {
+  assert.match(teamwearExperienceSource, /name="itemQuantity"/u);
+  assert.match(teamwearExperienceSource, /name="itemSizes"/u);
+  assert.match(teamwearExperienceSource, /step\(3, "Maten & voorstel"/u);
+  assert.match(teamwearExperienceSource, /step\(4, "Akkoord"/u);
   assert.match(teamwearExperienceSource, /if \(sizingShortcut && proposal && !proposal\.approval\)/u);
   assert.match(teamwearExperienceSource, /sizingShortcut\.textContent = "Voorstel controleren →"/u);
+  assert.match(serviceSource, /TEAMKIT_APPROVAL_REQUIRED/u);
 });
 
 test("Guided Setup stuurt alleen bewezen productievereisten naar het juiste beheerdoel", () => {

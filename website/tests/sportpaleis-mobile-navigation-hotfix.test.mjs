@@ -77,22 +77,26 @@ test("desktop viewport reset never hides or scroll-locks the persistent sidebar"
   assert.equal(bodyClasses.has("sp-mobile-nav-open"), false);
 });
 
-test("exact Human regression: Menu sluiten consumes its click before the underlying Bedrukken route", () => {
-  let handler;
+test("exact Human regression: Menu sluiten consumes the pointer sequence before the underlying Bedrukken route", () => {
+  const handlers = new Map();
   let dismissed = 0;
   let removed = 0;
   const backdrop = {
-    addEventListener: (type, callback) => { assert.equal(type, "click"); handler = callback; },
-    removeEventListener: (type, callback) => { assert.equal(type, "click"); assert.equal(callback, handler); removed += 1; },
+    addEventListener: (type, callback) => { handlers.set(type, callback); },
+    removeEventListener: (type, callback) => { assert.equal(callback, handlers.get(type)); removed += 1; },
   };
   const cleanup = bindMobileNavigationBackdrop(backdrop, () => { dismissed += 1; });
-  const event = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
-  handler(event);
-  assert.equal(event.prevented, true);
-  assert.equal(event.stopped, true, "delegated navigation may not observe the dismissal click");
+  const pointer = { button: 0, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+  handlers.get("pointerdown")(pointer);
+  assert.equal(pointer.prevented, true);
+  assert.equal(pointer.stopped, true, "hit testing may not move to the underlying route during the Human tap");
+  const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+  handlers.get("click")(click);
+  assert.equal(click.prevented, true);
+  assert.equal(click.stopped, true, "delegated navigation may not observe the dismissal click");
   assert.equal(dismissed, 1);
   cleanup();
-  assert.equal(removed, 1);
+  assert.equal(removed, 2);
 });
 
 test("390px premium shell makes the toggled sidebar visible and interactive", async () => {

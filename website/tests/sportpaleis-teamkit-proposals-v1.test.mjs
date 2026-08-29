@@ -32,15 +32,15 @@ function item(sourceId) {
   };
 }
 
-test("Teamwear experience houdt catalogus in Collectie en Studio bij contextgebonden ontwerpassets", async () => {
+test("Teamwear begint bij de artikelbron en houdt contextassets en bekende artikelen optioneel", async () => {
   const source = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
   assert.match(source, /const contextAssets = clubAssets\(state, proposal\)/u);
   assert.match(source, /Ontwerp toevoegen/u);
   assert.match(source, /Alleen assets van deze klant, vereniging of dit voorstel/u);
-  assert.match(source, /<strong>Catalogus<\\\/strong>[\s\S]*?Asset Library/u);
-  assert.match(source, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);
+  assert.match(source, /Logo’s & bedrukking[\s\S]*Meer artikelen/u);
+  assert.match(source, /Artikelbron[\s\S]*Bedrukking[\s\S]*Maten & voorstel[\s\S]*Akkoord[\s\S]*Afhandeling/u);
   assert.match(source, /studio-filter-assets[\s\S]*CLUB_LOGO[\s\S]*SPONSOR[\s\S]*NAME[\s\S]*BACK_NUMBER[\s\S]*FREE_TEXT/u);
-  assert.match(source, /RUSTIG KIJKEN[\s\S]*Officiële merkcollecties[\s\S]*Ik weet wat ik zoek/u);
+  assert.match(source, /Officiële merkcollecties/u);
   assert.match(source, /SPORTPALEIS_TEAMWEAR_BRAND_SOURCES/u);
 });
 

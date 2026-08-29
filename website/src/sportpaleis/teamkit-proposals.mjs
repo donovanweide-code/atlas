@@ -157,6 +157,9 @@ function normalizeCatalogSnapshot(input) {
   };
   const imageKey = text(input.imageKey, "Productbeeld", 240);
   const requestedBackImageKey = nullableText(input.backImageKey, "Achteraanzicht", 240);
+  const productType = ["UPPER_GARMENT", "LOWER_GARMENT", "SPORTS_BAG", "BACKPACK", "OTHER"].includes(input.productType) ? input.productType : null;
+  const defaultSides = ["UPPER_GARMENT", "SPORTS_BAG"].includes(productType) || (!productType && (requestedBackImageKey || input.backSourceUrl)) ? ["FRONT", "BACK"] : ["FRONT"];
+  const printableSides = Array.isArray(input.printableSides) ? [...new Set(input.printableSides.filter((side) => ["FRONT", "BACK"].includes(side)))] : defaultSides;
   return {
     catalogProductId: text(input.catalogProductId, "Catalogusproduct", 180), brand: text(input.brand, "Merk", 120), supplierName: text(input.supplierName || input.brand, "Leverancier", 160),
     supplierArticleName: text(input.supplierArticleName, "Leverancier-artikelnaam", 180), supplierArticleNumber: text(input.supplierArticleNumber, "Leverancier-artikelnummer", 120), category: text(input.category, "Categorie", 120),
@@ -166,6 +169,7 @@ function normalizeCatalogSnapshot(input) {
     advicePriceEur: money(input.advicePriceEur), effectivePriceEur: money(input.effectivePriceEur),
     priceLabel: ["Teamprijs", "Jullie prijs"].includes(input.priceLabel) ? input.priceLabel : null, minimumQuantity: input.minimumQuantity == null ? null : boundedNumber(input.minimumQuantity, "Minimumaantal", 1, 100_000),
     pricingPolicyRef: nullableText(input.pricingPolicyRef, "Prijsregel", 180), sourceAdapterId: text(input.sourceAdapterId, "Catalogusbron", 180), sourceStatus: ["AUTHORITATIVE", "CONTROLLED_FIXTURE", "DATA_GAP"].includes(input.sourceStatus) ? input.sourceStatus : "DATA_GAP",
+    directFrontSourceId: nullableText(input.directFrontSourceId, "Voorzijdebron", 180), directBackSourceId: nullableText(input.directBackSourceId, "Achterzijdebron", 180), productType, printableSides: printableSides.length ? printableSides : ["FRONT"], sourceReference: nullableText(input.sourceReference, "Bronreferentie", 500),
   };
 }
 
@@ -203,6 +207,7 @@ function garment(item, side) {
   const garmentVisual = garmentSource?.dataUri ? `<img class="tk-shirt__source" src="${esc(garmentSource.dataUri)}" alt="${esc(item.productName)} ${side === "FRONT" ? "voorzijde" : "achterzijde"}">` : "";
   return `<figure class="tk-garment"><div class="tk-shirt${garmentVisual ? " tk-shirt--source" : ""}" style="--kit-color:${esc(item.color)}">${garmentVisual}<i></i>${placements}</div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"}</figcaption></figure>`;
 }
+function itemBackRelevant(item) { const allowed = !item.catalogSnapshot?.printableSides || item.catalogSnapshot.printableSides.includes("BACK"); return Boolean(allowed && (item.visualGarmentSources?.BACK || item.placements.some(({ side }) => side === "BACK"))); }
 
 const STATIC_TEAMWEAR_IMAGE_FILES = Object.freeze({
   "asc-shirt-home": "asc-shirt-home.webp", "asc-match-shorts": "asc-match-shorts.webp", "asc-socks": "asc-socks.webp", "asc-polo": "asc-polo.webp",
@@ -220,7 +225,16 @@ function teamwearImageKey(item, state) {
   return "asc-shirt-home";
 }
 
-function garmentVisualBytes(item, state, side = "FRONT") {
+function garmentVisualBytes(item, state, side = "FRONT", proposal = null) {
+  const directSourceId = side === "BACK" ? item.catalogSnapshot?.directBackSourceId : item.catalogSnapshot?.directFrontSourceId;
+  if (directSourceId && proposal) {
+    const source = proposal.sources?.find(({ id }) => id === directSourceId);
+    if (source?.dataBase64 && ["SVG", "PNG", "JPG", "WEBP"].includes(source.format)) {
+      const bytes = Buffer.from(source.dataBase64, "base64");
+      if (proposalSha256(bytes) !== source.sha256) throw error("De directe productbron wijkt af van de immutable proposal-source.", "TEAMKIT_DIRECT_SOURCE_HASH_MISMATCH", 409);
+      return { imageKey: `proposal-source:${source.id}`, bytes, sha256: source.sha256, mimeType: source.mimeType };
+    }
+  }
   const imageKey = side === "BACK" ? item.catalogSnapshot?.backImageKey ?? null : teamwearImageKey(item, state); if (!imageKey) return null;
   const sourceFile = imageKey.startsWith("sp-live-") ? `${imageKey}.webp` : STATIC_TEAMWEAR_IMAGE_FILES[imageKey];
   if (sourceFile) {
@@ -250,13 +264,13 @@ export function proposalSnapshot(proposal, state = null) {
   return {
     proposalId: proposal.id, proposalNumber: proposal.proposalNumber, revision: proposal.currentRevision, title: proposal.title, type: proposal.type,
     customer: structuredClone(proposal.customer), association: structuredClone(proposal.association), team: proposal.team, season: proposal.season, category: proposal.category,
-    deadline: proposal.deadline, notes: proposal.notes, items: proposal.items.map((item) => { const front = garmentVisualBytes(item, state, "FRONT"); const back = garmentVisualBytes(item, state, "BACK"); const placements = item.placements.map((placement) => { const bytes = proposalPlacementVisualBytes(placement, proposal, state); const source = proposal.sources.find(({ id }) => id === placement.sourceId); return { ...structuredClone(placement), visualSource: bytes ? { sha256: proposalSha256(bytes), mimeType: source?.mimeType ?? null, dataUri: previewDataUri(bytes, source?.mimeType ?? null) } : null }; }); const visual = (entry) => entry ? { imageKey: entry.imageKey, sha256: entry.sha256, mimeType: entry.mimeType, dataUri: previewDataUri(entry.bytes, entry.mimeType) } : null; return { ...structuredClone(item), placements, visualGarmentSource: visual(front), visualGarmentSources: { FRONT: visual(front), BACK: visual(back) } }; }),
+    deadline: proposal.deadline, notes: proposal.notes, items: proposal.items.map((item) => { const front = garmentVisualBytes(item, state, "FRONT", proposal); const back = garmentVisualBytes(item, state, "BACK", proposal); const placements = item.placements.map((placement) => { const bytes = proposalPlacementVisualBytes(placement, proposal, state); const source = proposal.sources.find(({ id }) => id === placement.sourceId); return { ...structuredClone(placement), visualSource: bytes ? { sha256: proposalSha256(bytes), mimeType: source?.mimeType ?? null, dataUri: previewDataUri(bytes, source?.mimeType ?? null) } : null }; }); const visual = (entry) => entry ? { imageKey: entry.imageKey, sha256: entry.sha256, mimeType: entry.mimeType, dataUri: previewDataUri(entry.bytes, entry.mimeType) } : null; return { ...structuredClone(item), placements, visualGarmentSource: visual(front), visualGarmentSources: { FRONT: visual(front), BACK: visual(back) } }; }),
     sourceRefs: proposal.sources.map(({ id, filename, mimeType, sha256, version, quality }) => ({ id, filename, mimeType, sha256, version, qualityStatus: quality.status })),
   };
 }
 
 export function renderProposalPreview(snapshot, { customer = false } = {}) {
-  const items = snapshot.items.map((item) => `<article class="tk-item"><header><div><small>${esc(item.articleNumber ?? "TEAMKIT")}</small><h2>${esc(item.productName)}</h2></div><strong>${item.quantity ? `${item.quantity}×` : "Aantal volgt"}</strong></header><div class="tk-views">${garment(item, "FRONT")}${garment(item, "BACK")}</div><dl><div><dt>Kleur</dt><dd>${esc(item.color)}</dd></div><div><dt>Maten</dt><dd>${esc(item.sizes.join(", ") || "Nog te bepalen")}</dd></div></dl>${item.placements.length ? `<ul>${item.placements.map((placement) => { const rule = placement.productionRule; const known = rule ? [rule.fontProfile, rule.physicalWidthMm && rule.physicalHeightMm ? `${rule.physicalWidthMm}×${rule.physicalHeightMm} mm` : null, rule.foilColor].filter(Boolean) : []; const production = [...known, rule?.status === "RESOLVED" ? null : "Productiecontrole nodig"].filter(Boolean).join(" · ") || "Productiecontrole nodig"; const customerDescription = [placement.text, placement.preset.replaceAll("_", " ").toLowerCase()].filter(Boolean).join(" · "); return `<li><strong>${esc(placement.label)}</strong><span>${customer ? esc(customerDescription) : `${esc(placement.preset.replaceAll("_", " ").toLowerCase())} · ${esc(placement.route.replaceAll("_", " ").toLowerCase())} · ${esc(production)}`}</span></li>`; }).join("")}</ul>` : `<p class="tk-empty">Nog geen bedrukkingen toegevoegd.</p>`}${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</article>`).join("");
+  const items = snapshot.items.map((item) => `<article class="tk-item"><header><div><small>${esc(item.articleNumber ?? "TEAMKIT")}</small><h2>${esc(item.productName)}</h2></div><strong>${item.quantity ? `${item.quantity}×` : "Aantal volgt"}</strong></header><div class="tk-views">${garment(item, "FRONT")}${itemBackRelevant(item) ? garment(item, "BACK") : ""}</div><dl><div><dt>Kleur</dt><dd>${esc(item.color)}</dd></div><div><dt>Maten</dt><dd>${esc(item.sizes.join(", ") || "Nog te bepalen")}</dd></div></dl>${item.placements.length ? `<ul>${item.placements.map((placement) => { const rule = placement.productionRule; const known = rule ? [rule.fontProfile, rule.physicalWidthMm && rule.physicalHeightMm ? `${rule.physicalWidthMm}×${rule.physicalHeightMm} mm` : null, rule.foilColor].filter(Boolean) : []; const production = [...known, rule?.status === "RESOLVED" ? null : "Productiecontrole nodig"].filter(Boolean).join(" · ") || "Productiecontrole nodig"; const customerDescription = [placement.text, placement.preset.replaceAll("_", " ").toLowerCase()].filter(Boolean).join(" · "); return `<li><strong>${esc(placement.label)}</strong><span>${customer ? esc(customerDescription) : `${esc(placement.preset.replaceAll("_", " ").toLowerCase())} · ${esc(placement.route.replaceAll("_", " ").toLowerCase())} · ${esc(production)}`}</span></li>`; }).join("")}</ul>` : `<p class="tk-empty">Nog geen bedrukkingen toegevoegd.</p>`}${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</article>`).join("");
   return `<section class="tk-preview" data-proposal-revision="${snapshot.revision}"><header class="tk-preview__hero"><div><p>SPORT 2000 SPORTPALEIS</p><h1>${esc(snapshot.title)}</h1><span>${esc(snapshot.association.name ?? snapshot.customer.name)}${snapshot.team ? ` · ${esc(snapshot.team)}` : ""}</span></div><dl><div><dt>Voorstel</dt><dd>${esc(snapshot.proposalNumber)}</dd></div><div><dt>Versie</dt><dd>V${snapshot.revision}</dd></div></dl></header><div class="tk-preview__items">${items || `<p>Nog geen artikelen toegevoegd.</p>`}</div>${snapshot.notes ? `<aside><strong>Opmerking</strong><p>${esc(snapshot.notes)}</p></aside>` : ""}</section>`;
 }
 
@@ -300,7 +314,7 @@ function generateLegacyProposalPdf(snapshot, approved = false) {
     for (const [cardIndex, item] of page.entries()) {
       const col = cardIndex % 2; const row = Math.floor(cardIndex / 2); const x = 34 + col * 390; const top = 482 - row * 218; const bottom = top - 202;
       commands.push(`1 1 1 rg ${x} ${bottom} 374 202 re f`, "0.86 0.89 0.87 RG 0.8 w", `${x} ${bottom} 374 202 re S`, "0.07 0.10 0.09 rg", pdfText(x + 16, top - 23, 12, pdfShort(item.productName, 38), true), "0.35 0.40 0.38 rg", pdfText(x + 16, top - 40, 7, pdfShort(`${item.catalogSnapshot?.brand ?? "TEAMWEAR"}  |  ${item.catalogSnapshot?.supplierArticleNumber ?? item.articleNumber ?? "Artikel volgt"}  |  ${item.color}`, 58)));
-      pdfGarment(commands, item, "FRONT", x + 14, bottom + 18); pdfGarment(commands, item, "BACK", x + 100, bottom + 18);
+      pdfGarment(commands, item, "FRONT", x + 14, bottom + 18); if (itemBackRelevant(item)) pdfGarment(commands, item, "BACK", x + 100, bottom + 18);
       const detailsX = x + 196; let detailsY = top - 68; const advice = item.catalogSnapshot?.advicePriceEur; const effective = item.catalogSnapshot?.effectivePriceEur;
       if (advice != null) { commands.push("0.39 0.44 0.42 rg", pdfText(detailsX, detailsY, 8, `Adviesprijs ${pdfEuro(advice)}`)); detailsY -= 18; }
       if (effective != null) { commands.push("0.03 0.36 0.23 rg", pdfText(detailsX, detailsY, 11, `${item.catalogSnapshot?.priceLabel ?? "Teamprijs"} ${pdfEuro(effective)}`, true)); detailsY -= 22; }
@@ -380,7 +394,7 @@ export async function generateProposalPdf(snapshot, approved = false, { state = 
     for (const [cardIndex, item] of page.entries()) {
       const col = cardIndex % 2; const row = Math.floor(cardIndex / 2); const x = 34 + col * 390; const y = 96 + row * 218;
       context.fillStyle = "#ffffff"; context.fillRect(x, y, 374, 202); context.strokeStyle = "#d9dddc"; context.lineWidth = .8; context.strokeRect(x, y, 374, 202); canvasText(context, item.productName, x + 16, y + 24, 12, { bold: true, maxWidth: 342 }); canvasText(context, `${item.catalogSnapshot?.brand ?? "TEAMWEAR"}  |  ${item.catalogSnapshot?.supplierArticleNumber ?? item.articleNumber ?? "Artikel volgt"}  |  ${item.color}`, x + 16, y + 41, 7, { color: "#62676c", maxWidth: 342 });
-      await drawPdfGarment(context, item, "FRONT", x + 14, y + 52, 82, 132, state, proposal); await drawPdfGarment(context, item, "BACK", x + 102, y + 52, 82, 132, state, proposal);
+      await drawPdfGarment(context, item, "FRONT", x + 14, y + 52, 82, 132, state, proposal); if (itemBackRelevant(item)) await drawPdfGarment(context, item, "BACK", x + 102, y + 52, 82, 132, state, proposal);
       let detailsY = y + 72; const detailsX = x + 200; const detailsWidth = 158; if (item.catalogSnapshot?.advicePriceEur != null) { canvasText(context, `Adviesprijs ${pdfEuro(item.catalogSnapshot.advicePriceEur)}`, detailsX, detailsY, 8, { color: "#686d72", maxWidth: detailsWidth }); detailsY += 18; } if (item.catalogSnapshot?.effectivePriceEur != null) { canvasText(context, `${item.catalogSnapshot.priceLabel ?? "Teamprijs"} ${pdfEuro(item.catalogSnapshot.effectivePriceEur)}`, detailsX, detailsY, 11, { bold: true, color: "#111318", maxWidth: detailsWidth }); detailsY += 22; }
       canvasText(context, `Beschikbaarheid: ${item.sizes.join(", ") || "maten volgen"}`, detailsX, detailsY, 8, { color: "#34383e", maxWidth: detailsWidth }); detailsY += 17;
       for (const placement of item.placements.slice(0, 4)) { canvasText(context, `${placement.label}${placement.text ? ` - ${placement.text}` : ""} | ${placement.preset.replaceAll("_", " ").toLowerCase()}`, detailsX, detailsY, 7, { color: "#42464b", maxWidth: detailsWidth }); detailsY += 14; }

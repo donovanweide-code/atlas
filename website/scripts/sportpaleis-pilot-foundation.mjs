@@ -2376,6 +2376,12 @@ export class SportpaleisPilotService {
       if (payload.items) {
         const items = structuredClone(payload.items);
         const association = state.associations.find(({ id, name }) => id === proposal.association.id || name === proposal.association.name);
+        for (const item of items) {
+          const directSourceIds = [item.catalogSnapshot?.directFrontSourceId, item.catalogSnapshot?.directBackSourceId].filter(Boolean);
+          if (directSourceIds.some((sourceId) => !proposal.sources.some(({ id }) => id === sourceId))) throw Object.assign(new Error("De directe artikelbron hoort niet bij dit voorstel."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
+          const printableSides = new Set(item.catalogSnapshot?.printableSides ?? ["FRONT", "BACK"]);
+          if ((item.placements ?? []).some(({ side }) => side === "BACK" && !printableSides.has("BACK"))) throw Object.assign(new Error("Deze productsoort heeft geen bedrukbare achterzijde."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE" });
+        }
         for (const item of items) for (const placement of item.placements ?? []) {
           const sharedMatch = String(placement.sourceId ?? "").match(/^shared-source:([^:]+):(.+)$/u);
           if (sharedMatch) {

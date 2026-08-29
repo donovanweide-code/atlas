@@ -1047,6 +1047,12 @@ export interface TeamkitProposalItem {
     pricingPolicyRef: string | null;
     sourceAdapterId: string;
     sourceStatus: "AUTHORITATIVE" | "CONTROLLED_FIXTURE" | "DATA_GAP";
+    /** Direct proposal source used as the product image; no catalog master is implied. */
+    directFrontSourceId?: string | null;
+    directBackSourceId?: string | null;
+    productType?: "UPPER_GARMENT" | "LOWER_GARMENT" | "SPORTS_BAG" | "BACKPACK" | "OTHER";
+    printableSides?: ("FRONT" | "BACK")[];
+    sourceReference?: string | null;
   };
   placements: TeamkitProposalPlacement[];
 }

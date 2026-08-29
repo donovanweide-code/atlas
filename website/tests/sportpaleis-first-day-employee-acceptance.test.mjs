@@ -28,21 +28,21 @@ test("first-day medewerker vindt en begrijpt de primaire dagelijkse Sportpaleis-
 });
 
 test("first-day medewerker kan de volledige Teamwear-flow bronmatig volgen", () => {
-  assert.match(teamwearWorkspace, /Voor wie maken we dit\?/u);
-  assert.match(teamwearWorkspace, /Naam, vereniging of team/u);
-  assert.match(teamwearWorkspace, /Alleen indien nodig: team, contact of planning/u);
-  assert.match(teamwearWorkspace, /Naar collectie/u);
-  assert.match(teamwearExperience, /Context[\s\S]*Collectie[\s\S]*Studio[\s\S]*Voorstel & akkoord[\s\S]*Maten & aantallen[\s\S]*Afhandeling/u);
+  assert.match(teamwearWorkspace, /Met welk artikel wil je beginnen\?/u);
+  assert.match(teamwearWorkspace, /Plak of sleep het productbeeld hier/u);
+  assert.match(teamwearWorkspace, /Alleen indien nodig: contact of planning/u);
+  assert.match(teamwearWorkspace, /Open direct in Studio/u);
+  assert.match(teamwearExperience, /Artikelbron[\s\S]*Bedrukking[\s\S]*Maten & voorstel[\s\S]*Akkoord[\s\S]*Afhandeling/u);
   assert.match(teamwearExperience, /Ontwerp toevoegen/u);
   assert.match(teamwearExperience, /data-kind="CLUB_LOGO">Logo/u);
   assert.match(teamwearExperience, /data-kind="SPONSOR">Sponsor/u);
   assert.match(teamwearExperience, /data-kind="NAME"[\s\S]*data-kind="BACK_NUMBER"[\s\S]*data-kind="FREE_TEXT"/u);
   assert.match(teamwearExperience, /Positiezone[\s\S]*Linkerborst[\s\S]*Middenachter[\s\S]*Mouw links/u);
   assert.match(teamwearExperience, /GARMENT_PRINT_AREA_V1/u);
-  assert.match(teamwearExperience, /Naar maten & aantallen/u);
+  assert.match(teamwearExperience, /Maten en globaal aantal/u);
   assert.match(teamwearExperience, /Professioneel Teamwear-voorstel/u);
   assert.match(teamwearExperience, /PDF openen/u);
-  assert.match(teamwearExperience, /Via Mail voorbereiden/u);
+  assert.match(teamwearWorkspace, /Aanlevermail bekijken/u);
   assert.match(teamwearCss, /Tenant-brand enforcement[\s\S]*--teamwear-accent:#d3172f[\s\S]*focus-visible[\s\S]*var\(--teamwear-accent\)/u, "de finale tenantlaag dwingt rood/zwart af voor actieve en focusstates");
   assert.match(proposalCss, /Sportpaleis customer surface[\s\S]*\.tk-public\{background:linear-gradient\(180deg,#090a0c[\s\S]*\.tk-button--primary\{background:#17191d[\s\S]*#d3172f/u, "ook de klantpreview gebruikt de Sportpaleis-merkkleuren");
 });

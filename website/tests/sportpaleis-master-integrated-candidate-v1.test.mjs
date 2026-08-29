@@ -89,15 +89,17 @@ test("scanner/orderpick blijft in kandidaat als begrensde proof en wordt niet al
   assert.match(source, /barcodeHardwareValidated: false/u);
 });
 
-test("Teamwear is de medewerkerstaal en de volledige catalogus blijft buiten Studio", async () => {
+test("Teamwear is de medewerkerstaal en de catalogus is slechts een optionele versneller", async () => {
   const workspace = await readFile(new URL("../src/sportpaleis-teamkit-workspace.ts", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
   const shell = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(workspace, /Teamwear van aanvraag tot akkoord/u);
   assert.doesNotMatch(workspace, /Van aanvraag tot goedgekeurde teamkit/u);
   assert.match(shell, /replace\("Teamkit samenstellen", "Teamwear samenstellen"\)/u);
-  assert.match(experience, /\.replace\(\/<div class="sp-studio-panel-title"><strong>Catalogus/u);
-  assert.match(experience, /maten en aantallen volgen na het ontwerp/u);
+  assert.match(workspace, /Met welk artikel wil je beginnen/u);
+  assert.match(workspace, /Plak of sleep het productbeeld hier/u);
+  assert.match(experience, /<summary>Meer artikelen<\/summary>/u);
+  assert.match(experience, /Maten en globaal aantal/u);
 });
 
 test("Bedrukken houdt de gekozen-status tijdens invoer gelijk aan de ordersamenvatting", async () => {

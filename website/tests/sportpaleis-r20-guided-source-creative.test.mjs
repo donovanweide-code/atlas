@@ -116,7 +116,8 @@ test("Guided Setup en Studio exposen de concrete bronactie en touch-safe canvasc
   assert.match(studio, /studio-deselect/u);
   assert.match(studio, /updateToolState/u);
   assert.match(studio, /itemBackImage/u);
-  assert.match(studio, /Achteraanzicht<br>nog controleren/u);
+  assert.match(studio, /Achteraanzicht nodig<br>voor deze opdruk/u);
+  assert.match(studio, /itemAllowsBack/u);
   assert.match(studio, /variant\.media\.find/u);
   assert.match(studio, /"ARTWORK", "NUMBER_SET"/u);
   assert.match(studio, /assetKind === "SHORT_NUMBER"/u);

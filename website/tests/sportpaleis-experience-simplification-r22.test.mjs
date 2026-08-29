@@ -42,12 +42,13 @@ test("Vrije opdruk begint bij productieobjecten en accepteert reeksen, vrije waa
   ]);
 });
 
-test("Teamwear toont geen databasewand en neemt een exacte bekende context automatisch over", () => {
-  assert.match(teamwear, /Begin met typen/u);
-  assert.match(teamwear, /context\.id !== requestedContextId \? "hidden"/u);
+test("Teamwear begint bij het artikel en gebruikt bekende context alleen als versneller", () => {
+  assert.match(teamwear, /Met welk artikel wil je beginnen/u);
+  assert.match(teamwear, /Plak of sleep het productbeeld hier/u);
+  assert.match(teamwear, /Vereniging of klant koppelen \(optioneel\)/u);
   assert.match(workspace, /exact\.length === 1/u);
-  assert.match(workspace, /Automatisch herkend/u);
-  assert.match(teamwear, /Alleen indien nodig: team, contact of planning/u);
+  assert.match(workspace, /Bekende gegevens worden automatisch overgenomen/u);
+  assert.match(teamwear, /Alleen indien nodig: contact of planning/u);
 });
 
 test("Productie en ordercorrectie tonen de kleinste volgende handeling", () => {
