@@ -11,6 +11,7 @@ This candidate succeeds immutable R2.3 after interactive Chrome review proved fi
 - Pass the immutable proposal source into PDF garment rendering so Studio, preview and PDF use the same bytes and hash.
 - Keep the mobile navigation backdrop present until the click is consumed, preventing the same tap from reaching bottom navigation.
 - Never inherit a catalog back image when the front is a separate pasted/direct source; an unproven cross-source pair stays fail-closed.
+- Prevent the rendered Studio/review layer from resolving that catalog back again through the optional article link.
 - Make future catalog regeneration cache front and back from the same current gallery source set.
 
 ## Preserved boundaries
@@ -23,7 +24,7 @@ This candidate succeeds immutable R2.3 after interactive Chrome review proved fi
 
 ## Automated evidence before immutable packaging
 
-- Targeted Teamwear/mobile/Proposal regression: 23/23 PASS.
+- Targeted Teamwear/mobile/Proposal regression after rendered fallback correction: 18/18 PASS.
 - Full Sportpaleis regression: 531/531 PASS.
 - Public production build: PASS.
 - Workspace production build: PASS.

@@ -64,6 +64,7 @@ test("een directe frontbron erft nooit stil een achterkant van een bekend artike
   assert.match(workspace, /const knownBack = directFrontSourceId \? null : knownArticle\?\.catalogMedia/u);
   assert.match(workspace, /directFrontSourceId, directBackSourceId/u);
   assert.match(experience, /const direct = proposalSourcePreview\(proposal, item\.catalogSnapshot\?\.directBackSourceId/u);
+  assert.match(experience, /if \(item\.catalogSnapshot\?\.directFrontSourceId\) return null;/u);
 });
 
 test("catalogusregeneratie cachet voor- en achterkant uit dezelfde actuele gallery", async () => {

@@ -10,7 +10,14 @@ function initial(value: string): string { return value.split(/\s+/u).filter(Bool
 function articleFor(state: PilotBootstrap, item: TeamkitProposalItem): CatalogArticle | undefined { return state.articles.find(({ id }) => id === item.articleId) ?? state.articles.find(({ articleNumber }) => articleNumber === item.articleNumber) ?? state.articles.find(({ name }) => name === item.productName); }
 function itemImage(state: PilotBootstrap, proposal: TeamkitProposal, item: TeamkitProposalItem, base: string): string { return proposalSourcePreview(proposal, item.catalogSnapshot?.directFrontSourceId ?? null, base) ?? articleImage(item.catalogSnapshot?.imageKey ?? articleFor(state, item)?.imageKey); }
 function articleBackImageKey(article: CatalogArticle | undefined): string | null { return article?.catalogMedia?.find(({ kind, imageKey }) => kind === "BACK" && imageKey && imageKey !== article.imageKey)?.imageKey ?? null; }
-function itemBackImage(state: PilotBootstrap, proposal: TeamkitProposal, item: TeamkitProposalItem, base: string): string | null { const direct = proposalSourcePreview(proposal, item.catalogSnapshot?.directBackSourceId ?? null, base); if (direct) return direct; const article = articleFor(state, item); const key = item.catalogSnapshot?.backImageKey ?? articleBackImageKey(article); return key && key !== (item.catalogSnapshot?.imageKey ?? article?.imageKey) ? articleImage(key) : null; }
+function itemBackImage(state: PilotBootstrap, proposal: TeamkitProposal, item: TeamkitProposalItem, base: string): string | null {
+  const direct = proposalSourcePreview(proposal, item.catalogSnapshot?.directBackSourceId ?? null, base);
+  if (direct) return direct;
+  if (item.catalogSnapshot?.directFrontSourceId) return null;
+  const article = articleFor(state, item);
+  const key = item.catalogSnapshot?.backImageKey ?? articleBackImageKey(article);
+  return key && key !== (item.catalogSnapshot?.imageKey ?? article?.imageKey) ? articleImage(key) : null;
+}
 function itemNeedsBack(item: TeamkitProposalItem): boolean { return item.placements.some(({ side }) => side === "BACK"); }
 function itemAllowsBack(item: TeamkitProposalItem): boolean { return item.catalogSnapshot?.printableSides?.includes("BACK") ?? true; }
 function euro(value: number | null | undefined): string { return typeof value === "number" ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value) : "Prijs volgt"; }
