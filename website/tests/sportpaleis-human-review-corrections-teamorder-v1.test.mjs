@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSyncState, failSportpaleisWebsiteSync, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
 import { parseTeamProductionLines } from "../src/sportpaleis/team-production-lines.ts";
 
@@ -15,7 +16,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "spw-human-review-v1-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-HUMAN-REVIEW-CORRECTIONS-TEAMORDER-V1-TEST" });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-HUMAN-REVIEW-CORRECTIONS-TEAMORDER-V1-TEST" });
   await service.initialize();
   return { root, store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }) };
 }
@@ -103,8 +104,8 @@ test("één kleurbatch houdt Initialen, Rugnummers, Shortnummers en Namen in det
 test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, expliciet Afronden en Opgehaald blijven apart", async (context) => {
   const { store, service, admin, operator } = await fixture(context);
   const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
-  const created = (await service.createOrder(admin.token, admin.csrfToken, { orderKind: "INDIVIDUAL", customer: "Lifecycle fixture", customerEmail: "", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: empty }], productionLines: [{ id: "lifecycle-dw", type: "INITIALS", content: "DW", previewLabel: "Initialen DW", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id }] }, "human-review-lifecycle-order")).value;
-  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "lifecycle-manual-receipt" }, created.revision);
+  const created = (await service.createOrder(admin.token, admin.csrfToken, { orderKind: "CUSTOM", customer: "Lifecycle fixture", customerEmail: "", customerPhone: "0612345678", standardPersonalization: empty, items: [{ product: "Vrije initialen", size: "", quantity: 1, personalization: "Initialen DW", foilColor: "Wit", deviation: true, overrides: empty }], productionLines: [{ id: "lifecycle-dw", type: "INITIALS", content: "DW", previewLabel: "Initialen DW", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id }] }, "human-review-lifecycle-order")).value;
+  const acknowledged = await captureReceipt(service, admin, created, "lifecycle-manual-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "human-review-lifecycle-control")).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "human-review-lifecycle-proposal")).value;
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "human-review-lifecycle-job")).value;
@@ -154,7 +155,7 @@ test("Winkel met meerdere productiegroepen wordt pas na laatste Bedrukt eligible
       { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
     ],
   }, "human-review-lifecycle-multiple-order")).value;
-  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "lifecycle-multiple-manual-receipt" }, created.revision);
+  const acknowledged = await captureReceipt(service, admin, created, "lifecycle-multiple-manual-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "human-review-lifecycle-multiple-control")).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "human-review-lifecycle-multiple-proposal")).value;
   assert.equal(proposal.groups.length, 2);

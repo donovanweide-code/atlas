@@ -22,7 +22,7 @@ test("Teamwear reviewcatalogus blijft aantoonbaar reviewdata en kan niet als bes
   assert.ok(catalog.every(({ variants }) => variants.every(({ sourceArticleId }) => sourceArticleId === "")));
   assert.equal(queryTeamwearCatalog(catalog, { query: "BV6708" }).products.length, 1);
 
-  assert.match(teamwearExperienceSource, /product\.sourceStatus !== "AUTHORITATIVE" \|\| !variant\.sourceArticleId/u);
+  assert.match(teamwearExperienceSource, /const variantSourceStatus = variant\.sourceStatus \?\? product\.sourceStatus; const reviewOnly = variantSourceStatus !== "AUTHORITATIVE" \|\| !variant\.sourceArticleId/u);
   assert.match(teamwearExperienceSource, /Nog niet bestelbaar/u);
   assert.doesNotMatch(teamwearExperienceSource, /replaceAll\("Reviewdata",\s*"Beschikbaar"\)/u);
 });

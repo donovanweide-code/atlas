@@ -423,13 +423,13 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async resolveExistingOrderProductionReconciliationFinding(order: WorkspaceOrder, findingId: string, value: string, reason: string): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+  async resolveExistingOrderProductionReconciliationFinding(order: WorkspaceOrder, findingId: string, value: string, reason: string, cancel = false): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     const reconciliation = order.productionReconciliation;
     if (!reconciliation) throw new Error("Er is geen actuele ontbrekende productiewaarheid beschikbaar.");
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/production-reconciliation/decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("existing-order-reconciliation-decision") },
-      body: JSON.stringify({ expectedRevision: order.revision, historicalSourceHash: reconciliation.historicalSourceHash, findingId, value, reason }),
+      body: JSON.stringify({ expectedRevision: order.revision, historicalSourceHash: reconciliation.historicalSourceHash, findingId, value, reason, cancel }),
     }));
   }
 

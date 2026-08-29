@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 const passwords = { kevin: "P0-Color-Admin-2026!", patrick: "P0-Color-Operator-2026!", collega: "P0-Color-Store-2026!", "donovan-support": "P0-Color-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -13,7 +14,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-p0-color-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-P0-PRODUCTION-COLOR-20260817" });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-P0-PRODUCTION-COLOR-20260817" });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -23,7 +24,7 @@ async function controlledPioneersOrder(service, actor, idempotencyKey, items) {
     orderKind: "INDIVIDUAL", customer: `P0 kleur ${idempotencyKey}`, customerEmail: "", customerPhone: "0612345678",
     standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" }, items,
   }, `${idempotencyKey}-order-fixture`)).value;
-  const acknowledged = await service.recordCommunicationStatus(actor.token, actor.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: `${idempotencyKey}-receipt` }, created.revision);
+  const acknowledged = await captureReceipt(service, actor, created, `${idempotencyKey}-receipt`);
   return (await service.advanceOrder(actor.token, actor.csrfToken, created.id, acknowledged.revision, `${idempotencyKey}-control`)).value;
 }
 

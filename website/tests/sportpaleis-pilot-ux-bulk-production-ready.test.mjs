@@ -40,24 +40,18 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
   const legacyOrder = await controlledOrder(service, admin, "legacy-unmanaged", [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]);
-  const legacyProposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: legacyOrder.id, expectedRevision: legacyOrder.revision }] }, "bulk-ux-legacy-proposal")).value;
   await store.mutate(async (state) => {
     const storedOrder = state.orders.find(({ id }) => id === legacyOrder.id);
     storedOrder.items.forEach((item) => { item.foilColor = "Onbekend"; });
     storedOrder.productionLines.forEach((line) => { line.foilColor = "Onbekend"; line.decorationIdentity.foilColor = "Onbekend"; });
-    const group = state.productionProposals.find(({ id }) => id === legacyProposal.id).groups[0];
-    group.foilColor = "Onbekend";
-    group.label = "Onbekend — 1 order";
     return { state, value: null };
   });
   const unmanagedState = await service.bootstrap(admin.token);
   const unmanagedColorOrder = unmanagedState.orders.find(({ id }) => id === legacyOrder.id);
   assert.equal(unmanagedColorOrder.productionStatus, "ATTENTION");
-  assert.match(unmanagedColorOrder.productionStatusReason, /beheerde foliekleur ontbreekt/u);
-  const unmanagedProposal = unmanagedState.productionProposals.find(({ id }) => id === legacyProposal.id);
-  const unmanagedGroup = unmanagedProposal.groups[0];
+  assert.match(unmanagedColorOrder.productionStatusReason, /foliekleur is niet actief beheerd/u);
   const jobsBeforeUnmanagedAttempt = unmanagedState.productionJobs.length;
-  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: unmanagedProposal.id, proposalGroupId: unmanagedGroup.id, orders: unmanagedGroup.orders }, "bulk-ux-unmanaged-color-denied"), (error) => error.code === "PRODUCTION_FOIL_COLOR_UNMANAGED");
+  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: unmanagedColorOrder.id, expectedRevision: unmanagedColorOrder.revision }] }, "bulk-ux-unmanaged-color-denied"), (error) => error.code === "ORDER_NOT_READY");
   const afterUnmanagedAttempt = await service.bootstrap(admin.token);
   assert.equal(afterUnmanagedAttempt.productionJobs.length, jobsBeforeUnmanagedAttempt);
   assert.equal(afterUnmanagedAttempt.orders.find(({ id }) => id === unmanagedColorOrder.id).revision, unmanagedColorOrder.revision);

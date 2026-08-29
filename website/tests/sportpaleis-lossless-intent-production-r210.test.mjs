@@ -120,6 +120,11 @@ test("verzonden of bezorgd wordt nooit zonder deliverybewijs als mailwaarheid op
     items: [{ articleId: "sp-live-137294", size: "152", quantity: 1, deviation: false, overrides: emptyPersonalization }],
   }, "r210-mail-truth-order")).value;
   await assert.rejects(service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT" }, created.revision), (error) => error.code === "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED");
-  const proven = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "provider-proof-r210" }, created.revision);
-  assert.deepEqual(proven.communication.receipt, { status: "SENT", updatedAt: proven.communication.receipt.updatedAt, providerReference: "provider-proof-r210" });
+  const evidenceBody = { attemptId: "attempt-r210", provider: "WBD_MAIL_FOUNDATION", providerReference: "provider-proof-r210", status: "SENT", acceptedAt: "2026-08-29T12:00:00.000Z", channel: "receipt" };
+  await assert.rejects(service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "provider-proof-r210", deliveryEvidence: { ...evidenceBody, evidenceHash: "client-authored" } }, created.revision), (error) => error.code === "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED");
+  const captured = await service.captureOrderMail(admin.token, admin.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "r210-mail-truth-capture");
+  assert.equal(captured.status, "CAPTURED");
+  const projected = await service.order(admin.token, created.id);
+  assert.equal(projected.communication.receipt.status, "CAPTURED");
+  assert.notEqual(projected.communication.receipt.status, "SENT");
 });

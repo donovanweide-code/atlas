@@ -7,6 +7,7 @@ import test from "node:test";
 import { SPORTPALEIS_ASSOCIATIONS } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 import { associationPersonalizationModel } from "../src/sportpaleis/order-personalization.ts";
 import { CUTJOB_SVG_WRITER, PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, availableProductionSourceIdentities, resolveProductionSource } from "../src/sportpaleis/production-sources.ts";
 
@@ -17,7 +18,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-final-review-003-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, releaseId: "SPW-FINAL-PILOT-BLOCKER-CORRECTION-005-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, releaseId: "SPW-FINAL-PILOT-BLOCKER-CORRECTION-005-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true });
   await service.initialize();
   return { service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -46,7 +47,7 @@ test("Pioneers 2 loopt van normale order tot byte-identiek SVG-productieartefact
   assert.equal(created.productionLines[0].source.kind, "PRODUCTION_ELEMENT");
   assert.equal(created.productionLines[0].source.id, "production-asset-verified-pioneers-rug-senior-200");
   assert.equal(created.productionLines[0].proofStatus, "GEOMETRY_VALIDATED"); assert.equal(created.productionLines[0].heightMm, 200);
-  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "human-review-local" }, created.revision);
+  const acknowledged = await captureReceipt(service, admin, created, "human-review-local-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "review-pioneers-control")).value;
   const readyState = await service.bootstrap(admin.token); const readyOrder = readyState.orders.find(({ id }) => id === controlled.id);
   assert.equal(readyOrder.productionStatus, "READY"); assert.equal(readyOrder.productionStatusReason, null);
@@ -122,8 +123,7 @@ test("tussenvoegsel blijft een apart handmatig initialenelement met overname en 
   assert.ok(created.productionLines.some(({ type, content, placementRole }) => type === "INITIALS" && content === "M" && placementRole === "INITIALS_LAST"));
   assert.ok(created.productionLines.some(({ type, content }) => type === "INITIALS" && content === "PK"));
 
-  await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "human-review-local" }, created.revision);
-  const current = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
+  const current = await captureReceipt(service, admin, created, "human-review-infix-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, current.revision, "review-infix-to-control")).value;
   await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "review-infix-fail-closed"), (error) => error.code === "ORDER_NOT_READY");
 });

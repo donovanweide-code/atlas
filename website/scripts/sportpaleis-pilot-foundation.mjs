@@ -1353,10 +1353,11 @@ function currentTeamwearCatalogProjection(state, { brand = null, use = null } = 
   const products = buildSportpaleisProductCatalog(state.articles).filter((product) => (!brand || product.brand.toLocaleLowerCase("nl-NL") === brand.toLocaleLowerCase("nl-NL")) && (!use || teamwearUseForCatalogProduct(product) === use));
   return products.map((product) => {
     const article = state.articles.find(({ id }) => id === product.variants[0]?.sourceArticleId);
-    const sourceStatus = product.variants.some(({ sourceArticleId }) => {
+    const sourceStatusForVariant = ({ sourceArticleId }) => {
       const sourceArticle = state.articles.find(({ id }) => id === sourceArticleId);
       return Boolean(sourceArticle?.catalogProvenance || (sourceArticle?.teamwearCatalog?.status === "SELECTABLE" && (sourceArticle.teamwearCatalog.sourceLabel || sourceArticle.catalogProvenance)));
-    }) ? "AUTHORITATIVE" : "DATA_GAP";
+    };
+    const sourceStatus = product.variants.every(sourceStatusForVariant) ? "AUTHORITATIVE" : "MIXED_VARIANT_AUTHORITY";
     return {
       ...product,
       supplierName: product.brand === "Stanno" ? "Stanno / Deventrade" : product.brand || "Sportpaleis",
@@ -1368,7 +1369,7 @@ function currentTeamwearCatalogProjection(state, { brand = null, use = null } = 
       advicePriceEur: typeof article?.priceConfiguration?.articleUnitPriceEur === "number" ? article.priceConfiguration.articleUnitPriceEur : null,
       sourceStatus,
       syncStatus: "REVIEW_REQUIRED",
-      variants: product.variants.map((variant) => ({ ...variant, colorHex: null })),
+      variants: product.variants.map((variant) => ({ ...variant, colorHex: null, sourceStatus: sourceStatusForVariant(variant) ? "AUTHORITATIVE" : "DATA_GAP" })),
     };
   });
 }
@@ -2947,6 +2948,7 @@ export class SportpaleisPilotService {
         });
         const createdAt = iso();
         const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_PROPOSAL_CREATE" });
         const groups = buildProductionProposalGroups(state, orders);
         const proposal = {
           id: `production-proposal-${randomBytes(10).toString("hex")}`,
@@ -3006,6 +3008,7 @@ export class SportpaleisPilotService {
         });
         const createdAt = iso();
         const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE" });
         const groups = buildProductionProposalGroups(state, orders);
         const proposal = {
           id: `production-proposal-${randomBytes(10).toString("hex")}`,
@@ -3674,9 +3677,11 @@ export class SportpaleisPilotService {
           const previous = order.stage;
           const completedJobs = (progress?.entries ?? []).filter(({ status }) => status === "PRODUCED").map(({ productionJobId }) => state.productionJobs.find(({ id }) => id === productionJobId)).filter(Boolean);
           const completionBody = {
-            version: "CANONICAL_PRODUCTION_COMPLETION_V1",
+            version: "CANONICAL_PRODUCTION_COMPLETION_V2",
+            productionExecutionHash: order.productionExecutionSnapshot?.executionHash ?? null,
+            productionLineHash: sha256(JSON.stringify(productionLines)),
             requiredLineIds: [...new Set(productionLines.map(({ id }) => id))].sort(),
-            productionJobs: completedJobs.map(({ id, jobNumber, snapshotHash }) => ({ id, jobNumber, snapshotHash })).sort((left, right) => left.id.localeCompare(right.id)),
+            productionJobs: completedJobs.map(({ id, jobNumber, snapshotHash, snapshot }) => ({ id, jobNumber, snapshotHash, artifactSha256: snapshot?.artifact?.sha256 ?? null })).sort((left, right) => left.id.localeCompare(right.id)),
             stockApplicationIds: stockApplications.filter(({ status }) => status === "APPLIED").map(({ id }) => id).sort(),
             explicitHumanAction: "AFRONDEN",
           };
@@ -3715,6 +3720,7 @@ export class SportpaleisPilotService {
         const order = state.orders.find(({ id }) => id === orderId);
         if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
         if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gereconcilieerd."), { statusCode: 409, code: "ORDER_DELETED" });
+        assertExistingOrderReconciliationWriteAllowed(state, order);
         if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd; controleer het voorstel opnieuw."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         const reconciliation = reconcileExistingOrderProductionTruth(state, order);
         if (reconciliation.historicalSourceHash !== String(payload.historicalSourceHash ?? "") || reconciliation.projectionHash !== String(payload.projectionHash ?? "")) throw Object.assign(new Error("De historische bron of voorbereide productieprojectie is gewijzigd; controleer opnieuw."), { statusCode: 409, code: "RECONCILIATION_PROJECTION_STALE" });
@@ -3731,6 +3737,10 @@ export class SportpaleisPilotService {
           findings: [],
           confirmed: { at, byUserId: user.id, byUserName: user.name, reason, historicalSourceHash: reconciliation.historicalSourceHash, projectionHash: reconciliation.projectionHash },
         };
+        const finalValidation = validateFinalProductionTruth(state, order, order.productionLines);
+        if (finalValidation.status !== "VALID") throw Object.assign(new Error(finalValidation.findings[0]?.reason ?? "Finale productiewaarheid is geblokkeerd."), { statusCode: 409, code: finalValidation.findings[0]?.code ?? "FINAL_PRODUCTION_VALIDATION_FAILED", findings: finalValidation.findings });
+        const snapshotBody = { ...productionExecutionSnapshotBody(state, order, order.productionLines, finalValidation, user, at), reason: "EXPLICIT_EXISTING_ORDER_RECONCILIATION" };
+        order.productionExecutionSnapshot = { ...snapshotBody, executionHash: sha256(JSON.stringify(snapshotBody)) };
         order.revision += 1;
         order.updatedAt = at;
         order.eventHistory ??= [];
@@ -3752,28 +3762,33 @@ export class SportpaleisPilotService {
         const order = state.orders.find(({ id }) => id === orderId);
         if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
         if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gereconcilieerd."), { statusCode: 409, code: "ORDER_DELETED" });
+        assertExistingOrderReconciliationWriteAllowed(state, order);
         if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd; controleer de ontbrekende waarheid opnieuw."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         const reconciliation = reconcileExistingOrderProductionTruth(state, order);
         if (reconciliation.historicalSourceHash !== String(payload.historicalSourceHash ?? "")) throw Object.assign(new Error("De historische bron is gewijzigd; controleer opnieuw."), { statusCode: 409, code: "RECONCILIATION_SOURCE_STALE" });
-        const finding = reconciliation.findings.find(({ id }) => id === String(payload.findingId ?? ""));
+        const requestedFindingId = String(payload.findingId ?? "");
+        const previousDecisions = existingOrderReconciliationDecisions(order);
+        const storedDecision = previousDecisions.find(({ findingId }) => findingId === requestedFindingId);
+        const storedAction = storedDecision?.action ?? (storedDecision?.missingField === "SIZE_CLASS" ? { kind: "CHOOSE_SIZE_CLASS", options: ["JUNIOR", "SENIOR"] } : storedDecision?.missingField === "FOIL_COLOR" ? { kind: "CHOOSE_FOIL_COLOR", options: [...new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => color))] } : null);
+        const finding = reconciliation.findings.find(({ id }) => id === requestedFindingId) ?? (storedDecision && storedAction ? { id: storedDecision.findingId, missingField: storedDecision.missingField, itemId: storedDecision.itemId, decoration: storedDecision.decoration, evidence: storedDecision.evidence, action: storedAction } : null);
         if (!finding) throw Object.assign(new Error("De ontbrekende productiewaarheid is niet meer actueel."), { statusCode: 409, code: "RECONCILIATION_FINDING_STALE" });
         if (!["CHOOSE_SIZE_CLASS", "CHOOSE_DECORATION_TYPE", "CHOOSE_FOIL_COLOR"].includes(finding.action.kind)) throw Object.assign(new Error("Deze herstelactie moet via de aangewezen bron- of artikelcontext worden uitgevoerd."), { statusCode: 409, code: "RECONCILIATION_ACTION_NOT_INLINE" });
-        const value = requiredText(payload.value, "Keuze", 80);
-        if (!finding.action.options?.includes(value)) throw Object.assign(new Error("Kies één van de actuele veilige opties."), { statusCode: 400, code: "RECONCILIATION_DECISION_INVALID" });
-        if (finding.action.kind === "CHOOSE_FOIL_COLOR" && !managedFoilColor(state, value)) throw Object.assign(new Error("De gekozen foliekleur is niet actief beheerd."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         const reason = requiredText(payload.reason, "Reden", 400);
         const at = iso();
-        const previousDecisions = existingOrderReconciliationDecisions(order);
-        const decision = { findingId: finding.id, missingField: finding.missingField, value, at, byUserId: user.id, byUserName: user.name, reason, evidence: finding.evidence };
-        const decisions = [...previousDecisions.filter(({ findingId }) => findingId !== finding.id), decision];
+        const cancel = payload.cancel === true;
+        const value = cancel ? null : requiredText(payload.value, "Keuze", 80);
+        if (!cancel && !finding.action.options?.includes(value)) throw Object.assign(new Error("Kies één van de actuele veilige opties."), { statusCode: 400, code: "RECONCILIATION_DECISION_INVALID" });
+        if (!cancel && finding.action.kind === "CHOOSE_FOIL_COLOR" && !managedFoilColor(state, value)) throw Object.assign(new Error("De gekozen foliekleur is niet actief beheerd."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
+        const decision = cancel ? null : { findingId: finding.id, missingField: finding.missingField, itemId: finding.itemId, decoration: finding.decoration, value, at, byUserId: user.id, byUserName: user.name, reason, evidence: finding.evidence, action: structuredClone(finding.action) };
+        const decisions = [...previousDecisions.filter(({ findingId }) => findingId !== finding.id), ...(decision ? [decision] : [])];
         order.productionReconciliation = { ...structuredClone(reconciliation), decisions };
         const updated = reconcileExistingOrderProductionTruth(state, order);
         order.productionReconciliation = { ...structuredClone(updated), decisions };
         order.revision += 1;
         order.updatedAt = at;
         order.eventHistory ??= [];
-        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "EXISTING_ORDER_PRODUCTION_DECISION_RECORDED", at, userId: user.id, userName: user.name, source: "explicit-human-decision", details: { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true } });
-        audit(state, user.id, "Ontbrekende bestaande-orderwaarheid beslist", order.id, { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true });
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: cancel ? "EXISTING_ORDER_PRODUCTION_DECISION_REVOKED" : "EXISTING_ORDER_PRODUCTION_DECISION_RECORDED", at, userId: user.id, userName: user.name, source: "explicit-human-decision", details: { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true } });
+        audit(state, user.id, cancel ? "Beslissing over bestaande-orderwaarheid ingetrokken" : "Ontbrekende bestaande-orderwaarheid beslist", order.id, { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true });
         return publicOrderWithProductionTruth(state, order);
       }, payload);
       return { state, value: outcome };
@@ -4506,15 +4521,26 @@ export class SportpaleisPilotService {
 
   async recordCommunicationStatus(token, csrfToken, orderId, payload, expectedRevision) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
+    const channel = allowedValue(payload.channel, ["receipt", "production", "ready"], "Communicatiekanaal");
+    const status = allowedValue(payload.status, ["NOT_SENT", "SENT", "DELIVERED", "BOUNCED", "FAILED"], "Communicatiestatus");
+    const providerReference = String(payload.providerReference ?? "").trim() || null;
+    let verifiedDeliveryEvidence = null;
+    if (["SENT", "DELIVERED"].includes(status)) {
+      const attemptId = String(payload.deliveryEvidence?.attemptId ?? "").trim();
+      const history = attemptId ? await this.#mail().history({ organizationId: "sportpaleis", contextType: "order", contextId: orderId }, { id: user.id, name: user.name, role: user.role }) : [];
+      const attempt = history.find(({ id }) => id === attemptId);
+      const expectedTransportStatus = status === "SENT" ? "SMTP_ACCEPTED" : "DELIVERED";
+      const templatesByChannel = { receipt: ["ORDER_RECEIVED"], production: ["ORDER_IN_PRODUCTION"], ready: ["ORDER_READY"] };
+      const valid = attempt && attempt.status === expectedTransportStatus && attempt.referenceId && attempt.referenceId === providerReference && templatesByChannel[channel].includes(attempt.templateKey) && !Number.isNaN(Date.parse(attempt.completedAt));
+      if (!valid) throw Object.assign(new Error("Verzonden of bezorgd vereist een server-side bewezen poging uit de gecontracteerde mailroute; clientmetadata of een vrije providerreferentie is onvoldoende."), { statusCode: 409, code: "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED" });
+      const evidenceBody = { attemptId: attempt.id, provider: attempt.transport, providerReference: attempt.referenceId, status, acceptedAt: attempt.completedAt, channel, templateKey: attempt.templateKey };
+      verifiedDeliveryEvidence = { ...evidenceBody, evidenceHash: sha256(JSON.stringify(evidenceBody)) };
+    }
     const result = await this.store.mutate(async (state) => {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-      const channel = allowedValue(payload.channel, ["receipt", "production", "ready"], "Communicatiekanaal");
-      const status = allowedValue(payload.status, ["NOT_SENT", "SENT", "DELIVERED", "BOUNCED", "FAILED"], "Communicatiestatus");
-      const providerReference = String(payload.providerReference ?? "").trim() || null;
-      if (["SENT", "DELIVERED"].includes(status) && !providerReference) throw Object.assign(new Error("Verzonden of bezorgd vereist bewijs van de gecontracteerde mailroute."), { statusCode: 409, code: "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED" });
       const at = iso(); order.communication ??= { receipt: { status: "NOT_SENT", updatedAt: at }, production: { status: "NOT_SENT", updatedAt: at }, ready: { status: "NOT_SENT", updatedAt: at } };
-      order.communication[channel] = { status, updatedAt: at, providerReference };
+      order.communication[channel] = { status, updatedAt: at, providerReference, ...(verifiedDeliveryEvidence ? { deliveryEvidence: verifiedDeliveryEvidence } : {}) };
       if (status === "BOUNCED") order.attention = "E-mail niet bezorgd — klant bellen";
       if (status === "FAILED") order.attention = "E-mailverzending mislukt — handmatig opvolgen";
       order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
@@ -4541,13 +4567,13 @@ export class SportpaleisPilotService {
     }
     const request = { ...orderMailRequest, idempotencyKey };
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role }, { simulation: payload.simulation ?? "success" });
-    if (result.duplicate) return result;
     await this.store.mutate(async (next) => {
       const order = next.orders.find(({ id }) => id === orderId);
       if (order) {
         const at = iso();
         order.communication ??= { requiredForIndividualOrder: true, receipt: { status: "NOT_SENT", updatedAt: at }, production: { status: "NOT_SENT", updatedAt: at }, ready: { status: "NOT_SENT", updatedAt: at } };
         const capturedStatus = result.status === "CAPTURED" ? "CAPTURED" : result.status === "SMTP_ACCEPTED" ? "SMTP_ACCEPTED" : result.status === "UNKNOWN_PARTIAL_SEND" ? "UNKNOWN" : "FAILED";
+        const priorAttemptApplied = order.eventHistory?.some(({ type, details }) => type === `MAIL_${result.status}` && details?.mailAttemptId === result.id);
         if (payload.templateKey === "ORDER_RECEIVED") {
           const receiptStatus = capturedStatus;
           order.communication.receipt = { status: receiptStatus, updatedAt: at, providerReference: result.id };
@@ -4557,11 +4583,13 @@ export class SportpaleisPilotService {
         }
         if (payload.templateKey === "ORDER_IN_PRODUCTION") order.communication.production = { status: capturedStatus, updatedAt: at, providerReference: result.id };
         if (payload.templateKey === "ORDER_READY") order.communication.ready = { status: capturedStatus, updatedAt: at, providerReference: result.id };
-        order.revision += 1;
-        order.updatedAt = at;
-        order.eventHistory ??= [];
-        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `MAIL_${result.status}`, at, userId: user.id, userName: user.name, source: "capture-transport", details: { templateKey: payload.templateKey, mailAttemptId: result.id } });
-        audit(next, user.id, "Mail capture uitgevoerd", order.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id });
+        if (!priorAttemptApplied) {
+          order.revision += 1;
+          order.updatedAt = at;
+          order.eventHistory ??= [];
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `MAIL_${result.status}`, at, userId: user.id, userName: user.name, source: "capture-transport", details: { templateKey: payload.templateKey, mailAttemptId: result.id, duplicateRecovery: Boolean(result.duplicate) } });
+          audit(next, user.id, result.duplicate ? "Mail capture-projectie hersteld" : "Mail capture uitgevoerd", order.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id });
+        }
       }
       return { state: next, value: undefined };
     });
@@ -4583,15 +4611,18 @@ export class SportpaleisPilotService {
     const { state, user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken);
     const request = { ...this.#teamkitProposalMailRequest(state, user, proposalId, payload), idempotencyKey };
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role });
-    if (!result.duplicate) await this.store.mutate(async (next) => {
+    await this.store.mutate(async (next) => {
       const proposal = next.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) return { state: next, value: undefined };
       const delivered = ["SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(result.status);
       const evidence = { id: result.id, templateKey: payload.templateKey, status: result.status, capturedAt: iso(), revision: proposal.currentRevision, delivered };
       proposal.deliveryEvidence ??= [];
-      proposal.deliveryEvidence.push(evidence);
+      const alreadyProjected = proposal.deliveryEvidence.some(({ id }) => id === result.id);
+      if (!alreadyProjected) proposal.deliveryEvidence.push(evidence);
       if (payload.templateKey === "PROPOSAL_REVIEW_REQUEST" && delivered && proposal.status === "READY_FOR_REVIEW") proposal.status = "SENT_TO_CUSTOMER";
-      proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
-      audit(next, user.id, delivered ? "Voorstelmail delivery bewezen" : "Voorstelmail voorbereid — niet verstuurd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: delivered });
+      if (!alreadyProjected) {
+        proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
+        audit(next, user.id, delivered ? "Voorstelmail delivery bewezen" : "Voorstelmail voorbereid — niet verstuurd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: delivered, duplicateRecovery: Boolean(result.duplicate) });
+      }
       return { state: next, value: undefined };
     });
     return result;
@@ -6221,7 +6252,10 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
   return [...grouped.values()];
 }
 
-const EXISTING_ORDER_RECONCILIATION_VERSION = "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1";
+const EXISTING_ORDER_RECONCILIATION_VERSION = "EXISTING_ORDER_CANONICAL_RECONCILIATION_V2";
+const FINAL_PRODUCTION_VALIDATOR_VERSION = "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V1";
+const PRODUCTION_EXECUTION_SNAPSHOT_VERSION = "SPORTPALEIS_IMMUTABLE_PRODUCTION_EXECUTION_V1";
+const CANONICAL_BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 
 function stableExistingOrderProductionLines(lines) {
   return [...lines]
@@ -6265,12 +6299,19 @@ function legacyPersonalizationFromText(item, profile) {
   const evidence = [];
   const unresolved = [];
   const inferred = [];
+  const duplicates = [];
   const text = String(item.personalization ?? "").trim();
-  if (!text || /^geen bedrukking$/iu.test(text)) return { values: result, evidence, unresolved, inferred };
+  if (!text || /^geen bedrukking$/iu.test(text)) return { values: result, evidence, unresolved, inferred, duplicates };
   const productText = String(item.product ?? "");
   if (/\bsenior\b/iu.test(`${productText} ${text}`)) result.backNumberSizeClass = "SENIOR";
   else if (/\bjunior\b/iu.test(`${productText} ${text}`)) result.backNumberSizeClass = "JUNIOR";
-  const parts = text.split(/\s*[·|;\n]\s*/u).map((part) => part.trim()).filter(Boolean);
+  // Split only where the next segment is recognisably a new decoration. This
+  // keeps names such as "DE VRIES" intact while making historic "+", "&" and
+  // comma-separated combinations lossless instead of greedily absorbing them.
+  const decorationStart = "(?:initialen?|init\\.?|rug(?:nummer)?|rugnr\\.?|borst(?:nummer)?|borstnr\\.?|short(?:nummer)?|shortnr\\.?|broeknummer|naam|rugnaam)";
+  const parts = text
+    .split(new RegExp(`\\s*(?:[·|;\\n]|[+&](?=\\s*${decorationStart}\\b)|,(?=\\s*${decorationStart}\\b))\\s*`, "iu"))
+    .map((part) => part.trim()).filter(Boolean);
   for (const part of parts) {
     if (/^\d+(?:[.,]\d+)?\s*mm$/iu.test(part)) { evidence.push(`Historische fysieke-maataanduiding: ${part}`); continue; }
     const patterns = [
@@ -6284,6 +6325,10 @@ function legacyPersonalizationFromText(item, profile) {
     if (matched) {
       const [, pattern] = matched;
       const value = part.match(pattern)?.[1]?.trim() ?? "";
+      if (result[matched[0]] && result[matched[0]] !== value) {
+        duplicates.push({ field: matched[0], values: [result[matched[0]], value], evidence: part });
+        continue;
+      }
       result[matched[0]] = value;
       evidence.push(`${part} → ${matched[0]}`);
       continue;
@@ -6292,11 +6337,54 @@ function legacyPersonalizationFromText(item, profile) {
     const productField = /rugnummer/iu.test(productText) ? "backNumber" : /short(?:nummer)?/iu.test(productText) ? "shortsNumber" : /borstnummer/iu.test(productText) ? "chestNumber" : /initial/iu.test(productText) ? "initials" : /naam/iu.test(productText) ? "name" : null;
     const inferredField = productField && supported.includes(productField) ? productField : supported.length === 1 ? supported[0] : null;
     if (inferredField) {
+      if (result[inferredField] && result[inferredField] !== part) {
+        duplicates.push({ field: inferredField, values: [result[inferredField], part], evidence: part });
+        continue;
+      }
       result[inferredField] = part;
       inferred.push({ field: inferredField, value: part, evidence: productField ? `Productomschrijving “${productText}”` : `Profiel ondersteunt uitsluitend ${inferredField}` });
     } else unresolved.push(part);
   }
-  return { values: result, evidence, unresolved, inferred };
+  return { values: result, evidence, unresolved, inferred, duplicates };
+}
+
+function orderAssociationCandidates(order) {
+  return [...new Set([order.association, ...(order.associations ?? []), ...(order.items ?? []).map(({ association }) => association)].map((value) => String(value ?? "").trim()).filter((value) => value && value !== "Geen vereniging"))];
+}
+
+function resolveHistoricalArticleContext(state, order, historicalItem) {
+  if (historicalItem.articleId) {
+    const exact = state.articles.find(({ id }) => id === historicalItem.articleId);
+    return exact ? { article: exact, authority: "ITEM_ARTICLE_ID", ambiguous: false, candidates: [exact] } : { article: null, authority: "ITEM_ARTICLE_ID_MISSING", ambiguous: false, candidates: [] };
+  }
+  const itemAssociation = String(historicalItem.association ?? "").trim();
+  const orderAssociations = orderAssociationCandidates(order);
+  const constrain = (candidates) => {
+    if (itemAssociation) return candidates.filter(({ association }) => association === itemAssociation);
+    if (orderAssociations.length === 1) return candidates.filter(({ association }) => association === orderAssociations[0]);
+    return candidates;
+  };
+  if (historicalItem.articleNumber) {
+    const candidates = constrain(state.articles.filter(({ articleNumber }) => String(articleNumber) === String(historicalItem.articleNumber)));
+    return { article: candidates.length === 1 ? candidates[0] : null, authority: itemAssociation ? "SKU_AND_ITEM_ASSOCIATION" : orderAssociations.length === 1 ? "SKU_AND_UNIQUE_ORDER_ASSOCIATION" : "SKU", ambiguous: candidates.length > 1, candidates };
+  }
+  if (historicalItem.product) {
+    const candidates = constrain(state.articles.filter(({ name }) => normalizedProductionIdentity(name) === normalizedProductionIdentity(historicalItem.product)));
+    return { article: candidates.length === 1 ? candidates[0] : null, authority: "PRODUCT_NAME_CONTEXT", ambiguous: candidates.length > 1, candidates };
+  }
+  return { article: null, authority: "NO_ARTICLE_EVIDENCE", ambiguous: false, candidates: [] };
+}
+
+function structuredVariantCardinalityFinding(order, item, itemIndex, variants) {
+  if (!variants.length) return null;
+  const invalid = variants.some(({ quantity }) => !Number.isInteger(Number(quantity)) || Number(quantity) < 1);
+  const total = variants.reduce((sum, { quantity }) => sum + Number(quantity || 0), 0);
+  const duplicateIds = new Set(variants.map(({ id }) => id)).size !== variants.length;
+  if (!invalid && !duplicateIds && total === Number(item.quantity)) return null;
+  return existingOrderFinding(order, item, itemIndex, "CARDINALITY", item.personalization || item.product,
+    `De historische persoons-/variantregels tellen niet exact op tot artikel-aantal ${item.quantity}.`,
+    `Varianttotaal ${total}; ${variants.length} regels; unieke identities: ${!duplicateIds}`,
+    { kind: "OPEN_ORDER_CONTENT", label: "Aantallen per persoon controleren", target: `orders/${order.id}#productieherstel` });
 }
 
 function existingOrderFinding(order, item, index, missingField, decoration, reason, evidence, action) {
@@ -6320,6 +6408,13 @@ function existingOrderDecision(decisions, finding) {
   return decisions.find(({ findingId }) => findingId === finding.id) ?? null;
 }
 
+function assertExistingOrderReconciliationWriteAllowed(state, order) {
+  const hasPhysicalExecution = ["PRINT", "DONE"].includes(order.stage)
+    || state.productionJobs?.some((job) => job.orders?.some(({ id }) => id === order.id) || job.snapshot?.orders?.some(({ id }) => id === order.id));
+  if (hasPhysicalExecution) throw Object.assign(new Error("Productiewaarheid is na fysieke uitvoering immutable; maak een auditable reprint/correctie-execution."), { statusCode: 409, code: "HISTORICAL_PRODUCTION_TRUTH_IMMUTABLE" });
+  if (!["ORDER", "CONTROL"].includes(order.stage)) throw Object.assign(new Error("Deze lifecyclefase staat geen reconciliatiemutatie toe."), { statusCode: 409, code: "RECONCILIATION_STAGE_LOCKED" });
+}
+
 /**
  * Reconciles immutable historical order intent into a current canonical
  * production projection. It never writes to the order. A RESOLVABLE
@@ -6328,20 +6423,33 @@ function existingOrderDecision(decisions, finding) {
 export function reconcileExistingOrderProductionTruth(state, order) {
   const historicalSourceHash = existingOrderHistoricalSourceHash(order);
   const decisions = existingOrderReconciliationDecisions(order);
-  if (order.productionLines?.length) {
-    const productionLines = structuredClone(order.productionLines);
+  const immutableSnapshotLines = order.productionExecutionSnapshot?.productionLines;
+  if (immutableSnapshotLines?.length || order.productionLines?.length) {
+    const productionLines = structuredClone(immutableSnapshotLines?.length ? immutableSnapshotLines : order.productionLines);
+    const baseValidation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines, { allowHistoricalSourceSnapshot: Boolean(immutableSnapshotLines) || ["PRINT", "DONE"].includes(order.stage) });
+    const snapshotIntegrity = immutableSnapshotLines?.length ? verifyProductionExecutionSnapshot(order) : { valid: true };
+    const validationFindings = snapshotIntegrity.valid ? baseValidation.findings : [...baseValidation.findings, finalProductionFinding("EXECUTION_SNAPSHOT", snapshotIntegrity.reason, { code: "PRODUCTION_EXECUTION_SNAPSHOT_HASH_MISMATCH", evidence: JSON.stringify(snapshotIntegrity) })];
+    const validationBody = { ...baseValidation, findings: validationFindings, status: validationFindings.length ? "BLOCKED" : "VALID" };
+    const validation = { ...validationBody, validationHash: sha256(JSON.stringify({ ...validationBody, validationHash: undefined })) };
     return {
       version: EXISTING_ORDER_RECONCILIATION_VERSION,
-      status: "PROVEN",
-      sourceKind: "STORED_CANONICAL",
+      status: validation.status === "VALID" ? "PROVEN" : "HUMAN_DECISION_REQUIRED",
+      sourceKind: immutableSnapshotLines?.length ? "IMMUTABLE_EXECUTION_SNAPSHOT" : "STORED_CANONICAL",
       historicalSourceHash,
       projectionHash: sha256(JSON.stringify(productionLines)),
       productionLines,
-      findings: [],
-      evidence: ["Canonieke productieregels zijn reeds bij de order opgeslagen."],
+      findings: validation.status === "VALID" ? [] : validation.findings.map((finding, index) => existingOrderFinding(order, order.items?.find(({ id }) => id === finding.itemId) ?? order.items?.[0] ?? { id: "unknown" }, index, finding.field, finding.decoration ?? "Productieregel", finding.reason, finding.evidence, { kind: "OPEN_PRODUCTION_SOURCE", label: "Productiewaarheid controleren", target: `orders/${order.id}#productieherstel` })),
+      evidence: [immutableSnapshotLines?.length ? "Immutable execution snapshot is exact geverifieerd." : "Opgeslagen canonical productieregels zijn door de finale validator gecontroleerd.", `Validator ${validation.version} · ${validation.validationHash}`],
+      finalValidation: validation,
       ...(decisions.length ? { decisions } : {}),
       ...(order.productionReconciliation?.confirmed ? { confirmed: structuredClone(order.productionReconciliation.confirmed) } : {}),
     };
+  }
+
+  if (["PRINT", "DONE"].includes(order.stage)) {
+    const item = order.items?.[0] ?? { id: "unknown", product: order.id };
+    const finding = existingOrderFinding(order, item, 0, "EXECUTION_SNAPSHOT", item.personalization || item.product, "De historische productie-uitvoering mist een immutable execution snapshot en wordt niet uit actuele configuratie herberekend.", order.sourceContext?.provenance ?? `Historische order ${order.id}`, { kind: "OPEN_HISTORY", label: "Historische uitvoering controleren", target: `historie/${order.id}` });
+    return { version: EXISTING_ORDER_RECONCILIATION_VERSION, status: "HUMAN_DECISION_REQUIRED", sourceKind: "HISTORICAL_EXECUTION_WITHOUT_SNAPSHOT", historicalSourceHash, projectionHash: null, productionLines: [], findings: [finding], evidence: ["Fail-closed: actieve configuratie mag historische fysieke uitvoering niet herschrijven."], ...(decisions.length ? { decisions } : {}) };
   }
 
   const findings = [];
@@ -6349,19 +6457,20 @@ export function reconcileExistingOrderProductionTruth(state, order) {
   const projectedItems = [];
   let requiresConfirmation = decisions.length > 0;
   for (const [itemIndex, historicalItem] of (order.items ?? []).entries()) {
-    if (/^geen bedrukking$/iu.test(String(historicalItem.personalization ?? "").trim()) || historicalItem.productionProfileId === "profile-none") continue;
-    let article = historicalItem.articleId ? state.articles.find(({ id }) => id === historicalItem.articleId) : null;
-    article ??= historicalItem.articleNumber ? state.articles.find(({ articleNumber, association }) => String(articleNumber) === String(historicalItem.articleNumber) && (!historicalItem.association || association === historicalItem.association)) : null;
-    if (!article && historicalItem.product) {
-      const matches = state.articles.filter(({ name, association }) => normalizedProductionIdentity(name) === normalizedProductionIdentity(historicalItem.product) && (!historicalItem.association || association === historicalItem.association));
-      if (matches.length === 1) { article = matches[0]; requiresConfirmation = true; evidence.push(`${historicalItem.id}: artikel exact op productnaam en vereniging gevonden (${article.articleNumber}).`); }
-    }
+    const hasDecorationIntent = nonEmptyPersonalization(historicalItem.personalizationValues) || (historicalItem.variants ?? []).some((variant) => nonEmptyPersonalization(variant.personalizationValues)) || !/^geen bedrukking$/iu.test(String(historicalItem.personalization ?? "").trim());
+    if (!hasDecorationIntent) continue;
+    const context = resolveHistoricalArticleContext(state, order, historicalItem);
+    const article = context.article;
+    if (context.ambiguous) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, `Artikelnummer ${historicalItem.articleNumber ?? "onbekend"} komt in meerdere contexten voor; Workspace kiest nooit stil de eerste match.`, context.candidates.map(({ id, association }) => `${id} · ${association}`).join(" | "), { kind: "OPEN_ORDER_CONTENT", label: "Artikelcontext kiezen", target: `orders/${order.id}#productieherstel` }));
+    else if (article && context.authority === "PRODUCT_NAME_CONTEXT") { requiresConfirmation = true; evidence.push(`${historicalItem.id}: artikel exact op productnaam en context gevonden (${article.articleNumber}).`); }
     const profileId = historicalItem.productionProfileId || article?.profileId;
     const profile = state.productionProfiles.find(({ id }) => id === profileId);
     if (!historicalItem.articleNumber && !article?.articleNumber) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE", historicalItem.personalization || historicalItem.product, "Het historische artikel heeft geen eenduidige artikelidentiteit.", historicalItem.sourceProvenance ?? order.sourceContext?.provenance ?? "Historische order", { kind: "OPEN_ORDER_CONTENT", label: "Artikel en bedrukking controleren", target: `orders/nieuw?edit=${encodeURIComponent(order.id)}#artikelen` }));
-    if (!profile) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "PRODUCTION_PROFILE", historicalItem.personalization || historicalItem.product, "Er is geen historisch of exact artikelgebonden productieprofiel gevonden.", historicalItem.productionProfileId ? `Opgeslagen profiel ${historicalItem.productionProfileId}` : "Geen profielreferentie opgeslagen", { kind: "OPEN_PRODUCTION_SOURCE", label: "Productieprofiel kiezen", target: `beheer/productieprofielen` }));
+    if (!profile || profileId === "profile-none") findings.push(existingOrderFinding(order, historicalItem, itemIndex, "PRODUCTION_PROFILE", historicalItem.personalization || historicalItem.product, profileId === "profile-none" ? "De historische regel bevat bedrukintentie maar is tegenstrijdig als ‘geen productieprofiel’ opgeslagen." : "Er is geen historisch of exact artikelgebonden productieprofiel gevonden.", historicalItem.productionProfileId ? `Opgeslagen profiel ${historicalItem.productionProfileId}` : "Geen profielreferentie opgeslagen", { kind: "OPEN_PRODUCTION_SOURCE", label: "Productieprofiel controleren", target: `beheer/productieprofielen` }));
 
     let variants = (historicalItem.variants ?? []).filter((variant) => nonEmptyPersonalization(variant.personalizationValues)).map((variant) => structuredClone(variant));
+    const cardinalityFinding = structuredVariantCardinalityFinding(order, historicalItem, itemIndex, variants);
+    if (cardinalityFinding) findings.push(cardinalityFinding);
     if (!variants.length && nonEmptyPersonalization(historicalItem.personalizationValues)) variants = [{
       id: `legacy-variant-${sha256(JSON.stringify([order.id, historicalItem.id, historicalItem.personalizationValues])).slice(0, 16).toLowerCase()}`,
       quantity: historicalItem.quantity,
@@ -6377,6 +6486,7 @@ export function reconcileExistingOrderProductionTruth(state, order) {
         requiresConfirmation = true;
         evidence.push(`${historicalItem.id}: ${inference.evidence}; voorstel ${inference.field} = “${inference.value}”.`);
       }
+      for (const duplicate of parsed.duplicates) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "DECORATION_CARDINALITY", duplicate.values.join(" / "), `Meerdere waarden voor ${duplicate.field} mogen niet stil tot één decoration worden samengevoegd.`, duplicate.evidence, { kind: "OPEN_ORDER_CONTENT", label: "Decorations en aantallen controleren", target: `orders/${order.id}#productieherstel` }));
       for (const [unresolvedIndex, value] of parsed.unresolved.entries()) {
         const finding = existingOrderFinding(order, historicalItem, itemIndex + unresolvedIndex, "DECORATION_TYPE", value, `“${value}” kan niet betrouwbaar aan één bedrukkingstype worden gekoppeld.`, historicalItem.personalization, { kind: "CHOOSE_DECORATION_TYPE", label: "Bedrukkingstype kiezen", target: `orders/${order.id}#productieherstel`, options: [...new Set(profile.supports ?? [])] });
         const decision = existingOrderDecision(decisions, finding);
@@ -6397,7 +6507,8 @@ export function reconcileExistingOrderProductionTruth(state, order) {
     }
     for (const variant of variants) {
       const values = variant.personalizationValues ?? {};
-      if (String(values.backNumber ?? "").trim() && !String(values.backNumberSizeClass ?? variant.backNumberProduction?.sizeClass ?? historicalItem.backNumberProduction?.sizeClass ?? "").trim()) {
+      const effectiveSizeClass = String(values.backNumberSizeClass ?? variant.backNumberProduction?.sizeClass ?? historicalItem.backNumberProduction?.sizeClass ?? "").trim().toUpperCase();
+      if (String(values.backNumber ?? "").trim() && !CANONICAL_BACK_NUMBER_SIZE_CLASSES.has(effectiveSizeClass)) {
         const finding = existingOrderFinding(order, historicalItem, itemIndex, "SIZE_CLASS", `Rugnummer ${values.backNumber}`, "Junior/Senior is niet historisch vastgelegd en wordt nooit uit de kledingmaat gegokt.", variant.personalization || historicalItem.personalization, { kind: "CHOOSE_SIZE_CLASS", label: "Junior of Senior kiezen", target: `orders/${order.id}#productieherstel`, options: ["JUNIOR", "SENIOR"] });
         const decision = existingOrderDecision(decisions, finding);
         if (decision && finding.action.options.includes(decision.value)) {
@@ -6431,11 +6542,18 @@ export function reconcileExistingOrderProductionTruth(state, order) {
       variants,
     });
   }
-  let productionLines = findings.some(({ missingField }) => ["ARTICLE", "DECORATION_TYPE", "VALUE", "FOIL_COLOR", "PRODUCTION_PROFILE", "SIZE_CLASS"].includes(missingField)) ? [] : stableExistingOrderProductionLines(resolveCanonicalProductionLines(state, order.id, projectedItems));
+  let productionLines = findings.some(({ missingField }) => ["ARTICLE", "ARTICLE_CONTEXT", "DECORATION_TYPE", "DECORATION_CARDINALITY", "CARDINALITY", "VALUE", "FOIL_COLOR", "PRODUCTION_PROFILE", "SIZE_CLASS"].includes(missingField)) ? [] : stableExistingOrderProductionLines(resolveCanonicalProductionLines(state, order.id, projectedItems));
   for (const [lineIndex, line] of productionLines.entries()) if (line.validation?.status !== "VALID") {
     const item = projectedItems.find(({ id }) => id === line.itemId) ?? order.items?.[0] ?? { id: "unknown", product: "Onbekende bedrukking" };
     const missingField = /maat|mm|afmeting/iu.test(line.validation.reason ?? "") ? "DIMENSIONS" : "PRODUCTION_SOURCE";
     findings.push(existingOrderFinding(order, item, lineIndex, missingField, line.preview?.label ?? line.content, line.validation.reason ?? "De canonieke productieregel is niet uitvoerbaar.", line.provenance, { kind: "OPEN_PRODUCTION_SOURCE", label: missingField === "DIMENSIONS" ? "Fysieke maat controleren" : "Productiebron openen", target: `beheer/productieprofielen#profiel-${encodeURIComponent(item.productionProfileId ?? "")}` }));
+  }
+  if (productionLines.length && !findings.length) {
+    const validation = validateFinalProductionTruth(state, { ...order, items: projectedItems, productionLines }, productionLines);
+    if (validation.status !== "VALID") for (const [index, finding] of validation.findings.entries()) {
+      const item = projectedItems.find(({ id }) => id === finding.itemId) ?? projectedItems[0] ?? order.items?.[0] ?? { id: "unknown" };
+      findings.push(existingOrderFinding(order, item, index, finding.field, finding.decoration ?? item.personalization ?? item.product, finding.reason, finding.evidence, { kind: "OPEN_PRODUCTION_SOURCE", label: "Productiewaarheid controleren", target: `orders/${order.id}#productieherstel` }));
+    }
   }
   const projectionHash = productionLines.length ? sha256(JSON.stringify(productionLines)) : null;
   const status = findings.length ? "HUMAN_DECISION_REQUIRED" : requiresConfirmation ? "RESOLVABLE" : "PROVEN";
@@ -6444,14 +6562,16 @@ export function reconcileExistingOrderProductionTruth(state, order) {
 }
 
 function productionLinesForOrder(state, order) {
+  if (order.productionExecutionSnapshot?.productionLines?.length) return order.productionExecutionSnapshot.productionLines;
   if (order.productionLines?.length) return order.productionLines;
+  if (["PRINT", "DONE"].includes(order.stage)) return [];
   const reconciliation = reconcileExistingOrderProductionTruth(state, order);
   return reconciliation.status === "PROVEN" ? reconciliation.productionLines : [];
 }
 
 function publicOrderWithProductionTruth(state, order, { includeReconciliation = true } = {}) {
   const productionReconciliation = includeReconciliation ? reconcileExistingOrderProductionTruth(state, order) : null;
-  const productionLines = order.productionLines?.length ? order.productionLines : includeReconciliation ? productionLinesForOrder(state, order) : [];
+  const productionLines = order.productionExecutionSnapshot?.productionLines?.length ? order.productionExecutionSnapshot.productionLines : order.productionLines?.length ? order.productionLines : includeReconciliation ? productionLinesForOrder(state, order) : [];
   const projected = { ...order, ...(productionLines.length ? { productionLines } : {}), ...(includeReconciliation ? { productionReconciliation } : {}) };
   return { ...projected, ...productionStatusForOrder(state, projected) };
 }
@@ -6590,8 +6710,17 @@ function productionClosureForOrder(state, order) {
     const evidence = order.productionCompletionEvidence;
     const readyEvent = order.eventHistory?.find(({ type, details }) => type === "PRODUCTION_READY" && details?.explicitHumanAction === "AFRONDEN");
     if (!evidence || !readyEvent) return { status: "REVIEW_REQUIRED", reason: "Gereed-status mist immutable Afronden-bewijs." };
+    const { evidenceHash, confirmedAt, confirmedBy, ...completionBody } = evidence;
+    if (sha256(JSON.stringify(completionBody)) !== evidenceHash || readyEvent.details?.completionEvidenceHash !== evidenceHash) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs heeft geen geldige immutable hash-/eventbinding." };
+    const snapshotIntegrity = verifyProductionExecutionSnapshot(order);
+    if (!snapshotIntegrity.valid || evidence.productionExecutionHash !== order.productionExecutionSnapshot?.executionHash) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de immutable productie-uitvoering." };
+    if (evidence.productionLineHash !== sha256(JSON.stringify(productionLines))) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de uitgevoerde productieregels." };
     const requiredLineIds = [...new Set(productionLines.map(({ id }) => id))].sort();
     if (JSON.stringify(requiredLineIds) !== JSON.stringify([...(evidence.requiredLineIds ?? [])].sort())) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de canonical productieregels." };
+    for (const reference of evidence.productionJobs ?? []) {
+      const job = state.productionJobs.find(({ id }) => id === reference.id);
+      if (!job || job.jobNumber !== reference.jobNumber || job.snapshotHash !== reference.snapshotHash || (job.snapshot?.artifact?.sha256 ?? null) !== (reference.artifactSha256 ?? null)) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs verwijst niet exact naar de uitgevoerde immutable productiejob." };
+    }
     return { status: "CONFIRMED", reason: null };
   }
   if (order.stage !== "PRINT") return { status: "NOT_ELIGIBLE", reason: "De order is nog niet volledig fysiek geproduceerd." };
@@ -6714,6 +6843,121 @@ function productionLineWriterIdentity(state, line) {
     return { id: CUTJOB_SVG_WRITER.id, version: CUTJOB_SVG_WRITER.version };
   }
   throw Object.assign(new Error("Een productieregel heeft nog geen exact uitvoerbare bron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
+}
+
+function finalProductionFinding(field, reason, { line = null, item = null, evidence = null, code = null } = {}) {
+  return {
+    field,
+    reason,
+    evidence: evidence ?? code ?? "Final Production Validator",
+    ...(code ? { code } : {}),
+    ...(line?.id ? { lineId: line.id } : {}),
+    ...(line?.itemId ?? item?.id ? { itemId: line?.itemId ?? item?.id } : {}),
+    ...(line ? { decoration: line.preview?.label ?? line.content ?? line.id } : {}),
+  };
+}
+
+/**
+ * Single consequential gate used before a projection is called PROVEN and
+ * before any physical proposal/job is materialised. UI routes may collect
+ * intent differently; they cannot bypass this production contract.
+ */
+export function validateFinalProductionTruth(state, order, lines = productionLinesForOrder(state, order), { allowHistoricalSourceSnapshot = false } = {}) {
+  const productionLines = structuredClone(lines ?? []);
+  const snapshot = allowHistoricalSourceSnapshot ? order.productionExecutionSnapshot : null;
+  const validationOrder = snapshot ? {
+    ...order,
+    sourceContext: structuredClone(snapshot.sourceContext ?? order.sourceContext),
+    association: snapshot.association ?? order.association,
+    associations: structuredClone(snapshot.associations ?? order.associations ?? []),
+    items: structuredClone(snapshot.items ?? order.items ?? []),
+    productionLines,
+  } : order;
+  const findings = [];
+  if (!productionLines.length) findings.push(finalProductionFinding("PRODUCTION_LINES", "Er zijn geen canonieke productieregels om uit te voeren.", { code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" }));
+  const lineIds = productionLines.map(({ id }) => String(id ?? "").trim());
+  if (lineIds.some((id) => !id) || new Set(lineIds).size !== lineIds.length) findings.push(finalProductionFinding("DECORATION_CARDINALITY", "Iedere fysieke productieregel moet exact één unieke identity hebben.", { code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH" }));
+
+  for (const item of validationOrder.items ?? []) {
+    const variants = (item.variants ?? []).filter((variant) => nonEmptyPersonalization(variant.personalizationValues));
+    const cardinalityFinding = structuredVariantCardinalityFinding(order, item, 0, variants);
+    if (cardinalityFinding) findings.push(finalProductionFinding("CARDINALITY", cardinalityFinding.reason, { item, evidence: cardinalityFinding.evidence, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH" }));
+    for (const variant of variants) if (String(variant.personalizationValues?.backNumber ?? "").trim()) {
+      const sizeClass = String(variant.personalizationValues?.backNumberSizeClass ?? variant.backNumberProduction?.sizeClass ?? "").trim().toUpperCase();
+      if (!CANONICAL_BACK_NUMBER_SIZE_CLASSES.has(sizeClass)) findings.push(finalProductionFinding("SIZE_CLASS", `Rugnummer ${variant.personalizationValues.backNumber} heeft geen canonieke JUNIOR/SENIOR-productieklasse.`, { item, evidence: `Ontvangen klasse: ${sizeClass || "ontbreekt"}`, code: "PRODUCTION_SIZE_CLASS_INVALID" }));
+    }
+  }
+
+  for (const line of productionLines) {
+    const item = validationOrder.items?.find(({ id }) => id === line.itemId);
+    const identity = productionDecorationIdentity(validationOrder, line);
+    if (!item) findings.push(finalProductionFinding("ITEM_IDENTITY", "De productieregel mist de oorspronkelijke orderregel.", { line, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" }));
+    const canonicalArticleIdentity = item ? item.articleNumber || item.articleId || item.id : null;
+    if (!identity || identity.orderId !== order.id || identity.itemId !== line.itemId || identity.articleNumber !== canonicalArticleIdentity || identity.value !== line.content || !identity.decorationType || !identity.placement || !identity.foilColor || !identity.productionProfileId) findings.push(finalProductionFinding("DECORATION_IDENTITY", "De canonieke decoration identity is onvolledig of wijkt af van de orderbron.", { line, code: "PRODUCTION_DECORATION_IDENTITY_MISSING" }));
+    if (!(Number(line.widthMm) > 0) || !(Number(line.heightMm) > 0)) findings.push(finalProductionFinding("DIMENSIONS", "De fysieke productiegeometrie moet positief en expliciet zijn.", { line, code: "PRODUCTION_DIMENSIONS_INVALID" }));
+    if (!Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1) findings.push(finalProductionFinding("QUANTITY", "Het fysieke aantal moet een positief geheel getal zijn.", { line, code: "PRODUCTION_QUANTITY_INVALID" }));
+    if (line.validation?.status !== "VALID") findings.push(finalProductionFinding("LINE_VALIDATION", line.validation?.reason || "De productieregel is niet gevalideerd.", { line, code: "PRODUCTION_LINE_BLOCKED" }));
+    if (!allowHistoricalSourceSnapshot) {
+      if (!managedFoilColor(state, productionLineFoilColor(state, order, line))) findings.push(finalProductionFinding("FOIL_COLOR", "De fysieke foliekleur is niet actief beheerd.", { line, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" }));
+      try { productionLineWriterIdentity(state, line); } catch (error) { findings.push(finalProductionFinding("PRODUCTION_SOURCE", error.message, { line, code: error.code ?? "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" })); }
+      try { assertPioneersNumberSource(state, validationOrder, line); } catch (error) { findings.push(finalProductionFinding("PRODUCTION_SOURCE", error.message, { line, code: error.code })); }
+      try { assertScBuitenboysShortSource(state, validationOrder, line); } catch (error) { findings.push(finalProductionFinding("PRODUCTION_SOURCE", error.message, { line, code: error.code })); }
+    }
+  }
+  if (productionLines.length) {
+    const effectiveOrder = { ...validationOrder, productionLines };
+    const hasStructuredCardinalitySource = (validationOrder.items ?? []).some((item) => (item.variants ?? []).some((variant) => nonEmptyPersonalization(variant.personalizationValues)) || nonEmptyPersonalization(item.personalizationValues));
+    if (!allowHistoricalSourceSnapshot || hasStructuredCardinalitySource) try { assertOrderProductionDecorationCardinality(state, effectiveOrder); } catch (error) { findings.push(finalProductionFinding("DECORATION_CARDINALITY", error.message, { evidence: JSON.stringify({ code: error.code, identity: error.identity, expected: error.expected, actual: error.actual }), code: error.code })); }
+    if (!allowHistoricalSourceSnapshot) try { assertProductionAssetContexts(state, productionLines, [...new Set([validationOrder.association, ...(validationOrder.associations ?? [])].filter(Boolean))]); } catch (error) { findings.push(finalProductionFinding("SOURCE_CONTEXT", error.message, { code: error.code })); }
+  }
+  const normalized = findings.map((finding) => ({ ...finding })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const validationBody = { version: FINAL_PRODUCTION_VALIDATOR_VERSION, orderId: order.id, orderRevision: order.revision, lineHash: sha256(JSON.stringify(productionLines)), findings: normalized };
+  return { ...validationBody, status: normalized.length ? "BLOCKED" : "VALID", validationHash: sha256(JSON.stringify(validationBody)) };
+}
+
+function productionExecutionSnapshotBody(state, order, productionLines, validation, actor, at) {
+  const profileIds = [...new Set(productionLines.map(({ decorationIdentity }) => decorationIdentity?.productionProfileId).filter(Boolean))];
+  return {
+    version: PRODUCTION_EXECUTION_SNAPSHOT_VERSION,
+    orderId: order.id,
+    orderRevision: order.revision,
+    sourceContext: structuredClone(order.sourceContext ?? null),
+    association: order.association,
+    associations: structuredClone(order.associations ?? []),
+    items: structuredClone(order.items ?? []),
+    productionLines: structuredClone(productionLines),
+    productionProfiles: profileIds.map((id) => structuredClone(state.productionProfiles.find((profile) => profile.id === id))).filter(Boolean),
+    finalValidation: structuredClone(validation),
+    capturedAt: at,
+    capturedBy: { userId: actor.id, userName: actor.name, role: actor.role },
+  };
+}
+
+function materializeProductionExecutionSnapshot(state, order, actor, { reason = "CONSEQUENTIAL_PRODUCTION_GATE" } = {}) {
+  if (order.productionExecutionSnapshot?.executionHash) {
+    const integrity = verifyProductionExecutionSnapshot(order);
+    if (!integrity.valid) throw Object.assign(new Error(integrity.reason), { statusCode: 409, code: "PRODUCTION_EXECUTION_SNAPSHOT_INVALID", integrity });
+    return order.productionExecutionSnapshot;
+  }
+  const productionLines = structuredClone(order.productionLines?.length ? order.productionLines : reconcileExistingOrderProductionTruth(state, order).productionLines);
+  const validation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines);
+  if (validation.status !== "VALID") throw Object.assign(new Error(validation.findings[0]?.reason ?? "De finale productiewaarheid is niet valide."), { statusCode: 409, code: validation.findings[0]?.code ?? "FINAL_PRODUCTION_VALIDATION_FAILED", findings: validation.findings });
+  const at = iso();
+  const body = { ...productionExecutionSnapshotBody(state, order, productionLines, validation, actor, at), reason };
+  order.productionExecutionSnapshot = { ...body, executionHash: sha256(JSON.stringify(body)) };
+  order.productionLines = structuredClone(productionLines);
+  order.eventHistory ??= [];
+  order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_EXECUTION_TRUTH_FROZEN", at, userId: actor.id, userName: actor.name, source: reason, details: { executionHash: order.productionExecutionSnapshot.executionHash, validatorVersion: validation.version, validationHash: validation.validationHash, productionLineIds: productionLines.map(({ id }) => id) } });
+  audit(state, actor.id, "Immutable productie-uitvoering vastgelegd", order.id, { reason, executionHash: order.productionExecutionSnapshot.executionHash, validatorVersion: validation.version, validationHash: validation.validationHash, productionLineIds: productionLines.map(({ id }) => id) });
+  return order.productionExecutionSnapshot;
+}
+
+function verifyProductionExecutionSnapshot(order) {
+  const snapshot = order.productionExecutionSnapshot;
+  if (!snapshot?.executionHash) return { valid: false, reason: "Immutable execution snapshot ontbreekt." };
+  const { executionHash, ...body } = snapshot;
+  const actual = sha256(JSON.stringify(body));
+  return actual === executionHash ? { valid: true, executionHash } : { valid: false, reason: "Immutable execution snapshot-hash wijkt af.", expected: executionHash, actual };
 }
 
 function buildProductionProposalGroups(state, orders) {
@@ -7033,11 +7277,16 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
 function productionProposalBlockReason(order, state = undefined) {
   if (order.deletion?.status === "DELETED") return "order is verwijderd";
   if (!["ORDER", "CONTROL"].includes(order.stage)) return "status is niet Klaar voor productie";
+  if (order.productionExecutionSnapshot?.executionHash && !verifyProductionExecutionSnapshot(order).valid) return "immutable productie-uitvoering heeft een ongeldige integriteitshash";
   const reconciliation = state ? reconcileExistingOrderProductionTruth(state, order) : null;
   const productionLines = state ? productionLinesForOrder(state, order) : order.productionLines ?? [];
   if (!productionLines.length) {
     const finding = reconciliation?.findings?.[0];
     return finding ? `${finding.decoration}: ${finding.reason}` : "geen gevalideerde productieregels beschikbaar";
+  }
+  if (state) {
+    const finalValidation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines, { allowHistoricalSourceSnapshot: Boolean(order.productionExecutionSnapshot) });
+    if (finalValidation.status !== "VALID") return finalValidation.findings[0]?.reason ?? "finale productiewaarheid is geblokkeerd";
   }
   if (state && productionLines.some((line) => !managedFoilColor(state, productionLineFoilColor(state, order, line)))) return "een actieve beheerde foliekleur ontbreekt";
   const blockedLine = productionLines.find(({ validation }) => validation.status !== "VALID");
@@ -7236,6 +7485,7 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       id: `item-${randomBytes(6).toString("hex")}`,
       sourceType: legacyTrusted ? "LEGACY" : "CUSTOM",
       sourceProvenance: legacyTrusted ? "Bestaande Foundation 006-invoer" : "Handmatig aan deze order toegevoegd; geen nieuw catalogusartikel aangemaakt",
+      articleNumber: optional(item.articleNumber, 120) || null,
       product: options.freeProduction ? (optional(item.product, 120) || "Vrije opdruk") : requiredText(item.product, "Product", 120),
       association,
       size: variants.length > 1 ? "Meerdere maten" : variants[0].size,

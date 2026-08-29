@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 const passwords = { kevin: "Group-Flow-Admin-2026!", patrick: "Group-Flow-Operator-2026!", collega: "Group-Flow-Store-2026!", "donovan-support": "Group-Flow-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -15,7 +16,7 @@ test("meerdere geschikte orders worden één uitvoerbare productiegroep met éé
   const runtimeArtifactRoot = path.join(root, "shared-runtime");
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
 
@@ -29,7 +30,7 @@ test("meerdere geschikte orders worden één uitvoerbare productiegroep met éé
       standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
     }, `group-order-${index + 1}`)).value;
-    const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: `group-receipt-${index + 1}` }, created.revision);
+    const acknowledged = await captureReceipt(service, admin, created, `group-receipt-${index + 1}`);
     controlledOrders.push((await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, `group-control-${index + 1}`)).value);
   }
 
@@ -80,7 +81,7 @@ test("een afwijkende groepsselectie blijft vóór artifact en transactieverwerki
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-production-group-closed-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "shared-runtime") });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot: path.join(root, "shared-runtime") });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const created = (await service.createOrder(admin.token, admin.csrfToken, {
@@ -88,7 +89,7 @@ test("een afwijkende groepsselectie blijft vóór artifact en transactieverwerki
     standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
     items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
   }, "group-closed-order")).value;
-  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "group-closed-receipt" }, created.revision);
+  const acknowledged = await captureReceipt(service, admin, created, "group-closed-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "group-closed-control")).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "group-closed-proposal")).value;
   const productionJobCount = (await service.bootstrap(admin.token)).productionJobs.length;

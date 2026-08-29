@@ -94,8 +94,11 @@ test("Teamorder houdt alle contactvelden optioneel", async (context) => {
 test("een order zonder e-mail of telefoon kan door de normale productieflow zonder referentiedatamutatie", async (context) => {
   const { service, store, storeUser, operator } = await fixture(context);
   const before = await store.read();
-  const font = (await service.bootstrap(operator.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
-  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { ...individualPayload("", ""), productionLines: [{ id: "optional-email-back", type: "NUMBER", content: "10", previewLabel: "Rugnummer 10", widthMm: 100, heightMm: 200, quantity: 1, sourceId: font.id }] }, "optional-email-ready-order-0001")).value;
+  const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
+    ...individualPayload("", ""),
+    standardPersonalization: { initials: "", name: "", backNumber: "2", backNumberSizeClass: "SENIOR", shortsNumber: "" },
+    items: [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: {} }],
+  }, "optional-email-ready-order-0001")).value;
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "optional-email-control-0001")).value;
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "optional-email-proposal-0001")).value;
   const group = proposal.groups[0];

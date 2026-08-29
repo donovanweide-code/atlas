@@ -12,9 +12,9 @@ export interface TeamwearCatalogProduct extends SportpaleisCatalogProduct {
   collection: string | null;
   familyKey: string | null;
   advicePriceEur: number | null;
-  sourceStatus: "AUTHORITATIVE" | "CONTROLLED_FIXTURE" | "DATA_GAP";
+  sourceStatus: "AUTHORITATIVE" | "MIXED_VARIANT_AUTHORITY" | "CONTROLLED_FIXTURE" | "DATA_GAP";
   syncStatus: "CURRENT" | "REVIEW_REQUIRED" | "NOT_CONNECTED";
-  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null })[];
+  variants: (SportpaleisCatalogProduct["variants"][number] & { colorHex: string | null; sourceStatus?: "AUTHORITATIVE" | "DATA_GAP" })[];
 }
 
 export interface TeamwearPriceQuote {

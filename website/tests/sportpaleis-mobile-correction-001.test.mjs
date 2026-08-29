@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 const passwords = { kevin: "Correction-Kevin-2026!", patrick: "Correction-Patrick-2026!", collega: "Correction-Store-2026!", "donovan-support": "Correction-Support-2026!" };
 const empty = { initials: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -13,7 +14,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-mobile-correction-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, releaseId: "SPW-HUMAN-REVIEW-CORRECTION-002-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), releaseId: "SPW-HUMAN-REVIEW-CORRECTION-002-20260812", allowedOrigin: "http://127.0.0.1", demoMode: true, uploadsEnabled: true });
   await service.initialize();
   return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
@@ -59,7 +60,7 @@ test("human review correction — productievoorstel weigert een globale preview 
   const { service, admin, storeUser } = await fixture(context);
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "proposal-order")).value;
   await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "proposal-not-ready"), (error) => error.code === "ORDER_NOT_READY" && error.message.includes(created.id));
-  const acknowledged = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "test-capture" }, created.revision);
+  const acknowledged = await captureReceipt(service, admin, created, "test-capture-receipt");
   const ready = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "proposal-ready")).value;
   await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-missing"), (error) => error.code === "ORDER_NOT_READY" && /contour\/fontbestand/u.test(error.message));
   assert.equal((await service.bootstrap(admin.token)).productionProposals.length, 0);

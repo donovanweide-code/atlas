@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 const passwords = { kevin: "Hotfix-Admin-2026!", patrick: "Hotfix-Operator-2026!", collega: "Hotfix-Store-2026!", "donovan-support": "Hotfix-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -13,7 +14,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-human-acceptance-hotfix-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-HUMAN-ACCEPTANCE-HOTFIX" });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-HUMAN-ACCEPTANCE-HOTFIX" });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   return { service, admin };
@@ -35,7 +36,7 @@ test("niet-beschikbare foliekleur faalt vóór voorstel, job, revision en auditm
       { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
     ],
   }, "hotfix-order")).value;
-  const receipt = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: "hotfix-receipt" }, created.revision);
+  const receipt = await captureReceipt(service, admin, created, "hotfix-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, receipt.revision, "hotfix-control")).value;
   assert.deepEqual(controlled.items.map(({ foilColor }) => foilColor), ["Zwart", "Wit"]);
 

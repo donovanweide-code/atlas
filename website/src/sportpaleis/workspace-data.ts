@@ -435,7 +435,7 @@ export interface WorkspaceOrder {
   /** Server-derived operational status. Never use the stage alone as production readiness. */
   productionStatus?: "ATTENTION" | "READY" | "IN_PRODUCTION" | "PARTIALLY_PRODUCED" | "FULLY_PRODUCED" | "DONE";
   productionStatusReason?: string | null;
-  productionClosure?: { status: "NOT_ELIGIBLE" | "ELIGIBLE" | "CONFIRMED"; reason: string | null };
+  productionClosure?: { status: "NOT_ELIGIBLE" | "ELIGIBLE" | "CONFIRMED" | "REVIEW_REQUIRED"; reason: string | null };
   orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM" | "LEGACY";
   teamContext?: string | null;
   owner: string;
@@ -465,6 +465,18 @@ export interface WorkspaceOrder {
   foilStates?: { color: string; status: "READY" | "HOLD" }[];
   items: WorkspaceOrderItem[];
   productionLines?: SportpaleisProductionLine[];
+  productionExecutionSnapshot?: {
+    version: "SPORTPALEIS_IMMUTABLE_PRODUCTION_EXECUTION_V1";
+    orderId: string;
+    orderRevision: number;
+    productionLines: SportpaleisProductionLine[];
+    finalValidation: { version: string; status: "VALID" | "BLOCKED"; validationHash: string; lineHash: string; findings: unknown[] };
+    capturedAt: string;
+    capturedBy: { userId: string; userName: string; role: string };
+    reason: string;
+    executionHash: string;
+    [key: string]: unknown;
+  };
   /**
    * Read-only analysis of an older order representation against the current
    * canonical production contract. Historical items remain the source record;
@@ -472,9 +484,9 @@ export interface WorkspaceOrder {
    * audited confirmation when confirmation is required.
    */
   productionReconciliation?: {
-    version: "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1";
+    version: "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1" | "EXISTING_ORDER_CANONICAL_RECONCILIATION_V2";
     status: "PROVEN" | "RESOLVABLE" | "HUMAN_DECISION_REQUIRED";
-    sourceKind: "STORED_CANONICAL" | "HISTORICAL_ORDER_PROJECTION";
+    sourceKind: "STORED_CANONICAL" | "IMMUTABLE_EXECUTION_SNAPSHOT" | "HISTORICAL_EXECUTION_WITHOUT_SNAPSHOT" | "HISTORICAL_ORDER_PROJECTION";
     historicalSourceHash: string;
     projectionHash: string | null;
     productionLines: SportpaleisProductionLine[];
@@ -483,11 +495,11 @@ export interface WorkspaceOrder {
       itemId: string;
       articleNumber: string | null;
       decoration: string;
-      missingField: "ARTICLE" | "DECORATION_TYPE" | "VALUE" | "FOIL_COLOR" | "PRODUCTION_PROFILE" | "SIZE_CLASS" | "PRODUCTION_SOURCE" | "DIMENSIONS" | "CONFLICT";
+      missingField: "ARTICLE" | "ARTICLE_CONTEXT" | "DECORATION_TYPE" | "DECORATION_CARDINALITY" | "CARDINALITY" | "VALUE" | "FOIL_COLOR" | "PRODUCTION_PROFILE" | "SIZE_CLASS" | "PRODUCTION_SOURCE" | "DIMENSIONS" | "EXECUTION_SNAPSHOT" | "CONFLICT" | string;
       reason: string;
       evidence: string;
       action: {
-        kind: "CONFIRM_PROJECTION" | "CHOOSE_SIZE_CLASS" | "CHOOSE_DECORATION_TYPE" | "CHOOSE_FOIL_COLOR" | "OPEN_PRODUCTION_SOURCE" | "OPEN_ORDER_CONTENT";
+        kind: "CONFIRM_PROJECTION" | "CHOOSE_SIZE_CLASS" | "CHOOSE_DECORATION_TYPE" | "CHOOSE_FOIL_COLOR" | "OPEN_PRODUCTION_SOURCE" | "OPEN_ORDER_CONTENT" | "OPEN_HISTORY";
         label: string;
         target: string;
         options?: string[];
@@ -503,6 +515,9 @@ export interface WorkspaceOrder {
       byUserName: string;
       reason: string;
       evidence: string;
+      itemId?: string;
+      decoration?: string;
+      action?: { kind: string; label: string; target: string; options?: string[] };
     }[];
     confirmed?: {
       at: string;
@@ -516,7 +531,7 @@ export interface WorkspaceOrder {
   stockApplications?: { id: string; kind: "STOCK_LOGO"; association: "VVA / Spartaan"; quantity: number; status: "PENDING" | "APPLIED"; appliedAt: string | null; appliedBy: string | null; source: "WEBSHOP_XPRT" }[];
   notes?: { id: string; scope: "order" | "customer"; kind: "internal" | "attention"; text: string; authorId: string; authorName: string; createdAt: string }[];
   priority?: { requestedBy: string; alignedWith: string; reason: string; explanation: string; createdAt: string } | null;
-  communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null }; production?: { status: string; updatedAt?: string; providerReference?: string | null }; ready: { status: string; updatedAt?: string; providerReference?: string | null } };
+  communication?: { requiredForIndividualOrder?: boolean; receipt: { status: string; updatedAt?: string; providerReference?: string | null; deliveryEvidence?: Record<string, unknown> }; production?: { status: string; updatedAt?: string; providerReference?: string | null; deliveryEvidence?: Record<string, unknown> }; ready: { status: string; updatedAt?: string; providerReference?: string | null; deliveryEvidence?: Record<string, unknown> } };
   barcode?: { value: string; featureEnabled: false; hardwareValidated: false };
   pickup?: { status: "NOT_PICKED_UP" | "PICKED_UP"; pickedUpAt: string | null; pickedUpBy: string | null };
   payment?: { status: "UNKNOWN" | "DUE" | "PAID" | "REGISTER_PROCESSED"; updatedAt: string | null; updatedBy: string | null; source: "MANUAL_WORKSPACE" | "ACA_XPRT" | "UNKNOWN" };

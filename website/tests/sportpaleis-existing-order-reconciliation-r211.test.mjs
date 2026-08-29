@@ -71,6 +71,7 @@ test("expliciete historische decoration-intentie wordt deterministisch PROVEN zo
 test("gemengd Junior/Senior blijft in afzonderlijke fysieke groepen en kledingmaat bepaalt de klasse nooit", () => {
   const state = executableTestState();
   const item = legacyItem("mixed", "Rugnummers volgens namenlijst", {
+    quantity: 5,
     variants: [
       { id: "person-junior", quantity: 2, size: "140", personalization: "Rug 7 Junior", personalizationValues: { backNumber: "7", backNumberSizeClass: "JUNIOR" }, backNumberProduction: { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "Historische Junior-productieregel" } },
       { id: "person-senior", quantity: 3, size: "M", personalization: "Rug 7 Senior", personalizationValues: { backNumber: "7", backNumberSizeClass: "SENIOR" }, backNumberProduction: { sizeClass: "SENIOR", physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "Historische Senior-productieregel" } },
@@ -141,7 +142,7 @@ test("legacydiversiteit behoudt bron, orderklasse, cardinaliteit, kleur en lifec
   const people = results.find(({ order }) => order.id === "SP-LEGACY-PERSONEN").result;
   assert.equal(people.status, "PROVEN");
   assert.deepEqual(new Set(people.productionLines.filter(({ personalizationField }) => personalizationField === "backNumber").map(({ heightMm }) => heightMm)), new Set([200, 220]));
-  const stored = legacyOrder("SP-LEGACY-PARTIAL", [legacyItem("partial", "Initialen PT")], { stage: "PRINT", productionLines: structuredClone(results[0].result.productionLines), productionCompletion: { status: "PARTIAL" } });
+  const stored = { ...structuredClone(results[0].order), stage: "PRINT", productionLines: structuredClone(results[0].result.productionLines), productionCompletion: { status: "PARTIAL" } };
   const storedResult = reconcileExistingOrderProductionTruth(state, stored);
   assert.equal(storedResult.status, "PROVEN");
   assert.equal(storedResult.sourceKind, "STORED_CANONICAL");

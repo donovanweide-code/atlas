@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 const passwords = { kevin: "Color-Choice-Admin-2026!", patrick: "Color-Choice-Operator-2026!", collega: "Color-Choice-Store-2026!", "donovan-support": "Color-Choice-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -13,7 +14,7 @@ async function fixture(context, key) {
   const root = await mkdtemp(path.join(tmpdir(), `sportpaleis-color-choice-${key}-`));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-QUICK-INTAKE-ADAPTIVE-NESTING-V1" });
+  const service = new SportpaleisPilotService({ store, mailFoundation: createTestMailFoundation(root), artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-QUICK-INTAKE-ADAPTIVE-NESTING-V1" });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const operator = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
@@ -31,7 +32,7 @@ async function fixture(context, key) {
       { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
     ],
   }, `color-choice-${key}-order`)).value;
-  const receipt = await service.recordCommunicationStatus(admin.token, admin.csrfToken, created.id, { channel: "receipt", status: "SENT", providerReference: `color-choice-${key}-receipt` }, created.revision);
+  const receipt = await captureReceipt(service, admin, created, `color-choice-${key}-receipt`);
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, receipt.revision, `color-choice-${key}-control`)).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, `color-choice-${key}-proposal`)).value;
   const byColor = (color) => proposal.groups.find(({ foilColor }) => foilColor === color);
