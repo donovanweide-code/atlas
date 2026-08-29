@@ -465,6 +465,54 @@ export interface WorkspaceOrder {
   foilStates?: { color: string; status: "READY" | "HOLD" }[];
   items: WorkspaceOrderItem[];
   productionLines?: SportpaleisProductionLine[];
+  /**
+   * Read-only analysis of an older order representation against the current
+   * canonical production contract. Historical items remain the source record;
+   * a projection becomes stored production truth only after an explicit,
+   * audited confirmation when confirmation is required.
+   */
+  productionReconciliation?: {
+    version: "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1";
+    status: "PROVEN" | "RESOLVABLE" | "HUMAN_DECISION_REQUIRED";
+    sourceKind: "STORED_CANONICAL" | "HISTORICAL_ORDER_PROJECTION";
+    historicalSourceHash: string;
+    projectionHash: string | null;
+    productionLines: SportpaleisProductionLine[];
+    findings: {
+      id: string;
+      itemId: string;
+      articleNumber: string | null;
+      decoration: string;
+      missingField: "ARTICLE" | "DECORATION_TYPE" | "VALUE" | "FOIL_COLOR" | "PRODUCTION_PROFILE" | "SIZE_CLASS" | "PRODUCTION_SOURCE" | "DIMENSIONS" | "CONFLICT";
+      reason: string;
+      evidence: string;
+      action: {
+        kind: "CONFIRM_PROJECTION" | "CHOOSE_SIZE_CLASS" | "CHOOSE_DECORATION_TYPE" | "CHOOSE_FOIL_COLOR" | "OPEN_PRODUCTION_SOURCE" | "OPEN_ORDER_CONTENT";
+        label: string;
+        target: string;
+        options?: string[];
+      };
+    }[];
+    evidence: string[];
+    decisions?: {
+      findingId: string;
+      missingField: string;
+      value: string;
+      at: string;
+      byUserId: string;
+      byUserName: string;
+      reason: string;
+      evidence: string;
+    }[];
+    confirmed?: {
+      at: string;
+      byUserId: string;
+      byUserName: string;
+      reason: string;
+      historicalSourceHash: string;
+      projectionHash: string;
+    };
+  };
   stockApplications?: { id: string; kind: "STOCK_LOGO"; association: "VVA / Spartaan"; quantity: number; status: "PENDING" | "APPLIED"; appliedAt: string | null; appliedBy: string | null; source: "WEBSHOP_XPRT" }[];
   notes?: { id: string; scope: "order" | "customer"; kind: "internal" | "attention"; text: string; authorId: string; authorName: string; createdAt: string }[];
   priority?: { requestedBy: string; alignedWith: string; reason: string; explanation: string; createdAt: string } | null;

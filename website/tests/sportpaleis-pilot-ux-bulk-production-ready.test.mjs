@@ -31,13 +31,20 @@ test("selectie over kleuren gebruikt bestaande groepen en bulk Gereed slaat onvo
   const initial = await service.bootstrap(admin.token);
   const lineLessControlled = initial.orders.filter(({ stage, productionLines }) => stage === "CONTROL" && !productionLines?.length);
   assert.ok(lineLessControlled.length > 0, "seed bevat de historische CONTROL-zonder-productieregels situatie");
-  assert.ok(lineLessControlled.every(({ productionStatus, productionStatusReason }) => productionStatus === "ATTENTION" && /geen gevalideerde productieregels/u.test(productionStatusReason)));
+  assert.ok(lineLessControlled.every(({ productionStatus, productionReconciliation }) =>
+    productionStatus === "ATTENTION"
+    && productionReconciliation?.status === "HUMAN_DECISION_REQUIRED"
+    && productionReconciliation.findings?.length > 0
+    && productionReconciliation.findings.every(({ decoration, reason, action }) => decoration && reason && action?.label && action?.target)
+  ), "historische orders zonder veilige projectie tonen concrete, uitvoerbare beslissingen in plaats van een generieke dead-end melding");
   const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   if (pioneers.defaultFoilColor !== "Wit") await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: pioneers.foilColors, defaultFoilColor: "Wit" });
   const legacyOrder = await controlledOrder(service, admin, "legacy-unmanaged", [{ articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty }]);
   const legacyProposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: legacyOrder.id, expectedRevision: legacyOrder.revision }] }, "bulk-ux-legacy-proposal")).value;
   await store.mutate(async (state) => {
-    state.orders.find(({ id }) => id === legacyOrder.id).items.forEach((item) => { item.foilColor = "Onbekend"; });
+    const storedOrder = state.orders.find(({ id }) => id === legacyOrder.id);
+    storedOrder.items.forEach((item) => { item.foilColor = "Onbekend"; });
+    storedOrder.productionLines.forEach((line) => { line.foilColor = "Onbekend"; line.decorationIdentity.foilColor = "Onbekend"; });
     const group = state.productionProposals.find(({ id }) => id === legacyProposal.id).groups[0];
     group.foilColor = "Onbekend";
     group.label = "Onbekend — 1 order";

@@ -413,6 +413,26 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, expectedRevision: order.revision }) }));
   }
 
+  async confirmExistingOrderProductionReconciliation(order: WorkspaceOrder, reason: string): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+    const reconciliation = order.productionReconciliation;
+    if (!reconciliation?.projectionHash) throw new Error("Er is geen bevestigbare productieprojectie beschikbaar.");
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/production-reconciliation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("existing-order-reconciliation") },
+      body: JSON.stringify({ expectedRevision: order.revision, historicalSourceHash: reconciliation.historicalSourceHash, projectionHash: reconciliation.projectionHash, confirm: true, reason }),
+    }));
+  }
+
+  async resolveExistingOrderProductionReconciliationFinding(order: WorkspaceOrder, findingId: string, value: string, reason: string): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+    const reconciliation = order.productionReconciliation;
+    if (!reconciliation) throw new Error("Er is geen actuele ontbrekende productiewaarheid beschikbaar.");
+    return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(order.id)}/production-reconciliation/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("existing-order-reconciliation-decision") },
+      body: JSON.stringify({ expectedRevision: order.revision, historicalSourceHash: reconciliation.historicalSourceHash, findingId, value, reason }),
+    }));
+  }
+
   async addOrderNote(orderId: string, input: { scope: "order" | "customer"; kind: "internal" | "attention"; text: string }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders/${encodeURIComponent(orderId)}/notes`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("note") }, body: JSON.stringify(input) }));
   }

@@ -2386,7 +2386,7 @@ export class SportpaleisPilotService {
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: structuredClone(bootstrapOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
+      orders: structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) }))),
       orderHistory: { total: sortedOperationalOrders.length, loaded: bootstrapOrders.length, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
@@ -2470,7 +2470,7 @@ export class SportpaleisPilotService {
       .sort((left, right) => String(right.updatedAt ?? right.createdAt ?? "").localeCompare(String(left.updatedAt ?? left.createdAt ?? "")) || right.id.localeCompare(left.id));
     const cursorIndex = input.cursor ? sorted.findIndex(({ id }) => id === input.cursor) : -1;
     const offset = cursorIndex >= 0 ? cursorIndex + 1 : 0;
-    const items = sorted.slice(offset, offset + limit).map((order) => ({ ...order, ...productionStatusForOrder(state, order) }));
+    const items = sorted.slice(offset, offset + limit).map((order) => publicOrderWithProductionTruth(state, order));
     return { items: structuredClone(items), total: sorted.length, pageSize: limit, query, nextCursor: offset + items.length < sorted.length ? items.at(-1)?.id ?? null : null, bounded: true };
   }
 
@@ -2480,7 +2480,7 @@ export class SportpaleisPilotService {
       && candidate.deletion?.byUserId !== "system:final-clean-start"
       && !(candidate.eventHistory ?? []).some((event) => event.source === "final-clean-start"));
     if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
-    return structuredClone({ ...order, ...productionStatusForOrder(state, order) });
+    return structuredClone(publicOrderWithProductionTruth(state, order));
   }
 
   async productionJob(token, productionJobId) {
@@ -3034,7 +3034,7 @@ export class SportpaleisPilotService {
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           if (!["ORDER", "CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
-          if (order.productionLines?.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
+          if (productionLinesForOrder(state, order).some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
           return order;
         });
         const sequence = state.nextProductionJobSequence;
@@ -3098,11 +3098,11 @@ export class SportpaleisPilotService {
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           const allowedStages = proposalGroup ? ["ORDER", "CONTROL", "PRINT"] : ["CONTROL", "PRINT"];
           if (!allowedStages.includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
-          if (order.productionLines?.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
+          if (productionLinesForOrder(state, order).some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
           return order;
         });
         if (!proposalGroup) {
-          const directFoilColors = new Set(orders.flatMap((order) => (order.productionLines ?? []).map((line) => productionLineFoilColor(state, order, line)).filter(Boolean)));
+          const directFoilColors = new Set(orders.flatMap((order) => productionLinesForOrder(state, order).map((line) => productionLineFoilColor(state, order, line)).filter(Boolean)));
           if ([...directFoilColors].some((color) => !managedFoilColor(state, color))) throw Object.assign(new Error("Een productieregel heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
           if (directFoilColors.size > 1) throw Object.assign(new Error("Een order met meerdere foliekleuren moet eerst als afzonderlijke kleurproductiegroepen worden voorbereid."), { statusCode: 409, code: "PRODUCTION_COLOR_GROUP_REQUIRED" });
         }
@@ -3568,13 +3568,12 @@ export class SportpaleisPilotService {
         if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
           throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
-        const blockedProductionLine = order.stage === "CONTROL" ? order.productionLines?.find(({ validation }) => validation?.status !== "VALID") : null;
-        if (order.stage === "CONTROL" && (blockedProductionLine || order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP")))) {
-          const detail = blockedProductionLine?.validation?.reason ? `: ${blockedProductionLine.validation.reason}` : "";
-          throw Object.assign(new Error(`Productiedata ontbreekt${detail}. De order blijft zichtbaar bij Productie, maar kan nog niet naar fysieke productie.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
-        }
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
           throw Object.assign(new Error("Deze order wacht volledig op de juiste foliekleur."), { statusCode: 409, code: "COLOR_HOLD" });
+        }
+        const productionBlocker = order.stage === "CONTROL" ? productionProposalBlockReason(order, state) : null;
+        if (productionBlocker) {
+          throw Object.assign(new Error(`Productiedata ontbreekt: ${productionBlocker}. De order blijft zichtbaar bij Productie met een concrete herstelactie.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
         }
         if (order.stage === "PRINT") throw Object.assign(new Error("Meld een volledig geproduceerde order vanuit Productie expliciet Gereed."), { statusCode: 409, code: "USE_PRODUCTION_READY_ACTION" });
         const previous = order.stage;
@@ -3612,13 +3611,12 @@ export class SportpaleisPilotService {
           if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
             throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
           }
-          const blockedProductionLine = order.stage === "CONTROL" ? order.productionLines?.find(({ validation }) => validation?.status !== "VALID") : null;
-          if (order.stage === "CONTROL" && (blockedProductionLine || order.items.some((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP")))) {
-            const detail = blockedProductionLine?.validation?.reason ? `: ${blockedProductionLine.validation.reason}` : "";
-            throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata${detail}.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
-          }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
             throw Object.assign(new Error(`${order.id} wacht volledig op de juiste foliekleur.`), { statusCode: 409, code: "COLOR_HOLD" });
+          }
+          const productionBlocker = order.stage === "CONTROL" ? productionProposalBlockReason(order, state) : null;
+          if (productionBlocker) {
+            throw Object.assign(new Error(`${order.id} mist gevalideerde productiedata: ${productionBlocker}.`), { statusCode: 409, code: "PRODUCTION_DATA_INCOMPLETE" });
           }
           if (order.stage === "PRINT") throw Object.assign(new Error(`${order.id}: meld volledig geproduceerd werk vanuit Productie expliciet Gereed.`), { statusCode: 409, code: "USE_PRODUCTION_READY_ACTION" });
           const previous = order.stage;
@@ -3661,14 +3659,15 @@ export class SportpaleisPilotService {
             continue;
           }
           const progress = productionProgressForOrder(state, order);
+          const productionLines = productionLinesForOrder(state, order);
           const stockApplications = order.stockApplications ?? [];
           const stockComplete = stockApplications.length > 0 && stockApplications.every(({ status }) => status === "APPLIED");
-          const plottedComplete = (order.productionLines ?? []).length === 0 ? true : Boolean(progress?.trackedComplete && progress.complete);
+          const plottedComplete = productionLines.length === 0 ? true : Boolean(progress?.trackedComplete && progress.complete);
           if (!plottedComplete || stockApplications.some(({ status }) => status !== "APPLIED")) {
             skipped.push({ id: order.id, code: "PRODUCTION_LINES_PENDING", reason: "Nog niet alle vereiste productieregels per foliekleur zijn bedrukt." });
             continue;
           }
-          if (!(order.productionLines ?? []).length && !stockComplete) {
+          if (!productionLines.length && !stockComplete) {
             skipped.push({ id: order.id, code: "PRODUCTION_LINES_PENDING", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." });
             continue;
           }
@@ -3676,7 +3675,7 @@ export class SportpaleisPilotService {
           const completedJobs = (progress?.entries ?? []).filter(({ status }) => status === "PRODUCED").map(({ productionJobId }) => state.productionJobs.find(({ id }) => id === productionJobId)).filter(Boolean);
           const completionBody = {
             version: "CANONICAL_PRODUCTION_COMPLETION_V1",
-            requiredLineIds: [...new Set((order.productionLines ?? []).map(({ id }) => id))].sort(),
+            requiredLineIds: [...new Set(productionLines.map(({ id }) => id))].sort(),
             productionJobs: completedJobs.map(({ id, jobNumber, snapshotHash }) => ({ id, jobNumber, snapshotHash })).sort((left, right) => left.id.localeCompare(right.id)),
             stockApplicationIds: stockApplications.filter(({ status }) => status === "APPLIED").map(({ id }) => id).sort(),
             explicitHumanAction: "AFRONDEN",
@@ -3701,6 +3700,81 @@ export class SportpaleisPilotService {
           completed.push(order);
         }
         return { completed, skipped };
+      }, payload);
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async confirmExistingOrderProductionReconciliation(token, csrfToken, orderId, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `CONFIRM_EXISTING_ORDER_PRODUCTION_RECONCILIATION:${orderId}`, () => {
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gereconcilieerd."), { statusCode: 409, code: "ORDER_DELETED" });
+        if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd; controleer het voorstel opnieuw."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+        const reconciliation = reconcileExistingOrderProductionTruth(state, order);
+        if (reconciliation.historicalSourceHash !== String(payload.historicalSourceHash ?? "") || reconciliation.projectionHash !== String(payload.projectionHash ?? "")) throw Object.assign(new Error("De historische bron of voorbereide productieprojectie is gewijzigd; controleer opnieuw."), { statusCode: 409, code: "RECONCILIATION_PROJECTION_STALE" });
+        if (reconciliation.status !== "RESOLVABLE" || !reconciliation.productionLines.length || reconciliation.productionLines.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Alleen een eenduidige, volledig valide voorbereide projectie kan worden bevestigd."), { statusCode: 409, code: "RECONCILIATION_NOT_CONFIRMABLE" });
+        if (payload.confirm !== true) throw Object.assign(new Error("Expliciete bevestiging is vereist."), { statusCode: 400, code: "RECONCILIATION_CONFIRMATION_REQUIRED" });
+        const reason = requiredText(payload.reason, "Reden", 400);
+        const at = iso();
+        const previous = { productionLines: [], historicalSourceHash: reconciliation.historicalSourceHash };
+        order.productionLines = structuredClone(reconciliation.productionLines);
+        order.productionReconciliation = {
+          ...structuredClone(reconciliation),
+          status: "PROVEN",
+          sourceKind: "STORED_CANONICAL",
+          findings: [],
+          confirmed: { at, byUserId: user.id, byUserName: user.name, reason, historicalSourceHash: reconciliation.historicalSourceHash, projectionHash: reconciliation.projectionHash },
+        };
+        order.revision += 1;
+        order.updatedAt = at;
+        order.eventHistory ??= [];
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "EXISTING_ORDER_PRODUCTION_RECONCILED", at, userId: user.id, userName: user.name, source: "explicit-human-confirmation", details: { previous, next: { productionLineIds: order.productionLines.map(({ id }) => id), projectionHash: reconciliation.projectionHash }, reason, evidence: reconciliation.evidence, historicalSourcePreserved: true } });
+        audit(state, user.id, "Bestaande order naar canonical productiewaarheid gereconcilieerd", order.id, { previous, next: { productionLineIds: order.productionLines.map(({ id }) => id), projectionHash: reconciliation.projectionHash }, reason, evidence: reconciliation.evidence, historicalSourcePreserved: true });
+        return publicOrderWithProductionTruth(state, order);
+      }, payload);
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
+  async resolveExistingOrderProductionReconciliationFinding(token, csrfToken, orderId, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `RESOLVE_EXISTING_ORDER_PRODUCTION_FINDING:${orderId}`, () => {
+        const order = state.orders.find(({ id }) => id === orderId);
+        if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gereconcilieerd."), { statusCode: 409, code: "ORDER_DELETED" });
+        if (order.revision !== Number(payload.expectedRevision)) throw Object.assign(new Error("De order is intussen gewijzigd; controleer de ontbrekende waarheid opnieuw."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
+        const reconciliation = reconcileExistingOrderProductionTruth(state, order);
+        if (reconciliation.historicalSourceHash !== String(payload.historicalSourceHash ?? "")) throw Object.assign(new Error("De historische bron is gewijzigd; controleer opnieuw."), { statusCode: 409, code: "RECONCILIATION_SOURCE_STALE" });
+        const finding = reconciliation.findings.find(({ id }) => id === String(payload.findingId ?? ""));
+        if (!finding) throw Object.assign(new Error("De ontbrekende productiewaarheid is niet meer actueel."), { statusCode: 409, code: "RECONCILIATION_FINDING_STALE" });
+        if (!["CHOOSE_SIZE_CLASS", "CHOOSE_DECORATION_TYPE", "CHOOSE_FOIL_COLOR"].includes(finding.action.kind)) throw Object.assign(new Error("Deze herstelactie moet via de aangewezen bron- of artikelcontext worden uitgevoerd."), { statusCode: 409, code: "RECONCILIATION_ACTION_NOT_INLINE" });
+        const value = requiredText(payload.value, "Keuze", 80);
+        if (!finding.action.options?.includes(value)) throw Object.assign(new Error("Kies één van de actuele veilige opties."), { statusCode: 400, code: "RECONCILIATION_DECISION_INVALID" });
+        if (finding.action.kind === "CHOOSE_FOIL_COLOR" && !managedFoilColor(state, value)) throw Object.assign(new Error("De gekozen foliekleur is niet actief beheerd."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
+        const reason = requiredText(payload.reason, "Reden", 400);
+        const at = iso();
+        const previousDecisions = existingOrderReconciliationDecisions(order);
+        const decision = { findingId: finding.id, missingField: finding.missingField, value, at, byUserId: user.id, byUserName: user.name, reason, evidence: finding.evidence };
+        const decisions = [...previousDecisions.filter(({ findingId }) => findingId !== finding.id), decision];
+        order.productionReconciliation = { ...structuredClone(reconciliation), decisions };
+        const updated = reconcileExistingOrderProductionTruth(state, order);
+        order.productionReconciliation = { ...structuredClone(updated), decisions };
+        order.revision += 1;
+        order.updatedAt = at;
+        order.eventHistory ??= [];
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "EXISTING_ORDER_PRODUCTION_DECISION_RECORDED", at, userId: user.id, userName: user.name, source: "explicit-human-decision", details: { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true } });
+        audit(state, user.id, "Ontbrekende bestaande-orderwaarheid beslist", order.id, { findingId: finding.id, missingField: finding.missingField, previous: previousDecisions.find(({ findingId }) => findingId === finding.id) ?? null, next: decision, reason, historicalSourcePreserved: true });
+        return publicOrderWithProductionTruth(state, order);
       }, payload);
       return { state, value: outcome };
     });
@@ -6147,6 +6221,241 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
   return [...grouped.values()];
 }
 
+const EXISTING_ORDER_RECONCILIATION_VERSION = "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1";
+
+function stableExistingOrderProductionLines(lines) {
+  return [...lines]
+    .map((line) => {
+      const identity = [
+        line.orderId ?? "", line.itemId ?? "", line.variantId ?? "", line.personalizationField ?? line.type,
+        line.content, line.foilColor ?? line.decorationIdentity?.foilColor ?? "", line.source?.kind ?? "",
+        line.source?.id ?? "", line.source?.version ?? "", Number(line.widthMm), Number(line.heightMm),
+        Number(line.quantity), line.placementRole ?? "", line.placementRule?.compositionId ?? "",
+      ];
+      return { ...line, id: `legacy-canonical-${sha256(JSON.stringify(identity)).slice(0, 24).toLowerCase()}` };
+    })
+    .sort((left, right) => [left.itemId, left.personalizationField, left.content, left.foilColor, left.id].map(String).join("|").localeCompare([right.itemId, right.personalizationField, right.content, right.foilColor, right.id].map(String).join("|"), "nl"));
+}
+
+function existingOrderHistoricalSourceHash(order) {
+  return sha256(JSON.stringify({
+    id: order.id,
+    createdAt: order.createdAt,
+    sourceContext: order.sourceContext ?? null,
+    association: order.association,
+    associations: order.associations ?? [],
+    standardPersonalization: order.standardPersonalization ?? null,
+    items: (order.items ?? []).map((item) => ({
+      id: item.id, articleId: item.articleId ?? null, articleNumber: item.articleNumber ?? null,
+      product: item.product, association: item.association ?? null, size: item.size ?? null,
+      quantity: item.quantity, personalization: item.personalization, personalizationValues: item.personalizationValues ?? null,
+      foilColor: item.foilColor, productionProfileId: item.productionProfileId ?? null,
+      sourceType: item.sourceType ?? null, sourceProvenance: item.sourceProvenance ?? null,
+      backNumberProduction: item.backNumberProduction ?? null, variants: item.variants ?? [],
+    })),
+  }));
+}
+
+function nonEmptyPersonalization(values = {}) {
+  return PERSONALIZATION_FIELDS.some((field) => String(values?.[field] ?? "").trim()) || String(values?.initialsInfix ?? "").trim();
+}
+
+function legacyPersonalizationFromText(item, profile) {
+  const result = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
+  const evidence = [];
+  const unresolved = [];
+  const inferred = [];
+  const text = String(item.personalization ?? "").trim();
+  if (!text || /^geen bedrukking$/iu.test(text)) return { values: result, evidence, unresolved, inferred };
+  const productText = String(item.product ?? "");
+  if (/\bsenior\b/iu.test(`${productText} ${text}`)) result.backNumberSizeClass = "SENIOR";
+  else if (/\bjunior\b/iu.test(`${productText} ${text}`)) result.backNumberSizeClass = "JUNIOR";
+  const parts = text.split(/\s*[·|;\n]\s*/u).map((part) => part.trim()).filter(Boolean);
+  for (const part of parts) {
+    if (/^\d+(?:[.,]\d+)?\s*mm$/iu.test(part)) { evidence.push(`Historische fysieke-maataanduiding: ${part}`); continue; }
+    const patterns = [
+      ["initials", /^(?:initialen?|init\.?)[\s:=-]*(.+)$/iu],
+      ["backNumber", /^(?:rug(?:nummer)?|rugnr\.?)[\s:=-]*(\S+?)(?:\s*\((?:Junior|Senior)\))?$/iu],
+      ["chestNumber", /^(?:borst(?:nummer)?|borstnr\.?)[\s:=-]*(\S+)$/iu],
+      ["shortsNumber", /^(?:short(?:nummer)?|shortnr\.?|broeknummer)[\s:=-]*(\S+)$/iu],
+      ["name", /^(?:naam|rugnaam)[\s:=-]*(.+)$/iu],
+    ];
+    const matched = patterns.find(([, pattern]) => pattern.test(part));
+    if (matched) {
+      const [, pattern] = matched;
+      const value = part.match(pattern)?.[1]?.trim() ?? "";
+      result[matched[0]] = value;
+      evidence.push(`${part} → ${matched[0]}`);
+      continue;
+    }
+    const supported = [...new Set(profile?.supports ?? [])].filter((field) => PERSONALIZATION_FIELDS.includes(field));
+    const productField = /rugnummer/iu.test(productText) ? "backNumber" : /short(?:nummer)?/iu.test(productText) ? "shortsNumber" : /borstnummer/iu.test(productText) ? "chestNumber" : /initial/iu.test(productText) ? "initials" : /naam/iu.test(productText) ? "name" : null;
+    const inferredField = productField && supported.includes(productField) ? productField : supported.length === 1 ? supported[0] : null;
+    if (inferredField) {
+      result[inferredField] = part;
+      inferred.push({ field: inferredField, value: part, evidence: productField ? `Productomschrijving “${productText}”` : `Profiel ondersteunt uitsluitend ${inferredField}` });
+    } else unresolved.push(part);
+  }
+  return { values: result, evidence, unresolved, inferred };
+}
+
+function existingOrderFinding(order, item, index, missingField, decoration, reason, evidence, action) {
+  return {
+    id: `reconciliation-${sha256(JSON.stringify([order.id, item.id, missingField, decoration, index])).slice(0, 18).toLowerCase()}`,
+    itemId: item.id,
+    articleNumber: item.articleNumber ?? null,
+    decoration,
+    missingField,
+    reason,
+    evidence,
+    action,
+  };
+}
+
+function existingOrderReconciliationDecisions(order) {
+  return Array.isArray(order.productionReconciliation?.decisions) ? structuredClone(order.productionReconciliation.decisions) : [];
+}
+
+function existingOrderDecision(decisions, finding) {
+  return decisions.find(({ findingId }) => findingId === finding.id) ?? null;
+}
+
+/**
+ * Reconciles immutable historical order intent into a current canonical
+ * production projection. It never writes to the order. A RESOLVABLE
+ * projection requires an explicit audited confirmation before materializing.
+ */
+export function reconcileExistingOrderProductionTruth(state, order) {
+  const historicalSourceHash = existingOrderHistoricalSourceHash(order);
+  const decisions = existingOrderReconciliationDecisions(order);
+  if (order.productionLines?.length) {
+    const productionLines = structuredClone(order.productionLines);
+    return {
+      version: EXISTING_ORDER_RECONCILIATION_VERSION,
+      status: "PROVEN",
+      sourceKind: "STORED_CANONICAL",
+      historicalSourceHash,
+      projectionHash: sha256(JSON.stringify(productionLines)),
+      productionLines,
+      findings: [],
+      evidence: ["Canonieke productieregels zijn reeds bij de order opgeslagen."],
+      ...(decisions.length ? { decisions } : {}),
+      ...(order.productionReconciliation?.confirmed ? { confirmed: structuredClone(order.productionReconciliation.confirmed) } : {}),
+    };
+  }
+
+  const findings = [];
+  const evidence = [];
+  const projectedItems = [];
+  let requiresConfirmation = decisions.length > 0;
+  for (const [itemIndex, historicalItem] of (order.items ?? []).entries()) {
+    if (/^geen bedrukking$/iu.test(String(historicalItem.personalization ?? "").trim()) || historicalItem.productionProfileId === "profile-none") continue;
+    let article = historicalItem.articleId ? state.articles.find(({ id }) => id === historicalItem.articleId) : null;
+    article ??= historicalItem.articleNumber ? state.articles.find(({ articleNumber, association }) => String(articleNumber) === String(historicalItem.articleNumber) && (!historicalItem.association || association === historicalItem.association)) : null;
+    if (!article && historicalItem.product) {
+      const matches = state.articles.filter(({ name, association }) => normalizedProductionIdentity(name) === normalizedProductionIdentity(historicalItem.product) && (!historicalItem.association || association === historicalItem.association));
+      if (matches.length === 1) { article = matches[0]; requiresConfirmation = true; evidence.push(`${historicalItem.id}: artikel exact op productnaam en vereniging gevonden (${article.articleNumber}).`); }
+    }
+    const profileId = historicalItem.productionProfileId || article?.profileId;
+    const profile = state.productionProfiles.find(({ id }) => id === profileId);
+    if (!historicalItem.articleNumber && !article?.articleNumber) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE", historicalItem.personalization || historicalItem.product, "Het historische artikel heeft geen eenduidige artikelidentiteit.", historicalItem.sourceProvenance ?? order.sourceContext?.provenance ?? "Historische order", { kind: "OPEN_ORDER_CONTENT", label: "Artikel en bedrukking controleren", target: `orders/nieuw?edit=${encodeURIComponent(order.id)}#artikelen` }));
+    if (!profile) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "PRODUCTION_PROFILE", historicalItem.personalization || historicalItem.product, "Er is geen historisch of exact artikelgebonden productieprofiel gevonden.", historicalItem.productionProfileId ? `Opgeslagen profiel ${historicalItem.productionProfileId}` : "Geen profielreferentie opgeslagen", { kind: "OPEN_PRODUCTION_SOURCE", label: "Productieprofiel kiezen", target: `beheer/productieprofielen` }));
+
+    let variants = (historicalItem.variants ?? []).filter((variant) => nonEmptyPersonalization(variant.personalizationValues)).map((variant) => structuredClone(variant));
+    if (!variants.length && nonEmptyPersonalization(historicalItem.personalizationValues)) variants = [{
+      id: `legacy-variant-${sha256(JSON.stringify([order.id, historicalItem.id, historicalItem.personalizationValues])).slice(0, 16).toLowerCase()}`,
+      quantity: historicalItem.quantity,
+      size: historicalItem.size ?? "",
+      personalization: historicalItem.personalization,
+      personalizationValues: structuredClone(historicalItem.personalizationValues),
+      backNumberProduction: historicalItem.backNumberProduction ?? null,
+    }];
+    if (!variants.length && profile) {
+      const parsed = legacyPersonalizationFromText(historicalItem, profile);
+      evidence.push(...parsed.evidence.map((entry) => `${historicalItem.id}: ${entry}`));
+      for (const inference of parsed.inferred) {
+        requiresConfirmation = true;
+        evidence.push(`${historicalItem.id}: ${inference.evidence}; voorstel ${inference.field} = “${inference.value}”.`);
+      }
+      for (const [unresolvedIndex, value] of parsed.unresolved.entries()) {
+        const finding = existingOrderFinding(order, historicalItem, itemIndex + unresolvedIndex, "DECORATION_TYPE", value, `“${value}” kan niet betrouwbaar aan één bedrukkingstype worden gekoppeld.`, historicalItem.personalization, { kind: "CHOOSE_DECORATION_TYPE", label: "Bedrukkingstype kiezen", target: `orders/${order.id}#productieherstel`, options: [...new Set(profile.supports ?? [])] });
+        const decision = existingOrderDecision(decisions, finding);
+        if (decision && finding.action.options.includes(decision.value)) {
+          parsed.values[decision.value] = value;
+          requiresConfirmation = true;
+          evidence.push(`${historicalItem.id}: ${decision.byUserName} koppelde “${value}” expliciet aan ${decision.value}.`);
+        } else findings.push(finding);
+      }
+      if (nonEmptyPersonalization(parsed.values)) variants = [{
+        id: `legacy-variant-${sha256(JSON.stringify([order.id, historicalItem.id, parsed.values])).slice(0, 16).toLowerCase()}`,
+        quantity: historicalItem.quantity,
+        size: historicalItem.size ?? "",
+        personalization: historicalItem.personalization,
+        personalizationValues: parsed.values,
+        backNumberProduction: historicalItem.backNumberProduction ?? (parsed.values.backNumber && parsed.values.backNumberSizeClass ? resolveBackNumberProductionContext(state.associations.find(({ id, name }) => id === historicalItem.association || name === historicalItem.association), profile, parsed.values.backNumberSizeClass, historicalItem.size) : null),
+      }];
+    }
+    for (const variant of variants) {
+      const values = variant.personalizationValues ?? {};
+      if (String(values.backNumber ?? "").trim() && !String(values.backNumberSizeClass ?? variant.backNumberProduction?.sizeClass ?? historicalItem.backNumberProduction?.sizeClass ?? "").trim()) {
+        const finding = existingOrderFinding(order, historicalItem, itemIndex, "SIZE_CLASS", `Rugnummer ${values.backNumber}`, "Junior/Senior is niet historisch vastgelegd en wordt nooit uit de kledingmaat gegokt.", variant.personalization || historicalItem.personalization, { kind: "CHOOSE_SIZE_CLASS", label: "Junior of Senior kiezen", target: `orders/${order.id}#productieherstel`, options: ["JUNIOR", "SENIOR"] });
+        const decision = existingOrderDecision(decisions, finding);
+        if (decision && finding.action.options.includes(decision.value)) {
+          values.backNumberSizeClass = decision.value;
+          variant.backNumberProduction = resolveBackNumberProductionContext(state.associations.find(({ id, name }) => id === historicalItem.association || name === historicalItem.association), profile, decision.value, variant.size ?? historicalItem.size);
+          requiresConfirmation = true;
+          evidence.push(`${historicalItem.id}: ${decision.byUserName} bevestigde ${decision.value} voor rugnummer ${values.backNumber}.`);
+        } else findings.push(finding);
+      }
+    }
+    if (!variants.length && !findings.some(({ itemId }) => itemId === historicalItem.id)) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "VALUE", historicalItem.product, "De historische orderregel bevat geen eenduidige bedrukwaarde.", historicalItem.personalization || "Geen bedrukkingstekst opgeslagen", { kind: "CHOOSE_DECORATION_TYPE", label: "Bedrukking vastleggen", target: `orders/${order.id}#productieherstel`, options: [...new Set(profile?.supports ?? [])] }));
+    let effectiveFoilColor = historicalItem.foilColor;
+    if (!String(effectiveFoilColor ?? "").trim() || /^onbekend$/iu.test(effectiveFoilColor)) {
+      const finding = existingOrderFinding(order, historicalItem, itemIndex, "FOIL_COLOR", historicalItem.personalization || historicalItem.product, "De fysieke foliekleur ontbreekt in de historische orderwaarheid.", historicalItem.sourceProvenance ?? "Historische order", { kind: "CHOOSE_FOIL_COLOR", label: "Foliekleur kiezen", target: `orders/${order.id}#productieherstel`, options: [...new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => color))] });
+      const decision = existingOrderDecision(decisions, finding);
+      if (decision && finding.action.options.includes(decision.value)) {
+        effectiveFoilColor = decision.value;
+        requiresConfirmation = true;
+        evidence.push(`${historicalItem.id}: ${decision.byUserName} bevestigde foliekleur ${decision.value}.`);
+      } else findings.push(finding);
+    }
+    projectedItems.push({
+      ...structuredClone(historicalItem),
+      articleId: historicalItem.articleId ?? article?.id,
+      articleNumber: historicalItem.articleNumber ?? article?.articleNumber,
+      association: historicalItem.association ?? article?.association ?? order.association,
+      productionProfileId: profileId,
+      foilColor: effectiveFoilColor,
+      sourceType: "LEGACY",
+      sourceProvenance: historicalItem.sourceProvenance ?? order.sourceContext?.provenance ?? `Historische order ${order.id}`,
+      variants,
+    });
+  }
+  let productionLines = findings.some(({ missingField }) => ["ARTICLE", "DECORATION_TYPE", "VALUE", "FOIL_COLOR", "PRODUCTION_PROFILE", "SIZE_CLASS"].includes(missingField)) ? [] : stableExistingOrderProductionLines(resolveCanonicalProductionLines(state, order.id, projectedItems));
+  for (const [lineIndex, line] of productionLines.entries()) if (line.validation?.status !== "VALID") {
+    const item = projectedItems.find(({ id }) => id === line.itemId) ?? order.items?.[0] ?? { id: "unknown", product: "Onbekende bedrukking" };
+    const missingField = /maat|mm|afmeting/iu.test(line.validation.reason ?? "") ? "DIMENSIONS" : "PRODUCTION_SOURCE";
+    findings.push(existingOrderFinding(order, item, lineIndex, missingField, line.preview?.label ?? line.content, line.validation.reason ?? "De canonieke productieregel is niet uitvoerbaar.", line.provenance, { kind: "OPEN_PRODUCTION_SOURCE", label: missingField === "DIMENSIONS" ? "Fysieke maat controleren" : "Productiebron openen", target: `beheer/productieprofielen#profiel-${encodeURIComponent(item.productionProfileId ?? "")}` }));
+  }
+  const projectionHash = productionLines.length ? sha256(JSON.stringify(productionLines)) : null;
+  const status = findings.length ? "HUMAN_DECISION_REQUIRED" : requiresConfirmation ? "RESOLVABLE" : "PROVEN";
+  if (status === "RESOLVABLE") findings.push(existingOrderFinding(order, projectedItems[0] ?? order.items[0], 0, "CONFLICT", "Historische bedrukking", "Workspace heeft precies één evidence-backed canonical projection voorbereid; bevestiging voorkomt een stille historische herschrijving.", evidence.join(" · ") || "Historische order + exact profiel", { kind: "CONFIRM_PROJECTION", label: "Productievoorstel bevestigen", target: `orders/${order.id}#productieherstel` }));
+  return { version: EXISTING_ORDER_RECONCILIATION_VERSION, status, sourceKind: "HISTORICAL_ORDER_PROJECTION", historicalSourceHash, projectionHash, productionLines, findings, evidence, ...(decisions.length ? { decisions } : {}) };
+}
+
+function productionLinesForOrder(state, order) {
+  if (order.productionLines?.length) return order.productionLines;
+  const reconciliation = reconcileExistingOrderProductionTruth(state, order);
+  return reconciliation.status === "PROVEN" ? reconciliation.productionLines : [];
+}
+
+function publicOrderWithProductionTruth(state, order, { includeReconciliation = true } = {}) {
+  const productionReconciliation = includeReconciliation ? reconcileExistingOrderProductionTruth(state, order) : null;
+  const productionLines = order.productionLines?.length ? order.productionLines : includeReconciliation ? productionLinesForOrder(state, order) : [];
+  const projected = { ...order, ...(productionLines.length ? { productionLines } : {}), ...(includeReconciliation ? { productionReconciliation } : {}) };
+  return { ...projected, ...productionStatusForOrder(state, projected) };
+}
+
 const deriveCatalogProductionLines = resolveCanonicalProductionLines;
 
 function lineFromOrderItem(state, order, item, index) {
@@ -6234,7 +6543,7 @@ function productionProgressForOrder(state, order) {
     const lineRefs = group.productionLineRefs.filter(({ orderId }) => orderId === order.id);
     return { foilColor: group.foilColor, status: job?.status === "COMPLETED" ? "PRODUCED" : "OPEN", productionJobId: job?.id ?? null, lineRefs };
   });
-  const requiredLineIds = new Set((order.productionLines ?? []).map(({ id }) => id));
+  const requiredLineIds = new Set(productionLinesForOrder(state, order).map(({ id }) => id));
   const trackedLineIds = new Set(entries.flatMap(({ lineRefs }) => lineRefs.map(({ lineId }) => lineId)));
   const producedLineIds = new Set(entries.filter(({ status }) => status === "PRODUCED").flatMap(({ lineRefs }) => lineRefs.map(({ lineId }) => lineId)));
   const trackedCounts = entries.flatMap(({ lineRefs }) => lineRefs.map(({ lineId }) => lineId)).reduce((counts, lineId) => counts.set(lineId, Number(counts.get(lineId) ?? 0) + 1), new Map());
@@ -6263,6 +6572,7 @@ function stableProductionTypeSort(entries) {
 }
 
 function productionLineFoilColor(state, order, line) {
+  if (String(line.decorationIdentity?.foilColor ?? "").trim()) return String(line.decorationIdentity.foilColor).trim();
   if (String(line.foilColor ?? "").trim()) return String(line.foilColor).trim();
   const item = order.items.find(({ id }) => id === line.itemId)
     ?? order.items.find(({ personalizationValues }) => personalizationValues && Object.values(personalizationValues).includes(line.content))
@@ -6275,11 +6585,12 @@ function productionSourceLabel(sourceChannel) {
 }
 
 function productionClosureForOrder(state, order) {
+  const productionLines = productionLinesForOrder(state, order);
   if (order.stage === "DONE") {
     const evidence = order.productionCompletionEvidence;
     const readyEvent = order.eventHistory?.find(({ type, details }) => type === "PRODUCTION_READY" && details?.explicitHumanAction === "AFRONDEN");
     if (!evidence || !readyEvent) return { status: "REVIEW_REQUIRED", reason: "Gereed-status mist immutable Afronden-bewijs." };
-    const requiredLineIds = [...new Set((order.productionLines ?? []).map(({ id }) => id))].sort();
+    const requiredLineIds = [...new Set(productionLines.map(({ id }) => id))].sort();
     if (JSON.stringify(requiredLineIds) !== JSON.stringify([...(evidence.requiredLineIds ?? [])].sort())) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de canonical productieregels." };
     return { status: "CONFIRMED", reason: null };
   }
@@ -6287,9 +6598,9 @@ function productionClosureForOrder(state, order) {
   const progress = productionProgressForOrder(state, order);
   const stockApplications = order.stockApplications ?? [];
   if (stockApplications.some(({ status }) => status !== "APPLIED")) return { status: "NOT_ELIGIBLE", reason: "Het voorraadlogo is nog niet fysiek toegepast." };
-  if ((order.productionLines ?? []).length > 0 && !progress?.trackedComplete) return { status: "NOT_ELIGIBLE", reason: "Niet alle vereiste productieregels zijn aan een fysieke productiegroep gekoppeld." };
-  if ((order.productionLines ?? []).length > 0 && !progress?.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
-  if (!(order.productionLines ?? []).length && !stockApplications.length) return { status: "NOT_ELIGIBLE", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." };
+  if (productionLines.length > 0 && !progress?.trackedComplete) return { status: "NOT_ELIGIBLE", reason: "Niet alle vereiste productieregels zijn aan een fysieke productiegroep gekoppeld." };
+  if (productionLines.length > 0 && !progress?.complete) return { status: "NOT_ELIGIBLE", reason: "Nog niet alle vereiste productiegroepen zijn Bedrukt." };
+  if (!productionLines.length && !stockApplications.length) return { status: "NOT_ELIGIBLE", reason: "Er is geen aantoonbaar uitgevoerde fysieke productiestap." };
   return { status: "ELIGIBLE", reason: null };
 }
 
@@ -6408,13 +6719,15 @@ function productionLineWriterIdentity(state, line) {
 function buildProductionProposalGroups(state, orders) {
   const grouped = new Map();
   for (const order of orders) {
-    assertOrderProductionDecorationCardinality(state, order);
-    if (!order.productionLines?.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
-    for (const line of order.productionLines) {
-      assertPioneersNumberSource(state, order, line);
-      assertScBuitenboysShortSource(state, order, line);
+    const productionLines = productionLinesForOrder(state, order);
+    const effectiveOrder = { ...order, productionLines };
+    assertOrderProductionDecorationCardinality(state, effectiveOrder);
+    if (!productionLines.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
+    for (const line of productionLines) {
+      assertPioneersNumberSource(state, effectiveOrder, line);
+      assertScBuitenboysShortSource(state, effectiveOrder, line);
       const writer = productionLineWriterIdentity(state, line);
-      const foilColor = productionLineFoilColor(state, order, line);
+      const foilColor = productionLineFoilColor(state, effectiveOrder, line);
       const sourceChannel = order.sourceContext?.source ?? "STORE";
       const key = `${sourceChannel}|${foilColor.toLocaleLowerCase("nl-NL")}|${writer.id}@${writer.version}`;
       const group = grouped.get(key) ?? { sourceChannel, foilColor, outputWriter: writer, entries: [] };
@@ -6666,7 +6979,12 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
 
 function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined, options = {}) {
   const snapshotStartedAt = performance.now();
-  const allProductionLines = orders.flatMap((order) => order.productionLines?.length ? order.productionLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id, ...(productionDecorationIdentity(order, line) ? { decorationIdentity: productionDecorationIdentity(order, line) } : {}) })) : order.items.map((item, index) => ({ ...lineFromOrderItem(state, order, item, index), orderId: order.id })));
+  const allProductionLines = orders.flatMap((order) => {
+    const effectiveLines = productionLinesForOrder(state, order);
+    return effectiveLines.length
+      ? effectiveLines.map((line) => ({ ...line, orderId: line.orderId ?? order.id, ...(productionDecorationIdentity(order, line) ? { decorationIdentity: productionDecorationIdentity(order, line) } : {}) }))
+      : order.items.map((item, index) => ({ ...lineFromOrderItem(state, order, item, index), orderId: order.id }));
+  });
   const selectedLineKeys = productionGroup?.lineRefs ? new Set(productionGroup.lineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`)) : null;
   const selectedLineOrder = productionGroup?.lineRefs ? new Map(productionGroup.lineRefs.map(({ orderId, lineId }, index) => [`${orderId}|${lineId}`, index])) : null;
   const orderProductionLines = selectedLineKeys
@@ -6715,11 +7033,17 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
 function productionProposalBlockReason(order, state = undefined) {
   if (order.deletion?.status === "DELETED") return "order is verwijderd";
   if (!["ORDER", "CONTROL"].includes(order.stage)) return "status is niet Klaar voor productie";
-  if (!order.productionLines?.length) return "geen gevalideerde productieregels beschikbaar";
-  if (state && (order.items.some(({ foilColor }) => !managedFoilColor(state, foilColor)) || order.productionLines.some(({ foilColor }) => foilColor && !managedFoilColor(state, foilColor)))) return "een actieve beheerde foliekleur ontbreekt";
-  const blockedLine = order.productionLines?.find(({ validation }) => validation.status !== "VALID");
+  const reconciliation = state ? reconcileExistingOrderProductionTruth(state, order) : null;
+  const productionLines = state ? productionLinesForOrder(state, order) : order.productionLines ?? [];
+  if (!productionLines.length) {
+    const finding = reconciliation?.findings?.[0];
+    return finding ? `${finding.decoration}: ${finding.reason}` : "geen gevalideerde productieregels beschikbaar";
+  }
+  if (state && productionLines.some((line) => !managedFoilColor(state, productionLineFoilColor(state, order, line)))) return "een actieve beheerde foliekleur ontbreekt";
+  const blockedLine = productionLines.find(({ validation }) => validation.status !== "VALID");
   if (blockedLine) return blockedLine.validation.reason || "een productieregel is geblokkeerd";
-  const blockedItem = order.items.find((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
+  const reconciledLegacyTruth = reconciliation?.sourceKind === "HISTORICAL_ORDER_PROJECTION" && reconciliation.status === "PROVEN" || Boolean(order.productionReconciliation?.confirmed);
+  const blockedItem = reconciledLegacyTruth ? null : order.items.find((item) => item.productionReadiness?.status === "DATA_GAP" || item.backNumberProduction?.status === "DATA_GAP" || item.variants?.some((variant) => variant.backNumberProduction?.status === "DATA_GAP"));
   if (blockedItem) return blockedItem.productionReadiness?.reason || blockedItem.backNumberProduction?.source || "noodzakelijke productiegegevens ontbreken";
   if (order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) return "alle foliekleuren staan op wachten";
   return null;
@@ -7241,6 +7565,16 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/orders" && method === "GET") {
         json(response, 200, await service.orderHistory(token, Object.fromEntries(requestUrl.searchParams)));
+        return true;
+      }
+      const orderReconciliationDecisionMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/production-reconciliation\/decision$/);
+      if (orderReconciliationDecisionMatch && method === "POST") {
+        json(response, 200, await service.resolveExistingOrderProductionReconciliationFinding(token, csrf, decodeURIComponent(orderReconciliationDecisionMatch[1]), await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const orderReconciliationMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)\/production-reconciliation$/);
+      if (orderReconciliationMatch && method === "POST") {
+        json(response, 200, await service.confirmExistingOrderProductionReconciliation(token, csrf, decodeURIComponent(orderReconciliationMatch[1]), await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const orderUpdateMatch = route.match(/^\/api\/sportpaleis\/v1\/orders\/([^/]+)$/);
