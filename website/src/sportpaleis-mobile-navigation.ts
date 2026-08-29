@@ -39,18 +39,13 @@ export function toggleMobileNavigation(elements: MobileNavigationElements): bool
  */
 export function bindMobileNavigationBackdrop(backdrop: HTMLButtonElement | null, dismiss: () => void): () => void {
   if (!backdrop) return () => undefined;
-  const onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
-    event.stopImmediatePropagation();
-  };
   const onClick = (event: MouseEvent): void => {
     event.preventDefault();
     event.stopImmediatePropagation();
     dismiss();
   };
-  backdrop.addEventListener("pointerdown", onPointerDown);
   backdrop.addEventListener("click", onClick);
-  return () => { backdrop.removeEventListener("pointerdown", onPointerDown); backdrop.removeEventListener("click", onClick); };
+  return () => { backdrop.removeEventListener("click", onClick); };
 }
 
 export function syncMobileNavigationForViewport(elements: MobileNavigationElements, mobile: boolean): void {

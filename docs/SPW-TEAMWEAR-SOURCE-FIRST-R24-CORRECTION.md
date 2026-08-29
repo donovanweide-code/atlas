@@ -10,7 +10,7 @@ This candidate succeeds immutable R2.3 after interactive Chrome review proved fi
 - Allow a back placement to activate the controlled back-view placeholder only for products that permit a back side; backpacks remain fail-closed.
 - Pass the immutable proposal source into PDF garment rendering so Studio, preview and PDF use the same bytes and hash.
 - Keep the mobile navigation backdrop present until the click is consumed, preventing the same tap from reaching bottom navigation.
-- Stop pointer propagation without cancelling Chrome's follow-up click, so the backdrop both closes and cannot click through.
+- Let the backdrop own and consume the actual click directly, without a preceding pointer handler that can suppress that click.
 - Never inherit a catalog back image when the front is a separate pasted/direct source; an unproven cross-source pair stays fail-closed.
 - Prevent the rendered Studio/review layer from resolving that catalog back again through the optional article link.
 - Make future catalog regeneration cache front and back from the same current gallery source set.

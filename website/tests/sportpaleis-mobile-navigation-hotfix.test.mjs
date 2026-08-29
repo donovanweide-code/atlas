@@ -77,7 +77,7 @@ test("desktop viewport reset never hides or scroll-locks the persistent sidebar"
   assert.equal(bodyClasses.has("sp-mobile-nav-open"), false);
 });
 
-test("exact Human regression: Menu sluiten consumes the pointer sequence before the underlying Bedrukken route", () => {
+test("exact Human regression: Menu sluiten owns the click before the underlying Bedrukken route", () => {
   const handlers = new Map();
   let dismissed = 0;
   let removed = 0;
@@ -86,18 +86,14 @@ test("exact Human regression: Menu sluiten consumes the pointer sequence before 
     removeEventListener: (type, callback) => { assert.equal(callback, handlers.get(type)); removed += 1; },
   };
   const cleanup = bindMobileNavigationBackdrop(backdrop, () => { dismissed += 1; });
-  const pointer = { button: 0, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
-  handlers.get("pointerdown")(pointer);
-  assert.equal(pointer.prevented, false, "pointerdown mag de afsluitende Chrome-click niet onderdrukken");
-  assert.equal(pointer.stopped, true, "hit testing may not move to the underlying route during the Human tap");
-  assert.equal(dismissed, 0, "de backdrop blijft tot de echte click bestaan zodat Chrome geen nieuw click-target kiest");
+  assert.equal(handlers.has("pointerdown"), false, "geen pointerlaag mag Chrome's afsluitende click onderdrukken");
   const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
   handlers.get("click")(click);
   assert.equal(click.prevented, true);
   assert.equal(click.stopped, true, "delegated navigation may not observe the dismissal click");
   assert.equal(dismissed, 1);
   cleanup();
-  assert.equal(removed, 2);
+  assert.equal(removed, 1);
 });
 
 test("390px premium shell makes the toggled sidebar visible and interactive", async () => {
