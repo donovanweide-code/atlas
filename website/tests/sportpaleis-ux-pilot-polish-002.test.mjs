@@ -29,13 +29,13 @@ test("Orders scheiden status, aandacht en gereed werk", async () => {
   assert.match(source, /activeOrderFilter/);
   assert.match(source, /data-action="order-filter"/);
   assert.match(source, /function productionPill/);
-  assert.match(source, /ATTENTION: "Aandacht nodig", READY: "Klaar om te produceren", IN_PRODUCTION: "In productie", DONE: "Gereed"/);
+  assert.match(source, /ATTENTION: "Aandacht nodig", READY: "Klaar om te produceren", IN_PRODUCTION: "In productie", PARTIALLY_PRODUCED: "Deels geproduceerd", FULLY_PRODUCED: "Volledig geproduceerd", DONE: "Gereed"/);
   assert.doesNotMatch(source, /if \(order\.attention\) return \{ label: "Aandacht nodig"/);
 });
 
 test("Productie scheidt geblokkeerd en maakbaar werk en verbergt ontwikkelaarstaal", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /productionStatus === "READY" \|\| productionStatus === "IN_PRODUCTION"/);
+  assert.match(source, /productionStatus === "READY" \|\| isActiveProductionStatus\(productionStatus\)/);
   assert.match(source, /Nog niet maakbaar/);
   assert.match(source, /Klaar om te produceren/);
   assert.match(source, /Bekijk wat nodig is/);

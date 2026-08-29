@@ -129,7 +129,9 @@ export function findProposalByCustomerToken(state, token, now = new Date()) {
 function normalizePlacement(input) {
   const route = TEAMKIT_FULFILLMENT_ROUTES.includes(input.route) ? input.route : "NOG_TE_BEPALEN";
   const preset = canonicalTeamwearPlacementZone(input.preset ?? "FRONT_CENTER_LARGE");
-  const kind = ["CLUB_LOGO", "SPONSOR", "NAME", "INITIALS", "BACK_NUMBER", "SHORT_NUMBER", "FREE_TEXT"].includes(input.kind) ? input.kind : "FREE_TEXT";
+  const allowedKinds = ["CLUB_LOGO", "SPONSOR", "NAME", "INITIALS", "BACK_NUMBER", "CHEST_NUMBER", "SHORT_NUMBER", "FREE_TEXT"];
+  if (input.kind && !allowedKinds.includes(input.kind)) throw error("Onbekende Teamwear-bedrukking; de betekenis wordt niet stilzwijgend gewijzigd.", "PROPOSAL_PLACEMENT_KIND_INVALID");
+  const kind = input.kind || "FREE_TEXT";
   const sourceId = nullableText(input.sourceId, "Bron", 180); const productionAssetId = nullableText(input.productionAssetId, "Productieasset", 180);
   if (["CLUB_LOGO", "SPONSOR"].includes(kind) && !sourceId && !productionAssetId) throw error("Kies voor dit logo een bron of bestaand asset.", "PROPOSAL_PLACEMENT_SOURCE_REQUIRED");
   if (!["CLUB_LOGO", "SPONSOR"].includes(kind) && !nullableText(input.text, "Opdruktekst", 120)) throw error("Vul de opdruktekst in.", "PROPOSAL_PLACEMENT_TEXT_REQUIRED");

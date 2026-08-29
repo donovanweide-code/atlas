@@ -106,14 +106,14 @@ test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleid
   await assert.rejects(service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision }), (error) => error.code === "TEAMKIT_PRODUCTION_SIZING_REQUIRED");
 
   proposal = await service.updateTeamkitProductionSizing(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [{ itemId: compositionItem.id, sizeQuantities: [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }] }] });
-  assert.deepEqual(proposal.productionSizing.items[0], { itemId: compositionItem.id, quantity: 10, sizes: ["S", "M"], sizeQuantities: [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }], allocationMode: "PER_SIZE" });
+  assert.deepEqual(proposal.productionSizing.items[0], { itemId: compositionItem.id, quantity: 10, sizes: ["M", "S"], sizeQuantities: [{ size: "M", quantity: 6 }, { size: "S", quantity: 4 }], allocationMode: "PER_SIZE" });
   assert.equal(proposal.revisions.at(-1).snapshot.items[0].quantity, null, "operationele maten wijzigen de approved designrevision niet");
-  assert.match(proposal.fulfillmentTasks[0].specification, /10 \| S, M/u);
+  assert.match(proposal.fulfillmentTasks[0].specification, /10 \| M, S/u);
   const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
   assert.equal(prepared.orders.length, 1);
   assert.equal(prepared.orders[0].items[0].quantity, 10);
   assert.equal(prepared.orders[0].items[0].size, "", "Teamwear order gebruikt de variantregels en geen concurrerende samenvattingswaarheid");
-  assert.deepEqual(prepared.orders[0].items[0].variants.map(({ size, quantity }) => ({ size, quantity })), [{ size: "S", quantity: 4 }, { size: "M", quantity: 6 }]);
+  assert.deepEqual(prepared.orders[0].items[0].variants.map(({ size, quantity }) => ({ size, quantity })), [{ size: "M", quantity: 6 }, { size: "S", quantity: 4 }]);
   assert.equal(prepared.orders[0].teamkitContext.productionSizingSnapshotHash, proposal.productionSizing.snapshotHash);
   assert.equal(prepared.orders[0].teamkitContext.productionSizingRevision, 1);
 });

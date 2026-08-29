@@ -80,7 +80,8 @@ test("R20 Guided Setup gebruikt verenigingscontext en dubbele kernacties zijn ve
   assert.doesNotMatch(orders, /href="\$\{BASE\}\/orders\/nieuw"/u, "Orders gebruikt alleen de volledige ordertypekiezer");
   assert.doesNotMatch(execution, /sp-button--wide[^>]+productie\/historie/u, "Historie staat alleen in de productiecontextnavigatie");
 
-  assert.equal((service.match(/assertFulfillmentTransition\(order,/gu) ?? []).length, 4, "alle drie mutatiepaden gebruiken dezelfde invariant");
+  assert.match(service, /function applyCanonicalFulfillmentTransition\(order, action, user, at/u);
+  assert.equal((service.match(/applyCanonicalFulfillmentTransition\(/gu) ?? []).length, 3, "beide publieke mutatiepaden gebruiken één centrale transition-writer");
 });
 
 test("Naambalk blijft een samengestelde NAME + RUGNUMBER-applicatie zonder eigen fysieke maat", async (context) => {

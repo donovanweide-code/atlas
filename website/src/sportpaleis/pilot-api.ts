@@ -618,7 +618,7 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async searchTeamwearCatalog(input: { query?: string; brand?: string; use?: string; audience?: string; offset?: number; limit?: number } = {}): Promise<{ products: unknown[]; total: number; nextOffset: number | null; bounded: true; resolver: "CANONICAL_PRODUCT_CATALOG_V1"; elapsedMs: number }> {
+  async searchTeamwearCatalog(input: { query?: string; brand?: string; use?: string; audience?: string; offset?: number; limit?: number } = {}): Promise<{ products: unknown[]; total: number; nextOffset: number | null; bounded: true; resolver: "CANONICAL_PRODUCT_CATALOG_V1"; normalizedQuery: string; normalizedFilters: { brand: string | null; use: string | null; audience: string | null }; stateRevision: number; elapsedMs: number }> {
     const query = new URLSearchParams(Object.entries(input).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]));
     return responseBody(await fetch(`${API}/teamwear/catalog?${query}`, { credentials: "same-origin" }));
   }

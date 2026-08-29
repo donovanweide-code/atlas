@@ -70,7 +70,7 @@ test("PRE-PILOT MASTER — organisatie, sessies, operatie en intake", async (con
     let created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({
       orderKind: "TEAM",
       standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
-      items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty }],
+      items: [{ articleId: "sp-live-137294", size: "L", quantity: 1, deviation: false, overrides: empty }],
       productionLines: [{ id: "prepilot-team-back", type: "NUMBER", content: "2", previewLabel: "Rugnummer 2", widthMm: 100, heightMm: 200, quantity: 1, sourceId: (await service.bootstrap(activeAdmin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID").id }],
     }), "prepilot-operation-team")).value;
     await store.mutate(async (state) => { const order = state.orders.find(({ id }) => id === created.id); order.communication.receipt.status = "CAPTURED"; return { state, value: undefined }; });

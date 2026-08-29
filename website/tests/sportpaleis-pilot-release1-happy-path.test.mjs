@@ -107,6 +107,6 @@ test("Release 1 UI houdt override en deelproductie normaal en biedt dunne bulkac
   assert.match(source, /Productiebestand maken/u);
   assert.match(source, /productionClosure\?\.status === "ELIGIBLE"/u);
   assert.match(source, /data-action="bulk-delete-orders"/u);
-  assert.match(source, /productionStatus === "IN_PRODUCTION"/u);
+  assert.match(source, /isActiveProductionStatus\(productionStatus\)/u);
   assert.doesNotMatch(source, /foilColorOverride[^]{0,160}Aandacht nodig/iu);
 });

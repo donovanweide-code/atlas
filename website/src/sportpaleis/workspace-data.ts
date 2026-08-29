@@ -433,7 +433,7 @@ export interface WorkspaceOrder {
   promisedAt: string | null;
   stage: OrderStage;
   /** Server-derived operational status. Never use the stage alone as production readiness. */
-  productionStatus?: "ATTENTION" | "READY" | "IN_PRODUCTION" | "DONE";
+  productionStatus?: "ATTENTION" | "READY" | "IN_PRODUCTION" | "PARTIALLY_PRODUCED" | "FULLY_PRODUCED" | "DONE";
   productionStatusReason?: string | null;
   productionClosure?: { status: "NOT_ELIGIBLE" | "ELIGIBLE" | "CONFIRMED"; reason: string | null };
   orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM" | "LEGACY";
@@ -964,7 +964,7 @@ export interface TeamkitProposalSource {
 
 export interface TeamkitProposalPlacement {
   id: string;
-  kind: "CLUB_LOGO" | "SPONSOR" | "NAME" | "INITIALS" | "BACK_NUMBER" | "SHORT_NUMBER" | "FREE_TEXT";
+  kind: "CLUB_LOGO" | "SPONSOR" | "NAME" | "INITIALS" | "BACK_NUMBER" | "CHEST_NUMBER" | "SHORT_NUMBER" | "FREE_TEXT";
   label: string;
   side: "FRONT" | "BACK";
   preset: TeamkitPlacementPreset;

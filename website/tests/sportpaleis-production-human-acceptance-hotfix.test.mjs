@@ -76,7 +76,7 @@ test("dagelijkse productie houdt proposal-only werk vindbaar en toont feedback i
   assert.match(directHandler, /performance\.now\(\)/u);
   assert.match(directHandler, /Productievoorstel maken… Workspace blijft bezig/u);
   assert.match(source, /productionSearchOrders = operationalOrders\.filter\(\(\{ stage, productionStatus \}\) => \["CONTROL", "PRINT", "DONE"\]/u);
-  assert.match(source, /productionStatus && \["READY", "IN_PRODUCTION"\]\.includes\(productionStatus\)/u);
+  assert.match(source, /productionStatus === "READY" \|\| isActiveProductionStatus\(productionStatus\)/u);
   assert.match(source, /sp-production-order-refs/u);
   assert.match(source, /data-production-action-feedback/u);
   assert.match(source, /role="status" aria-live="polite"/u);
@@ -93,7 +93,7 @@ test("productiefilters houden PRINT-orders zichtbaar tot expliciet Gereed", asyn
   const execution = source.slice(source.indexOf("function productionExecution"), source.indexOf("function proofLabel"));
   assert.match(execution, /showAttention = activeProductionFilter === "attention" \|\| activeProductionFilter === "all"/u);
   assert.match(execution, /showPrinting = activeProductionFilter === "printing" \|\| activeProductionFilter === "all"/u);
-  assert.match(execution, /printingOrders = operationalOrders\.filter\(\(\{ productionStatus \}\) => productionStatus === "IN_PRODUCTION"\)/u);
+  assert.match(execution, /printingOrders = operationalOrders\.filter\(\(\{ productionStatus \}\) => isActiveProductionStatus\(productionStatus\)\)/u);
   assert.match(execution, /data-production-status-panel="printing"/u);
   assert.match(execution, /Volledig geproduceerd · expliciet Gereed melden blijft vereist/u);
   assert.match(execution, /data-production-status-row=/u);
