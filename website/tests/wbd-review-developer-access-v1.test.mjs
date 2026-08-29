@@ -30,6 +30,7 @@ async function fixture(context, options = {}) {
     allowedOrigin: "https://workspace.sportpaleis.nl",
     activeReviewCandidateIds: [candidateId],
     reviewAccessEnabled: options.reviewAccessEnabled ?? true,
+    reviewAccessIsolatedState: options.reviewAccessIsolatedState ?? false,
     reviewAccessIssuerPrincipalIds: options.reviewAccessIssuerPrincipalIds ?? ["kevin"],
   });
   await service.initialize();
@@ -98,6 +99,8 @@ test("Codex logs in independently with one-time handoff and receives read-only C
   assert.equal(activated.principal.id, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
   const bootstrap = await service.bootstrap(activated.sessionToken);
   assert.equal(bootstrap.currentUser.id, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
+  assert.deepEqual(bootstrap.users.map(({ id }) => id), [WBD_REVIEW_DEVELOPER_PRINCIPAL.id], "ephemeral principal exists only in its own bootstrap projection");
+  assert.deepEqual(bootstrap.switchableUsers, [], "review principal cannot see or switch to customer identities");
   assert.equal(bootstrap.currentUser.principalType, "REVIEW_DEVELOPER");
   assert.equal(bootstrap.capabilities.reviewDeveloper, true);
   assert.equal(bootstrap.capabilities.reviewMode, true);
@@ -146,6 +149,34 @@ test("central request guard fails closed outside exact read-only scope and audit
   assert.ok(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === WBD_REVIEW_DEVELOPER_PRINCIPAL.id));
   assert.ok(state.audit.some(({ action }) => action === "Tijdelijke Codex-reviewsessie gestart"));
   assert.deepEqual(WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES.includes("release.deploy"), true);
+});
+
+test("safe-interact is limited to an explicit allowlist and disposable candidate state", async (context) => {
+  const isolated = await fixture(context, { reviewAccessIsolatedState: true });
+  const issued = await isolated.service.issueReviewDeveloperGrant(isolated.admin.token, isolated.admin.csrfToken, grantInput());
+  const activated = await isolated.service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
+  const allowed = await isolated.service.assertTemporaryReviewRequest(activated.sessionToken, { method: "PATCH", route: "/api/sportpaleis/v1/orders/SP-REVIEW-001" });
+  assert.equal(allowed.capability, "candidate.ui.safe-interact");
+  await assert.rejects(
+    () => isolated.service.assertTemporaryReviewRequest(activated.sessionToken, { method: "POST", route: "/api/sportpaleis/v1/orders" }),
+    (error) => error?.code === "REVIEW_SIDE_EFFECT_FORBIDDEN",
+  );
+  await assert.rejects(
+    () => isolated.service.assertTemporaryReviewRequest(activated.sessionToken, { method: "POST", route: "/api/sportpaleis/v1/teamkit-proposals/proposal/mail/capture" }),
+    (error) => error?.code === "REVIEW_SIDE_EFFECT_FORBIDDEN",
+  );
+
+  const persistentBoundary = await fixture(context, { reviewAccessIsolatedState: false });
+  const persistentGrant = await persistentBoundary.service.issueReviewDeveloperGrant(persistentBoundary.admin.token, persistentBoundary.admin.csrfToken, grantInput());
+  const persistentSession = await persistentBoundary.service.activateReviewDeveloperGrant(activationPayload(persistentGrant.activationPath));
+  await assert.rejects(
+    () => persistentBoundary.service.assertTemporaryReviewRequest(persistentSession.sessionToken, { method: "PATCH", route: "/api/sportpaleis/v1/orders/SP-REVIEW-001" }),
+    (error) => error?.code === "REVIEW_SIDE_EFFECT_FORBIDDEN",
+  );
+
+  const state = await isolated.store.read();
+  assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie uitgevoerd" && details.capability === "candidate.ui.safe-interact"));
+  assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie geweigerd" && details.reason === "OUTSIDE_GRANT_SCOPE"));
 });
 
 test("TTL, explicit revocation and logout invalidate all temporary access", async (context) => {
@@ -238,4 +269,65 @@ test("real HTTP activation creates an independent cookie session and rejects a w
   });
   assert.equal(forbiddenResponse.status, 403);
   assert.equal((await forbiddenResponse.json()).error, "REVIEW_SIDE_EFFECT_FORBIDDEN");
+});
+
+test("real HTTP safe-interact mutates only disposable Candidate state and preserves the ephemeral principal boundary", async (context) => {
+  const { service, admin, store } = await fixture(context, { reviewAccessIsolatedState: true });
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({
+    scopes: ["candidate.review.read", "candidate.ui.safe-interact", "candidate.debug.read", "candidate.test-state.isolated"],
+  }));
+  const payload = activationPayload(issued.activationPath);
+  const server = createServer(createSportpaleisPilotRequestHandler(service));
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  service.allowedOrigin = baseUrl;
+
+  const activationResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/auth/review-access/activate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  assert.equal(activationResponse.status, 200);
+  const activated = await activationResponse.json();
+  const cookie = activationResponse.headers.get("set-cookie").split(";", 1)[0];
+  const bootstrap = await (await fetch(`${baseUrl}/api/sportpaleis/v1/bootstrap`, { headers: { cookie } })).json();
+  const order = bootstrap.orders.find(({ stage }) => stage === "ORDER");
+  assert.ok(order, "disposable review fixture contains a safe editable order");
+
+  const customer = `${order.customer} · review`;
+  const updateResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/orders/${encodeURIComponent(order.id)}`, {
+    method: "PATCH",
+    headers: { cookie, "content-type": "application/json", "x-csrf-token": activated.csrfToken, origin: baseUrl },
+    body: JSON.stringify({ expectedRevision: order.revision, customer }),
+  });
+  assert.equal(updateResponse.status, 200);
+  assert.equal((await updateResponse.json()).customer, customer);
+
+  const article = bootstrap.articles.find(({ imageKey, active }) => active && imageKey);
+  assert.ok(article);
+  const compositionResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/visual-compositions`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", "x-csrf-token": activated.csrfToken, origin: baseUrl, "idempotency-key": "review-composition-projection" },
+    body: JSON.stringify({ concept: "PRODUCT_FOCUS", title: "Disposable reviewcompositie", artDirection: "Zelfde bron, veilige reviewstate.", articleId: article.id, assetIds: [] }),
+  });
+  assert.equal(compositionResponse.status, 201);
+  const composition = await compositionResponse.json();
+  const refreshedBootstrap = await (await fetch(`${baseUrl}/api/sportpaleis/v1/bootstrap`, { headers: { cookie } })).json();
+  assert.equal(refreshedBootstrap.visualCompositions.some(({ id }) => id === composition.value.id), true, "review capability, not the synthetic role label, controls its own projection");
+
+  const mailResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/orders/${encodeURIComponent(order.id)}/mail/capture`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", "x-csrf-token": activated.csrfToken, origin: baseUrl },
+    body: "{}",
+  });
+  assert.equal(mailResponse.status, 403);
+  assert.equal((await mailResponse.json()).error, "REVIEW_SIDE_EFFECT_FORBIDDEN");
+
+  const state = await store.read();
+  assert.equal(state.orders.find(({ id }) => id === order.id).customer, customer);
+  assert.equal(state.users.some(({ id }) => id === WBD_REVIEW_DEVELOPER_PRINCIPAL.id), false, "temporary principal is never persisted as a customer user");
+  assert.ok(state.audit.some(({ action, userId }) => action === "Order gewijzigd" && userId === WBD_REVIEW_DEVELOPER_PRINCIPAL.id));
+  assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie geweigerd" && details.route.endsWith("/mail/capture")));
 });

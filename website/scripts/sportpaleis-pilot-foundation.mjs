@@ -41,6 +41,7 @@ import {
   WBD_REVIEW_DEVELOPER_PRINCIPAL,
   WbdReviewDeveloperAccessPolicy,
 } from "./wbd-review-developer-access.mjs";
+import { classifySportpaleisReviewRequest } from "./sportpaleis-review-access-policy.mjs";
 import {
   reconcileSportpaleisEmployeeDirectory,
 } from "./sportpaleis-employee-directory.mjs";
@@ -1754,6 +1755,10 @@ export function sportpaleisProductionInventoryView(state) {
 }
 
 function assertRole(user, allowed) {
+  if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType
+    && user.candidateStateIsolated === true
+    && user.scopes?.includes("candidate.ui.safe-interact")
+    && allowed.includes("admin")) return;
   if (!allowed.includes(user.role)) {
     throw Object.assign(new Error("Onvoldoende rechten."), { statusCode: 403, code: "FORBIDDEN" });
   }
@@ -1789,7 +1794,7 @@ function reviewModeAllowed(user, principalIds, reviewCandidates) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -1817,6 +1822,7 @@ export class SportpaleisPilotService {
     this.reviewDeveloperAccessPolicy = reviewAccessEnabled === true
       ? new WbdReviewDeveloperAccessPolicy({ issuerPrincipalIds: reviewAccessIssuerPrincipalIds, allowedCandidateIds: activeReviewCandidateIds, tenantId: "sportpaleis" })
       : null;
+    this.reviewAccessIsolatedState = reviewAccessIsolatedState === true;
   }
 
   async initialize() {
@@ -1892,14 +1898,32 @@ export class SportpaleisPilotService {
       if (cause?.code === "REVIEW_SESSION_UNKNOWN") return null;
       throw cause;
     }
-    if (method !== "GET") throw Object.assign(new Error("De tijdelijke Codex-principal heeft geen productie- of beheerwrite-authority."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
+    const capability = classifySportpaleisReviewRequest({ method, route, isolatedCandidateState: this.reviewAccessIsolatedState });
+    if (!capability) {
+      await this.store.mutate(async (next) => {
+        try {
+          this.reviewDeveloperAccessPolicy.authorizeCapability(next, {
+            sessionToken: token,
+            tenantId: "sportpaleis",
+            candidateId: context.grant.candidateId,
+            capability: "review.side-effect.denied",
+            method,
+            route,
+          }, now);
+        } catch {
+          return { state: next, value: null };
+        }
+        return { state: next, value: null };
+      });
+      throw Object.assign(new Error("De tijdelijke Codex-principal heeft geen productie- of beheerwrite-authority."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
+    }
     const result = await this.store.mutate(async (next) => ({
       state: next,
       value: this.reviewDeveloperAccessPolicy.authorizeCapability(next, {
         sessionToken: token,
         tenantId: "sportpaleis",
         candidateId: context.grant.candidateId,
-        capability: "candidate.review.read",
+        capability,
         method,
         route,
       }, now),
@@ -2052,6 +2076,7 @@ export class SportpaleisPilotService {
             workContexts: ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"],
             defaultContext: "ALL",
             featureExposure: { teamwearExperiencePilot: true },
+            candidateStateIsolated: this.reviewAccessIsolatedState,
           };
           return { state, session: { ...context.session, reviewGrantId: context.grant.id, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT" }, user, reviewGrant: context.grant };
         } catch (cause) {
@@ -2162,7 +2187,9 @@ export class SportpaleisPilotService {
   async bootstrap(token) {
     const { state, user, session } = await this.authenticate(token);
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
+    const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
     const admin = user.role === "admin" || reviewDeveloper;
+    const productionWorkspace = admin || user.role === "operator";
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
@@ -2185,29 +2212,29 @@ export class SportpaleisPilotService {
       revision: state.revision,
       currentUserId: user.id,
       currentUser: sessionUser,
-      users: admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
+      users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
-      switchableUsers: state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
+      switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
       orders: structuredClone(bootstrapOrders.map((order) => ({ ...order, ...productionStatusForOrder(state, order) }))),
       orderHistory: { total: sortedOperationalOrders.length, loaded: bootstrapOrders.length, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
-      webshopIntake: ["admin", "operator"].includes(user.role) ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
+      webshopIntake: productionWorkspace ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
-      productionElements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElements.map((element) => ({ ...element, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
+      productionElements: productionWorkspace ? structuredClone(state.productionElements.map((element) => ({ ...element, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
       productionAssetSources: admin ? structuredClone((state.productionAssetSources ?? []).map((source) => ({ ...(({ documentPreviewSvg: _documentPreviewSvg, ...metadata }) => metadata)(source), original: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(source.original), candidates: source.candidates.map((candidate) => (({ previewSvg: _previewSvg, controlledVector: _controlledVector, ...metadata }) => metadata)(candidate)) }))) : [],
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
-      productionElementRequirements: ["admin", "operator"].includes(user.role) ? structuredClone(state.productionElementRequirements) : [],
-      productionInventory: ["admin", "operator"].includes(user.role) ? sportpaleisProductionInventoryView(state) : [],
-      productionJobs: ["admin", "operator"].includes(user.role) ? structuredClone(bootstrapJobs) : [],
-      productionHistory: ["admin", "operator"].includes(user.role) ? { total: sortedOperationalJobs.length, loaded: bootstrapJobs.length, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true } : { total: 0, loaded: 0, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true },
-      productionProposals: ["admin", "operator"].includes(user.role) ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      productionElementRequirements: productionWorkspace ? structuredClone(state.productionElementRequirements) : [],
+      productionInventory: productionWorkspace ? sportpaleisProductionInventoryView(state) : [],
+      productionJobs: productionWorkspace ? structuredClone(bootstrapJobs) : [],
+      productionHistory: productionWorkspace ? { total: sortedOperationalJobs.length, loaded: bootstrapJobs.length, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true } : { total: 0, loaded: 0, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true },
+      productionProposals: productionWorkspace ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
-      quickProductionIntakes: ["admin", "operator"].includes(user.role) ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
-      visualCompositions: ["admin", "operator"].includes(user.role) ? state.visualCompositions.map(publicVisualComposition).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
-      creativeVectorDrafts: ["admin", "operator"].includes(user.role) ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
+      quickProductionIntakes: productionWorkspace ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
+      visualCompositions: productionWorkspace ? state.visualCompositions.map(publicVisualComposition).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
+      creativeVectorDrafts: productionWorkspace ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
       articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
       associations: structuredClone(state.associations),
@@ -2232,7 +2259,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }

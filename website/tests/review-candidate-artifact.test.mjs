@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { verifyImmutableReviewCandidate } from "../scripts/review-candidate-artifact.mjs";
+
+const hash = (value) => createHash("sha256").update(value).digest("hex");
+
+test("immutable review candidate verification binds artifact, manifests and extracted files", async (context) => {
+  const root = await mkdtemp(path.join(tmpdir(), "review-candidate-identity-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const extracted = path.join(root, "extracted");
+  await mkdir(path.join(extracted, "app", "dist-workspace"), { recursive: true });
+  const page = Buffer.from("<!doctype html><title>R2.2</title>");
+  await writeFile(path.join(extracted, "app", "dist-workspace", "sportpaleis.html"), page);
+  const embedded = Buffer.from(JSON.stringify({ releaseId: "R2.2", commit: "abc", files: [{ path: "app/dist-workspace/sportpaleis.html", bytes: page.length, sha256: hash(page) }] }));
+  await writeFile(path.join(extracted, "RELEASE-MANIFEST.json"), embedded);
+  const artifact = Buffer.from("immutable-archive-bytes");
+  const artifactPath = path.join(root, "R2.2.tar.gz");
+  await writeFile(artifactPath, artifact);
+  const outer = {
+    releaseId: "R2.2", commit: "abc", artifact: "R2.2.tar.gz", artifactBytes: artifact.length,
+    artifactSha256: hash(artifact), embeddedManifestSha256: hash(embedded),
+  };
+  const manifestPath = path.join(root, "R2.2.manifest.json");
+  await writeFile(manifestPath, JSON.stringify(outer));
+
+  const result = await verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) });
+  assert.equal(result.verifiedFileCount, 1);
+  assert.equal(result.releaseId, "R2.2");
+
+  await writeFile(path.join(extracted, "app", "dist-workspace", "sportpaleis.html"), "tampered");
+  await assert.rejects(
+    () => verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) }),
+    (error) => error?.code === "REVIEW_ARTIFACT_IDENTITY_MISMATCH",
+  );
+  assert.equal((await readFile(manifestPath, "utf8")).includes("tampered"), false);
+});

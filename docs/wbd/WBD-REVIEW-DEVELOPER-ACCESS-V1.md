@@ -25,7 +25,9 @@ TTL is minimaal vijf minuten, standaard één uur en maximaal vier uur. Een acti
 - `candidate.test-state.isolated`
 - `pilot.live-validation.read`
 
-De huidige HTTP-boundary is bewust read-only. Niet-GET-verzoeken van deze principal worden vóór de businessroute geweigerd. Veilige Candidate-interactie blijft browser-/Candidate-state en krijgt geen productieauthority.
+De normale HTTP-boundary is bewust read-only. Stateful `candidate.ui.safe-interact` is uitsluitend beschikbaar wanneer de runtime aantoonbaar een disposable Candidate-datastore gebruikt. Alleen een korte expliciete route-allowlist is toegestaan; iedere andere niet-GET wordt vóór de businessroute geweigerd. Productie, mail, hardware, deployment, credentials en gebruikersbeheer blijven altijd verboden.
+
+De browserlauncher serveert nooit impliciet de build uit zijn eigen worktree. Voor start verifieert hij release-ID, commit, buitenste artifacthash, embedded manifesthash en ieder manifestbestand van de aangewezen immutable Candidate. De tijdelijke principal wordt alleen in zijn eigen bootstrap-response geprojecteerd en nooit in persistente gebruikersdata opgenomen.
 
 ## Altijd verboden
 
