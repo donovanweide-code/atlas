@@ -37,11 +37,13 @@ async function approve(service, actor, proposal, items) {
 
 test("Teamwear logo en sponsor worden verliesloos aan echte order-, regel- en decoration-identiteit gebonden", async (context) => {
   const { service, admin, operator } = await fixture(context);
+  const article = (await service.bootstrap(operator.token)).articles.find(({ articleNumber }) => articleNumber === "140224");
+  assert.ok(article, "de identity-regressie gebruikt een echt server-authoritative bovenartikel");
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "lossless-logo.svg", mimeType: "image/svg+xml", dataBase64: vector.toString("base64"), provenance: "R2.10 controlled master", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const candidate = source.candidates[0];
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "R2.10 controlled logo", ownerType: "ASSOCIATION", ownerName: "A.S.C. Waterwijk", productionMethod: "SELF_PRODUCED", widthMm: 80, heightMm: 80 * candidate.boundsMm.height / candidate.boundsMm.width, sizePolicyMode: "FIXED", defaultFoilColor: "Wit", contexts: [{ type: "ASSOCIATION", id: "asc-waterwijk", label: "A.S.C. Waterwijk" }], applications: [{ kind: "LOGO", placement: "Borst" }, { kind: "SPONSOR", placement: "Mouw" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Lossless visual identities", customerName: "Waterwijk", contactName: "R2.10 Reviewer", customerEmail: "reviewer@r210.test", associationName: "A.S.C. Waterwijk" });
-  const items = [{ id: "garment-one", articleId: null, articleNumber: "CUSTOM-1", productName: "Trainingstop", color: "Navy", quantity: null, sizes: [], team: null, notes: null, placements: [
+  const items = [{ id: "garment-one", articleId: article.id, articleNumber: article.articleNumber, productName: article.name, color: "Navy", quantity: null, sizes: [], team: null, notes: null, placements: [
     placement("club-logo", "CLUB_LOGO", null, { productionAssetId: asset.id, assetVersion: asset.version }),
     placement("sleeve-sponsor", "SPONSOR", null, { productionAssetId: asset.id, assetVersion: asset.version, side: "SLEEVE_LEFT", preset: "SLEEVE_LEFT" }),
   ] }];
@@ -57,7 +59,7 @@ test("Teamwear logo en sponsor worden verliesloos aan echte order-, regel- en de
     assert.equal(line.itemId, order.items[0].id);
     assert.equal(line.decorationIdentity.orderId, order.id);
     assert.equal(line.decorationIdentity.itemId, order.items[0].id);
-    assert.equal(line.decorationIdentity.articleNumber, "CUSTOM-1");
+    assert.equal(line.decorationIdentity.articleNumber, article.articleNumber);
     assert.equal(line.quantity, 2);
   }
   assert.deepEqual(new Set(lines.map(({ decorationIdentity }) => decorationIdentity.decorationType)), new Set(["CLUB_LOGO", "SPONSOR"]));

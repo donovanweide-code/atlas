@@ -43,10 +43,19 @@ async function approvedProposal(service, operator, sourceId, asset) {
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "RC2 productieacceptance", customerName: "SV RC2", contactName: "Mevrouw Team", customerEmail: "team@rc2.test", associationName: "A.S.C. Waterwijk", team: "JO15", season: "2026/2027" });
   const access = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = access.path.split("/").at(-1);
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
+  const articles = (await service.bootstrap(operator.token)).articles;
+  const shirt = articles.find(({ association, name, active }) => active && association === "A.S.C. Waterwijk" && /wedstrijd shirt/iu.test(name));
+  const jacket = articles.find(({ association, name, active }) => active && association === "A.S.C. Waterwijk" && /full zip jack|winterjas|regenjack/iu.test(name));
+  const bag = articles.find(({ association, name, active }) => active && association === "A.S.C. Waterwijk" && /voetbaltas/iu.test(name));
+  assert.ok(shirt && jacket && bag);
+  const shirtSizes = shirt.availableSizes.slice(0, 1);
+  const jacketSizes = jacket.availableSizes.slice(0, 1);
+  const bagSizes = bag.availableSizes.slice(0, 1);
+  assert.ok(shirtSizes.length > 0 && jacketSizes.length > 0 && bagSizes.length > 0);
   const items = [
-    { id: "item-ready", articleId: null, articleNumber: "READY-1", productName: "Wedstrijdshirt", color: "Navy", quantity: 18, sizes: ["S", "M", "L"], team: "JO15", notes: null, placements: [placement("placement-ready-a", "INTERN_BEDRUKKEN", { asset }), placement("placement-ready-b", "INTERN_BEDRUKKEN", { asset, preset: "RECHTERBORST" })] },
-    { id: "item-attention", articleId: null, articleNumber: "ATTN-1", productName: "Trainingsjas", color: "Navy", quantity: 6, sizes: ["M", "L"], team: "JO15", notes: null, placements: [placement("placement-attention", "INTERN_BEDRUKKEN", { sourceId })] },
-    { id: "item-external", articleId: null, articleNumber: "EXT-1", productName: "Sporttas", color: "Zwart", quantity: 18, sizes: ["One size"], team: "JO15", notes: null, placements: [placement("placement-external", "EXTERNE_BEDRUKKER", { sourceId, preset: "TAS" })] },
+    { id: "item-ready", articleId: shirt.id, articleNumber: shirt.articleNumber, productName: shirt.name, color: "Navy", quantity: 18, sizes: shirtSizes, team: "JO15", notes: null, placements: [placement("placement-ready-a", "INTERN_BEDRUKKEN", { asset }), placement("placement-ready-b", "INTERN_BEDRUKKEN", { asset, preset: "RECHTERBORST" })] },
+    { id: "item-attention", articleId: jacket.id, articleNumber: jacket.articleNumber, productName: jacket.name, color: "Navy", quantity: 6, sizes: jacketSizes, team: "JO15", notes: null, placements: [placement("placement-attention", "INTERN_BEDRUKKEN", { sourceId })] },
+    { id: "item-external", articleId: bag.id, articleNumber: bag.articleNumber, productName: bag.name, color: "Zwart", quantity: 18, sizes: bagSizes, team: "JO15", notes: null, placements: [placement("placement-external", "EXTERNE_BEDRUKKER", { sourceId, preset: "TAS" })] },
   ];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items, reason: "Approved RC2 productiesnapshot" });
   for (const status of ["READY_FOR_REVIEW", "READY_FOR_APPROVAL"]) proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status, expectedRevision: proposal.aggregateRevision });

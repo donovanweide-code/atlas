@@ -9,6 +9,7 @@ const managedFont = (definition) => Object.freeze({
   status: "TECHNICALLY_VALID",
   allowedInStore: true,
   ...definition,
+  authoritativeIdentity: definition.authoritativeIdentity ?? definition.id,
   version: definition.sha256.slice(0, 12),
 });
 

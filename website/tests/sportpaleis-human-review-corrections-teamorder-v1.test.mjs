@@ -184,10 +184,11 @@ test("Winkel met meerdere productiegroepen wordt pas na laatste Bedrukt eligible
 });
 
 test("Teamorder structureert gemengde bulkinput en accepteert geen vereniging", async (context) => {
-  const { service, admin } = await fixture(context);
+  const { store, service, admin } = await fixture(context);
   assert.deepEqual(parseTeamProductionLines("1 t/m 18\n34").length, 19);
   assert.deepEqual(parseTeamProductionLines("DW × 2"), [{ value: "DW", quantity: 2 }]);
   assert.throws(() => parseTeamProductionLines("DW twee?"), /waarde|aantal|begrijp/u);
+  await store.mutate(async (current) => { current.productionProfiles.find(({ id }) => id === "profile-shirt").fontProfile = "Liberation Sans Regular"; return { state: current, value: null }; });
   const state = await service.bootstrap(admin.token);
   const font = state.productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const created = (await service.createOrder(admin.token, admin.csrfToken, {

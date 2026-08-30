@@ -1124,6 +1124,18 @@ export interface TeamkitProposalItem {
     productType?: "UPPER_GARMENT" | "LOWER_GARMENT" | "SPORTS_BAG" | "BACKPACK" | "OTHER";
     printableSides?: ("FRONT" | "BACK")[];
     sourceReference?: string | null;
+    canonicalProductIdentity?: {
+      version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1";
+      sourceArticleId: string;
+      articleNumber: string;
+      productType: "UPPER_GARMENT" | "LOWER_GARMENT" | "SPORTS_BAG" | "BACKPACK" | "OTHER";
+      physicalSides: ("FRONT" | "BACK")[];
+      printableSides: ("FRONT" | "BACK")[];
+      authority: string;
+      evidenceKind: string;
+      evidenceReference: string;
+      evidenceHash: string;
+    };
   };
   placements: TeamkitProposalPlacement[];
 }

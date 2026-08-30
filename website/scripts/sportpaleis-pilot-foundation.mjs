@@ -10,7 +10,7 @@ import {
   SPORTPALEIS_FONT_CONFIRMATION,
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
-import { authoritativeProductionAssetById } from "../config/sportpaleis-authoritative-production-assets.mjs";
+import { authoritativeProductionAssetById, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS } from "../config/sportpaleis-authoritative-production-assets.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
 import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects, SPORTPALEIS_MACHINE_CONSTRAINTS } from "../src/sportpaleis/direct-print/index.ts";
 import {
@@ -34,7 +34,7 @@ import {
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
-import { canonicalTeamkitProductType, inferCanonicalTeamkitProductType } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
+import { canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth, inferCanonicalTeamkitProductType } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -1402,22 +1402,125 @@ function currentTeamwearCatalogProjection(state, { brand = null, use = null } = 
   });
 }
 
-function normalizeTeamkitItemsWithCanonicalProductTruth(state, requestedItems) {
+function exactSourceFirstArticleBinding(state, item, proposalSources = []) {
+  const snapshot = item.catalogSnapshot ?? {};
+  const candidates = new Map();
+  const remember = (article, evidenceKind, evidenceReference) => {
+    if (!article?.active) return;
+    const existing = candidates.get(article.id);
+    candidates.set(article.id, existing ?? { article, evidence: [] });
+    candidates.get(article.id).evidence.push({ kind: evidenceKind, reference: evidenceReference });
+  };
+
+  if (snapshot.sourceProductId && snapshot.sourceColorId) {
+    for (const article of state.articles) if (article.catalogMedia?.some((media) => media.sourceProductId === snapshot.sourceProductId && media.sourceColorId === snapshot.sourceColorId && media.classification === "SOURCE_GALLERY_ORDER_V1")) remember(article, "OFFICIAL_VARIANT_IDENTITY", `${snapshot.sourceProductId}:${snapshot.sourceColorId}`);
+  }
+  if (snapshot.sourceStatus === "AUTHORITATIVE" && snapshot.catalogProductId) {
+    const article = state.articles.find(({ id, active }) => active && id === snapshot.catalogProductId);
+    if (article) remember(article, "CANONICAL_CATALOG_ARTICLE", snapshot.catalogProductId);
+  }
+
+  if (candidates.size === 0) return { status: "UNRESOLVED", binding: null, evidence: [] };
+  if (candidates.size > 1) return { status: "CONFLICTING", binding: null, evidence: [...candidates.values()].flatMap(({ article, evidence }) => evidence.map((entry) => ({ ...entry, sourceArticleId: article.id }))) };
+  const [{ article, evidence }] = [...candidates.values()];
+  // Direct uploads are immutable visual evidence, never product identity. A
+  // client-controlled filename (even one containing an SKU) cannot establish
+  // physical sides or placements. Preserve its provenance only after a server-
+  // authoritative catalog/variant binding has independently resolved identity.
+  for (const sourceId of [snapshot.directFrontSourceId, snapshot.directBackSourceId].filter(Boolean)) {
+    const source = proposalSources.find(({ id }) => id === sourceId);
+    if (source) evidence.push({ kind: "IMMUTABLE_PRODUCT_IMAGE_SOURCE", reference: `${source.id}@${source.sha256}` });
+  }
+  const truth = canonicalTeamkitSurfaceTruth(inferCanonicalTeamkitProductType(article));
+  const body = {
+    version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1",
+    sourceArticleId: article.id,
+    articleNumber: article.articleNumber,
+    productType: truth.productType,
+    physicalSides: [...truth.physicalSides],
+    printableSides: [...truth.printableSides],
+    authority: "SPORTPALEIS_SERVER_PRODUCT_TRUTH",
+    evidenceKind: evidence.map(({ kind }) => kind).sort().join("+"),
+    evidenceReference: evidence.map(({ reference }) => reference).sort().join(" | "),
+  };
+  return { status: "RESOLVED", binding: { ...body, evidenceHash: sha256(JSON.stringify(body)) }, evidence };
+}
+
+function catalogSnapshotForAuthoritativeArticle(article) {
+  const productType = inferCanonicalTeamkitProductType(article);
+  const truth = canonicalTeamkitSurfaceTruth(productType);
+  const front = article.catalogMedia?.find(({ kind, classification }) => kind === "FRONT" && classification === "SOURCE_GALLERY_ORDER_V1");
+  const back = article.catalogMedia?.find(({ kind, classification }) => kind === "BACK" && classification === "SOURCE_GALLERY_ORDER_V1");
+  return {
+    catalogProductId: article.id,
+    brand: article.teamwearCatalog?.brand ?? "Sportpaleis",
+    supplierName: article.teamwearCatalog?.supplierName ?? article.teamwearCatalog?.brand ?? "Sportpaleis",
+    supplierArticleName: article.name,
+    supplierArticleNumber: article.articleNumber,
+    category: article.teamwearCatalog?.category ?? article.category ?? productType,
+    collection: article.teamwearCatalog?.collection ?? null,
+    audience: article.teamwearCatalog?.audiences ?? [],
+    colorLabel: front?.colorLabel ?? "Nog te bepalen",
+    imageKey: front?.imageKey ?? article.imageKey,
+    backImageKey: back?.imageKey ?? null,
+    frontSourceUrl: front?.sourceUrl ?? null,
+    backSourceUrl: back?.sourceUrl ?? null,
+    sourceProductId: front?.sourceProductId ?? null,
+    sourceColorId: front?.sourceColorId ?? null,
+    mediaClassification: front?.classification ?? null,
+    advicePriceEur: typeof article.priceConfiguration?.articleUnitPriceEur === "number" ? article.priceConfiguration.articleUnitPriceEur : null,
+    effectivePriceEur: null,
+    priceLabel: null,
+    minimumQuantity: null,
+    pricingPolicyRef: null,
+    sourceAdapterId: "sportpaleis-existing",
+    sourceStatus: "AUTHORITATIVE",
+    directFrontSourceId: null,
+    directBackSourceId: null,
+    productType,
+    printableSides: [...truth.printableSides],
+    sourceReference: `Server-authoritative artikel ${article.articleNumber}`,
+  };
+}
+
+function normalizeTeamkitItemsWithCanonicalProductTruth(state, requestedItems, proposalSources = []) {
   const items = structuredClone(requestedItems);
   for (const item of items) {
+    if (!item.catalogSnapshot && item.articleId) {
+      const article = state.articles.find(({ id, active }) => id === item.articleId && active);
+      if (!article) throw Object.assign(new Error("Het gekozen bekende artikel bestaat niet meer in de actuele productwaarheid."), { statusCode: 409, code: "TEAMKIT_ARTICLE_TRUTH_NOT_FOUND", itemId: item.id ?? null, articleId: item.articleId });
+      item.catalogSnapshot = catalogSnapshotForAuthoritativeArticle(article);
+    }
     if (!item.catalogSnapshot) continue;
     const requestedType = canonicalTeamkitProductType(item.catalogSnapshot.productType);
+    const requestedSides = Array.isArray(item.catalogSnapshot.printableSides) ? [...new Set(item.catalogSnapshot.printableSides)] : null;
+    // Never accept a client-carried server binding. Every request is resolved
+    // again from current authoritative state and immutable proposal sources.
+    delete item.catalogSnapshot.canonicalProductIdentity;
     if (item.articleId) {
       const article = state.articles.find(({ id, active }) => id === item.articleId && active);
       if (!article) throw Object.assign(new Error("Het gekozen bekende artikel bestaat niet meer in de actuele productwaarheid."), { statusCode: 409, code: "TEAMKIT_ARTICLE_TRUTH_NOT_FOUND", itemId: item.id ?? null, articleId: item.articleId });
       const canonicalType = inferCanonicalTeamkitProductType(article);
       if (requestedType && requestedType !== canonicalType) throw Object.assign(new Error("De opgegeven productsoort conflicteert met het gekozen canonieke artikel."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_CONFLICT", itemId: item.id ?? null, articleId: article.id, requestedType, canonicalType });
+      const truth = canonicalTeamkitSurfaceTruth(canonicalType);
+      const body = { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: article.id, articleNumber: article.articleNumber, productType: truth.productType, physicalSides: [...truth.physicalSides], printableSides: [...truth.printableSides], authority: "SPORTPALEIS_SERVER_PRODUCT_TRUTH", evidenceKind: "ARTICLE_ID", evidenceReference: article.id };
+      item.catalogSnapshot.canonicalProductIdentity = { ...body, evidenceHash: sha256(JSON.stringify(body)) };
       item.catalogSnapshot.productType = canonicalType;
       item.catalogSnapshot.category = canonicalType;
       item.articleNumber = article.articleNumber;
-    } else if (!requestedType) {
-      throw Object.assign(new Error("Leg voor een directe artikelbron eerst de productspecifieke soort vast."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_REQUIRED", itemId: item.id ?? null });
+    } else {
+      const resolution = exactSourceFirstArticleBinding(state, item, proposalSources);
+      if (resolution.status !== "RESOLVED") throw Object.assign(new Error(resolution.status === "CONFLICTING" ? "De directe artikelbron matcht meerdere conflicterende canonieke productidentiteiten." : "De directe artikelbron bevat onvoldoende authoritative identiteit om fysieke zijden en placements veilig vast te stellen."), { statusCode: 409, code: `TEAMKIT_CANONICAL_PRODUCT_IDENTITY_${resolution.status}`, itemId: item.id ?? null, evidence: resolution.evidence });
+      const canonicalType = resolution.binding.productType;
+      if (requestedType && requestedType !== canonicalType) throw Object.assign(new Error("De opgegeven productsoort conflicteert met de server-authoritative artikelbron."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_CONFLICT", itemId: item.id ?? null, sourceArticleId: resolution.binding.sourceArticleId, requestedType, canonicalType });
+      item.catalogSnapshot.canonicalProductIdentity = resolution.binding;
+      item.catalogSnapshot.productType = canonicalType;
+      item.catalogSnapshot.category = canonicalType;
+      item.articleNumber = resolution.binding.articleNumber;
     }
+    const truth = canonicalTeamkitSurfaceTruth(item.catalogSnapshot.productType);
+    if (requestedSides?.some((side) => !truth.printableSides.includes(side))) throw Object.assign(new Error("De opgegeven bedrukbare zijde conflicteert met de server-authoritative productsurface-truth."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE", itemId: item.id ?? null, requestedSides, canonicalSides: truth.printableSides });
+    item.catalogSnapshot.printableSides = requestedSides?.length ? requestedSides : [...truth.printableSides];
   }
   return normalizeProposalItems(items);
 }
@@ -2615,7 +2718,7 @@ export class SportpaleisPilotService {
             const directSourceIds = [item.catalogSnapshot?.directFrontSourceId, item.catalogSnapshot?.directBackSourceId].filter(Boolean);
             if (directSourceIds.some((sourceId) => !proposal.sources.some(({ id: candidate }) => candidate === sourceId))) throw Object.assign(new Error("De directe artikelbron hoort niet bij deze atomaire proposal-intake."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
           }
-          proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items);
+          proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items, proposal.sources);
           resolveTeamkitPlacementProductionRules(state, proposal, 1);
         }
         proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, proposal.sources.length || proposal.items.length ? "Source-first voorstel atomair aangemaakt" : "Voorstel aangemaakt", [], new Date(), state));
@@ -2682,7 +2785,7 @@ export class SportpaleisPilotService {
           }
           placement.sourceId = source.id;
         }
-        proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items);
+        proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items, proposal.sources);
         resolveTeamkitPlacementProductionRules(state, proposal, proposal.currentRevision + 1);
       }
       proposal.currentRevision += 1; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
@@ -2947,8 +3050,16 @@ export class SportpaleisPilotService {
       catch (error) { throw Object.assign(new Error("De fontbron is geen technisch leesbaar outline-font."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
       const addedAt = iso(); const id = `font-${hash.slice(0, 16).toLowerCase()}`;
       const provenance = optional(payload.provenance, 500) || `Door ${user.name} toegevoegd via Beheer op ${addedAt}`;
-      const font = { id, name: requiredText(payload.name, "Fontnaam", 120), originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64") };
-      state.productionFonts.push(font); audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore });
+      const font = { id, name: requiredText(payload.name, "Fontnaam", 120), originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, authority: "ADMIN_VERIFIED_UPLOAD", status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, authoritativeIdentity: id, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64") };
+      state.productionFonts.push(font);
+      const normalizedFontName = normalizedProductionIdentity(font.name);
+      const boundProfileIds = [];
+      for (const profile of state.productionProfiles.filter(({ fontProfile }) => normalizedProductionIdentity(fontProfile) === normalizedFontName)) {
+        if (profile.canonicalFontSourceId && profile.canonicalFontSourceId !== id) throw Object.assign(new Error(`Letterprofiel ${profile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: profile.id, currentSourceId: profile.canonicalFontSourceId, requestedSourceId: id });
+        profile.canonicalFontSourceId = id;
+        boundProfileIds.push(profile.id);
+      }
+      audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds });
       const { sourceDataBase64: _sourceDataBase64, ...publicFont } = font;
       return { state, value: structuredClone(publicFont) };
     });
@@ -5846,18 +5957,44 @@ function publicProductionElement(element) {
   });
 }
 
-function configuredManagedFont(state, profile) {
+function canonicalManagedFontResolution(state, profile) {
   const configuredName = String(profile?.fontProfile ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("nl-NL");
-  if (!configuredName) return null;
+  const provenance = {
+    profileId: profile?.id ?? null,
+    profileRevision: Number(profile?.revision ?? 1),
+    configuredName: profile?.fontProfile ?? null,
+  };
+  if (!configuredName) return { status: "MISSING", font: null, matches: [], provenance };
   const normalized = (value) => String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
   const configuredIdentity = normalized(configuredName);
   const spainIdentity = normalized(OWNER_SUPPLIED_FONT_EVIDENCE.spain.canonicalProfileName);
-  const matches = state.productionFonts.filter(({ name, sha256: hash, status }) => {
-    if (status !== "TECHNICALLY_VALID") return false;
-    if (configuredIdentity === spainIdentity) return String(hash ?? "").toUpperCase() === OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256;
-    return normalized(name) === configuredIdentity;
-  });
-  return matches.length === 1 ? matches[0] : null;
+  const declaredSourceId = String(profile?.canonicalFontSourceId ?? "").trim();
+  const registeredCandidates = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter((asset) => asset.kind === "MANAGED_FONT" && [asset.name, asset.familyName, asset.postscriptName].some((identity) => normalized(identity) === configuredIdentity));
+  const registeredSourceId = configuredIdentity === spainIdentity
+    ? "font-5d083befacdf98ae"
+    : registeredCandidates.length === 1 ? registeredCandidates[0].id : null;
+  const requiredSourceId = declaredSourceId || registeredSourceId;
+  if (!requiredSourceId) return { status: "UNRESOLVED", font: null, matches: [], provenance: { ...provenance, configuredIdentity, reason: "CANONICAL_SOURCE_ID_UNBOUND" } };
+  const registeredAsset = authoritativeProductionAssetById(requiredSourceId);
+  const matches = state.productionFonts.filter(({ id, status }) => status === "TECHNICALLY_VALID" && id === requiredSourceId);
+  if (matches.length === 0) return { status: "UNRESOLVED", font: null, matches: [], provenance: { ...provenance, configuredIdentity } };
+  if (matches.length > 1) return { status: "CONFLICTING", font: null, matches: matches.map(({ id, version, sha256: hash }) => ({ id, version, sha256: hash })), provenance: { ...provenance, configuredIdentity } };
+  const font = matches[0];
+  const authoritativeHash = String(font.sha256 ?? "").toUpperCase();
+  const exactAuthoritativeIdentity = font.status === "TECHNICALLY_VALID"
+    && Boolean(font.provenance)
+    && /^[A-F0-9]{64}$/u.test(authoritativeHash)
+    && font.authoritativeIdentity === font.id
+    && (!registeredAsset || registeredAsset.kind === "MANAGED_FONT"
+      && registeredAsset.sha256 === authoritativeHash
+      && registeredAsset.authoritativeIdentity === font.id);
+  if (!exactAuthoritativeIdentity) return { status: "CONFLICTING", font: null, matches: [{ id: font.id, version: font.version, sha256: font.sha256 }], provenance: { ...provenance, configuredIdentity, reason: "AUTHORITATIVE_IDENTITY_INVALID" } };
+  return { status: "RESOLVED", font, matches: [{ id: font.id, version: font.version, sha256: font.sha256 }], provenance: { ...provenance, configuredIdentity, requiredSourceId, authoritativeIdentity: font.id, authoritativeSha256: authoritativeHash } };
+}
+
+function configuredManagedFont(state, profile) {
+  const resolution = canonicalManagedFontResolution(state, profile);
+  return resolution.status === "RESOLVED" ? resolution.font : null;
 }
 
 const PIONEERS_ASSOCIATION = "Almere Pioneers";
@@ -7274,13 +7411,13 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
   const kind = line.source?.kind;
   if (kind === "FONT") {
     if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type)) return false;
-    const profileFont = configuredManagedFont(state, semantics.profile);
     const selectedFont = state.productionFonts.find(({ id }) => id === line.source?.id);
-    // A profile-bound managed master is authoritative and cannot be substituted.
-    // Profiles without a resolvable managed master retain the explicitly selected,
-    // versioned managed font rather than inventing a canonical identity.
-    const requiredFont = profileFont
-      ?? (!semantics.profile ? state.productionFonts.find(({ id }) => id === line.decorationIdentity?.productionProfileId) : selectedFont);
+    const profileResolution = semantics.profile ? canonicalManagedFontResolution(state, semantics.profile) : null;
+    // A production profile is an authoritative source requirement, not a hint.
+    // An unresolved, missing or conflicting canonical master can never be
+    // substituted by another technically valid managed font.
+    if (profileResolution && profileResolution.status !== "RESOLVED") return false;
+    const requiredFont = profileResolution?.font ?? selectedFont;
     if (!requiredFont || requiredFont.status !== "TECHNICALLY_VALID" || !requiredFont.provenance || !/^[A-F0-9]{64}$/u.test(String(requiredFont.sha256 ?? "").toUpperCase())) return false;
     const exactIdentity = line.source.id === requiredFont.id
       && line.source.version === requiredFont.version
@@ -7407,6 +7544,10 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     if (!Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1) findings.push(finalProductionFinding("QUANTITY", "Het fysieke aantal moet een positief geheel getal zijn.", { line, code: "PRODUCTION_QUANTITY_INVALID" }));
     if (line.validation?.status !== "VALID") findings.push(finalProductionFinding("LINE_VALIDATION", line.validation?.reason || "De productieregel is niet gevalideerd.", { line, code: "PRODUCTION_LINE_BLOCKED" }));
     const semantics = canonicalLineSemantics(state, validationOrder, item, line, snapshot);
+    if (["FONT", "PROFILE"].includes(line.source?.kind) && ["TEXT", "INITIALS", "NUMBER"].includes(line.type) && semantics.profile) {
+      const canonicalFont = canonicalManagedFontResolution(state, semantics.profile);
+      if (canonicalFont.status !== "RESOLVED") findings.push(finalProductionFinding("CANONICAL_FONT_SOURCE", `De canonieke fontmaster ${semantics.profile.fontProfile || "ontbreekt"} is ${canonicalFont.status.toLocaleLowerCase("nl-NL")} en blokkeert fysieke productie.`, { line, evidence: JSON.stringify(canonicalFont.provenance), code: `PRODUCTION_CANONICAL_FONT_${canonicalFont.status}` }));
+    }
     if (semantics.allowedTypes && !semantics.allowedTypes.includes(line.type)) findings.push(finalProductionFinding("DECORATION_TYPE", `${semantics.field} kan niet als fysieke regeltype ${line.type} worden uitgevoerd.`, { line, evidence: `Toegestaan: ${semantics.allowedTypes.join(", ")}`, code: "PRODUCTION_DECORATION_SEMANTICS_MISMATCH" }));
     const approvedTeamkitRule = approvedTeamkitRuleMatchesCurrentLine(line);
     if (line.personalizationField && identity?.placement !== line.personalizationField && !approvedTeamkitRule) findings.push(finalProductionFinding("PLACEMENT", "De fysieke placement wijkt af van de canonieke decoration-betekenis of approved Teamwear-regel.", { line, evidence: `${line.personalizationField} ≠ ${identity?.placement}`, code: "PRODUCTION_PLACEMENT_MISMATCH" }));

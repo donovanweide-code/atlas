@@ -208,7 +208,9 @@ test("Teamwear pilot exposure is default-deny, exact-principal en auditbaar uit 
 test("contextuploads verschijnen in een volgende Teamwear van dezelfde vereniging en blijven daarbuiten verborgen", async (context) => {
   const { service, admin } = await fixture(context);
   const state = await service.bootstrap(admin.token);
-  const association = state.associations[0];
+  const article = state.articles.find(({ association, name, active }) => active && association && /shirt/iu.test(name));
+  const association = state.associations.find(({ name }) => name === article?.association);
+  assert.ok(article && association);
   const first = await service.createTeamkitProposal(admin.token, admin.csrfToken, { title: "Library bron A", associationId: association.id, associationName: association.name });
   const upload = await service.addTeamkitProposalSource(admin.token, admin.csrfToken, first.id, { filename: "gedeelde-sponsor.svg", mimeType: "image/svg+xml", dataBase64: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50" fill="#123456"/></svg>').toString("base64") });
   const second = await service.createTeamkitProposal(admin.token, admin.csrfToken, { title: "Library bron B", associationId: association.id, associationName: association.name });
@@ -223,7 +225,7 @@ test("contextuploads verschijnen in een volgende Teamwear van dezelfde verenigin
   const reused = await service.updateTeamkitProposal(admin.token, admin.csrfToken, second.id, {
     expectedRevision: second.aggregateRevision,
     reason: "Gedeeld sponsorasset hergebruikt",
-    items: [{ id: "shared-library-item", productName: "Teamshirt", color: "Navy", sizes: [], placements: [{ id: "shared-library-placement", kind: "SPONSOR", label: "Gedeelde sponsor", side: "FRONT", preset: "MIDDENBORST", sourceId: shared.id, productionAssetId: null, assetVersion: null, text: null, widthPercent: 30, route: "NOG_TE_BEPALEN", supplierName: null, note: null }] }],
+    items: [{ id: "shared-library-item", articleId: article.id, articleNumber: article.articleNumber, productName: article.name, color: "Navy", sizes: [], placements: [{ id: "shared-library-placement", kind: "SPONSOR", label: "Gedeelde sponsor", side: "FRONT", preset: "MIDDENBORST", sourceId: shared.id, productionAssetId: null, assetVersion: null, text: null, widthPercent: 30, route: "NOG_TE_BEPALEN", supplierName: null, note: null }] }],
   });
   const reusedSource = reused.sources.find(({ sha256 }) => sha256 === upload.source.sha256);
   assert.ok(reusedSource);

@@ -163,6 +163,18 @@ function normalizeCatalogSnapshot(input) {
   const productType = canonicalTeamkitProductType(input.productType) ?? inferCanonicalTeamkitProductType({ category: input.category, name: input.supplierArticleName });
   const defaultSides = ["UPPER_GARMENT", "SPORTS_BAG"].includes(productType) || (!productType && (requestedBackImageKey || input.backSourceUrl)) ? ["FRONT", "BACK"] : ["FRONT"];
   const printableSides = Array.isArray(input.printableSides) ? [...new Set(input.printableSides.filter((side) => ["FRONT", "BACK"].includes(side)))] : defaultSides;
+  const identity = input.canonicalProductIdentity?.version === "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1" ? {
+    version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1",
+    sourceArticleId: text(input.canonicalProductIdentity.sourceArticleId, "Canoniek bronartikel", 180),
+    articleNumber: text(input.canonicalProductIdentity.articleNumber, "Canoniek artikelnummer", 120),
+    productType: canonicalTeamkitProductType(input.canonicalProductIdentity.productType),
+    physicalSides: Array.isArray(input.canonicalProductIdentity.physicalSides) ? [...new Set(input.canonicalProductIdentity.physicalSides.filter((side) => ["FRONT", "BACK"].includes(side)))] : [],
+    printableSides: Array.isArray(input.canonicalProductIdentity.printableSides) ? [...new Set(input.canonicalProductIdentity.printableSides.filter((side) => ["FRONT", "BACK"].includes(side)))] : [],
+    authority: text(input.canonicalProductIdentity.authority, "Productidentity-authoriteit", 120),
+    evidenceKind: text(input.canonicalProductIdentity.evidenceKind, "Productidentity-bewijs", 120),
+    evidenceReference: text(input.canonicalProductIdentity.evidenceReference, "Productidentity-referentie", 500),
+    evidenceHash: text(input.canonicalProductIdentity.evidenceHash, "Productidentity-hash", 64),
+  } : null;
   return {
     catalogProductId: text(input.catalogProductId, "Catalogusproduct", 180), brand: text(input.brand, "Merk", 120), supplierName: text(input.supplierName || input.brand, "Leverancier", 160),
     supplierArticleName: text(input.supplierArticleName, "Leverancier-artikelnaam", 180), supplierArticleNumber: text(input.supplierArticleNumber, "Leverancier-artikelnummer", 120), category: text(input.category, "Categorie", 120),
@@ -173,6 +185,7 @@ function normalizeCatalogSnapshot(input) {
     priceLabel: ["Teamprijs", "Jullie prijs"].includes(input.priceLabel) ? input.priceLabel : null, minimumQuantity: input.minimumQuantity == null ? null : boundedNumber(input.minimumQuantity, "Minimumaantal", 1, 100_000),
     pricingPolicyRef: nullableText(input.pricingPolicyRef, "Prijsregel", 180), sourceAdapterId: text(input.sourceAdapterId, "Catalogusbron", 180), sourceStatus: ["AUTHORITATIVE", "CONTROLLED_FIXTURE", "DATA_GAP"].includes(input.sourceStatus) ? input.sourceStatus : "DATA_GAP",
     directFrontSourceId: nullableText(input.directFrontSourceId, "Voorzijdebron", 180), directBackSourceId: nullableText(input.directBackSourceId, "Achterzijdebron", 180), productType, printableSides: printableSides.length ? printableSides : ["FRONT"], sourceReference: nullableText(input.sourceReference, "Bronreferentie", 500),
+    ...(identity ? { canonicalProductIdentity: identity } : {}),
   };
 }
 

@@ -18,12 +18,14 @@ async function fixture(context) {
   const mailFoundation = new MailFoundation({ organizations: createMailOrganizations({ organizationIds: ["sportpaleis"] }), store: new MemoryMailStore(), transport: new CaptureTransport({ captureDirectory: path.join(root, "mail") }) });
   const service = new SportpaleisPilotService({ store, mailFoundation, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), allowedOrigin: "https://workspace.sportpaleis.nl", uploadsEnabled: true });
   await service.initialize();
-  return { store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
+  const article = (await store.read()).articles.find(({ association, name, active }) => active && association === "A.S.C. Waterwijk" && /wedstrijd shirt/iu.test(name));
+  assert.ok(article);
+  return { store, service, article, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
 
-function item(sourceId) {
+function item(sourceId, article) {
   return {
-    id: "item-shirt", articleId: null, articleNumber: "SHIRT-2026", productName: "Wedstrijdshirt", color: "#13294b", quantity: 18, sizes: ["S", "M", "L"], team: "JO15", notes: "Clubkleuren behouden",
+    id: "item-shirt", articleId: article.id, articleNumber: article.articleNumber, productName: article.name, color: "#13294b", quantity: 18, sizes: ["S", "M", "L"], team: "JO15", notes: "Clubkleuren behouden",
     placements: [
       { id: "placement-club", kind: "CLUB_LOGO", label: "Clublogo", side: "FRONT", preset: "LINKERBORST", sourceId, productionAssetId: null, assetVersion: null, text: null, widthPercent: 22, visualPosition: { coordinateSpace: "GARMENT_PRINT_AREA_V1", xPercent: 42.5, yPercent: 31.25 }, route: "INTERN_BEDRUKKEN", supplierName: null, note: null },
       { id: "placement-sponsor", kind: "SPONSOR", label: "Hoofdsponsor", side: "FRONT", preset: "MIDDENBORST", sourceId, productionAssetId: null, assetVersion: null, text: null, widthPercent: 38, route: "EXTERNE_BEDRUKKER", supplierName: "Bestaande bedrukpartner", note: null },
@@ -45,13 +47,13 @@ test("Teamwear begint bij de artikelbron en houdt contextassets en bekende artik
 });
 
 test("bestaand verenigingslogo wordt bij revision één keer als immutable voorstelbron vastgelegd", async (context) => {
-  const { service, operator } = await fixture(context);
+  const { service, operator, article } = await fixture(context);
   const bootstrap = await service.bootstrap(operator.token);
   const association = bootstrap.associations.find(({ name }) => name === "A.S.C. Waterwijk");
   assert.ok(association?.workspaceLogo);
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Visuele clublogo-review", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: association.name, team: "Senioren 1", season: "2026/2027" });
   const sourceReference = `association-logo:${association.id}:${association.workspaceLogo.sha256}`;
-  const visualItem = item(sourceReference); visualItem.placements = [visualItem.placements[0]];
+  const visualItem = item(sourceReference, article); visualItem.placements = [visualItem.placements[0]];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [visualItem], reason: "Bestaand clublogo gebruikt" });
   assert.equal(proposal.sources.length, 1);
   assert.equal(proposal.sources[0].sha256, association.workspaceLogo.sha256);
@@ -60,7 +62,7 @@ test("bestaand verenigingslogo wordt bij revision één keer als immutable voors
 });
 
 test("twee verschillende logo-bronnen blijven als twee placements en immutable revision-bronnen bewaard", async (context) => {
-  const { service, operator } = await fixture(context);
+  const { service, operator, article } = await fixture(context);
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Twee-logo acceptance", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: "A.S.C. Waterwijk", team: "Senioren 1", season: "2026/2027" });
   const issued = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id);
   const customerToken = issued.path.split("/").at(-1);
@@ -71,7 +73,7 @@ test("twee verschillende logo-bronnen blijven als twee placements en immutable r
   ] }, { submit: true });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   assert.equal(proposal.sources.length, 2);
-  const visualItem = item(proposal.sources[0].id);
+  const visualItem = item(proposal.sources[0].id, article);
   visualItem.placements = [
     visualItem.placements[0],
     { ...visualItem.placements[1], sourceId: proposal.sources[1].id },
@@ -91,12 +93,12 @@ test("twee verschillende logo-bronnen blijven als twee placements en immutable r
 });
 
 test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleidbare Teamwear-keten", async (context) => {
-  const { service, operator } = await fixture(context);
+  const { service, operator, article } = await fixture(context);
   let proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, { title: "Canonical composition truth", type: "Teamkit", customerName: "A.S.C. Waterwijk", contactName: "Reviewer", customerEmail: "review@example.test", associationName: "A.S.C. Waterwijk", team: "Senioren 1" });
   const issued = await service.issueTeamkitCustomerLink(operator.token, operator.csrfToken, proposal.id); const customerToken = issued.path.split("/").at(-1);
   await service.savePublicTeamkitIntake(customerToken, { data: { products: "Wedstrijdshirt" }, sources: [{ filename: "clublogo.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg.toString("base64") }] }, { submit: true });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
-  const compositionItem = item(proposal.sources[0].id); compositionItem.quantity = null; compositionItem.sizes = []; compositionItem.placements = [compositionItem.placements[0]];
+  const compositionItem = item(proposal.sources[0].id, article); compositionItem.quantity = null; compositionItem.sizes = []; compositionItem.placements = [compositionItem.placements[0]];
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [compositionItem], reason: "Approved ontwerp zonder operationele maatverdeling" });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_REVIEW", expectedRevision: proposal.aggregateRevision });
   proposal = await service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision });
@@ -119,7 +121,7 @@ test("approved compositie, matenverdeling en WorkspaceOrder vormen één herleid
 });
 
 test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhandeling end-to-end", async (context) => {
-  const { store, service, admin, operator, storeUser } = await fixture(context);
+  const { store, service, article, admin, operator, storeUser } = await fixture(context);
   let proposal = await service.createTeamkitProposal(storeUser.token, storeUser.csrfToken, { title: "Teamkit JO15 2026/2027", type: "Teamkit", customerName: "SV Voorbeeld", contactName: "Mevrouw Voorbeeld", customerEmail: "team@voorbeeld.nl", associationName: "A.S.C. Waterwijk", team: "JO15", season: "2026/2027" });
   assert.match(proposal.proposalNumber, /^PV-\d{4}-0001$/u);
   assert.equal(proposal.revisions.length, 1);
@@ -144,7 +146,7 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   assert.equal(proposal.sources[0].promotedProductionSourceId, productionSource.id);
 
   const staleRevision = proposal.aggregateRevision;
-  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [item(proposal.sources[0].id)], reason: "Eerste complete teamkit" });
+  proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [item(proposal.sources[0].id, article)], reason: "Eerste complete teamkit" });
   assert.equal(proposal.currentRevision, 2);
   assert.deepEqual(proposal.items[0].placements[0].visualPosition, { coordinateSpace: "GARMENT_PRINT_AREA_V1", xPercent: 42.5, yPercent: 31.25 });
   assert.match(proposal.revisions.at(-1).previewHtml, /left:42\.5%;top:31\.25%/u);
@@ -154,7 +156,7 @@ test("Teamkit Proposal V1 levert intake, revisions, exact akkoord en route-afhan
   await service.savePublicTeamkitFeedback(customerToken, { revision: 2, kind: "ITEM", targetId: "item-shirt", decision: "CHANGE", message: "Sponsor iets kleiner", customerName: "Mevrouw Voorbeeld" });
   proposal = (await service.bootstrap(operator.token)).teamkitProposals.find(({ id }) => id === proposal.id);
   const feedbackId = proposal.feedback[0].id;
-  const revisedItem = item(proposal.sources[0].id); revisedItem.placements[1].widthPercent = 30;
+  const revisedItem = item(proposal.sources[0].id, article); revisedItem.placements[1].widthPercent = 30;
   proposal = await service.updateTeamkitProposal(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [revisedItem], reason: "Sponsor kleiner na klantfeedback", feedbackIds: [feedbackId] });
   assert.equal(proposal.currentRevision, 3);
   assert.equal(proposal.feedback[0].status, "PROCESSED");

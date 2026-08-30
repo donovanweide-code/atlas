@@ -36,9 +36,11 @@ function canonicalInitialsFixture() {
 }
 
 function directItem(productType, printableSides, placements = []) {
+  const canonicalSides = ["UPPER_GARMENT", "SPORTS_BAG"].includes(productType) ? ["FRONT", "BACK"] : ["FRONT"];
+  const physicalSides = ["OTHER"].includes(productType) ? ["FRONT"] : ["FRONT", "BACK"];
   return {
     id: `item-${productType.toLowerCase()}`, articleId: null, articleNumber: "DIRECT-R221", productName: "Direct bronartikel", color: "Zwart", quantity: 1, sizes: ["M"], team: null, notes: null,
-    catalogSnapshot: { catalogProductId: "proposal-source:front", brand: "Eigen bron", supplierName: "Directe bron", supplierArticleName: "Direct bronartikel", supplierArticleNumber: "DIRECT-R221", category: productType, collection: null, audience: [], colorLabel: "Zwart", imageKey: "proposal-source:front", backImageKey: null, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "proposal-direct-source", sourceStatus: "AUTHORITATIVE", directFrontSourceId: "source-front", directBackSourceId: null, productType, printableSides, sourceReference: "R2.21 fixture" },
+    catalogSnapshot: { catalogProductId: "proposal-source:front", brand: "Eigen bron", supplierName: "Directe bron", supplierArticleName: "Direct bronartikel", supplierArticleNumber: "DIRECT-R221", category: productType, collection: null, audience: [], colorLabel: "Zwart", imageKey: "proposal-source:front", backImageKey: null, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "proposal-direct-source", sourceStatus: "AUTHORITATIVE", directFrontSourceId: "source-front", directBackSourceId: null, productType, printableSides, sourceReference: "R2.21 fixture", canonicalProductIdentity: { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: `test-${productType}`, articleNumber: "DIRECT-R221", productType, physicalSides, printableSides: canonicalSides, authority: "R2.21_TEST_PERSISTED_SERVER_TRUTH", evidenceKind: "TEST_FIXTURE", evidenceReference: "R2.21 fixture", evidenceHash: "A".repeat(64) } },
     placements,
   };
 }

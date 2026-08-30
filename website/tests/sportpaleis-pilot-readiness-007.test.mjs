@@ -83,7 +83,7 @@ test("Sportpaleis laatste pilot-readinesscorrectie 007", async (context) => {
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === pending.id);
     const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "readiness-007-pending-control")).value;
     assert.equal(controlled.stage, "CONTROL");
-    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-007-pending-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE" && /contour|fontbestand/u.test(error.message) && !/snijlijnen|fysieke snijoutput/iu.test(error.message));
+    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-007-pending-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE" && /contour|fontbestand|canonieke fontmaster/iu.test(error.message) && !/snijlijnen|fysieke snijoutput/iu.test(error.message));
   });
 
   await context.test("normale multi-verenigingsorder bewaart per artikel de eigen live bron en gaat met niet-blokkerende aandacht naar Controle", async () => {

@@ -62,7 +62,7 @@ test("human review correction — productievoorstel weigert een globale preview 
   await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "proposal-not-ready"), (error) => error.code === "ORDER_NOT_READY" && error.message.includes(created.id));
   const acknowledged = await captureReceipt(service, admin, created, "test-capture-receipt");
   const ready = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "proposal-ready")).value;
-  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-missing"), (error) => error.code === "ORDER_NOT_READY" && /contour\/fontbestand/u.test(error.message));
+  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-missing"), (error) => error.code === "ORDER_NOT_READY" && /contour\/fontbestand|canonieke fontmaster/iu.test(error.message));
   assert.equal((await service.bootstrap(admin.token)).productionProposals.length, 0);
 });
 
