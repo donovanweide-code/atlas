@@ -224,10 +224,80 @@ function garment(item, side) {
     return `<span class="tk-mark tk-mark--${placement.kind.toLowerCase()}" data-visual-surface="${visualSurface(placement.preset)}" style="left:${x}%;top:${y}%;width:${placement.widthPercent}%" title="${esc(placement.label)}">${visual}</span>`;
   }).join("");
   const garmentSource = item.visualGarmentSources?.[side] ?? (side === "FRONT" ? item.visualGarmentSource : null);
+  if (!garmentSource?.dataUri) return `<figure class="tk-garment tk-garment--visual-proof-blocked" data-visual-proof-surface="${side}" data-visual-proof-authority="MISSING"><div class="tk-visual-proof-attention"><strong>${side === "FRONT" ? "Voorzijde" : "Achterzijde"} niet als productbeeld bewezen</strong><span>Voeg authoritative presentatiemedia voor exact dit artikel, deze variant en deze zijde toe voordat klantgoedkeuring mogelijk is.</span></div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"} · klantgoedkeuring geblokkeerd</figcaption></figure>`;
   const garmentVisual = garmentSource?.dataUri ? `<img class="tk-shirt__source" src="${esc(garmentSource.dataUri)}" alt="${esc(item.productName)} ${side === "FRONT" ? "voorzijde" : "achterzijde"}">` : "";
-  return `<figure class="tk-garment"><div class="tk-shirt${garmentVisual ? " tk-shirt--source" : ""}" style="--kit-color:${esc(item.color)}">${garmentVisual}<i></i>${placements}</div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"}</figcaption></figure>`;
+  return `<figure class="tk-garment" data-visual-proof-surface="${side}" data-visual-proof-authority="${esc(garmentSource.authority)}"><div class="tk-shirt tk-shirt--source" style="--kit-color:${esc(item.color)}">${garmentVisual}<i></i>${placements}</div><figcaption>${side === "FRONT" ? "Voorzijde" : "Achterzijde"}</figcaption></figure>`;
 }
 function itemBackRelevant(item) { const allowed = !item.catalogSnapshot?.printableSides || item.catalogSnapshot.printableSides.includes("BACK"); return Boolean(allowed && (item.visualGarmentSources?.BACK || item.placements.some(({ side }) => side === "BACK"))); }
+
+function visualProofDataBytes(dataUri) {
+  const match = String(dataUri ?? "").match(/^data:([^;,]+);base64,([a-z0-9+/=]+)$/iu);
+  if (!match) return null;
+  try { return { mimeType: match[1].toLowerCase(), bytes: Buffer.from(match[2], "base64") }; } catch { return null; }
+}
+
+function requiredVisualProofSurfaces(item) {
+  // The product itself is part of every customer proof, so FRONT is required.
+  // Additional physical surfaces become proof requirements only when used.
+  return [...new Set(["FRONT", ...(item.placements ?? []).map(({ side }) => side === "BACK" ? "BACK" : "FRONT")])];
+}
+
+function expectedVisualProofIdentity(item, side) {
+  const snapshot = item.catalogSnapshot ?? {};
+  const directSourceId = side === "BACK" ? snapshot.directBackSourceId : snapshot.directFrontSourceId;
+  return {
+    imageKey: directSourceId ? `proposal-source:${directSourceId}` : side === "BACK" ? snapshot.backImageKey ?? null : snapshot.imageKey ?? null,
+    authority: directSourceId ? "IMMUTABLE_PROPOSAL_SOURCE" : "AUTHORITATIVE_CATALOG_MEDIA",
+    directSourceId: directSourceId ?? null,
+    articleId: item.articleId ?? null,
+    articleNumber: item.articleNumber ?? null,
+    sourceProductId: snapshot.sourceProductId ?? null,
+    sourceColorId: snapshot.sourceColorId ?? null,
+  };
+}
+
+/** Customer visual proof is stricter than physical production capability. */
+export function assessAuthoritativeProposalVisualProof(snapshot) {
+  const issues = [];
+  for (const item of snapshot.items ?? []) {
+    assertCanonicalTeamkitItemSurfaceTruth(item);
+    const binding = item.catalogSnapshot?.canonicalProductIdentity ?? null;
+    for (const side of requiredVisualProofSurfaces(item)) {
+      const visual = item.visualGarmentSources?.[side] ?? (side === "FRONT" ? item.visualGarmentSource : null);
+      const expected = expectedVisualProofIdentity(item, side);
+      const detail = { itemId: item.id ?? null, articleId: item.articleId ?? null, articleNumber: item.articleNumber ?? null, productName: item.productName, surface: side };
+      if (!visual || !visual.dataUri || !visual.sha256 || !visual.imageKey) {
+        issues.push({ ...detail, code: "AUTHORITATIVE_SURFACE_MEDIA_MISSING", expectedImageKey: expected.imageKey });
+        continue;
+      }
+      const decoded = visualProofDataBytes(visual.dataUri);
+      const actualHash = decoded?.bytes?.length ? proposalSha256(decoded.bytes) : null;
+      if (!decoded || actualHash !== visual.sha256) {
+        issues.push({ ...detail, code: "AUTHORITATIVE_SURFACE_MEDIA_HASH_MISMATCH", expectedSha256: visual.sha256, actualSha256: actualHash });
+        continue;
+      }
+      const identityConflict = !binding
+        || binding.sourceArticleId !== item.articleId
+        || binding.articleNumber !== item.articleNumber
+        || visual.surface !== side
+        || visual.articleId !== expected.articleId
+        || visual.articleNumber !== expected.articleNumber
+        || visual.imageKey !== expected.imageKey
+        || visual.authority !== expected.authority
+        || visual.sourceProductId !== expected.sourceProductId
+        || visual.sourceColorId !== expected.sourceColorId
+        || (expected.directSourceId && visual.sourceId !== expected.directSourceId);
+      if (identityConflict) issues.push({ ...detail, code: "AUTHORITATIVE_SURFACE_MEDIA_IDENTITY_CONFLICT", expected, actual: { imageKey: visual.imageKey, authority: visual.authority, sourceId: visual.sourceId ?? null, articleId: visual.articleId ?? null, articleNumber: visual.articleNumber ?? null, surface: visual.surface ?? null, sourceProductId: visual.sourceProductId ?? null, sourceColorId: visual.sourceColorId ?? null } });
+    }
+  }
+  return { version: "TEAMKIT_AUTHORITATIVE_VISUAL_PROOF_V1", status: issues.length ? "BLOCKED_FOR_VISUAL_APPROVAL" : "PROVEN", issues };
+}
+
+export function assertAuthoritativeProposalVisualProof(snapshot) {
+  const assessment = assessAuthoritativeProposalVisualProof(snapshot);
+  if (assessment.status !== "PROVEN") throw error("Klantgoedkeuring is geblokkeerd: voor minstens één gebruikte productzijde ontbreekt exact gebonden authoritative presentatiemedia.", "TEAMKIT_VISUAL_APPROVAL_MEDIA_REQUIRED", 409, { visualProof: assessment });
+  return assessment;
+}
 
 const STATIC_TEAMWEAR_IMAGE_FILES = Object.freeze({
   "asc-shirt-home": "asc-shirt-home.webp", "asc-match-shorts": "asc-match-shorts.webp", "asc-socks": "asc-socks.webp", "asc-polo": "asc-polo.webp",
@@ -282,18 +352,22 @@ function previewDataUri(bytes, mimeType = null) {
 
 export function proposalSnapshot(proposal, state = null) {
   for (const item of proposal.items) assertCanonicalTeamkitItemSurfaceTruth(item);
-  return {
+  const snapshot = {
     proposalId: proposal.id, proposalNumber: proposal.proposalNumber, revision: proposal.currentRevision, title: proposal.title, type: proposal.type,
     customer: structuredClone(proposal.customer), association: structuredClone(proposal.association), team: proposal.team, season: proposal.season, category: proposal.category,
-    deadline: proposal.deadline, notes: proposal.notes, items: proposal.items.map((item) => { const front = garmentVisualBytes(item, state, "FRONT", proposal); const back = garmentVisualBytes(item, state, "BACK", proposal); const placements = item.placements.map((placement) => { const bytes = proposalPlacementVisualBytes(placement, proposal, state); const source = proposal.sources.find(({ id }) => id === placement.sourceId); return { ...structuredClone(placement), visualSource: bytes ? { sha256: proposalSha256(bytes), mimeType: source?.mimeType ?? null, dataUri: previewDataUri(bytes, source?.mimeType ?? null) } : null }; }); const visual = (entry) => entry ? { imageKey: entry.imageKey, sha256: entry.sha256, mimeType: entry.mimeType, dataUri: previewDataUri(entry.bytes, entry.mimeType) } : null; return { ...structuredClone(item), placements, visualGarmentSource: visual(front), visualGarmentSources: { FRONT: visual(front), BACK: visual(back) } }; }),
+    deadline: proposal.deadline, notes: proposal.notes, items: proposal.items.map((item) => { const front = garmentVisualBytes(item, state, "FRONT", proposal); const back = garmentVisualBytes(item, state, "BACK", proposal); const placements = item.placements.map((placement) => { const bytes = proposalPlacementVisualBytes(placement, proposal, state); const source = proposal.sources.find(({ id }) => id === placement.sourceId); return { ...structuredClone(placement), visualSource: bytes ? { sha256: proposalSha256(bytes), mimeType: source?.mimeType ?? null, dataUri: previewDataUri(bytes, source?.mimeType ?? null) } : null }; }); const visual = (entry, side) => { if (!entry) return null; const directSourceId = side === "BACK" ? item.catalogSnapshot?.directBackSourceId : item.catalogSnapshot?.directFrontSourceId; return { imageKey: entry.imageKey, sha256: entry.sha256, mimeType: entry.mimeType, dataUri: previewDataUri(entry.bytes, entry.mimeType), surface: side, authority: directSourceId ? "IMMUTABLE_PROPOSAL_SOURCE" : item.catalogSnapshot?.sourceStatus === "AUTHORITATIVE" ? "AUTHORITATIVE_CATALOG_MEDIA" : "UNVERIFIED_MEDIA", sourceId: directSourceId ?? null, articleId: item.articleId ?? null, articleNumber: item.articleNumber ?? null, sourceProductId: item.catalogSnapshot?.sourceProductId ?? null, sourceColorId: item.catalogSnapshot?.sourceColorId ?? null, provenance: directSourceId ? `proposal-source:${directSourceId}` : item.catalogSnapshot?.sourceReference ?? null }; }; return { ...structuredClone(item), placements, visualGarmentSource: visual(front, "FRONT"), visualGarmentSources: { FRONT: visual(front, "FRONT"), BACK: visual(back, "BACK") } }; }),
     sourceRefs: proposal.sources.map(({ id, filename, mimeType, sha256, version, quality }) => ({ id, filename, mimeType, sha256, version, qualityStatus: quality.status })),
   };
+  snapshot.visualProof = assessAuthoritativeProposalVisualProof(snapshot);
+  return snapshot;
 }
 
 export function renderProposalPreview(snapshot, { customer = false } = {}) {
   for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
+  const visualProof = assessAuthoritativeProposalVisualProof(snapshot);
   const items = snapshot.items.map((item) => `<article class="tk-item"><header><div><small>${esc(item.articleNumber ?? "TEAMKIT")}</small><h2>${esc(item.productName)}</h2></div><strong>${item.quantity ? `${item.quantity}×` : "Aantal volgt"}</strong></header><div class="tk-views">${garment(item, "FRONT")}${itemBackRelevant(item) ? garment(item, "BACK") : ""}</div><dl><div><dt>Kleur</dt><dd>${esc(item.color)}</dd></div><div><dt>Maten</dt><dd>${esc(item.sizes.join(", ") || "Nog te bepalen")}</dd></div></dl>${item.placements.length ? `<ul>${item.placements.map((placement) => { const rule = placement.productionRule; const known = rule ? [rule.fontProfile, rule.physicalWidthMm && rule.physicalHeightMm ? `${rule.physicalWidthMm}×${rule.physicalHeightMm} mm` : null, rule.foilColor].filter(Boolean) : []; const production = [...known, rule?.status === "RESOLVED" ? null : "Productiecontrole nodig"].filter(Boolean).join(" · ") || "Productiecontrole nodig"; const customerDescription = [placement.text, placement.preset.replaceAll("_", " ").toLowerCase()].filter(Boolean).join(" · "); return `<li><strong>${esc(placement.label)}</strong><span>${customer ? esc(customerDescription) : `${esc(placement.preset.replaceAll("_", " ").toLowerCase())} · ${esc(placement.route.replaceAll("_", " ").toLowerCase())} · ${esc(production)}`}</span></li>`; }).join("")}</ul>` : `<p class="tk-empty">Nog geen bedrukkingen toegevoegd.</p>`}${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</article>`).join("");
-  return `<section class="tk-preview" data-proposal-revision="${snapshot.revision}"><header class="tk-preview__hero"><div><p>SPORT 2000 SPORTPALEIS</p><h1>${esc(snapshot.title)}</h1><span>${esc(snapshot.association.name ?? snapshot.customer.name)}${snapshot.team ? ` · ${esc(snapshot.team)}` : ""}</span></div><dl><div><dt>Voorstel</dt><dd>${esc(snapshot.proposalNumber)}</dd></div><div><dt>Versie</dt><dd>V${snapshot.revision}</dd></div></dl></header><div class="tk-preview__items">${items || `<p>Nog geen artikelen toegevoegd.</p>`}</div>${snapshot.notes ? `<aside><strong>Opmerking</strong><p>${esc(snapshot.notes)}</p></aside>` : ""}</section>`;
+  const attention = visualProof.status === "PROVEN" ? "" : `<aside class="tk-visual-proof-blocker" role="status"><strong>Klantgoedkeuring geblokkeerd</strong><p>Voor ${visualProof.issues.map(({ articleNumber, productName, surface }) => `${esc(articleNumber ?? productName)} · ${surface === "FRONT" ? "voorzijde" : "achterzijde"}`).join(", ")} ontbreekt authoritative presentatiemedia. Een generieke productvorm geldt niet als bewijs.</p></aside>`;
+  return `<section class="tk-preview" data-proposal-revision="${snapshot.revision}" data-visual-proof-status="${visualProof.status}"><header class="tk-preview__hero"><div><p>SPORT 2000 SPORTPALEIS</p><h1>${esc(snapshot.title)}</h1><span>${esc(snapshot.association.name ?? snapshot.customer.name)}${snapshot.team ? ` · ${esc(snapshot.team)}` : ""}</span></div><dl><div><dt>Voorstel</dt><dd>${esc(snapshot.proposalNumber)}</dd></div><div><dt>Versie</dt><dd>V${snapshot.revision}</dd></div></dl></header>${attention}<div class="tk-preview__items">${items || `<p>Nog geen artikelen toegevoegd.</p>`}</div>${snapshot.notes ? `<aside><strong>Opmerking</strong><p>${esc(snapshot.notes)}</p></aside>` : ""}</section>`;
 }
 
 export function createProposalRevision(proposal, actor, reason, feedbackIds = [], now = new Date(), state = null) {
@@ -409,6 +483,7 @@ async function drawPdfGarment(context, item, side, x, y, width, height, state, p
 
 export async function generateProposalPdf(snapshot, approved = false, { state = null, proposal = null } = {}) {
   for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
+  assertAuthoritativeProposalVisualProof(snapshot);
   const document = new PDFDocument({ title: `${snapshot.proposalNumber} V${snapshot.revision}`, author: "Sport 2000 Sportpaleis", creator: "Sportpaleis Teamwear", producer: "WBD Workspace", compressionLevel: 9 });
   const pages = snapshot.items.length ? Array.from({ length: Math.ceil(snapshot.items.length / 4) }, (_, index) => snapshot.items.slice(index * 4, index * 4 + 4)) : [[]];
   for (const [pageIndex, page] of pages.entries()) {
@@ -475,7 +550,7 @@ export function publicProposal(proposal) {
 
 export function customerProposal(proposal) {
   const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision) ?? createProposalRevision(proposal, { id: "system", name: "Sportpaleis", role: "customer" }, "Actuele klantpreview");
-  return structuredClone({ proposalNumber: proposal.proposalNumber, title: proposal.title, status: proposal.status, currentRevision: proposal.currentRevision, customer: proposal.customer, association: proposal.association, team: proposal.team, season: proposal.season, category: proposal.category, intake: proposal.intake, items: proposal.items, sources: proposal.sources.map(({ dataBase64: _dataBase64, safePreviewSvg: _safePreviewSvg, promotedProductionSourceId: _promotedProductionSourceId, ...source }) => source), previewHtml: renderProposalPreview(revision.snapshot, { customer: true }), feedback: proposal.feedback.filter(({ revision: number }) => number === proposal.currentRevision).map(({ processedAt: _processedAt, processedBy: _processedBy, ...feedback }) => feedback), approval: proposal.approval ? { revision: proposal.approval.revision, approvedAt: proposal.approval.approvedAt, customerName: proposal.approval.customerName, pdfAvailable: true } : null });
+  return structuredClone({ proposalNumber: proposal.proposalNumber, title: proposal.title, status: proposal.status, currentRevision: proposal.currentRevision, customer: proposal.customer, association: proposal.association, team: proposal.team, season: proposal.season, category: proposal.category, intake: proposal.intake, items: proposal.items, sources: proposal.sources.map(({ dataBase64: _dataBase64, safePreviewSvg: _safePreviewSvg, promotedProductionSourceId: _promotedProductionSourceId, ...source }) => source), previewHtml: renderProposalPreview(revision.snapshot, { customer: true }), visualApproval: assessAuthoritativeProposalVisualProof(revision.snapshot), feedback: proposal.feedback.filter(({ revision: number }) => number === proposal.currentRevision).map(({ processedAt: _processedAt, processedBy: _processedBy, ...feedback }) => feedback), approval: proposal.approval ? { revision: proposal.approval.revision, approvedAt: proposal.approval.approvedAt, customerName: proposal.approval.customerName, pdfAvailable: true } : null });
 }
 
 export function validateTeamkitProposalState(state) {
@@ -488,6 +563,8 @@ export function validateTeamkitProposalState(state) {
     for (const source of proposal.sources) { if (sourceIds.has(source.id) || !source.immutable || proposalSha256(Buffer.from(source.dataBase64 ?? "", "base64")) !== source.sha256) throw new Error("Immutable voorstelbron ontbreekt of is gewijzigd."); sourceIds.add(source.id); }
     for (const revision of proposal.revisions) {
       if (revision.snapshotHash !== proposalSha256(JSON.stringify(revision.snapshot)) || revision.previewSha256 !== proposalSha256(revision.previewHtml)) throw new Error("Voorstelrevision is gewijzigd.");
+      const visualProof = assessAuthoritativeProposalVisualProof(revision.snapshot);
+      if (JSON.stringify(revision.snapshot.visualProof) !== JSON.stringify(visualProof)) throw new Error("De immutable voorstelrevision mist exact reproduceerbare authoritative visual-proof truth.");
       for (const item of revision.snapshot.items) for (const placement of item.placements) if (placement.productionRule) {
         const { ruleHash, ...ruleBody } = placement.productionRule;
         if (ruleHash !== proposalSha256(JSON.stringify(ruleBody))) throw new Error("Teamwear productie-instelling is gewijzigd.");
@@ -495,7 +572,7 @@ export function validateTeamkitProposalState(state) {
     }
     proposal.approvalHistory ??= [];
     const approvals = [...proposal.approvalHistory, ...(proposal.approval ? [proposal.approval] : [])]; const approvedRevisions = new Set();
-    for (const approval of approvals) { const revision = proposal.revisions.find(({ number }) => number === approval.revision); const pdf = Buffer.from(approval.pdfBase64, "base64"); if (approvedRevisions.has(approval.revision) || !revision || revision.snapshotHash !== approval.snapshotHash || proposalSha256(approval.previewHtml) !== approval.previewSha256 || proposalSha256(pdf) !== approval.pdfSha256 || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Approved proposal is niet exact reproduceerbaar."); approvedRevisions.add(approval.revision); }
+    for (const approval of approvals) { const revision = proposal.revisions.find(({ number }) => number === approval.revision); const pdf = Buffer.from(approval.pdfBase64, "base64"); if (approvedRevisions.has(approval.revision) || !revision || revision.snapshotHash !== approval.snapshotHash || proposalSha256(approval.previewHtml) !== approval.previewSha256 || proposalSha256(pdf) !== approval.pdfSha256 || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Approved proposal is niet exact reproduceerbaar."); assertAuthoritativeProposalVisualProof(revision.snapshot); approvedRevisions.add(approval.revision); }
     if (proposal.productionSizing) {
       const sizing = proposal.productionSizing; const approval = approvals.find(({ revision }) => revision === sizing.approvedRevision);
       const sizingBody = { proposalId: proposal.id, approvedRevision: sizing.approvedRevision, revision: sizing.revision, items: sizing.items };

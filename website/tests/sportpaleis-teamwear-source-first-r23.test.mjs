@@ -11,7 +11,7 @@ const productSurfaces = await readFile(new URL("../src/sportpaleis/teamkit-produ
 
 function directItem(sourceId, productType, printableSides) {
   const physicalSides = productType === "OTHER" ? ["FRONT"] : ["FRONT", "BACK"];
-  return normalizeProposalItems([{ id: "item-1", articleId: null, articleNumber: "REF-1", productName: "Werkelijk bronartikel", color: "Marine", quantity: null, sizes: [], team: null, notes: null, catalogSnapshot: { catalogProductId: `proposal-source:${sourceId}`, brand: "Eigen bron", supplierName: "Directe artikelbron", supplierArticleName: "Werkelijk bronartikel", supplierArticleNumber: "REF-1", category: productType, collection: null, audience: [], colorLabel: "Marine", imageKey: `proposal-source:${sourceId}`, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "proposal-direct-source", sourceStatus: "AUTHORITATIVE", directFrontSourceId: sourceId, productType, printableSides, sourceReference: "Officiële catalogus pagina 18", canonicalProductIdentity: { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: "server-bound-r23", articleNumber: "REF-1", productType, physicalSides, printableSides, authority: "R2.23_PERSISTED_SERVER_TRUTH", evidenceKind: "TEST_FIXTURE", evidenceReference: "Officiële catalogus pagina 18", evidenceHash: "A".repeat(64) } }, placements: [] }])[0];
+  return normalizeProposalItems([{ id: "item-1", articleId: "server-bound-r23", articleNumber: "REF-1", productName: "Werkelijk bronartikel", color: "Marine", quantity: null, sizes: [], team: null, notes: null, catalogSnapshot: { catalogProductId: `proposal-source:${sourceId}`, brand: "Eigen bron", supplierName: "Directe artikelbron", supplierArticleName: "Werkelijk bronartikel", supplierArticleNumber: "REF-1", category: productType, collection: null, audience: [], colorLabel: "Marine", imageKey: `proposal-source:${sourceId}`, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "proposal-direct-source", sourceStatus: "AUTHORITATIVE", directFrontSourceId: sourceId, productType, printableSides, sourceReference: "Officiële catalogus pagina 18", canonicalProductIdentity: { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: "server-bound-r23", articleNumber: "REF-1", productType, physicalSides, printableSides, authority: "R2.23_PERSISTED_SERVER_TRUTH", evidenceKind: "TEST_FIXTURE", evidenceReference: "Officiële catalogus pagina 18", evidenceHash: "A".repeat(64) } }, placements: [] }])[0];
 }
 
 test("Teamwear begint bij een echte artikelbron en maakt context optioneel", () => {
@@ -33,7 +33,7 @@ test("directe productbron blijft immutable in proposal snapshot, klantpreview en
   assert.equal(snapshot.items[0].catalogSnapshot.sourceReference, "Officiële catalogus pagina 18");
   const preview = renderProposalPreview(snapshot, { customer: true });
   assert.match(preview, /data:image\/svg\+xml;base64/u);
-  assert.equal((preview.match(/<figure class="tk-garment">/gu) ?? []).length, 1, "rugtas toont geen verzonnen achterkant");
+  assert.equal((preview.match(/<figure class="tk-garment"/gu) ?? []).length, 1, "rugtas toont geen verzonnen achterkant");
   const pdf = await generateProposalPdf(snapshot, false, { state: { articles: [], productionElements: [], associations: [] }, proposal });
   assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
 });

@@ -9,6 +9,7 @@ import { SportpaleisFileStore, SportpaleisPilotService, setSportpaleisTeamwearPi
 import { buildSportpaleisProductCatalog } from "../src/sportpaleis-product-catalog.ts";
 import { normalizeProposalItems } from "../src/sportpaleis/teamkit-proposals.mjs";
 import { generateProposalPdf, proposalSnapshot, renderProposalPreview } from "../src/sportpaleis/teamkit-proposals.mjs";
+import { canonicalTeamkitArticleSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 import {
   buildTeamwearComposition,
   buildTeamwearAssetLibrary,
@@ -89,12 +90,13 @@ test("synccatalogus → revision-preview → PDF gebruikt dezelfde echte front/b
   assert.ok(article);
   const front = article.catalogMedia.find(({ kind }) => kind === "FRONT");
   const back = article.catalogMedia.find(({ kind }) => kind === "BACK");
+  const surfaceTruth = canonicalTeamkitArticleSurfaceTruth(article);
   assert.ok(front?.imageKey && back?.imageKey);
   assert.equal(front.sourceProductId, back.sourceProductId);
   assert.equal(front.sourceColorId, back.sourceColorId);
   assert.equal(front.colorLabel, back.colorLabel);
   const snapshot = {
-    catalogProductId: article.id, brand: "Sportpaleis", supplierName: "Sportpaleis", supplierArticleName: article.name, supplierArticleNumber: article.supplierArticleNumber ?? article.articleNumber, category: article.category, collection: null, audience: [], colorLabel: front.colorLabel, imageKey: front.imageKey, backImageKey: back.imageKey, frontSourceUrl: front.sourceUrl, backSourceUrl: back.sourceUrl, sourceProductId: front.sourceProductId, sourceColorId: front.sourceColorId, mediaClassification: front.classification, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "sportpaleis-existing", sourceStatus: "AUTHORITATIVE",
+    catalogProductId: article.id, brand: "Sportpaleis", supplierName: "Sportpaleis", supplierArticleName: article.name, supplierArticleNumber: article.supplierArticleNumber ?? article.articleNumber, category: article.category, collection: null, audience: [], colorLabel: front.colorLabel, imageKey: front.imageKey, backImageKey: back.imageKey, frontSourceUrl: front.sourceUrl, backSourceUrl: back.sourceUrl, sourceProductId: front.sourceProductId, sourceColorId: front.sourceColorId, mediaClassification: front.classification, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "sportpaleis-existing", sourceStatus: "AUTHORITATIVE", productType: surfaceTruth.productType, printableSides: surfaceTruth.printableSides, canonicalProductIdentity: { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: article.id, articleNumber: article.articleNumber, productType: surfaceTruth.productType, physicalSides: surfaceTruth.physicalSides, printableSides: surfaceTruth.printableSides, authority: surfaceTruth.authority, evidenceKind: "TEST_SERVER_BINDING", evidenceReference: article.id, evidenceHash: "A".repeat(64) },
   };
   const proposal = {
     id: "proposal-real-front-back", proposalNumber: "TKV-REAL-FRONT-BACK", currentRevision: 2, title: "Pioneers varsity", type: "TEAMKIT", customer: { name: "Almere Pioneers" }, association: { id: "association-03", name: "Almere Pioneers" }, team: "Selectie", season: "2026/2027", category: null, deadline: null, notes: null, sources: [],

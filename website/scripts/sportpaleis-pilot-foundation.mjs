@@ -78,6 +78,7 @@ import { createCreativeVectorCandidate } from "../src/sportpaleis/creative-vecto
 import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
 import {
   approvedFulfillmentTasks,
+  assertAuthoritativeProposalVisualProof,
   createCustomerAccess,
   createProposalRevision,
   customerProposal,
@@ -2922,6 +2923,11 @@ export class SportpaleisPilotService {
       if (proposal.aggregateRevision !== Number(payload.expectedRevision)) throw Object.assign(new Error("Dit voorstel is ondertussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: proposal.aggregateRevision });
       if (proposal.status === "APPROVED" && status !== "ARCHIVED") throw Object.assign(new Error("Een approved proposal blijft immutable."), { statusCode: 409, code: "APPROVED_REVISION_IMMUTABLE" });
       if (["READY_FOR_REVIEW", "READY_FOR_APPROVAL"].includes(status) && !proposal.items.length) throw Object.assign(new Error("Voeg minimaal één artikel toe voordat dit voorstel naar de klant gaat."), { statusCode: 409, code: "PROPOSAL_ITEMS_REQUIRED" });
+      if (status === "READY_FOR_APPROVAL") {
+        const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision);
+        if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
+        assertAuthoritativeProposalVisualProof(revision.snapshot);
+      }
       proposal.status = status; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; if (status === "ARCHIVED") proposal.archivedAt = proposal.updatedAt;
       audit(state, user.id, status === "READY_FOR_APPROVAL" ? "Goedkeuring gevraagd" : status === "ARCHIVED" ? "Voorstel gearchiveerd" : "Voorstelstatus gewijzigd", proposal.id, { status, revision: proposal.currentRevision });
       return { state, value: publicProposal(proposal) };
@@ -2978,6 +2984,7 @@ export class SportpaleisPilotService {
       if (!["SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(proposal.status)) throw Object.assign(new Error("Sportpaleis heeft deze versie nog niet voor akkoord vrijgegeven."), { statusCode: 409, code: "PROPOSAL_APPROVAL_NOT_READY" });
       if (revisionNumber !== proposal.currentRevision) throw Object.assign(new Error("Deze preview is niet meer de actuele versie."), { statusCode: 409, code: "PROPOSAL_REVISION_STALE", currentRevision: proposal.currentRevision });
       const revision = proposal.revisions.find(({ number }) => number === revisionNumber); if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
+      assertAuthoritativeProposalVisualProof(revision.snapshot);
       const customerName = requiredText(payload.customerName, "Naam", 160); const customerEmail = validEmail(payload.customerEmail ?? proposal.customer.email); const pdf = await generateProposalPdf(revision.snapshot, true, { state, proposal }); const previewHtml = renderProposalPreview(revision.snapshot, { customer: true });
       proposal.approval = { revision: revisionNumber, approvedAt: iso(), customerName, customerEmail, accessContextId: proposal.customerAccess.id, snapshotHash: revision.snapshotHash, previewHtml, previewSha256: proposalSha256(previewHtml), pdfBase64: pdf.toString("base64"), pdfSha256: proposalSha256(pdf), artifactFilename: `${proposal.proposalNumber}-V${revisionNumber}-akkoord.pdf` };
       const legacySizingComplete = revision.snapshot.items.length > 0 && revision.snapshot.items.every(({ quantity, sizes }) => Number.isInteger(quantity) && quantity > 0 && Array.isArray(sizes) && sizes.length > 0);
