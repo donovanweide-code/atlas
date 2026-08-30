@@ -1,13 +1,15 @@
 import { defineConfig } from "vite";
 import { readFileSync, readdirSync } from "node:fs";
-import { createHash } from "node:crypto";
-import { basename } from "node:path";
 import {
   SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
   SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
   assertAuthoritativeProductionAssetBytes,
   authoritativeProductionAssetManifest,
 } from "./config/sportpaleis-authoritative-production-assets.mjs";
+import {
+  deterministicTeamwearCatalogManifest,
+  deterministicWorkspaceAssetFileName,
+} from "./config/deterministic-workspace-assets.mjs";
 
 const pwaAsset = (name: string) => readFileSync(new URL(`./workspace-public/${name}`, import.meta.url), "utf8");
 
@@ -60,22 +62,10 @@ export default defineConfig({
           source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/teamwear-fixtures/${fileName}`, import.meta.url)),
         });
       }
-      const catalogImages: Record<string, { fileName: string; sha256: string }> = {};
-      for (const asset of Object.values(bundle)) {
-        if (asset.type !== "asset") continue;
-        const originals = asset.originalFileNames?.filter((name) => name.replaceAll("\\", "/").includes("src/assets/images/sportpaleis/")) ?? [];
-        if (originals.length === 0) continue;
-        const source = typeof asset.source === "string" ? Buffer.from(asset.source) : Buffer.from(asset.source);
-        const entry = { fileName: asset.fileName, sha256: createHash("sha256").update(source).digest("hex").toUpperCase() };
-        for (const original of originals) {
-          const key = basename(original).replace(/\.[^.]+$/u, "");
-          catalogImages[key] = entry;
-        }
-      }
       this.emitFile({
         type: "asset",
         fileName: "assets/organizations/sportpaleis/teamwear-catalog-manifest.json",
-        source: `${JSON.stringify({ schemaVersion: 1, images: catalogImages }, null, 2)}\n`,
+        source: `${JSON.stringify(deterministicTeamwearCatalogManifest(bundle), null, 2)}\n`,
       });
     },
   }],
@@ -92,7 +82,7 @@ export default defineConfig({
       output: {
         entryFileNames: "assets/workspace-[hash].js",
         chunkFileNames: "assets/workspace-[hash].js",
-        assetFileNames: "assets/workspace-[hash][extname]",
+        assetFileNames: deterministicWorkspaceAssetFileName,
       },
     },
   },
