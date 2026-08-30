@@ -1,3 +1,5 @@
+import { SPORTPALEIS_CANONICAL_TEAMWEAR_PRODUCT_TRUTH_R224 } from "../../config/sportpaleis-canonical-teamwear-product-truth-r224.generated.mjs";
+
 export const TEAMKIT_PRODUCT_TYPES = Object.freeze(["UPPER_GARMENT", "LOWER_GARMENT", "SPORTS_BAG", "BACKPACK", "OTHER"]);
 
 const SURFACE_TRUTH = Object.freeze({
@@ -58,6 +60,19 @@ export function canonicalTeamkitSurfaceTruth(productType) {
   const canonicalType = canonicalTeamkitProductType(productType);
   if (!canonicalType) throw failure("De productspecifieke bedrukbare zijden zijn niet canoniek vastgesteld.", "TEAMKIT_PRODUCT_TYPE_REQUIRED");
   return { productType: canonicalType, ...SURFACE_TRUTH[canonicalType] };
+}
+
+/**
+ * Runtime production truth is always an explicit article-bound record. Product
+ * names remain useful for discovery, but can never authorize physical sides.
+ */
+export function canonicalTeamkitArticleSurfaceTruth(article) {
+  const record = article?.teamwearProductTruth ?? SPORTPALEIS_CANONICAL_TEAMWEAR_PRODUCT_TRUTH_R224[article?.id];
+  if (!record || record.status !== "PROVEN") throw failure("De productspecifieke bedrukbare zijden zijn nog niet als canonieke artikelwaarheid vastgelegd.", "TEAMKIT_CANONICAL_ARTICLE_SURFACE_UNRESOLVED", { articleId: article?.id ?? null });
+  if (record.sourceArticleId !== article.id || record.articleNumber !== article.articleNumber) throw failure("De canonieke productsurface-truth hoort niet bij het gekozen artikel/SKU.", "TEAMKIT_CANONICAL_ARTICLE_SURFACE_CONFLICT", { articleId: article.id, articleNumber: article.articleNumber });
+  const truth = canonicalTeamkitSurfaceTruth(record.productType);
+  if (JSON.stringify(record.physicalSides) !== JSON.stringify(truth.physicalSides) || JSON.stringify(record.printableSides) !== JSON.stringify(truth.printableSides)) throw failure("De vastgelegde artikelzijden conflicteren met de canonieke productsoort.", "TEAMKIT_CANONICAL_ARTICLE_SURFACE_CONFLICT", { articleId: article.id, productType: record.productType });
+  return { ...truth, authority: record.authority, evidenceKind: record.evidenceKind, evidenceReference: record.evidenceReference };
 }
 
 export function assertCanonicalTeamkitItemSurfaceTruth(item) {

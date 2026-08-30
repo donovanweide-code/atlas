@@ -105,7 +105,7 @@ test("source-first upload met exact officiële variantidentity krijgt server-aut
   const { store, service, operator } = await fixture(context);
   const proposal = await service.createTeamkitProposal(operator.token, operator.csrfToken, directPayload(), "r222-source-resolved");
   const item = proposal.items[0];
-  assert.equal(item.articleId, null);
+  assert.equal(item.articleId, "sp-live-131285");
   assert.equal(item.articleNumber, "131285");
   assert.equal(item.catalogSnapshot.canonicalProductIdentity.sourceArticleId, "sp-live-131285");
   assert.equal(item.catalogSnapshot.canonicalProductIdentity.productType, "BACKPACK");

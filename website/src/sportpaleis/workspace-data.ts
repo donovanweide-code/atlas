@@ -259,6 +259,20 @@ export interface CatalogArticle {
     reviewedAt: string | null;
     reviewedBy: string | null;
   };
+  /** Explicit server-authoritative physical product classification. Product names are discovery-only. */
+  teamwearProductTruth?: {
+    version: "SPORTPALEIS_CANONICAL_TEAMWEAR_PRODUCT_TRUTH_V1";
+    status: "PROVEN" | "UNRESOLVED";
+    sourceArticleId: string;
+    articleNumber: string;
+    productType: "UPPER_GARMENT" | "LOWER_GARMENT" | "SPORTS_BAG" | "BACKPACK" | "OTHER";
+    physicalSides: ("FRONT" | "BACK")[];
+    printableSides: ("FRONT" | "BACK")[];
+    authority: string;
+    evidenceKind: string;
+    evidenceReference: string;
+    reconciledAt: string;
+  };
   printRelevance?: { status: "CONFIRMED_VISIBLE_PERSONALIZATION" | "HUMAN_CONFIRMATION_REQUIRED"; sourceLabel: string; checkedAt: string };
   productionDataGaps?: string[];
   revision?: number;

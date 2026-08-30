@@ -32,6 +32,7 @@ export const WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES = Object.freeze([
 const DEFAULT_TTL_MS = 60 * 60 * 1_000;
 const MIN_TTL_MS = 5 * 60 * 1_000;
 const MAX_TTL_MS = 4 * 60 * 60 * 1_000;
+export const WBD_REVIEW_AUDIT_RETENTION_POLICY = Object.freeze({ version: "WBD_REVIEW_AUDIT_RETENTION_V1", mode: "APPEND_ONLY", pruningAllowed: false });
 
 function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
@@ -73,12 +74,12 @@ function appendAudit(state, { actorId, action, subject, details = {}, at }) {
     subject,
     details,
   });
-  state.audit = state.audit.slice(0, 2_000);
 }
 
 export function ensureWbdReviewDeveloperAccessState(state) {
-  state.reviewDeveloperAccess ??= { grants: [] };
+  state.reviewDeveloperAccess ??= { grants: [], auditRetentionPolicy: { ...WBD_REVIEW_AUDIT_RETENTION_POLICY } };
   state.reviewDeveloperAccess.grants ??= [];
+  state.reviewDeveloperAccess.auditRetentionPolicy = { ...WBD_REVIEW_AUDIT_RETENTION_POLICY };
   return state.reviewDeveloperAccess;
 }
 

@@ -34,7 +34,7 @@ import {
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
-import { canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth, inferCanonicalTeamkitProductType } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
+import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -1431,7 +1431,7 @@ function exactSourceFirstArticleBinding(state, item, proposalSources = []) {
     const source = proposalSources.find(({ id }) => id === sourceId);
     if (source) evidence.push({ kind: "IMMUTABLE_PRODUCT_IMAGE_SOURCE", reference: `${source.id}@${source.sha256}` });
   }
-  const truth = canonicalTeamkitSurfaceTruth(inferCanonicalTeamkitProductType(article));
+  const truth = canonicalTeamkitArticleSurfaceTruth(article);
   const body = {
     version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1",
     sourceArticleId: article.id,
@@ -1443,12 +1443,12 @@ function exactSourceFirstArticleBinding(state, item, proposalSources = []) {
     evidenceKind: evidence.map(({ kind }) => kind).sort().join("+"),
     evidenceReference: evidence.map(({ reference }) => reference).sort().join(" | "),
   };
-  return { status: "RESOLVED", binding: { ...body, evidenceHash: sha256(JSON.stringify(body)) }, evidence };
+  return { status: "RESOLVED", article, binding: { ...body, evidenceHash: sha256(JSON.stringify(body)) }, evidence };
 }
 
 function catalogSnapshotForAuthoritativeArticle(article) {
-  const productType = inferCanonicalTeamkitProductType(article);
-  const truth = canonicalTeamkitSurfaceTruth(productType);
+  const truth = canonicalTeamkitArticleSurfaceTruth(article);
+  const productType = truth.productType;
   const front = article.catalogMedia?.find(({ kind, classification }) => kind === "FRONT" && classification === "SOURCE_GALLERY_ORDER_V1");
   const back = article.catalogMedia?.find(({ kind, classification }) => kind === "BACK" && classification === "SOURCE_GALLERY_ORDER_V1");
   return {
@@ -1483,6 +1483,62 @@ function catalogSnapshotForAuthoritativeArticle(article) {
   };
 }
 
+function canonicalArticleMedia(article) {
+  const official = (article.catalogMedia ?? []).filter(({ classification }) => classification === "SOURCE_GALLERY_ORDER_V1");
+  const front = official.find(({ kind }) => kind === "FRONT") ?? null;
+  const back = official.find(({ kind, sourceProductId, sourceColorId }) => kind === "BACK" && (!front || (sourceProductId === front.sourceProductId && sourceColorId === front.sourceColorId))) ?? null;
+  if (official.some(({ kind }) => kind === "BACK") && !back) throw Object.assign(new Error("De officiële voor- en achterkant horen niet aantoonbaar bij dezelfde artikelvariant."), { statusCode: 409, code: "TEAMKIT_ARTICLE_MEDIA_VARIANT_CONFLICT", articleId: article.id });
+  return { front, back };
+}
+
+function assertRequestedArticleMediaIdentity(state, item, article) {
+  const snapshot = item.catalogSnapshot ?? {};
+  const { front, back } = canonicalArticleMedia(article);
+  const conflicts = [];
+  const compare = (field, actual, expected) => { if (actual != null && String(actual).trim() && String(actual) !== String(expected ?? "")) conflicts.push({ field, actual, expected: expected ?? null }); };
+  if (item.articleNumber && item.articleNumber !== article.articleNumber) conflicts.push({ field: "item.articleNumber", actual: item.articleNumber, expected: article.articleNumber });
+  if (snapshot.catalogProductId && state.articles.some(({ id }) => id === snapshot.catalogProductId) && snapshot.catalogProductId !== article.id) conflicts.push({ field: "catalogProductId", actual: snapshot.catalogProductId, expected: article.id });
+  compare("supplierArticleNumber", snapshot.supplierArticleNumber, article.articleNumber);
+  compare("sourceProductId", snapshot.sourceProductId, front?.sourceProductId);
+  compare("sourceColorId", snapshot.sourceColorId, front?.sourceColorId);
+  if (!snapshot.directFrontSourceId && !String(snapshot.imageKey ?? "").startsWith("proposal-source:")) compare("imageKey", snapshot.imageKey, front?.imageKey ?? article.imageKey);
+  if (!snapshot.directBackSourceId && snapshot.backImageKey) compare("backImageKey", snapshot.backImageKey, back?.imageKey ?? null);
+  if (!snapshot.directFrontSourceId) compare("frontSourceUrl", snapshot.frontSourceUrl, front?.sourceUrl ?? article.catalogProvenance?.imageUrl ?? null);
+  if (!snapshot.directBackSourceId) compare("backSourceUrl", snapshot.backSourceUrl, back?.sourceUrl ?? null);
+  if (conflicts.length) throw Object.assign(new Error("De aangeleverde artikelmedia hoort niet bij exact hetzelfde canonieke artikel/SKU."), { statusCode: 409, code: "TEAMKIT_ARTICLE_MEDIA_IDENTITY_CONFLICT", itemId: item.id ?? null, articleId: article.id, conflicts });
+  return { front, back };
+}
+
+function bindCatalogSnapshotToCanonicalArticle(item, article, truth, media, { preserveDirectMedia = false } = {}) {
+  const requested = item.catalogSnapshot ?? {};
+  const directFrontSourceId = preserveDirectMedia ? requested.directFrontSourceId ?? null : null;
+  const directBackSourceId = preserveDirectMedia ? requested.directBackSourceId ?? null : null;
+  item.articleId = article.id;
+  item.articleNumber = article.articleNumber;
+  item.productName = article.name;
+  item.catalogSnapshot = {
+    ...requested,
+    catalogProductId: article.id,
+    supplierArticleName: article.name,
+    supplierArticleNumber: article.articleNumber,
+    imageKey: directFrontSourceId ? requested.imageKey : media.front?.imageKey ?? article.imageKey,
+    backImageKey: directBackSourceId ? requested.backImageKey : media.back?.imageKey ?? null,
+    frontSourceUrl: directFrontSourceId ? requested.frontSourceUrl ?? null : media.front?.sourceUrl ?? article.catalogProvenance?.imageUrl ?? null,
+    backSourceUrl: directBackSourceId ? requested.backSourceUrl ?? null : media.back?.sourceUrl ?? null,
+    sourceProductId: media.front?.sourceProductId ?? null,
+    sourceColorId: media.front?.sourceColorId ?? null,
+    mediaClassification: media.front?.classification ?? null,
+    sourceAdapterId: "sportpaleis-existing",
+    sourceStatus: "AUTHORITATIVE",
+    directFrontSourceId,
+    directBackSourceId,
+    directFrontSourceRef: directFrontSourceId ? requested.directFrontSourceRef ?? null : null,
+    directBackSourceRef: directBackSourceId ? requested.directBackSourceRef ?? null : null,
+    productType: truth.productType,
+    category: truth.productType,
+  };
+}
+
 function normalizeTeamkitItemsWithCanonicalProductTruth(state, requestedItems, proposalSources = []) {
   const items = structuredClone(requestedItems);
   for (const item of items) {
@@ -1500,23 +1556,27 @@ function normalizeTeamkitItemsWithCanonicalProductTruth(state, requestedItems, p
     if (item.articleId) {
       const article = state.articles.find(({ id, active }) => id === item.articleId && active);
       if (!article) throw Object.assign(new Error("Het gekozen bekende artikel bestaat niet meer in de actuele productwaarheid."), { statusCode: 409, code: "TEAMKIT_ARTICLE_TRUTH_NOT_FOUND", itemId: item.id ?? null, articleId: item.articleId });
-      const canonicalType = inferCanonicalTeamkitProductType(article);
+      const truth = canonicalTeamkitArticleSurfaceTruth(article);
+      const canonicalType = truth.productType;
       if (requestedType && requestedType !== canonicalType) throw Object.assign(new Error("De opgegeven productsoort conflicteert met het gekozen canonieke artikel."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_CONFLICT", itemId: item.id ?? null, articleId: article.id, requestedType, canonicalType });
-      const truth = canonicalTeamkitSurfaceTruth(canonicalType);
+      const media = assertRequestedArticleMediaIdentity(state, item, article);
+      const hasDirectMedia = Boolean(item.catalogSnapshot.directFrontSourceId || item.catalogSnapshot.directBackSourceId);
+      if (hasDirectMedia) {
+        const directResolution = exactSourceFirstArticleBinding(state, { ...item, articleId: null }, proposalSources);
+        if (directResolution.status !== "RESOLVED" || directResolution.article.id !== article.id) throw Object.assign(new Error("De directe klantmedia kan niet aantoonbaar aan exact hetzelfde canonieke artikel worden gekoppeld."), { statusCode: 409, code: "TEAMKIT_ARTICLE_MEDIA_IDENTITY_CONFLICT", itemId: item.id ?? null, articleId: article.id, evidence: directResolution.evidence });
+      }
+      bindCatalogSnapshotToCanonicalArticle(item, article, truth, media, { preserveDirectMedia: hasDirectMedia });
       const body = { version: "TEAMKIT_CANONICAL_PRODUCT_IDENTITY_V1", sourceArticleId: article.id, articleNumber: article.articleNumber, productType: truth.productType, physicalSides: [...truth.physicalSides], printableSides: [...truth.printableSides], authority: "SPORTPALEIS_SERVER_PRODUCT_TRUTH", evidenceKind: "ARTICLE_ID", evidenceReference: article.id };
       item.catalogSnapshot.canonicalProductIdentity = { ...body, evidenceHash: sha256(JSON.stringify(body)) };
-      item.catalogSnapshot.productType = canonicalType;
-      item.catalogSnapshot.category = canonicalType;
-      item.articleNumber = article.articleNumber;
     } else {
       const resolution = exactSourceFirstArticleBinding(state, item, proposalSources);
       if (resolution.status !== "RESOLVED") throw Object.assign(new Error(resolution.status === "CONFLICTING" ? "De directe artikelbron matcht meerdere conflicterende canonieke productidentiteiten." : "De directe artikelbron bevat onvoldoende authoritative identiteit om fysieke zijden en placements veilig vast te stellen."), { statusCode: 409, code: `TEAMKIT_CANONICAL_PRODUCT_IDENTITY_${resolution.status}`, itemId: item.id ?? null, evidence: resolution.evidence });
       const canonicalType = resolution.binding.productType;
       if (requestedType && requestedType !== canonicalType) throw Object.assign(new Error("De opgegeven productsoort conflicteert met de server-authoritative artikelbron."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_CONFLICT", itemId: item.id ?? null, sourceArticleId: resolution.binding.sourceArticleId, requestedType, canonicalType });
+      const truth = canonicalTeamkitArticleSurfaceTruth(resolution.article);
+      const media = assertRequestedArticleMediaIdentity(state, item, resolution.article);
+      bindCatalogSnapshotToCanonicalArticle(item, resolution.article, truth, media, { preserveDirectMedia: Boolean(item.catalogSnapshot.directFrontSourceId || item.catalogSnapshot.directBackSourceId) });
       item.catalogSnapshot.canonicalProductIdentity = resolution.binding;
-      item.catalogSnapshot.productType = canonicalType;
-      item.catalogSnapshot.category = canonicalType;
-      item.articleNumber = resolution.binding.articleNumber;
     }
     const truth = canonicalTeamkitSurfaceTruth(item.catalogSnapshot.productType);
     if (requestedSides?.some((side) => !truth.printableSides.includes(side))) throw Object.assign(new Error("De opgegeven bedrukbare zijde conflicteert met de server-authoritative productsurface-truth."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE", itemId: item.id ?? null, requestedSides, canonicalSides: truth.printableSides });
