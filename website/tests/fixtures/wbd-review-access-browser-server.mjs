@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { createWbdCandidateReviewRuntime } from "../../scripts/wbd-candidate-review-runtime.mjs";
 import { createSportpaleisCandidateReviewAdapter } from "../../scripts/sportpaleis-candidate-review-adapter.mjs";
+import { SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR } from "../../scripts/sportpaleis-review-artifact-validator.mjs";
 
 const candidateId = "spw-experience-simplification-candidate-r2-2-20260828";
 const expectedReleaseId = "SPW-EXPERIENCE-SIMPLIFICATION-CANDIDATE-R2.2-20260828";
@@ -19,6 +20,9 @@ const runtime = await createWbdCandidateReviewRuntime({
     expectedCommit,
     expectedArtifactSha256,
   },
+  artifactValidators: [SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR],
+  entryPath: "/overzicht",
+  shellFile: "sportpaleis.html",
   createApplicationAdapter: ({ identity, runtimeRoot }) => createSportpaleisCandidateReviewAdapter({
     identity,
     runtimeRoot,

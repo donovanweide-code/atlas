@@ -11,6 +11,7 @@ import {
   SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
   assertAuthoritativeProductionAssetBytes,
 } from "../config/sportpaleis-authoritative-production-assets.mjs";
+import { SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR_ID } from "./sportpaleis-review-artifact-validator.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -214,6 +215,14 @@ async function main() {
     files: entries,
     persistentProductionArtifacts: productionArtifacts.references,
     authoritativeProductionAssets,
+    artifactValidation: {
+      schemaVersion: 1,
+      requiredValidators: [{
+        id: SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR_ID,
+        schemaVersion: 1,
+        productContext: { tenantId: "sportpaleis", application: "workspace" },
+      }],
+    },
     runtimeDependencyGraph: {
       entrypoints: [
         "app/scripts/workspace-runtime.mjs",

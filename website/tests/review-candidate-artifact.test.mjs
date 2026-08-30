@@ -7,6 +7,10 @@ import test from "node:test";
 
 import { verifyImmutableReviewCandidate } from "../scripts/review-candidate-artifact.mjs";
 import { SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS } from "../config/sportpaleis-authoritative-production-assets.mjs";
+import {
+  SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR,
+  SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR_ID,
+} from "../scripts/sportpaleis-review-artifact-validator.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -28,7 +32,10 @@ test("immutable review candidate verification binds artifact, manifests and extr
     files.push({ path: releasePath, bytes: bytes.length, sha256: hash(bytes) });
     authoritativeProductionAssets.push({ id: asset.id, kind: asset.kind, artifactPath: asset.artifactPath, releasePath, sha256: asset.sha256, sizeBytes: asset.sizeBytes, authority: asset.authority, provenance: asset.provenance });
   }
-  const embedded = Buffer.from(JSON.stringify({ releaseId: "R2.2", commit: "abc", files, authoritativeProductionAssets }));
+  const embedded = Buffer.from(JSON.stringify({
+    releaseId: "R2.2", commit: "abc", files, authoritativeProductionAssets,
+    artifactValidation: { schemaVersion: 1, requiredValidators: [{ id: SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR_ID, schemaVersion: 1, productContext: { tenantId: "sportpaleis", application: "workspace" } }] },
+  }));
   await writeFile(path.join(extracted, "RELEASE-MANIFEST.json"), embedded);
   const artifact = Buffer.from("immutable-archive-bytes");
   const artifactPath = path.join(root, "R2.2.tar.gz");
@@ -40,13 +47,14 @@ test("immutable review candidate verification binds artifact, manifests and extr
   const manifestPath = path.join(root, "R2.2.manifest.json");
   await writeFile(manifestPath, JSON.stringify(outer));
 
-  const result = await verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) });
+  const options = { artifactValidators: [SPORTPALEIS_PRODUCTION_ASSET_ARTIFACT_VALIDATOR] };
+  const result = await verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) }, options);
   assert.equal(result.verifiedFileCount, files.length);
   assert.equal(result.releaseId, "R2.2");
 
   await writeFile(path.join(extracted, "app", "dist-workspace", "sportpaleis.html"), "tampered");
   await assert.rejects(
-    () => verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) }),
+    () => verifyImmutableReviewCandidate({ artifactPath, manifestPath, extractedRoot: extracted, expectedReleaseId: "R2.2", expectedCommit: "abc", expectedArtifactSha256: hash(artifact) }, options),
     (error) => error?.code === "REVIEW_ARTIFACT_IDENTITY_MISMATCH",
   );
   assert.equal((await readFile(manifestPath, "utf8")).includes("tampered"), false);

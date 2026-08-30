@@ -28,13 +28,14 @@ function noStoreHeaders(extra = {}) {
 
 export async function createWbdCandidateReviewRuntime({
   candidate,
+  artifactValidators = [],
   createApplicationAdapter,
-  entryPath = "/overzicht",
-  shellFile = "sportpaleis.html",
+  entryPath = "/",
+  shellFile = "index.html",
   host = "127.0.0.1",
   port = 0,
 }) {
-  const identity = await verifyImmutableReviewCandidate(candidate);
+  const identity = await verifyImmutableReviewCandidate(candidate, { artifactValidators });
   const publicIdentity = Object.freeze({
     releaseId: identity.releaseId,
     commit: identity.commit,

@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import {
-  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
-  assertAuthoritativeProductionAssetBytes,
-} from "../config/sportpaleis-authoritative-production-assets.mjs";
 
 async function sha256(filePath) {
   return createHash("sha256").update(await readFile(filePath)).digest("hex");
@@ -25,7 +21,7 @@ export async function verifyImmutableReviewCandidate({
   expectedReleaseId,
   expectedCommit,
   expectedArtifactSha256,
-}) {
+}, { artifactValidators = [] } = {}) {
   const resolvedArtifact = path.resolve(artifactPath);
   const resolvedManifest = path.resolve(manifestPath);
   const resolvedRoot = path.resolve(extractedRoot);
@@ -54,32 +50,33 @@ export async function verifyImmutableReviewCandidate({
     exact(await sha256(filePath), String(entry.sha256).toLowerCase(), `Bestandshash ${entry.path}`);
   }
 
-  const declaredProductionAssets = embeddedManifest.authoritativeProductionAssets;
-  if (!Array.isArray(declaredProductionAssets) || declaredProductionAssets.length !== SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.length) {
-    fail("Embedded manifest bevat niet exact de authoritative production-assetset.", "REVIEW_ARTIFACT_PRODUCTION_ASSET_MISMATCH");
+  const validationContract = embeddedManifest.artifactValidation ?? { schemaVersion: 1, requiredValidators: [] };
+  if (validationContract.schemaVersion !== 1 || !Array.isArray(validationContract.requiredValidators)) {
+    fail("Embedded manifest bevat een ongeldig artifact-validationcontract.", "REVIEW_ARTIFACT_VALIDATION_CONTRACT_INVALID");
   }
-  for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
-    const expectedReleasePath = `app/dist-workspace/${asset.artifactPath}`;
-    const declared = declaredProductionAssets.find(({ id }) => id === asset.id);
-    if (!declared) fail(`Authoritative production asset ontbreekt in embedded manifest: ${asset.id}`, "REVIEW_ARTIFACT_PRODUCTION_ASSET_MISMATCH");
-    for (const [actual, expected, label] of [
-      [declared.releasePath, expectedReleasePath, "releasepad"],
-      [String(declared.sha256).toUpperCase(), asset.sha256, "SHA-256"],
-      [declared.sizeBytes, asset.sizeBytes, "bestandsgrootte"],
-      [declared.authority, asset.authority, "authority"],
-    ]) {
-      if (actual !== expected) fail(`Authoritative production asset ${asset.id} heeft een afwijkende ${label}.`, "REVIEW_ARTIFACT_PRODUCTION_ASSET_MISMATCH");
+  const validatorRegistry = new Map();
+  for (const validator of artifactValidators) {
+    const id = String(validator?.id ?? "").trim();
+    if (!id || typeof validator?.validate !== "function" || validatorRegistry.has(id)) {
+      fail("De reviewruntime bevat een ongeldige of dubbele artifactvalidator.", "REVIEW_ARTIFACT_VALIDATOR_INVALID");
     }
-    const filePath = path.join(resolvedRoot, ...expectedReleasePath.split("/"));
-    let bytes;
-    try { bytes = await readFile(filePath); } catch { fail(`Authoritative production asset ontbreekt na uitpakken: ${asset.id}`, "REVIEW_ARTIFACT_PRODUCTION_ASSET_MISSING"); }
-    try { assertAuthoritativeProductionAssetBytes(asset, bytes, expectedReleasePath); } catch (cause) {
-      fail(cause instanceof Error ? cause.message : `Authoritative production asset wijkt af: ${asset.id}`, "REVIEW_ARTIFACT_PRODUCTION_ASSET_MISMATCH");
-    }
+    validatorRegistry.set(id, validator);
+  }
+  const invokedArtifactValidators = [];
+  const declaredIds = new Set();
+  for (const requirement of validationContract.requiredValidators) {
+    const id = String(requirement?.id ?? "").trim();
+    if (!id || declaredIds.has(id)) fail("Artifact-validationcontract bevat een ongeldige of dubbele validator-ID.", "REVIEW_ARTIFACT_VALIDATION_CONTRACT_INVALID");
+    declaredIds.add(id);
+    const validator = validatorRegistry.get(id);
+    if (!validator) fail(`Vereiste artifactvalidator is niet beschikbaar: ${id}`, "REVIEW_ARTIFACT_VALIDATOR_MISSING");
+    await validator.validate({ requirement, outerManifest, embeddedManifest, extractedRoot: resolvedRoot });
+    invokedArtifactValidators.push(id);
   }
 
   const distRoot = path.join(resolvedRoot, "app", "dist-workspace");
-  await stat(path.join(distRoot, "sportpaleis.html"));
+  const distInfo = await stat(distRoot);
+  if (!distInfo.isDirectory()) fail("Candidate bevat geen geldige gerenderde applicatieroot.", "REVIEW_ARTIFACT_APPLICATION_ROOT_MISSING");
   return Object.freeze({
     releaseId: outerManifest.releaseId,
     commit: outerManifest.commit,
@@ -89,5 +86,6 @@ export async function verifyImmutableReviewCandidate({
     distRoot,
     extractedRoot: resolvedRoot,
     verifiedFileCount: (embeddedManifest.files ?? []).length,
+    invokedArtifactValidators: Object.freeze(invokedArtifactValidators),
   });
 }

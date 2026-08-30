@@ -16,11 +16,11 @@ async function candidateFixture(context) {
   const distRoot = path.join(extractedRoot, "app", "dist-workspace");
   await mkdir(distRoot, { recursive: true });
   const shell = Buffer.from("<!doctype html><title>Exact Candidate</title><main>immutable bytes</main>");
-  await writeFile(path.join(distRoot, "sportpaleis.html"), shell);
+  await writeFile(path.join(distRoot, "index.html"), shell);
   const embedded = {
     releaseId: "WBD-REVIEW-RUNTIME-TEST",
     commit: "a".repeat(40),
-    files: [{ path: "app/dist-workspace/sportpaleis.html", bytes: shell.length, sha256: sha256(shell) }],
+    files: [{ path: "app/dist-workspace/index.html", bytes: shell.length, sha256: sha256(shell) }],
   };
   const embeddedBytes = Buffer.from(JSON.stringify(embedded));
   await writeFile(path.join(extractedRoot, "RELEASE-MANIFEST.json"), embeddedBytes);
