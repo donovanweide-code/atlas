@@ -41,6 +41,7 @@ import {
 } from "./workspace-auth-foundation.mjs";
 import {
   ensureWbdReviewDeveloperAccessState,
+  persistWbdReviewDeveloperAccessDenial,
   WBD_REVIEW_DEVELOPER_PRINCIPAL,
   WbdReviewDeveloperAccessPolicy,
 } from "./wbd-review-developer-access.mjs";
@@ -2238,35 +2239,29 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token, now);
     if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) throw Object.assign(new Error("Een tijdelijke reviewer kan geen nieuwe toegang uitgeven."), { statusCode: 403, code: "REVIEW_GRANT_CHAIN_FORBIDDEN" });
     await this.#assertCsrf(token, csrfToken);
-    const result = await this.store.mutate(async (state) => {
-      const issued = this.reviewDeveloperAccessPolicy.issueGrant(state, {
+    const issued = await this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.issueGrant(state, {
         issuer: user,
         tenantId: "sportpaleis",
         candidateId: payload.candidateId,
         scopes: payload.scopes,
         humanGoReference: payload.humanGoReference,
         ttlMs: payload.ttlMs,
-      }, now);
-      return { state, value: issued };
-    });
+      }, now));
     return {
-      grant: result.value.grant,
-      activationPath: `/workspace/sportpaleis/review-toegang#token=${result.value.activationToken}&candidate=${encodeURIComponent(result.value.grant.candidateId)}`,
+      grant: issued.grant,
+      activationPath: `/workspace/sportpaleis/review-toegang#token=${issued.activationToken}&candidate=${encodeURIComponent(issued.grant.candidateId)}`,
       delivery: "LOCAL_HANDOFF_ONLY",
     };
   }
 
   async activateReviewDeveloperGrant(payload, now = new Date()) {
     if (!this.reviewDeveloperAccessPolicy) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
-    const result = await this.store.mutate(async (state) => {
-      const activated = this.reviewDeveloperAccessPolicy.activateGrant(state, {
+    const activated = await this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.activateGrant(state, {
         activationToken: payload.activationToken,
         tenantId: "sportpaleis",
         candidateId: payload.candidateId,
-      }, now);
-      return { state, value: activated };
-    });
-    return { ...result.value, cookieMaxAgeSeconds: Math.max(0, Math.floor((new Date(result.value.expiresAt).getTime() - now.getTime()) / 1_000)) };
+      }, now));
+    return { ...activated, cookieMaxAgeSeconds: Math.max(0, Math.floor((new Date(activated.expiresAt).getTime() - now.getTime()) / 1_000)) };
   }
 
   async revokeReviewDeveloperGrant(token, csrfToken, grantId, now = new Date()) {
@@ -2274,7 +2269,26 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token, now);
     if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) throw Object.assign(new Error("Een tijdelijke reviewer kan geen toegang beheren."), { statusCode: 403, code: "REVIEW_GRANT_CHAIN_FORBIDDEN" });
     await this.#assertCsrf(token, csrfToken);
-    const result = await this.store.mutate(async (state) => ({ state, value: this.reviewDeveloperAccessPolicy.revokeGrant(state, { issuer: user, grantId }, now) }));
+    return this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.revokeGrant(state, { issuer: user, grantId }, now));
+  }
+
+  async #mutateReviewDeveloperAccess(operation) {
+    let rejection = null;
+    const result = await this.store.mutate(async (state) => {
+      try {
+        return { state, value: operation(state) };
+      } catch (cause) {
+        rejection = cause;
+        return { state, value: null };
+      }
+    });
+    if (rejection) throw rejection;
+    return result.value;
+  }
+
+  async #persistReviewDeveloperAccessDenial(cause) {
+    if (!cause) return false;
+    const result = await this.store.mutate(async (state) => ({ state, value: persistWbdReviewDeveloperAccessDenial(state, cause) }));
     return result.value;
   }
 
@@ -2285,6 +2299,7 @@ export class SportpaleisPilotService {
     try {
       context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
     } catch (cause) {
+      await this.#persistReviewDeveloperAccessDenial(cause);
       if (cause?.code === "REVIEW_SESSION_UNKNOWN") return null;
       throw cause;
     }
@@ -2470,6 +2485,7 @@ export class SportpaleisPilotService {
           };
           return { state, session: { ...context.session, reviewGrantId: context.grant.id, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT" }, user, reviewGrant: context.grant };
         } catch (cause) {
+          await this.#persistReviewDeveloperAccessDenial(cause);
           if (cause?.code !== "REVIEW_SESSION_UNKNOWN") throw cause;
         }
       }
@@ -2484,11 +2500,8 @@ export class SportpaleisPilotService {
   async issueSessionView(token) {
     const { user, session } = await this.authenticate(token);
     if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
-      const result = await this.store.mutate(async (state) => {
-        const rotated = this.reviewDeveloperAccessPolicy.rotateSessionCsrf(state, { sessionToken: token, tenantId: "sportpaleis", candidateId: user.candidateId });
-        return { state, value: rotated };
-      });
-      return { user: publicUser(user), csrfToken: result.value.csrfToken, expiresAt: result.value.session.expiresAt, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT", demo: false };
+      const rotated = await this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.rotateSessionCsrf(state, { sessionToken: token, tenantId: "sportpaleis", candidateId: user.candidateId }));
+      return { user: publicUser(user), csrfToken: rotated.csrfToken, expiresAt: rotated.session.expiresAt, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT", demo: false };
     }
     const csrfToken = randomBytes(24).toString("base64url");
     await this.store.mutate(async (state) => {
@@ -2508,7 +2521,7 @@ export class SportpaleisPilotService {
 
   async logout(token, user, csrfToken, now = new Date()) {
     if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
-      await this.store.mutate(async (state) => ({ state, value: this.reviewDeveloperAccessPolicy.completeSession(state, { sessionToken: token, csrfToken, tenantId: "sportpaleis", candidateId: user.candidateId }, now) }));
+      await this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.completeSession(state, { sessionToken: token, csrfToken, tenantId: "sportpaleis", candidateId: user.candidateId }, now));
       return;
     }
     await this.#assertCsrf(token, csrfToken);
