@@ -3,6 +3,12 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SPORTPALEIS_ASSOCIATION_LOGOS } from "../config/sportpaleis-association-logos.generated.mjs";
+import {
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
+  assertAuthoritativeProductionAssetBytes,
+  authoritativeProductionAssetManifest,
+} from "../config/sportpaleis-authoritative-production-assets.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const outputRoot = path.resolve(scriptDirectory, "../dist-workspace");
@@ -21,6 +27,25 @@ function fail(message) {
 }
 
 const files = await filesBelow(outputRoot);
+const productionAssetManifestPath = path.join(outputRoot, ...SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH.split("/"));
+if (!files.includes(productionAssetManifestPath)) fail("authoritative production-assetmanifest ontbreekt");
+const productionAssetManifest = JSON.parse(await readFile(productionAssetManifestPath, "utf8"));
+if (JSON.stringify(productionAssetManifest) !== JSON.stringify(authoritativeProductionAssetManifest())) fail("authoritative production-assetmanifest wijkt af van Product Truth");
+for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
+  const sourcePath = path.resolve(scriptDirectory, "..", ...asset.sourcePath.split("/"));
+  const artifactPath = path.join(outputRoot, ...asset.artifactPath.split("/"));
+  if (!files.includes(artifactPath)) fail(`authoritative production asset ontbreekt: ${asset.id}`);
+  assertAuthoritativeProductionAssetBytes(asset, await readFile(sourcePath), asset.sourcePath);
+  assertAuthoritativeProductionAssetBytes(asset, await readFile(artifactPath), asset.artifactPath);
+}
+const productionFontRoot = path.join(outputRoot, "assets", "organizations", "sportpaleis", "fonts");
+const allowedStaticFontAssets = new Set([
+  ...SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter(({ kind }) => kind === "MANAGED_FONT").map(({ artifactPath }) => path.join(outputRoot, ...artifactPath.split("/"))),
+  path.join(productionFontRoot, "LICENSE_LIBERATION.txt"),
+]);
+for (const file of files.filter((candidate) => candidate.startsWith(`${productionFontRoot}${path.sep}`) && /\.(?:ttf|otf|woff2?)$/iu.test(candidate))) {
+  if (!allowedStaticFontAssets.has(file)) fail(`niet-authoritative static productiefont aangetroffen: ${path.basename(file)}`);
+}
 const htmlPath = path.join(outputRoot, "workspace.html");
 if (!files.includes(htmlPath)) fail("workspace.html ontbreekt");
 const workspaceHtml = await readFile(htmlPath, "utf8");

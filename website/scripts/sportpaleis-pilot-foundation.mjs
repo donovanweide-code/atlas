@@ -10,6 +10,7 @@ import {
   SPORTPALEIS_FONT_CONFIRMATION,
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
+import { authoritativeProductionAssetById } from "../config/sportpaleis-authoritative-production-assets.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
 import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects, SPORTPALEIS_MACHINE_CONSTRAINTS } from "../src/sportpaleis/direct-print/index.ts";
 import {
@@ -110,6 +111,7 @@ const LEGACY_PIONEERS_ASSOCIATION = "Almerer Pioneers";
 const CANONICAL_PIONEERS_ASSOCIATION = "Almere Pioneers";
 const canonicalAssociationName = (value) => String(value ?? "") === LEGACY_PIONEERS_ASSOCIATION ? CANONICAL_PIONEERS_ASSOCIATION : value;
 const DEFAULT_ARTIFACT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const INSTALLED_PRODUCTION_ASSET_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist-workspace");
 const BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 const PERSONALIZATION_FIELDS = ["initials", "name", "backNumber", "chestNumber", "shortsNumber"];
 const CANONICAL_PRODUCTION_RESOLVER_VERSION = "CANONICAL_PRODUCTION_TRUTH_V2";
@@ -130,41 +132,26 @@ const FONT_SIGNATURES = new Map([
   ["774f4646", { mimeType: "font/woff", extension: ".woff" }],
   ["774f4632", { mimeType: "font/woff2", extension: ".woff2" }],
 ]);
-const PILOT_FONT = Object.freeze({
-  id: "font-liberation-sans-regular-f8ace1f8",
-  name: "Liberation Sans Regular",
-  originalFilename: "LiberationSans-Regular.ttf",
-  version: "F8ACE1F892B2",
-  sha256: "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F",
-  mimeType: "font/ttf",
-  sizeBytes: 139512,
-  addedAt: "2026-08-11T00:00:00.000Z",
-  uploadedBy: { userId: "system", name: "WBD pilot foundation" },
-  provenance: "Open fontbron uit pdfjs-dist; LICENSE_LIBERATION.txt is lokaal bij de bron bewaard.",
-  status: "TECHNICALLY_VALID",
-  allowedInStore: true,
-  sourceUrl: "/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf",
-});
-const SPAIN_EURO_2016_FONT = Object.freeze({
-  id: "font-5d083befacdf98ae",
-  name: OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName,
-  originalFilename: "Spain Euro 2016.ttf",
-  version: OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256.slice(0, 12),
-  sha256: OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256,
-  mimeType: "font/ttf",
-  sizeBytes: 15_232,
-  addedAt: "2026-08-30T00:00:00.000Z",
-  uploadedBy: { userId: "system:human-product-truth", name: "Donovan" },
-  provenance: "Originele authoritative Spain Euro 2016-bron opnieuw aangeleverd door Donovan op 2026-08-30; bytes, SHA-256 en interne SpainEuro-Regular-identiteit exact gereconcilieerd met historische Human Product Truth.",
-  status: "TECHNICALLY_VALID",
-  allowedInStore: true,
-  sourceUrl: "/assets/organizations/sportpaleis/fonts/Spain Euro 2016.ttf",
-  familyName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName,
-  subfamilyName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.subfamilyName,
-  fullName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.fullName,
-  postscriptName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.postscriptName,
-  authoritativeIdentity: "font-5d083befacdf98ae",
-});
+function canonicalManagedFont(assetId) {
+  const asset = authoritativeProductionAssetById(assetId);
+  if (!asset || asset.kind !== "MANAGED_FONT") throw new Error(`Authoritative managed-font Product Truth ontbreekt: ${assetId}`);
+  const {
+    id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
+    provenance, status, allowedInStore, artifactPath, familyName, subfamilyName, fullName,
+    postscriptName, authoritativeIdentity,
+  } = asset;
+  return Object.freeze({
+    id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
+    provenance, status, allowedInStore, sourceUrl: `/${artifactPath}`,
+    ...(familyName ? { familyName } : {}),
+    ...(subfamilyName ? { subfamilyName } : {}),
+    ...(fullName ? { fullName } : {}),
+    ...(postscriptName ? { postscriptName } : {}),
+    ...(authoritativeIdentity ? { authoritativeIdentity } : {}),
+  });
+}
+const PILOT_FONT = canonicalManagedFont("font-liberation-sans-regular-f8ace1f8");
+const SPAIN_EURO_2016_FONT = canonicalManagedFont("font-5d083befacdf98ae");
 const CANONICAL_PRODUCTION_FONTS = Object.freeze([PILOT_FONT, SPAIN_EURO_2016_FONT]);
 
 function reconcileCanonicalProductionFonts(state) {
@@ -2012,7 +1999,7 @@ function reviewModeAllowed(user, principalIds, reviewCandidates) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -2027,6 +2014,7 @@ export class SportpaleisPilotService {
     this.mailMode = mailMode;
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
+    this.installedProductionAssetRoot = installedProductionAssetRoot === null ? null : path.resolve(installedProductionAssetRoot);
     this.reviewPrincipalIds = new Set(reviewPrincipalIds);
     const activeCandidateIds = new Set(activeReviewCandidateIds);
     const knownReviewCandidates = new Map(SPORTPALEIS_REVIEW_CANDIDATES.map((candidate) => [candidate.id, candidate]));
@@ -3093,6 +3081,7 @@ export class SportpaleisPilotService {
         const sequence = state.nextProductionJobSequence;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
         const snapshot = buildProductionJobSnapshot(state, currentOrders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, {
+          installedProductionAssetRoot: this.installedProductionAssetRoot,
           lineRefs: currentGroup.productionLineRefs,
           foilColor: currentGroup.foilColor,
           sourceChannel: currentGroup.sourceChannel,
@@ -3172,7 +3161,7 @@ export class SportpaleisPilotService {
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label });
+        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label });
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
@@ -6872,16 +6861,18 @@ function rectangleNesting(lines, productionDefaults = PILOT_SETTINGS.productionD
   return orders.map(arrange).sort((a, b) => a.usedLengthMm - b.usedLengthMm || a.usedWidthMm - b.usedWidthMm)[0];
 }
 
-function managedFontBytes(font, artifactRoot) {
+function managedFontBytes(font, artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT) {
   if (font?.sourceDataBase64) return Buffer.from(font.sourceDataBase64, "base64");
   const sourceUrl = String(font?.sourceUrl ?? "");
   if (!sourceUrl.startsWith("/assets/") || sourceUrl.includes("..")) return null;
   const relative = sourceUrl.replace(/^\/+/, "").split("/");
   const candidates = [
+    ...(installedProductionAssetRoot ? [path.resolve(installedProductionAssetRoot, ...relative)] : []),
     path.resolve(artifactRoot, "website", "public", ...relative),
     path.resolve(artifactRoot, "website", "dist-workspace", ...relative),
+    path.resolve(artifactRoot, "public", ...relative),
+    path.resolve(artifactRoot, "dist-workspace", ...relative),
     path.resolve(artifactRoot, "app", "dist-workspace", ...relative),
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public", ...relative),
   ];
   for (const candidate of candidates) {
     try {
@@ -7670,7 +7661,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     }
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
     if (!font) throw Object.assign(new Error(`Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_FONT_IDENTITY_MISMATCH" });
-    const bytes = managedFontBytes(font, artifactRoot);
+    const bytes = managedFontBytes(font, artifactRoot, options.installedProductionAssetRoot);
     if (!bytes) throw Object.assign(new Error(`De exacte bytes van fontbron ${font.id}@${font.version} ontbreken.`), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_MISSING" });
     const source = { id: font.id, version: font.version, sourceProofStatus: "CONFIGURED", outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
     return {
@@ -7767,7 +7758,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
     const source = sourceLayers.physicallyProvenContour ?? sourceLayers.validatedCutContour; if (!source) return [];
     return [{ id: source.sourceId || id, version: source.version, proofStatus: sourceLayers.physicallyProvenContour ? "PHYSICALLY_VALIDATED" : "GEOMETRY_VALIDATED", immutable: true }];
   });
-  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, { persist: options.persistArtifacts !== false });
+  const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, { persist: options.persistArtifacts !== false, installedProductionAssetRoot: options.installedProductionAssetRoot ?? productionGroup?.installedProductionAssetRoot });
   if (productionArtifact) sourceContours.push(...productionArtifact.sources.map(({ id, version, sourceProofStatus }) => ({ id, version, proofStatus: sourceProofStatus, immutable: true })));
   const firstProfile = orders.flatMap(({ items }) => items).map(({ productionProfileId }) => state.productionProfiles.find(({ id }) => id === productionProfileId)).find(Boolean);
   const abMirrorAccepted = state.productionJobs.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS");

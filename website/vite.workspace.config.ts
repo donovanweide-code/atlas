@@ -2,6 +2,12 @@ import { defineConfig } from "vite";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
+import {
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
+  assertAuthoritativeProductionAssetBytes,
+  authoritativeProductionAssetManifest,
+} from "./config/sportpaleis-authoritative-production-assets.mjs";
 
 const pwaAsset = (name: string) => readFileSync(new URL(`./workspace-public/${name}`, import.meta.url), "utf8");
 
@@ -11,13 +17,25 @@ export default defineConfig({
     name: "sportpaleis-pwa-assets",
     generateBundle(_options, bundle) {
       for (const fileName of ["robots.txt", "sportpaleis.webmanifest", "sportpaleis-sw.js", "sportpaleis-pwa-icon.svg", "wbd-owner.webmanifest", "wbd-owner-sw.js", "wbd-owner-icon.svg"]) this.emitFile({ type: "asset", fileName, source: pwaAsset(fileName) });
-      for (const fileName of ["LiberationSans-Regular.ttf", "LICENSE_LIBERATION.txt"]) {
+      for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
+        const source = readFileSync(new URL(`./${asset.sourcePath}`, import.meta.url));
+        assertAuthoritativeProductionAssetBytes(asset, source, asset.sourcePath);
         this.emitFile({
           type: "asset",
-          fileName: `assets/organizations/sportpaleis/fonts/${fileName}`,
-          source: readFileSync(new URL(`./public/assets/organizations/sportpaleis/fonts/${fileName}`, import.meta.url)),
+          fileName: asset.artifactPath,
+          source,
         });
       }
+      this.emitFile({
+        type: "asset",
+        fileName: SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
+        source: `${JSON.stringify(authoritativeProductionAssetManifest(), null, 2)}\n`,
+      });
+      this.emitFile({
+        type: "asset",
+        fileName: "assets/organizations/sportpaleis/fonts/LICENSE_LIBERATION.txt",
+        source: readFileSync(new URL("./public/assets/organizations/sportpaleis/fonts/LICENSE_LIBERATION.txt", import.meta.url)),
+      });
       this.emitFile({
         type: "asset",
         fileName: "assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png",

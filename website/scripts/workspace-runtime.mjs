@@ -35,6 +35,12 @@ import {
   WBD_HOMEPAGE_SOURCE_URL,
   WbdHomepageConnectorScheduler,
 } from "./wbd-homepage-live-connector.mjs";
+import {
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
+  assertAuthoritativeProductionAssetBytes,
+  authoritativeProductionAssetManifest,
+} from "../config/sportpaleis-authoritative-production-assets.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -73,6 +79,19 @@ const workspaceRootAssets = new Set([
   "/wbd-owner-sw.js",
   "/wbd-owner-icon.svg",
 ]);
+
+export async function verifyRuntimeAuthoritativeProductionAssets(distRoot) {
+  const manifestPath = path.join(distRoot, ...SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH.split("/"));
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (JSON.stringify(manifest) !== JSON.stringify(authoritativeProductionAssetManifest())) {
+    throw new Error("Runtime authoritative production-assetmanifest wijkt af van Product Truth.");
+  }
+  for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
+    const artifactPath = path.join(distRoot, ...asset.artifactPath.split("/"));
+    assertAuthoritativeProductionAssetBytes(asset, await readFile(artifactPath), `runtime:${asset.artifactPath}`);
+  }
+  return authoritativeProductionAssetManifest();
+}
 
 async function currentReleaseManifest(releaseId, requiredInProduction) {
   const manifestPath = path.resolve(websiteRoot, "..", "RELEASE-MANIFEST.json");
@@ -152,10 +171,13 @@ const mimeTypes = new Map([
   [".json", "application/json; charset=utf-8"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
+  [".ttf", "font/ttf"],
   [".txt", "text/plain; charset=utf-8"],
   [".webmanifest", "application/manifest+json; charset=utf-8"],
   [".webp", "image/webp"],
+  [".woff", "font/woff"],
   [".woff2", "font/woff2"],
+  [".otf", "font/otf"],
 ]);
 
 function normalizePathname(pathname) {
@@ -283,6 +305,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   const canonicalSportpaleisHost = configuredWorkspaceUrl.pathname === "/" ? configuredWorkspaceUrl.hostname : null;
   const canonicalWbdHost = new URL(config.wbdWorkspaceBaseUrl).hostname;
   const distRoot = path.resolve(websiteRoot, config.distDir);
+  await verifyRuntimeAuthoritativeProductionAssets(distRoot);
   const workspaceHtmlPath = path.join(distRoot, "workspace.html");
   const workspaceHtml = await readFile(workspaceHtmlPath, "utf8");
   const sportpaleisHtmlPath = path.join(distRoot, "sportpaleis.html");

@@ -7,6 +7,10 @@ import { execFileSync } from "node:child_process";
 import { createSportpaleisProductionBootstrap } from "./sportpaleis-pilot-foundation.mjs";
 import { collectRuntimeDependencyGraph } from "./release-runtime-graph.mjs";
 import { assertRemoteSourceTag } from "./release-provenance-core.mjs";
+import {
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
+  assertAuthoritativeProductionAssetBytes,
+} from "../config/sportpaleis-authoritative-production-assets.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, "..");
@@ -108,6 +112,19 @@ async function collectReferencedProductionArtifacts() {
   };
 }
 
+async function verifyAuthoritativeProductionAssets() {
+  const verified = [];
+  for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
+    const sourcePath = path.join(websiteRoot, ...asset.sourcePath.split("/"));
+    const artifactPath = path.join(websiteRoot, "dist-workspace", ...asset.artifactPath.split("/"));
+    const sourceEvidence = assertAuthoritativeProductionAssetBytes(asset, await readFile(sourcePath), asset.sourcePath);
+    const artifactEvidence = assertAuthoritativeProductionAssetBytes(asset, await readFile(artifactPath), `dist-workspace/${asset.artifactPath}`);
+    if (sourceEvidence.sha256 !== artifactEvidence.sha256) throw new Error(`Authoritative production asset is niet byte-identiek gematerialiseerd: ${asset.id}`);
+    verified.push({ ...artifactEvidence, releasePath: `app/dist-workspace/${asset.artifactPath}` });
+  }
+  return verified;
+}
+
 function git(...args) {
   return execFileSync("git", args, { cwd: repositoryRoot, encoding: "utf8" }).trim();
 }
@@ -162,6 +179,7 @@ async function main() {
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
     [path.join(websiteRoot, ".env.production.example"), "deployment/production.env.example"],
   ].map(([absolute, archive]) => ({ absolute, archive }));
+  const authoritativeProductionAssets = await verifyAuthoritativeProductionAssets();
   const productionArtifacts = await collectReferencedProductionArtifacts();
   const files = [
     ...explicit,
@@ -180,6 +198,12 @@ async function main() {
     const padding = (512 - (bytes.length % 512)) % 512;
     if (padding) tarParts.push(Buffer.alloc(padding));
   }
+  for (const asset of authoritativeProductionAssets) {
+    const entry = entries.find(({ path: entryPath }) => entryPath === asset.releasePath);
+    if (!entry || entry.sha256.toUpperCase() !== asset.sha256 || entry.bytes !== asset.sizeBytes) {
+      throw new Error(`Authoritative production asset ontbreekt of wijkt af in release-inhoud: ${asset.id}`);
+    }
+  }
   const embeddedManifest = Buffer.from(`${JSON.stringify({
     schemaVersion: 2,
     releaseId,
@@ -189,6 +213,7 @@ async function main() {
     sourceDate: "2026-08-12",
     files: entries,
     persistentProductionArtifacts: productionArtifacts.references,
+    authoritativeProductionAssets,
     runtimeDependencyGraph: {
       entrypoints: [
         "app/scripts/workspace-runtime.mjs",
@@ -238,6 +263,8 @@ async function main() {
     deployability: { rollbackArtifactRequired: true },
     runtimeDependencyCount: runtimeDependencies.length,
     persistentProductionArtifactCount: productionArtifacts.references.length,
+    authoritativeProductionAssetCount: authoritativeProductionAssets.length,
+    authoritativeProductionAssetFingerprint: sha256(Buffer.from(`${JSON.stringify(authoritativeProductionAssets)}\n`, "utf8")),
     reproducibleCommand: `node website/scripts/build-production-release.mjs ${releaseId} ${tag} ${baseFreezeTag}`,
     embeddedManifestSha256: sha256(embeddedManifest),
   };

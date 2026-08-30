@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { request as httpRequest } from "node:http";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,6 +11,22 @@ import {
   workspaceRuntimeEnvironmentSchema,
 } from "../scripts/workspace-runtime-config.mjs";
 import { createWorkspaceRuntimeServer } from "../scripts/workspace-runtime.mjs";
+import {
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS,
+  SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH,
+  authoritativeProductionAssetManifest,
+} from "../config/sportpaleis-authoritative-production-assets.mjs";
+
+async function writeAuthoritativeProductionAssets(root) {
+  for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
+    const target = path.join(root, ...asset.artifactPath.split("/"));
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, await readFile(new URL(`../${asset.sourcePath}`, import.meta.url)));
+  }
+  const manifestPath = path.join(root, ...SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH.split("/"));
+  await mkdir(path.dirname(manifestPath), { recursive: true });
+  await writeFile(manifestPath, `${JSON.stringify(authoritativeProductionAssetManifest(), null, 2)}\n`);
+}
 
 test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resultaat", () => {
   assert.throws(
@@ -65,6 +82,7 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   await writeFile(path.join(temporary, "sportpaleis-sw.js"), "self.addEventListener('install', () => self.skipWaiting());\n");
   await writeFile(path.join(temporary, "wbd-owner-sw.js"), "self.addEventListener(\"push\", (event) => event.waitUntil(self.registration.showNotification('WBD')));\n");
   await writeFile(path.join(temporary, "wbd-owner.webmanifest"), JSON.stringify({ start_url: "/workspace/wbd/home" }));
+  await writeAuthoritativeProductionAssets(temporary);
 
   const config = parseWorkspaceRuntimeConfig({
     NODE_ENV: "test",
@@ -159,6 +177,12 @@ test("health/readiness en documentrouting zijn klein, gescheiden en HTTP-correct
   assert.equal(asset.headers.get("content-type"), "text/javascript; charset=utf-8");
   assert.equal(asset.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 
+  const spainAsset = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.find(({ id }) => id === "font-5d083befacdf98ae");
+  const spainResponse = await fetch(`${origin}/${spainAsset.artifactPath.replaceAll(" ", "%20")}`);
+  assert.equal(spainResponse.status, 200);
+  assert.equal(spainResponse.headers.get("content-type"), "font/ttf");
+  assert.equal(createHash("sha256").update(Buffer.from(await spainResponse.arrayBuffer())).digest("hex").toUpperCase(), spainAsset.sha256);
+
   const robots = await fetch(`${origin}/robots.txt`);
   assert.equal(robots.status, 200);
   assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
@@ -195,6 +219,7 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   await mkdir(path.join(temporary, "assets"));
   await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
   await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><div id=app></div>");
+  await writeAuthoritativeProductionAssets(temporary);
   const config = parseWorkspaceRuntimeConfig({ NODE_ENV: "test", APP_ENV: "test", PORT: "0", WORKSPACE_DIST_DIR: temporary, WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", RELEASE_ID: "spw-clean-routes" });
   const server = await createWorkspaceRuntimeServer({ config });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
