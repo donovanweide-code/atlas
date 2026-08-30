@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { PDFDocument, loadImage } from "@napi-rs/canvas";
 import { productionAssetPiece, productionAssetPreviewSvg } from "./production-assets.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
+import { assertCanonicalTeamkitItemSurfaceTruth, canonicalTeamkitProductType, inferCanonicalTeamkitProductType } from "./teamkit-product-surfaces.mjs";
 
 export const TEAMKIT_PROPOSAL_STATUSES = Object.freeze([
   "DRAFT", "WAITING_FOR_CUSTOMER_INPUT", "READY_FOR_DESIGN", "IN_DESIGN", "READY_FOR_REVIEW",
@@ -159,7 +160,7 @@ function normalizeCatalogSnapshot(input) {
   };
   const imageKey = text(input.imageKey, "Productbeeld", 240);
   const requestedBackImageKey = nullableText(input.backImageKey, "Achteraanzicht", 240);
-  const productType = ["UPPER_GARMENT", "LOWER_GARMENT", "SPORTS_BAG", "BACKPACK", "OTHER"].includes(input.productType) ? input.productType : null;
+  const productType = canonicalTeamkitProductType(input.productType) ?? inferCanonicalTeamkitProductType({ category: input.category, name: input.supplierArticleName });
   const defaultSides = ["UPPER_GARMENT", "SPORTS_BAG"].includes(productType) || (!productType && (requestedBackImageKey || input.backSourceUrl)) ? ["FRONT", "BACK"] : ["FRONT"];
   const printableSides = Array.isArray(input.printableSides) ? [...new Set(input.printableSides.filter((side) => ["FRONT", "BACK"].includes(side)))] : defaultSides;
   return {
@@ -177,12 +178,16 @@ function normalizeCatalogSnapshot(input) {
 
 export function normalizeProposalItems(items) {
   if (!Array.isArray(items) || items.length > 40) throw error("Een voorstel bevat maximaal 40 artikelen.", "PROPOSAL_ITEMS_INVALID");
-  return items.map((item) => ({
-    id: item.id || `proposal-item-${randomUUID()}`, articleId: nullableText(item.articleId, "Artikel", 160), articleNumber: nullableText(item.articleNumber, "Artikelnummer", 120),
-    productName: text(item.productName, "Artikelnaam", 180), color: text(item.color || "Nog te bepalen", "Kleur", 120), quantity: boundedNumber(item.quantity, "Aantal", 1, 10_000, true),
-    sizes: Array.isArray(item.sizes) ? [...new Set(item.sizes.map((value) => text(value, "Maat", 40)).filter(Boolean))].slice(0, 60) : [],
-    team: nullableText(item.team, "Team", 120), notes: nullableText(item.notes, "Artikelopmerking", 800), catalogSnapshot: normalizeCatalogSnapshot(item.catalogSnapshot), placements: Array.isArray(item.placements) ? item.placements.slice(0, 30).map(normalizePlacement) : [],
-  }));
+  return items.map((item) => {
+    const normalized = {
+      id: item.id || `proposal-item-${randomUUID()}`, articleId: nullableText(item.articleId, "Artikel", 160), articleNumber: nullableText(item.articleNumber, "Artikelnummer", 120),
+      productName: text(item.productName, "Artikelnaam", 180), color: text(item.color || "Nog te bepalen", "Kleur", 120), quantity: boundedNumber(item.quantity, "Aantal", 1, 10_000, true),
+      sizes: Array.isArray(item.sizes) ? [...new Set(item.sizes.map((value) => text(value, "Maat", 40)).filter(Boolean))].slice(0, 60) : [],
+      team: nullableText(item.team, "Team", 120), notes: nullableText(item.notes, "Artikelopmerking", 800), catalogSnapshot: normalizeCatalogSnapshot(item.catalogSnapshot), placements: Array.isArray(item.placements) ? item.placements.slice(0, 30).map(normalizePlacement) : [],
+    };
+    assertCanonicalTeamkitItemSurfaceTruth(normalized);
+    return normalized;
+  });
 }
 
 function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
@@ -263,6 +268,7 @@ function previewDataUri(bytes, mimeType = null) {
 }
 
 export function proposalSnapshot(proposal, state = null) {
+  for (const item of proposal.items) assertCanonicalTeamkitItemSurfaceTruth(item);
   return {
     proposalId: proposal.id, proposalNumber: proposal.proposalNumber, revision: proposal.currentRevision, title: proposal.title, type: proposal.type,
     customer: structuredClone(proposal.customer), association: structuredClone(proposal.association), team: proposal.team, season: proposal.season, category: proposal.category,
@@ -272,6 +278,7 @@ export function proposalSnapshot(proposal, state = null) {
 }
 
 export function renderProposalPreview(snapshot, { customer = false } = {}) {
+  for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
   const items = snapshot.items.map((item) => `<article class="tk-item"><header><div><small>${esc(item.articleNumber ?? "TEAMKIT")}</small><h2>${esc(item.productName)}</h2></div><strong>${item.quantity ? `${item.quantity}×` : "Aantal volgt"}</strong></header><div class="tk-views">${garment(item, "FRONT")}${itemBackRelevant(item) ? garment(item, "BACK") : ""}</div><dl><div><dt>Kleur</dt><dd>${esc(item.color)}</dd></div><div><dt>Maten</dt><dd>${esc(item.sizes.join(", ") || "Nog te bepalen")}</dd></div></dl>${item.placements.length ? `<ul>${item.placements.map((placement) => { const rule = placement.productionRule; const known = rule ? [rule.fontProfile, rule.physicalWidthMm && rule.physicalHeightMm ? `${rule.physicalWidthMm}×${rule.physicalHeightMm} mm` : null, rule.foilColor].filter(Boolean) : []; const production = [...known, rule?.status === "RESOLVED" ? null : "Productiecontrole nodig"].filter(Boolean).join(" · ") || "Productiecontrole nodig"; const customerDescription = [placement.text, placement.preset.replaceAll("_", " ").toLowerCase()].filter(Boolean).join(" · "); return `<li><strong>${esc(placement.label)}</strong><span>${customer ? esc(customerDescription) : `${esc(placement.preset.replaceAll("_", " ").toLowerCase())} · ${esc(placement.route.replaceAll("_", " ").toLowerCase())} · ${esc(production)}`}</span></li>`; }).join("")}</ul>` : `<p class="tk-empty">Nog geen bedrukkingen toegevoegd.</p>`}${item.notes ? `<p>${esc(item.notes)}</p>` : ""}</article>`).join("");
   return `<section class="tk-preview" data-proposal-revision="${snapshot.revision}"><header class="tk-preview__hero"><div><p>SPORT 2000 SPORTPALEIS</p><h1>${esc(snapshot.title)}</h1><span>${esc(snapshot.association.name ?? snapshot.customer.name)}${snapshot.team ? ` · ${esc(snapshot.team)}` : ""}</span></div><dl><div><dt>Voorstel</dt><dd>${esc(snapshot.proposalNumber)}</dd></div><div><dt>Versie</dt><dd>V${snapshot.revision}</dd></div></dl></header><div class="tk-preview__items">${items || `<p>Nog geen artikelen toegevoegd.</p>`}</div>${snapshot.notes ? `<aside><strong>Opmerking</strong><p>${esc(snapshot.notes)}</p></aside>` : ""}</section>`;
 }
@@ -388,6 +395,7 @@ async function drawPdfGarment(context, item, side, x, y, width, height, state, p
 }
 
 export async function generateProposalPdf(snapshot, approved = false, { state = null, proposal = null } = {}) {
+  for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
   const document = new PDFDocument({ title: `${snapshot.proposalNumber} V${snapshot.revision}`, author: "Sport 2000 Sportpaleis", creator: "Sportpaleis Teamwear", producer: "WBD Workspace", compressionLevel: 9 });
   const pages = snapshot.items.length ? Array.from({ length: Math.ceil(snapshot.items.length / 4) }, (_, index) => snapshot.items.slice(index * 4, index * 4 + 4)) : [[]];
   for (const [pageIndex, page] of pages.entries()) {
@@ -409,6 +417,7 @@ export async function generateProposalPdf(snapshot, approved = false, { state = 
 
 export function approvedFulfillmentTasks(proposal, revision, state, now = new Date()) {
   const snapshot = revision.snapshot; const tasks = [];
+  for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
   for (const item of snapshot.items) for (const placement of item.placements) {
     const sizing = proposal.productionSizing?.approvedRevision === revision.number ? proposal.productionSizing.items.find(({ itemId }) => itemId === item.id) : null;
     const quantity = sizing?.quantity ?? item.quantity; const sizes = sizing?.sizes ?? item.sizes;

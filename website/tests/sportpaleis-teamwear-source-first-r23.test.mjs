@@ -7,6 +7,7 @@ const workspace = await readFile(new URL("../src/sportpaleis-workspace.ts", impo
 const teamwear = await readFile(new URL("../src/sportpaleis-teamkit-workspace.ts", import.meta.url), "utf8");
 const experience = await readFile(new URL("../src/sportpaleis-teamkit-experience.ts", import.meta.url), "utf8");
 const service = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
+const productSurfaces = await readFile(new URL("../src/sportpaleis/teamkit-product-surfaces.mjs", import.meta.url), "utf8");
 
 function directItem(sourceId, productType, printableSides) {
   return normalizeProposalItems([{ id: "item-1", articleId: null, articleNumber: "REF-1", productName: "Werkelijk bronartikel", color: "Marine", quantity: null, sizes: [], team: null, notes: null, catalogSnapshot: { catalogProductId: `proposal-source:${sourceId}`, brand: "Eigen bron", supplierName: "Directe artikelbron", supplierArticleName: "Werkelijk bronartikel", supplierArticleNumber: "REF-1", category: productType, collection: null, audience: [], colorLabel: "Marine", imageKey: `proposal-source:${sourceId}`, advicePriceEur: null, effectivePriceEur: null, priceLabel: null, minimumQuantity: null, pricingPolicyRef: null, sourceAdapterId: "proposal-direct-source", sourceStatus: "AUTHORITATIVE", directFrontSourceId: sourceId, productType, printableSides, sourceReference: "Officiële catalogus pagina 18" }, placements: [] }])[0];
@@ -37,7 +38,7 @@ test("directe productbron blijft immutable in proposal snapshot, klantpreview en
 });
 
 test("productspecifieke zijden zijn hard aan de proposal-truth gekoppeld", () => {
-  assert.match(service, /TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE/u);
+  assert.match(productSurfaces, /TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE/u);
   assert.match(service, /TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID/u);
   assert.match(experience, /itemNeedsBack/u);
   assert.match(experience, /itemAllowsBack/u);

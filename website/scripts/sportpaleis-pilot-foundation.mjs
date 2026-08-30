@@ -34,6 +34,7 @@ import {
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
+import { canonicalTeamkitProductType, inferCanonicalTeamkitProductType } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -1401,6 +1402,26 @@ function currentTeamwearCatalogProjection(state, { brand = null, use = null } = 
   });
 }
 
+function normalizeTeamkitItemsWithCanonicalProductTruth(state, requestedItems) {
+  const items = structuredClone(requestedItems);
+  for (const item of items) {
+    if (!item.catalogSnapshot) continue;
+    const requestedType = canonicalTeamkitProductType(item.catalogSnapshot.productType);
+    if (item.articleId) {
+      const article = state.articles.find(({ id, active }) => id === item.articleId && active);
+      if (!article) throw Object.assign(new Error("Het gekozen bekende artikel bestaat niet meer in de actuele productwaarheid."), { statusCode: 409, code: "TEAMKIT_ARTICLE_TRUTH_NOT_FOUND", itemId: item.id ?? null, articleId: item.articleId });
+      const canonicalType = inferCanonicalTeamkitProductType(article);
+      if (requestedType && requestedType !== canonicalType) throw Object.assign(new Error("De opgegeven productsoort conflicteert met het gekozen canonieke artikel."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_CONFLICT", itemId: item.id ?? null, articleId: article.id, requestedType, canonicalType });
+      item.catalogSnapshot.productType = canonicalType;
+      item.catalogSnapshot.category = canonicalType;
+      item.articleNumber = article.articleNumber;
+    } else if (!requestedType) {
+      throw Object.assign(new Error("Leg voor een directe artikelbron eerst de productspecifieke soort vast."), { statusCode: 409, code: "TEAMKIT_PRODUCT_TYPE_REQUIRED", itemId: item.id ?? null });
+    }
+  }
+  return normalizeProposalItems(items);
+}
+
 function transitionTeamkitFulfillmentTask(task, payload) {
   const priorStatus = task.status;
   const requestedRoute = payload.route ? allowedValue(payload.route, ["INTERN_BEDRUKKEN", "EXTERNE_BEDRUKKER", "NOG_TE_BEPALEN"], "Afhandelroute") : task.route;
@@ -2593,10 +2614,8 @@ export class SportpaleisPilotService {
             }
             const directSourceIds = [item.catalogSnapshot?.directFrontSourceId, item.catalogSnapshot?.directBackSourceId].filter(Boolean);
             if (directSourceIds.some((sourceId) => !proposal.sources.some(({ id: candidate }) => candidate === sourceId))) throw Object.assign(new Error("De directe artikelbron hoort niet bij deze atomaire proposal-intake."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
-            const printableSides = new Set(item.catalogSnapshot?.printableSides ?? ["FRONT", "BACK"]);
-            if ((item.placements ?? []).some(({ side }) => side === "BACK" && !printableSides.has("BACK"))) throw Object.assign(new Error("Deze productsoort heeft geen bedrukbare achterzijde."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE" });
           }
-          proposal.items = normalizeProposalItems(items);
+          proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items);
           resolveTeamkitPlacementProductionRules(state, proposal, 1);
         }
         proposal.revisions.push(createProposalRevision(proposal, { id: user.id, name: user.name, role: user.role }, proposal.sources.length || proposal.items.length ? "Source-first voorstel atomair aangemaakt" : "Voorstel aangemaakt", [], new Date(), state));
@@ -2629,8 +2648,6 @@ export class SportpaleisPilotService {
         for (const item of items) {
           const directSourceIds = [item.catalogSnapshot?.directFrontSourceId, item.catalogSnapshot?.directBackSourceId].filter(Boolean);
           if (directSourceIds.some((sourceId) => !proposal.sources.some(({ id }) => id === sourceId))) throw Object.assign(new Error("De directe artikelbron hoort niet bij dit voorstel."), { statusCode: 409, code: "TEAMKIT_DIRECT_PRODUCT_SOURCE_INVALID" });
-          const printableSides = new Set(item.catalogSnapshot?.printableSides ?? ["FRONT", "BACK"]);
-          if ((item.placements ?? []).some(({ side }) => side === "BACK" && !printableSides.has("BACK"))) throw Object.assign(new Error("Deze productsoort heeft geen bedrukbare achterzijde."), { statusCode: 409, code: "TEAMKIT_PRODUCT_SIDE_NOT_PRINTABLE" });
         }
         for (const item of items) for (const placement of item.placements ?? []) {
           const sharedMatch = String(placement.sourceId ?? "").match(/^shared-source:([^:]+):(.+)$/u);
@@ -2665,7 +2682,7 @@ export class SportpaleisPilotService {
           }
           placement.sourceId = source.id;
         }
-        proposal.items = normalizeProposalItems(items);
+        proposal.items = normalizeTeamkitItemsWithCanonicalProductTruth(state, items);
         resolveTeamkitPlacementProductionRules(state, proposal, proposal.currentRevision + 1);
       }
       proposal.currentRevision += 1; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
@@ -6452,7 +6469,7 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
 }
 
 const EXISTING_ORDER_RECONCILIATION_VERSION = "EXISTING_ORDER_CANONICAL_RECONCILIATION_V3";
-const FINAL_PRODUCTION_VALIDATOR_VERSION = "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V2";
+const FINAL_PRODUCTION_VALIDATOR_VERSION = "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V3";
 const PRODUCTION_EXECUTION_SNAPSHOT_VERSION = "SPORTPALEIS_IMMUTABLE_PRODUCTION_EXECUTION_V2";
 const CANONICAL_BACK_NUMBER_SIZE_CLASSES = new Set(["JUNIOR", "SENIOR"]);
 
@@ -7255,7 +7272,38 @@ function productionElementPlacementMatchesField(application, field) {
 
 function productionSourceRoleMatchesLine(state, order, line, semantics) {
   const kind = line.source?.kind;
-  if (kind === "FONT" || kind === "PRODUCTION_SOURCE") return ["TEXT", "INITIALS", "NUMBER"].includes(line.type);
+  if (kind === "FONT") {
+    if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type)) return false;
+    const profileFont = configuredManagedFont(state, semantics.profile);
+    const selectedFont = state.productionFonts.find(({ id }) => id === line.source?.id);
+    // A profile-bound managed master is authoritative and cannot be substituted.
+    // Profiles without a resolvable managed master retain the explicitly selected,
+    // versioned managed font rather than inventing a canonical identity.
+    const requiredFont = profileFont
+      ?? (!semantics.profile ? state.productionFonts.find(({ id }) => id === line.decorationIdentity?.productionProfileId) : selectedFont);
+    if (!requiredFont || requiredFont.status !== "TECHNICALLY_VALID" || !requiredFont.provenance || !/^[A-F0-9]{64}$/u.test(String(requiredFont.sha256 ?? "").toUpperCase())) return false;
+    const exactIdentity = line.source.id === requiredFont.id
+      && line.source.version === requiredFont.version
+      && String(line.source.sha256 ?? "").toUpperCase() === String(requiredFont.sha256).toUpperCase();
+    if (!exactIdentity) return false;
+    if (requiredFont.authoritativeIdentity && requiredFont.authoritativeIdentity !== requiredFont.id) return false;
+    if (normalizedProductionIdentity(requiredFont.name) === normalizedProductionIdentity(OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName)) {
+      return requiredFont.sha256 === OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256
+        && requiredFont.familyName === OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName
+        && requiredFont.postscriptName === OWNER_SUPPLIED_FONT_EVIDENCE.spain.postscriptName;
+    }
+    return true;
+  }
+  if (kind === "PRODUCTION_SOURCE") {
+    if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type) || !semantics.profile?.productionSourceSetId) return false;
+    const source = productionSourceByIdentity(line.source.id, line.source.version);
+    return Boolean(source
+      && source.sourceSetId === semantics.profile.productionSourceSetId
+      && line.source.sourceSetId === semantics.profile.productionSourceSetId
+      && (!semantics.profile.outputWriterId || source.outputWriterId === semantics.profile.outputWriterId)
+      && source.outputWriterId === line.source.outputWriterId
+      && source.outputWriterVersion === line.source.outputWriterVersion);
+  }
   if (kind === "PRODUCTION_ELEMENT") {
     const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
