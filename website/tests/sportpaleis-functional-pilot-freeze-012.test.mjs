@@ -29,8 +29,9 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     const view = await service.bootstrap(storeUser.token);
     assert.equal(view.schemaVersion, 13);
     assert.equal(view.releaseId, "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811");
-    assert.equal(view.productionFonts.length, 1);
+    assert.equal(view.productionFonts.length, 2);
     assert.equal(view.productionFonts[0].sha256, "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F");
+    assert.equal(view.productionFonts[1].sha256, "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585");
     assert.equal(view.productionFonts[0].sourceDataBase64, undefined);
     assert.equal(view.productionElements.length, 0);
     assert.equal(view.productionJobs.length, 0);
@@ -61,7 +62,7 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { name: "Alleen een naam", filename: "fake.ttf", dataBase64: Buffer.from("geen font").toString("base64"), provenance: "test" }), (error) => error.code === "FONT_FILE_INVALID" || error.code === "FONT_SIGNATURE_INVALID");
     const duplicate = await service.addProductionFont(admin.token, admin.csrfToken, { name: "Zelfde bron", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "Open bron", allowedInStore: true });
     assert.equal(duplicate.id, font.id);
-    assert.equal((await store.read()).productionFonts.length, 1);
+    assert.equal((await store.read()).productionFonts.length, 2);
   });
 
   await context.test("logo-/beeldmerkbronnen blijven gelaagd, aspect-locked en zonder stil rasterbewijs", async () => {

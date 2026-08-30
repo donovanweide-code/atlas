@@ -68,7 +68,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.equal(added.status, "TECHNICALLY_VALID");
   assert.equal(added.allowedInStore, false);
   const state = await store.read();
-  assert.equal(state.productionFonts.length, 2);
+  assert.equal(state.productionFonts.length, 3);
   const stored = state.productionFonts.find(({ id }) => id === added.id);
   assert.equal(stored.sourceDataBase64, bytes.toString("base64"));
   assert.equal(stored.uploadedBy.userId, admin.user.id);

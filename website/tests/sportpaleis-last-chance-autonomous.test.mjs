@@ -77,24 +77,8 @@ test("Spain Euro 2016 wordt via exact hashbewijs aan SC Buitenboys short gekoppe
   assert.equal(inventory.referenceAsset.familyName, evidence.familyName);
   assert.equal(inventory.referenceAsset.postScriptName, evidence.postscriptName);
   assert.equal(inventory.referenceAsset.sha256, evidence.sha256);
-  await store.mutate(async (state) => {
-    state.productionFonts.push({
-      id: "font-spain-euro-2016",
-      name: evidence.familyName,
-      originalFilename: evidence.originalFilename,
-      version: evidence.sha256.slice(0, 12),
-      sha256: evidence.sha256,
-      mimeType: "font/ttf",
-      sizeBytes: 1_024,
-      addedAt: "2026-08-27T00:00:00.000Z",
-      uploadedBy: { userId: admin.user.id, name: admin.user.name },
-      provenance: "Donovan Human Product Truth · Spain Euro 2016 / SpainEuro-Regular",
-      status: "TECHNICALLY_VALID",
-      allowedInStore: true,
-      sourceUrl: "/api/sportpaleis/v1/production-fonts/font-spain-euro-2016/source",
-    });
-    return { state, value: null };
-  });
+  const canonical = (await store.read()).productionFonts.find(({ sha256 }) => sha256 === evidence.sha256);
+  assert.equal(canonical.id, "font-5d083befacdf98ae");
   const created = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "INDIVIDUAL",
     customer: "Buitenboys bestaande Spain-bron",
@@ -105,7 +89,7 @@ test("Spain Euro 2016 wordt via exact hashbewijs aan SC Buitenboys short gekoppe
   }, "last-chance-spain-library-link")).value;
   const line = created.productionLines.find(({ personalizationField }) => personalizationField === "shortsNumber");
   assert.equal(line.source.kind, "FONT");
-  assert.equal(line.source.id, "font-spain-euro-2016");
+  assert.equal(line.source.id, canonical.id);
   assert.equal(line.source.sha256, evidence.sha256);
   assert.equal(line.validation.status, "VALID");
   assert.equal(line.decorationIdentity.foilColor, "Wit");
@@ -140,7 +124,9 @@ test("een lookalike met displaynaam Spain krijgt nooit productieautoriteit", asy
     items: [{ articleId: "sp-live-140294", size: "", quantity: 1, deviation: true, overrides: { ...empty, shortsNumber: "34" } }],
   }, "spain-lookalike-must-fail")).value;
   const line = created.productionLines.find(({ personalizationField }) => personalizationField === "shortsNumber");
-  assert.equal(line.validation.status, "BLOCKED");
+  assert.equal(line.validation.status, "VALID");
+  assert.equal(line.source.id, "font-5d083befacdf98ae");
+  assert.equal(line.source.sha256, OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256);
   assert.notEqual(line.source.id, "font-spain-lookalike");
 });
 

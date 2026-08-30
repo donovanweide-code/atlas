@@ -133,13 +133,15 @@ test("legacy Pioneers-weergavenaam wordt centraal genormaliseerd zonder immutabl
   assert.equal(migrated.productionJobs.find(({ id }) => id === historicalJob.id).snapshot.association, "Almerer Pioneers", "immutable productiehistorie behoudt de destijds vastgelegde snapshot");
 });
 
-test("alleen Liberation Sans is als echt lokaal productiefont geregistreerd", async () => {
-  const source = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
-  assert.equal(source.byteLength, 139512);
+test("alleen de twee hashbewezen canonieke fontmasters zijn lokaal geregistreerd", async () => {
+  const liberation = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
+  const spain = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/Spain%20Euro%202016.ttf", import.meta.url));
+  assert.equal(liberation.byteLength, 139512);
+  assert.equal(spain.byteLength, 15232);
   const state = createSportpaleisProductionBootstrap();
-  assert.deepEqual(state.productionFonts.map(({ name, sha256 }) => ({ name, sha256 })), [{
-    name: "Liberation Sans Regular",
-    sha256: "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F",
-  }]);
+  assert.deepEqual(state.productionFonts.map(({ name, sha256 }) => ({ name, sha256 })), [
+    { name: "Liberation Sans Regular", sha256: "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F" },
+    { name: "Spain Euro 2016", sha256: "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585" },
+  ]);
   assert.ok(!SPORTPALEIS_FONT_ASSET_INVENTORY.some(({ canonicalName }) => canonicalName === "Liberation Sans Regular"));
 });

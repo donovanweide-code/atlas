@@ -162,7 +162,7 @@ test("Pioneers 45 gebruikt de echte rug- en shortbronnen en houdt borst fail-clo
   assert.equal((await store.read()).productionJobs.some(({ snapshot }) => snapshot?.orders?.some(({ id }) => id === created.id)), false);
 });
 
-test("SC Buitenboys shortnummer 19 materialiseert exact eenmaal naast bestaande initialen en vereist Spain", async (context) => {
+test("SC Buitenboys shortnummer 19 materialiseert exact eenmaal naast bestaande initialen met authoritative Spain", async (context) => {
   const { service, operator } = await fixture(context);
   const created = (await service.createOrder(operator.token, operator.csrfToken, {
     orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000105", provenance: "Gecontroleerde SC Buitenboys praktijkfixture", association: "SC Buitenboys", customer: "Buitenboys 19", customerEmail: "", customerPhone: "", standardPersonalization: empty,
@@ -184,7 +184,9 @@ test("SC Buitenboys shortnummer 19 materialiseert exact eenmaal naast bestaande 
   assert.equal(initialsLines[0].content, "AB");
   const state = await service.bootstrap(operator.token);
   assert.equal(state.productionProfiles.find(({ id }) => id === "profile-source-sc-buitenboys-shortsNumber").fontProfile, "Spain");
-  assert.equal(shortLines[0].validation.status, "BLOCKED", "zonder exacte beheerde Spain-bron moet productie fail-closed blijven");
+  assert.equal(shortLines[0].validation.status, "VALID");
+  assert.equal(shortLines[0].source.id, "font-5d083befacdf98ae");
+  assert.equal(shortLines[0].source.sha256, "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585");
 });
 
 test("SC Buitenboys behoudt BLAUW Rug 34, WIT Short 34 en WIT Rug 34 als drie afzonderlijke decoraties", async (context) => {

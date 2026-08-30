@@ -145,6 +145,37 @@ const PILOT_FONT = Object.freeze({
   allowedInStore: true,
   sourceUrl: "/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf",
 });
+const SPAIN_EURO_2016_FONT = Object.freeze({
+  id: "font-5d083befacdf98ae",
+  name: OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName,
+  originalFilename: "Spain Euro 2016.ttf",
+  version: OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256.slice(0, 12),
+  sha256: OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256,
+  mimeType: "font/ttf",
+  sizeBytes: 15_232,
+  addedAt: "2026-08-30T00:00:00.000Z",
+  uploadedBy: { userId: "system:human-product-truth", name: "Donovan" },
+  provenance: "Originele authoritative Spain Euro 2016-bron opnieuw aangeleverd door Donovan op 2026-08-30; bytes, SHA-256 en interne SpainEuro-Regular-identiteit exact gereconcilieerd met historische Human Product Truth.",
+  status: "TECHNICALLY_VALID",
+  allowedInStore: true,
+  sourceUrl: "/assets/organizations/sportpaleis/fonts/Spain Euro 2016.ttf",
+  familyName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName,
+  subfamilyName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.subfamilyName,
+  fullName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.fullName,
+  postscriptName: OWNER_SUPPLIED_FONT_EVIDENCE.spain.postscriptName,
+  authoritativeIdentity: "font-5d083befacdf98ae",
+});
+const CANONICAL_PRODUCTION_FONTS = Object.freeze([PILOT_FONT, SPAIN_EURO_2016_FONT]);
+
+function reconcileCanonicalProductionFonts(state) {
+  state.productionFonts ??= [];
+  for (const source of CANONICAL_PRODUCTION_FONTS) {
+    const matches = state.productionFonts.filter(({ id, sha256: hash }) => id === source.id || String(hash ?? "").toUpperCase() === source.sha256);
+    if (matches.length > 1) throw new Error(`Dubbele canonieke productiefontbron: ${source.id}`);
+    if (matches.length === 1 && (matches[0].id !== source.id || String(matches[0].sha256 ?? "").toUpperCase() !== source.sha256)) throw new Error(`Conflicterende canonieke productiefontidentity: ${source.id}`);
+    if (!matches.length) state.productionFonts.push(structuredClone(source));
+  }
+}
 
 const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
 for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "Almere Pioneers" && ["116386", "116388"].includes(String(articleNumber)))) {
@@ -552,7 +583,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     websiteSync: createSportpaleisWebsiteSyncState(),
     webshopIntake: createSportpaleisWebshopIntakeState(),
     productionElements: [],
-    productionFonts: [structuredClone(PILOT_FONT)],
+    productionFonts: CANONICAL_PRODUCTION_FONTS.map((font) => structuredClone(font)),
     productionElementRequirements: [],
     productionJobs: createGoldenProductionJobs(iso(now)),
     productionProposals: [],
@@ -803,8 +834,7 @@ export function migrateSportpaleisPilotState(input) {
       ? { status: "MATCHED", comparisonMethod: "CANONICAL_SVG_PREVIEW", referenceSha256: source.original.sha256, checkedAt: source.uploadedAt ?? null, checkedBy: source.uploadedBy ?? null, note: "Preview en productie gebruiken dezelfde gevalideerde SVG-geometrie." }
       : { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.original.sha256, checkedAt: null, checkedBy: null, note: null };
   }
-  state.productionFonts ??= [];
-  if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
+  reconcileCanonicalProductionFonts(state);
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
@@ -958,8 +988,7 @@ export function validateSportpaleisPilotState(input) {
   state.productionElements ??= [];
   state.productionAssetSources ??= [];
   reconcileVerifiedProductionNumberSources(state);
-  state.productionFonts ??= [];
-  if (!state.productionFonts.some(({ id, sha256: hash }) => id === PILOT_FONT.id || hash === PILOT_FONT.sha256)) state.productionFonts.push(structuredClone(PILOT_FONT));
+  reconcileCanonicalProductionFonts(state);
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
