@@ -1289,7 +1289,6 @@ export class SportpaleisFileStore {
 
 function audit(state, userId, action, subject, details = {}) {
   state.audit.unshift({ id: `audit-${randomBytes(8).toString("hex")}`, at: iso(), userId, action, subject, details });
-  state.audit = state.audit.slice(0, 2_000);
 }
 
 export function setSportpaleisTeamwearPilotExposure(state, principalId, enabled, actorId = "system:pilot-control") {
@@ -1696,7 +1695,7 @@ function teamkitProductionLine(state, proposal, revision, item, placement, task)
   const content = String(placement.text ?? asset?.name ?? placement.label).trim();
   const measurementEvidence = override ? `${proposal.proposalNumber} V${revision.number} · expliciete goedgekeurde maatoverride` : asset ? `Production Asset ${asset.id}@${asset.version ?? asset.revision}` : "Geen toepasselijke productiemaat gevonden";
   const productionGroupId = String(item.productionGroupId ?? "all");
-  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}-${productionGroupId}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · voorstelbron ${task.assetRef.proposalSource?.id ?? "niet van toepassing"} · productiebron ${expectedProductionAsset?.id ?? "ontbreekt"} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, decorationIdentity: { orderId: `teamkit:${proposal.id}:${revision.number}`, itemId: item.id, articleNumber: item.articleNumber ?? item.id, decorationType: placement.kind, placement: placement.preset, value: content, foilColor: foilColor ?? (requestedFoil || "Onbekend"), productionProfileId: asset?.id ?? "production-asset-data-gap", assetId: asset?.id ?? null, assetVersion: asset?.version ?? null, targetGroup: productionGroupId }, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, associationName: association?.name ?? revision.snapshot.association.name ?? null, profileId: null, profileRevision: null, fontProfile: null, sizeLabel: widthMm > 0 && heightMm > 0 ? `${Math.round(widthMm * 1000) / 1000}×${Math.round(heightMm * 1000) / 1000} mm` : null, mirror: null, productionGroupId, productionSizeClass: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
+  const base = { id: `teamkit-line-${proposal.id}-${revision.number}-${item.id}-${placement.id}-${productionGroupId}`.replace(/[^a-zA-Z0-9_-]/gu, "-"), type, content, sourceId: asset?.id ?? task.assetRef.sourceId ?? null, sourceVersion: task.assetRef.version ?? asset?.version ?? null, sourceSha256: task.assetRef.sha256 ?? undefined, widthMm, heightMm, foilColor: foilColor ?? undefined, quantity: item.quantity, previewLabel: placement.label, provenance: `${provenance} · voorstelbron ${task.assetRef.proposalSource?.id ?? "niet van toepassing"} · productiebron ${expectedProductionAsset?.id ?? "ontbreekt"} · maatbron ${measurementEvidence}${override ? ` · override ${override.widthMm}×${override.heightMm} mm` : ""}`, decorationIdentity: { orderId: `teamkit:${proposal.id}:${revision.number}`, itemId: item.id, articleNumber: item.articleNumber ?? item.id, decorationType: placement.kind, placement: placement.preset, value: content, foilColor: foilColor ?? (requestedFoil || "Onbekend"), productionProfileId: asset?.id ?? "production-asset-data-gap", assetId: asset?.id ?? null, assetVersion: asset?.version ?? null, targetGroup: productionGroupId }, teamkitProductionContext: { proposalPlacementId: placement.id, side: placement.side, preset: placement.preset, articleId: item.articleId ?? null, associationName: association?.name ?? revision.snapshot.association.name ?? null, profileId: null, profileRevision: null, fontProfile: null, sizeLabel: widthMm > 0 && heightMm > 0 ? `${Math.round(widthMm * 1000) / 1000}×${Math.round(heightMm * 1000) / 1000} mm` : null, mirror: null, productionGroupId, productionSizeClass: null, measurementSource: override ? "EXPLICIT_PROPOSAL_OVERRIDE" : asset ? "PRODUCTION_ASSET" : "DATA_GAP", measurementEvidence, explicitOverride: override } };
   if (!fields.length) return base;
   const labels = { SOURCE: "goedgekeurde productiebron", DIMENSIONS: "fysieke maat in millimeters", FOIL_COLOR: "beheerde foliekleur" };
   const reason = `Controle nodig: ${fields.map((field) => labels[field]).join(", ")} ontbreekt of wijkt af van de goedgekeurde bron.`;
@@ -1720,9 +1719,9 @@ function teamkitPlacementRuleFromLine(line) {
     physicalHeightMm: Number(line.heightMm) > 0 ? Number(line.heightMm) : null,
     mirror: context.mirror ?? null,
     measurementSource: context.measurementSource ?? "DATA_GAP",
-    sourceId: line.sourceId ?? null,
-    sourceVersion: line.sourceVersion ?? null,
-    sourceSha256: line.sourceSha256 ?? null,
+    sourceId: line.sourceId ?? line.source?.id ?? null,
+    sourceVersion: line.sourceVersion ?? line.source?.version ?? null,
+    sourceSha256: line.sourceSha256 ?? line.source?.sha256 ?? null,
     reason: line.dataGap?.reason ?? null,
     deferredMaterialization: context.deferredBySizing ? ["PRODUCTION_SIZE_CLASS"] : [],
   };
@@ -1737,6 +1736,8 @@ function teamkitPlacementRuleFromLine(line) {
     mirror: body.mirror,
     placement: context.preset ?? null,
     sourceRole: body.resolver,
+    sourceId: body.sourceId,
+    sourceVersion: body.sourceVersion,
   };
   const rule = { ...body, intentRuleHash: proposalSha256(JSON.stringify(intentBody)) };
   return { ...rule, ruleHash: proposalSha256(JSON.stringify(rule)) };
@@ -1772,7 +1773,7 @@ function resolveTeamkitPlacementProductionRules(state, proposal, revisionNumber)
 
 function enforceApprovedTeamkitPlacementRule(line, placement) {
   const current = teamkitPlacementRuleFromLine(line); const approved = placement.productionRule;
-  const traced = { ...line, teamkitProductionContext: { ...line.teamkitProductionContext, approvedProductionRuleHash: approved?.ruleHash ?? null, currentProductionRuleHash: current.ruleHash } };
+  const traced = { ...line, teamkitProductionContext: { ...line.teamkitProductionContext, approvedProductionRuleHash: approved?.ruleHash ?? null, approvedProductionIntentHash: approved?.intentRuleHash ?? null, currentProductionRuleHash: current.ruleHash, currentProductionIntentHash: current.intentRuleHash } };
   if (approved?.ruleHash === current.ruleHash) return traced;
   const sizingWasIntentionallyDeferred = approved?.status === "REVIEW_REQUIRED"
     && approved?.deferredMaterialization?.includes("PRODUCTION_SIZE_CLASS")
@@ -2956,6 +2957,8 @@ export class SportpaleisPilotService {
           return order;
         });
         const createdAt = iso();
+        const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
+        if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
         const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
         for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_PROPOSAL_CREATE" });
         const groups = buildProductionProposalGroups(state, orders);
@@ -3016,6 +3019,8 @@ export class SportpaleisPilotService {
           return order;
         });
         const createdAt = iso();
+        const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
+        if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
         const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
         for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE" });
         const groups = buildProductionProposalGroups(state, orders);
@@ -3089,9 +3094,9 @@ export class SportpaleisPilotService {
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_PRODUCTION_JOB", () => {
-        const proposal = payload.proposalId ? state.productionProposals.find(({ id }) => id === payload.proposalId) : null;
+        let proposal = payload.proposalId ? state.productionProposals.find(({ id }) => id === payload.proposalId) : null;
         if (payload.proposalId && (!proposal || proposal.status !== "OPEN")) throw Object.assign(new Error("Het productievoorstel is niet meer open."), { statusCode: 409, code: "PRODUCTION_PROPOSAL_NOT_OPEN" });
-        const proposalGroup = proposal?.groups?.length
+        let proposalGroup = proposal?.groups?.length
           ? proposal.groups.find(({ id }) => id === payload.proposalGroupId) ?? (proposal.groups.length === 1 && !payload.proposalGroupId ? proposal.groups[0] : null)
           : null;
         if (proposal?.groups?.length && (!proposalGroup || proposalGroup.status !== "OPEN")) throw Object.assign(new Error("De productiegroep is niet meer open."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_OPEN" });
@@ -3117,23 +3122,32 @@ export class SportpaleisPilotService {
           const directFoilColors = new Set(orders.flatMap((order) => productionLinesForOrder(state, order).map((line) => productionLineFoilColor(state, order, line)).filter(Boolean)));
           if ([...directFoilColors].some((color) => !managedFoilColor(state, color))) throw Object.assign(new Error("Een productieregel heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
           if (directFoilColors.size > 1) throw Object.assign(new Error("Een order met meerdere foliekleuren moet eerst als afzonderlijke kleurproductiegroepen worden voorbereid."), { statusCode: 409, code: "PRODUCTION_COLOR_GROUP_REQUIRED" });
+          const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
+          if (overlapping) throw Object.assign(new Error(`Gebruik het bestaande open productievoorstel ${overlapping.proposalNumber}; een tweede fysieke execution is geblokkeerd.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
+          for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "DIRECT_PRODUCTION_JOB_CREATE" });
+          const groups = buildProductionProposalGroups(state, orders);
+          if (groups.length !== 1) throw Object.assign(new Error("Directe productie vereist exact één canonieke productiegroep."), { statusCode: 409, code: "PRODUCTION_GROUP_REQUIRED" });
+          const createdAt = iso();
+          const highest = state.productionProposals.reduce((value, candidate) => Math.max(value, Number(String(candidate.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+          proposal = { id: `production-proposal-${randomBytes(10).toString("hex")}`, proposalNumber: `PV-${new Date(createdAt).getUTCFullYear()}-${String(highest + 1).padStart(4, "0")}`, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), groups, status: "OPEN", productionJobId: null, productionJobIds: [], canonicalIntentKey: canonicalProductionProposalIntentKey(orders) };
+          proposalGroup = groups[0];
+          state.productionProposals.unshift(proposal);
+          audit(state, user.id, "Directe productiewaarheid aan voorstel gekoppeld", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), hardwareSendPerformed: false });
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, proposalGroup ? { lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label } : undefined);
+        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label });
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
-        if (proposalGroup) {
-          proposalGroup.status = "CONVERTED";
-          proposalGroup.productionJobId = job.id;
-          proposal.productionJobIds ??= [];
-          proposal.productionJobIds.push(job.id);
-          if (proposal.groups.every(({ status }) => status === "CONVERTED")) {
-            proposal.status = "CONVERTED";
-            proposal.productionJobId = proposal.productionJobIds.length === 1 ? job.id : null;
-          }
-        } else if (proposal) { proposal.status = "CONVERTED"; proposal.productionJobId = job.id; }
+        proposalGroup.status = "CONVERTED";
+        proposalGroup.productionJobId = job.id;
+        proposal.productionJobIds ??= [];
+        proposal.productionJobIds.push(job.id);
+        if (proposal.groups.every(({ status }) => status === "CONVERTED")) {
+          proposal.status = "CONVERTED";
+          proposal.productionJobId = proposal.productionJobIds.length === 1 ? job.id : null;
+        }
         for (const order of orders) {
           order.stage = "PRINT"; order.revision += 1; order.updatedAt = createdAt; order.eventHistory ??= []; order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { productionJobId: job.id, jobNumber, ...(proposalGroup ? { productionGroupId: proposalGroup.id, foilColor: proposalGroup.foilColor, productionLineRefs: proposalGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id) } : {}) } });
           syncOpenProposalOrderRevisions(state, order);
@@ -3153,6 +3167,15 @@ export class SportpaleisPilotService {
         const job = state.productionJobs.find(({ id }) => id === productionJobId);
         if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
         if (job.status !== "AWAITING_HUMAN_CHECK") throw Object.assign(new Error("Deze productiejob kan niet opnieuw als bedrukt worden gemarkeerd."), { statusCode: 409, code: "PRODUCTION_JOB_NOT_OPEN" });
+        if (job.kind === "REPLOT") {
+          const origin = state.productionJobs.find(({ id }) => id === job.originJobId);
+          if (!origin || origin.snapshotHash !== job.snapshotHash || job.snapshotHash !== sha256(JSON.stringify(job.snapshot))) throw Object.assign(new Error("De replot mist de exacte immutable oorspronkelijke uitvoering."), { statusCode: 409, code: "REPLOT_ORIGIN_IDENTITY_MISMATCH" });
+          const at = iso();
+          job.status = "COMPLETED";
+          job.humanAcceptance = { status: "PASS", acceptedSourceDate: at.slice(0, 10), sourceProofStatus: job.proofStatus, note: `Replot bevestigd door ${user.name}; de oorspronkelijke ordercompletion is niet herschreven.` };
+          audit(state, user.id, "Replot bedrukt", job.jobNumber, { productionJobId: job.id, originJobId: origin.id, originJobNumber: origin.jobNumber, snapshotHash: job.snapshotHash, orderCompletionMutated: false });
+          return structuredClone(job);
+        }
         const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === job.id));
         const group = proposal?.groups?.find(({ productionJobId: id }) => id === job.id);
         if (!proposal || !group) throw Object.assign(new Error("Deze productiejob mist de onveranderlijke productieregelkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
@@ -3577,7 +3600,7 @@ export class SportpaleisPilotService {
         if (order.revision !== expectedRevision) {
           throw Object.assign(new Error("Order is intussen door iemand anders gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         }
-        if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
+        if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(order, "receipt")) {
           throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
@@ -3620,7 +3643,7 @@ export class SportpaleisPilotService {
           return order;
         });
         for (const order of orders) {
-          if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(order.communication.receipt.status)) {
+          if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(order, "receipt")) {
             throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
           }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
@@ -3785,7 +3808,7 @@ export class SportpaleisPilotService {
         const storedAction = storedDecision?.action ?? (storedDecision?.missingField === "SIZE_CLASS" ? { kind: "CHOOSE_SIZE_CLASS", options: ["JUNIOR", "SENIOR"] } : storedDecision?.missingField === "FOIL_COLOR" ? { kind: "CHOOSE_FOIL_COLOR", options: [...new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => color))] } : null);
         const finding = reconciliation.findings.find(({ id }) => id === requestedFindingId) ?? (storedDecision && storedAction ? { id: storedDecision.findingId, missingField: storedDecision.missingField, itemId: storedDecision.itemId, decoration: storedDecision.decoration, evidence: storedDecision.evidence, action: storedAction } : null);
         if (!finding) throw Object.assign(new Error("De ontbrekende productiewaarheid is niet meer actueel."), { statusCode: 409, code: "RECONCILIATION_FINDING_STALE" });
-        if (!["CHOOSE_SIZE_CLASS", "CHOOSE_DECORATION_TYPE", "CHOOSE_FOIL_COLOR", "CHOOSE_PHYSICAL_HEIGHT_MM"].includes(finding.action.kind)) throw Object.assign(new Error("Deze herstelactie moet via de aangewezen bron- of artikelcontext worden uitgevoerd."), { statusCode: 409, code: "RECONCILIATION_ACTION_NOT_INLINE" });
+        if (!["CHOOSE_SIZE_CLASS", "CHOOSE_DECORATION_TYPE", "CHOOSE_FOIL_COLOR", "CHOOSE_PHYSICAL_HEIGHT_MM", "CHOOSE_ARTICLE_CONTEXT"].includes(finding.action.kind)) throw Object.assign(new Error("Deze herstelactie moet via de aangewezen bron- of artikelcontext worden uitgevoerd."), { statusCode: 409, code: "RECONCILIATION_ACTION_NOT_INLINE" });
         const reason = requiredText(payload.reason, "Reden", 400);
         const at = iso();
         const cancel = payload.cancel === true;
@@ -3821,6 +3844,10 @@ export class SportpaleisPilotService {
       if (user.role === "store" && order.stage !== "ORDER") throw Object.assign(new Error("Deze order is in productie en is voor winkelmedewerkers vergrendeld."), { statusCode: 409, code: "ORDER_LOCKED_FOR_STORE" });
       if (order.stage !== "ORDER" && user.role !== "store" && !String(payload.correctionReason ?? "").trim()) throw Object.assign(new Error("Een productiecorrectie vereist een reden."), { statusCode: 400, code: "CORRECTION_REASON_REQUIRED" });
       const contentChanged = payload.standardPersonalization !== undefined || payload.items !== undefined;
+      const preservedLegacyItemIds = [...new Set(Array.isArray(payload.preservedLegacyItemIds) ? payload.preservedLegacyItemIds.map(String) : [])];
+      const preservedLegacyItems = preservedLegacyItemIds.map((id) => order.items.find((item) => item.id === id)).filter(Boolean);
+      if (preservedLegacyItems.length !== preservedLegacyItemIds.length) throw Object.assign(new Error("Een te behouden historisch artikel is niet meer exact aanwezig."), { statusCode: 409, code: "LEGACY_ORDER_ITEM_IDENTITY_MISMATCH" });
+      if (preservedLegacyItems.some((item) => item.articleId && state.articles.some(({ id }) => id === item.articleId))) throw Object.assign(new Error("Alleen niet-mapbare historische artikelen mogen via de behoudroute onveranderd blijven."), { statusCode: 400, code: "LEGACY_ORDER_ITEM_PRESERVE_INVALID" });
       const previous = {
         customer: order.customer,
         customerEmail: order.customerEmail ?? "",
@@ -3866,9 +3893,11 @@ export class SportpaleisPilotService {
       if (contentChanged) {
         const strictPilotContract = order.orderKind === "INDIVIDUAL" || order.communication?.requiredForIndividualOrder === true;
         const standardPersonalization = validatePersonalization(payload.standardPersonalization, { requireBackNumberSizeClass: strictPilotContract });
-        const items = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract });
-        order.productionLines = order.orderKind === "INDIVIDUAL" ? deriveCatalogProductionLines(state, order.id, items) : order.productionLines;
-        applyProductionReadiness(items, order.productionLines);
+        const submittedItems = validateItems(payload.items, state, standardPersonalization, { requireBackNumberSizeClass: strictPilotContract });
+        const preservedProductionLines = (order.productionLines ?? []).filter(({ itemId }) => preservedLegacyItemIds.includes(itemId));
+        const items = [...submittedItems, ...structuredClone(preservedLegacyItems)];
+        order.productionLines = order.orderKind === "INDIVIDUAL" ? [...deriveCatalogProductionLines(state, order.id, submittedItems), ...structuredClone(preservedProductionLines)] : order.productionLines;
+        applyProductionReadiness(submittedItems, order.productionLines);
         const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
         order.standardPersonalization = standardPersonalization;
         order.items = items;
@@ -4600,30 +4629,47 @@ export class SportpaleisPilotService {
     if (communicationChannel && currentOrder?.communication?.[communicationChannel]?.status === "UNKNOWN") {
       throw Object.assign(new Error("De vorige verzenduitkomst is onbekend. Menselijke controle is vereist voordat opnieuw verzonden mag worden."), { statusCode: 409, code: "UNKNOWN_SEND_REQUIRES_HUMAN_REVIEW" });
     }
-    const request = { ...orderMailRequest, idempotencyKey };
+    const sourceRevision = Number(currentOrder?.revision);
+    const sourceRecipientHash = sha256(String(currentOrder?.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL"));
+    const sourceContextHash = sha256(JSON.stringify(orderMailRequest.context));
+    const priorChannelEvidence = communicationChannel ? currentOrder?.communication?.[communicationChannel] : null;
+    const retryGeneration = priorChannelEvidence?.status === "FAILED" ? priorChannelEvidence.providerReference ?? "failed" : "primary";
+    const canonicalAttemptKey = `order-mail:${sha256(JSON.stringify({ orderId, templateKey: payload.templateKey, sourceRecipientHash, sourceContextHash, retryGeneration }))}`;
+    const request = { ...orderMailRequest, idempotencyKey: canonicalAttemptKey };
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role }, { simulation: payload.simulation ?? "success" });
     await this.store.mutate(async (next) => {
       const order = next.orders.find(({ id }) => id === orderId);
       if (order) {
         const at = iso();
         order.communication ??= { requiredForIndividualOrder: true, receipt: { status: "NOT_SENT", updatedAt: at }, production: { status: "NOT_SENT", updatedAt: at }, ready: { status: "NOT_SENT", updatedAt: at } };
+        const currentRecipientHash = sha256(String(order.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL"));
+        let currentContextHash = null;
+        try { currentContextHash = sha256(JSON.stringify(this.#orderMailRequest(next, user, orderId, payload).context)); } catch { /* Gewijzigde of ongeldige context is stale evidence. */ }
+        if (currentRecipientHash !== sourceRecipientHash || currentContextHash !== sourceContextHash) {
+          order.communication.history ??= [];
+          order.communication.history.push({ channel: communicationChannel ?? "question", status: "STALE", updatedAt: at, providerReference: result.id, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, invalidatedReason: "ORDER_OR_RECIPIENT_CHANGED_DURING_SEND", sourceRevision, currentRevision: order.revision });
+          order.eventHistory ??= [];
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "MAIL_RESULT_STALE", at, userId: user.id, userName: user.name, source: "capture-transport", details: { templateKey: payload.templateKey, mailAttemptId: result.id, sourceRevision, currentRevision: order.revision, sourceRecipientHash, currentRecipientHash, sourceContextHash, currentContextHash } });
+          audit(next, user.id, "Mailresultaat niet geprojecteerd wegens gewijzigde materiële waarheid", order.id, { templateKey: payload.templateKey, mailAttemptId: result.id, sourceRevision, currentRevision: order.revision, sourceRecipientHash, currentRecipientHash, sourceContextHash, currentContextHash });
+          return { state: next, value: undefined };
+        }
         const capturedStatus = result.status === "CAPTURED" ? "CAPTURED" : result.status === "SMTP_ACCEPTED" ? "SMTP_ACCEPTED" : result.status === "UNKNOWN_PARTIAL_SEND" ? "UNKNOWN" : "FAILED";
         const priorAttemptApplied = order.eventHistory?.some(({ type, details }) => type === `MAIL_${result.status}` && details?.mailAttemptId === result.id);
         if (payload.templateKey === "ORDER_RECEIVED") {
           const receiptStatus = capturedStatus;
-          order.communication.receipt = { status: receiptStatus, updatedAt: at, providerReference: result.id, recipientHash: sha256(String(result.recipient ?? order.customerEmail).trim().toLocaleLowerCase("nl-NL")) };
+          order.communication.receipt = { status: receiptStatus, updatedAt: at, providerReference: result.id, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, sourceRevision };
           if (receiptStatus === "UNKNOWN") order.attention = "Ontvangstbevestiging heeft een onbekende verzenduitkomst — menselijke controle vereist; niet automatisch opnieuw verzenden.";
           else if (receiptStatus === "FAILED") order.attention = "Ontvangstbevestiging is aantoonbaar niet verzonden — gecontroleerd opnieuw proberen is mogelijk.";
           else if (order.attention?.startsWith("Ontvangstbevestiging")) delete order.attention;
         }
-        if (payload.templateKey === "ORDER_IN_PRODUCTION") order.communication.production = { status: capturedStatus, updatedAt: at, providerReference: result.id, recipientHash: sha256(String(result.recipient ?? order.customerEmail).trim().toLocaleLowerCase("nl-NL")) };
-        if (payload.templateKey === "ORDER_READY") order.communication.ready = { status: capturedStatus, updatedAt: at, providerReference: result.id, recipientHash: sha256(String(result.recipient ?? order.customerEmail).trim().toLocaleLowerCase("nl-NL")) };
+        if (payload.templateKey === "ORDER_IN_PRODUCTION") order.communication.production = { status: capturedStatus, updatedAt: at, providerReference: result.id, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, sourceRevision };
+        if (payload.templateKey === "ORDER_READY") order.communication.ready = { status: capturedStatus, updatedAt: at, providerReference: result.id, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, sourceRevision };
         if (!priorAttemptApplied) {
           order.revision += 1;
           order.updatedAt = at;
           order.eventHistory ??= [];
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `MAIL_${result.status}`, at, userId: user.id, userName: user.name, source: "capture-transport", details: { templateKey: payload.templateKey, mailAttemptId: result.id, duplicateRecovery: Boolean(result.duplicate) } });
-          audit(next, user.id, result.duplicate ? "Mail capture-projectie hersteld" : "Mail capture uitgevoerd", order.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id });
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: `MAIL_${result.status}`, at, userId: user.id, userName: user.name, source: "capture-transport", details: { templateKey: payload.templateKey, mailAttemptId: result.id, duplicateRecovery: Boolean(result.duplicate), sourceRevision, recipientHash: sourceRecipientHash, canonicalAttemptKey } });
+          audit(next, user.id, result.duplicate ? "Mail capture-projectie hersteld" : "Mail capture uitgevoerd", order.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, sourceRevision, recipientHash: sourceRecipientHash, canonicalAttemptKey, requestedIdempotencyKey: idempotencyKey });
         }
       }
       return { state: next, value: undefined };
@@ -4644,19 +4690,36 @@ export class SportpaleisPilotService {
 
   async captureTeamkitProposalMail(token, csrfToken, proposalId, payload, idempotencyKey) {
     const { state, user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken);
-    const request = { ...this.#teamkitProposalMailRequest(state, user, proposalId, payload), idempotencyKey };
+    const sourceProposal = state.teamkitProposals?.find(({ id }) => id === proposalId);
+    if (!sourceProposal) throw Object.assign(new Error("Voorstel niet gevonden."), { statusCode: 404, code: "PROPOSAL_NOT_FOUND" });
+    const mailRequest = this.#teamkitProposalMailRequest(state, user, proposalId, payload);
+    const sourceRevision = sourceProposal.currentRevision;
+    const sourceRecipientHash = sha256(String(mailRequest.recipient).trim().toLocaleLowerCase("nl-NL"));
+    const sourceContextHash = sha256(JSON.stringify(mailRequest.context));
+    const canonicalAttemptKey = `teamkit-${sha256(`${proposalId}:${mailRequest.templateKey}:v${sourceRevision}:${sourceRecipientHash}:${sourceContextHash}`)}`;
+    const request = { ...mailRequest, idempotencyKey: canonicalAttemptKey };
     const result = await this.#mail().capture(request, { id: user.id, name: user.name, role: user.role });
     await this.store.mutate(async (next) => {
       const proposal = next.teamkitProposals?.find(({ id }) => id === proposalId); if (!proposal) return { state: next, value: undefined };
+      let currentRequest = null;
+      try { currentRequest = this.#teamkitProposalMailRequest(next, user, proposalId, payload); } catch { /* Een gewijzigd/verlopen request is zelf stale evidence. */ }
+      const currentRecipientHash = currentRequest ? sha256(String(currentRequest.recipient).trim().toLocaleLowerCase("nl-NL")) : null;
+      const currentContextHash = currentRequest ? sha256(JSON.stringify(currentRequest.context)) : null;
+      if (proposal.currentRevision !== sourceRevision || currentRecipientHash !== sourceRecipientHash || currentContextHash !== sourceContextHash) {
+        proposal.deliveryEvidence ??= [];
+        if (!proposal.deliveryEvidence.some(({ id }) => id === result.id)) proposal.deliveryEvidence.push({ id: result.id, templateKey: payload.templateKey, status: "STALE", capturedAt: iso(), revision: sourceRevision, delivered: false, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, invalidatedReason: "PROPOSAL_OR_RECIPIENT_CHANGED_DURING_SEND" });
+        audit(next, user.id, "Voorstelmailresultaat verouderd — niet toegepast", proposal.id, { templateKey: payload.templateKey, mailAttemptId: result.id, sourceRevision, currentRevision: proposal.currentRevision, sourceRecipientHash, currentRecipientHash, sourceContextHash, currentContextHash, canonicalAttemptKey, requestedIdempotencyKey: idempotencyKey });
+        return { state: next, value: undefined };
+      }
       const delivered = ["SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(result.status);
-      const evidence = { id: result.id, templateKey: payload.templateKey, status: result.status, capturedAt: iso(), revision: proposal.currentRevision, delivered };
+      const evidence = { id: result.id, templateKey: payload.templateKey, status: result.status, capturedAt: iso(), revision: sourceRevision, delivered, recipientHash: sourceRecipientHash, contextHash: sourceContextHash };
       proposal.deliveryEvidence ??= [];
       const alreadyProjected = proposal.deliveryEvidence.some(({ id }) => id === result.id);
       if (!alreadyProjected) proposal.deliveryEvidence.push(evidence);
       if (payload.templateKey === "PROPOSAL_REVIEW_REQUEST" && delivered && proposal.status === "READY_FOR_REVIEW") proposal.status = "SENT_TO_CUSTOMER";
       if (!alreadyProjected) {
         proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role };
-        audit(next, user.id, delivered ? "Voorstelmail delivery bewezen" : "Voorstelmail voorbereid — niet verstuurd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: proposal.currentRevision, externalMailSent: delivered, duplicateRecovery: Boolean(result.duplicate) });
+        audit(next, user.id, delivered ? "Voorstelmail delivery bewezen" : "Voorstelmail voorbereid — niet verstuurd", proposal.id, { templateKey: payload.templateKey, status: result.status, mailAttemptId: result.id, revision: sourceRevision, recipientHash: sourceRecipientHash, contextHash: sourceContextHash, externalMailSent: delivered, duplicateRecovery: Boolean(result.duplicate), canonicalAttemptKey, requestedIdempotencyKey: idempotencyKey });
       }
       return { state: next, value: undefined };
     });
@@ -6040,7 +6103,9 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       productionSizeClass: optional(requestedTeamkitContext.productionSizeClass, 40) || null,
       materializationGroups: Array.isArray(requestedTeamkitContext.materializationGroups) ? requestedTeamkitContext.materializationGroups.map((value) => requiredText(value, "Teamkit-materialisatiegroep", 180)) : [],
       approvedProductionRuleHash: optional(requestedTeamkitContext.approvedProductionRuleHash, 128) || null,
+      approvedProductionIntentHash: optional(requestedTeamkitContext.approvedProductionIntentHash, 128) || null,
       currentProductionRuleHash: optional(requestedTeamkitContext.currentProductionRuleHash, 128) || null,
+      currentProductionIntentHash: optional(requestedTeamkitContext.currentProductionIntentHash, 128) || null,
       measurementSource: allowedValue(requestedTeamkitContext.measurementSource, ["PRODUCTION_PROFILE", "PRODUCTION_ASSET", "EXPLICIT_PROPOSAL_OVERRIDE", "DATA_GAP"], "Teamkit-maatbron"),
       measurementEvidence: requiredText(requestedTeamkitContext.measurementEvidence, "Teamkit-maatbewijs", 500),
       explicitOverride: requestedTeamkitContext.explicitOverride ? { widthMm: Number(requestedTeamkitContext.explicitOverride.widthMm), heightMm: Number(requestedTeamkitContext.explicitOverride.heightMm), aspectRatioLocked: true } : null,
@@ -6349,8 +6414,9 @@ function legacyPersonalizationFromText(item, profile) {
     .split(new RegExp(`\\s*(?:[·|;\\n]|[+&](?=\\s*${decorationStart}\\b)|,(?=\\s*${decorationStart}\\b))\\s*`, "iu"))
     .map((part) => part.trim()).filter(Boolean);
   for (const part of parts) {
-    if (/^\d+(?:[.,]\d+)?\s*mm$/iu.test(part)) {
-      const valueMm = Number(part.replace(/mm/iu, "").replace(",", ".").trim());
+    if (/^\d+(?:[.,]\d+)?\s*(?:mm|cm)$/iu.test(part)) {
+      const isCentimeters = /cm$/iu.test(part);
+      const valueMm = Number(part.replace(/(?:mm|cm)/iu, "").replace(",", ".").trim()) * (isCentimeters ? 10 : 1);
       physicalDimensions.push({ valueMm, raw: part });
       evidence.push(`Historische fysieke-maataanduiding: ${part}`);
       continue;
@@ -6507,8 +6573,14 @@ export function reconcileExistingOrderProductionTruth(state, order) {
     const hasDecorationIntent = nonEmptyPersonalization(historicalItem.personalizationValues) || (historicalItem.variants ?? []).some((variant) => nonEmptyPersonalization(variant.personalizationValues)) || !/^geen bedrukking$/iu.test(String(historicalItem.personalization ?? "").trim());
     if (!hasDecorationIntent) continue;
     const context = resolveHistoricalArticleContext(state, order, historicalItem);
-    const article = context.article;
-    if (context.ambiguous) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, `Artikelnummer ${historicalItem.articleNumber ?? "onbekend"} komt in meerdere contexten voor; Workspace kiest nooit stil de eerste match.`, context.candidates.map(({ id, association }) => `${id} · ${association}`).join(" | "), { kind: "OPEN_ORDER_CONTENT", label: "Artikelcontext kiezen", target: `orders/${order.id}#productieherstel` }));
+    let article = context.article;
+    if (context.ambiguous) {
+      const finding = existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, `Artikelnummer ${historicalItem.articleNumber ?? "onbekend"} komt in meerdere contexten voor; Workspace kiest nooit stil de eerste match.`, context.candidates.map(({ id, association }) => `${id} · ${association}`).join(" | "), { kind: "CHOOSE_ARTICLE_CONTEXT", label: "Artikelcontext kiezen", target: `orders/${order.id}#productieherstel`, options: context.candidates.map(({ id }) => id) });
+      const decision = existingOrderDecision(decisions, finding);
+      const selected = decision && finding.action.options.includes(decision.value) ? state.articles.find(({ id }) => id === decision.value) : null;
+      if (selected) { article = selected; requiresConfirmation = true; evidence.push(`${historicalItem.id}: ${decision.byUserName} koppelde de historische regel expliciet aan ${selected.articleNumber} · ${selected.association}.`); }
+      else findings.push(finding);
+    }
     else if (context.conflict) findings.push(existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, "Artikel-, SKU- en verenigingscontext spreken elkaar tegen; Workspace kiest nooit stil een clubprofiel.", context.conflicts.join(" · "), { kind: "OPEN_ORDER_CONTENT", label: "Artikelcontext corrigeren", target: `orders/nieuw?edit=${encodeURIComponent(order.id)}#artikelen` }));
     else if (article && context.authority === "PRODUCT_NAME_CONTEXT") { requiresConfirmation = true; evidence.push(`${historicalItem.id}: artikel exact op productnaam en context gevonden (${article.articleNumber}).`); }
     const profileId = historicalItem.productionProfileId || article?.profileId;
@@ -6783,10 +6855,30 @@ function productionSourceLabel(sourceChannel) {
   return ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop", TEAM_MAIL: "Teamorder", INVOICE: "Factuur", MANUAL: "Handmatig" })[sourceChannel] ?? "Andere bron";
 }
 
+function validOrderCommunicationEvidence(order, channel) {
+  const evidence = order.communication?.[channel];
+  const recipient = String(order.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL");
+  if (!evidence || !recipient || !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(evidence.status)) return false;
+  return Boolean(evidence.providerReference && evidence.recipientHash === sha256(recipient));
+}
+
 function canonicalStockCompletionEvidence(state, order) {
   const applications = (order.stockApplications ?? []).filter(({ status }) => status === "APPLIED").map(({ id, association, quantity, status, appliedAt, appliedBy }) => ({ id, association, quantity: Number(quantity), status, appliedAt, appliedBy })).sort((left, right) => left.id.localeCompare(right.id));
   const mutations = (state.webshopIntake?.stockLogo?.mutations ?? []).filter(({ orderId }) => orderId === order.id).map(({ id, orderId, quantity, previousStock, nextStock, at, byUserId }) => ({ id, orderId, quantity: Number(quantity), previousStock: Number(previousStock), nextStock: Number(nextStock), at, byUserId })).sort((left, right) => left.id.localeCompare(right.id));
   return { applications, mutations };
+}
+
+function validStockCompletionLedger(state, order, evidence) {
+  const applications = evidence?.applications ?? [];
+  const mutations = evidence?.mutations ?? [];
+  if (!applications.length || !mutations.length) return false;
+  if (applications.some(({ quantity }) => !Number.isInteger(Number(quantity)) || Number(quantity) < 1)) return false;
+  if (mutations.some(({ quantity, previousStock, nextStock }) => !Number.isInteger(Number(quantity)) || Number(quantity) >= 0 || !Number.isInteger(Number(previousStock)) || !Number.isInteger(Number(nextStock)) || Number(nextStock) !== Number(previousStock) + Number(quantity))) return false;
+  const applied = applications.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const removed = -mutations.reduce((sum, item) => sum + Number(item.quantity), 0);
+  if (!applied || applied !== removed) return false;
+  const completeLedger = state.webshopIntake?.stockLogo?.mutations ?? [];
+  return mutations.every(({ id, orderId }) => orderId === order.id && completeLedger.some((mutation) => mutation.id === id && mutation.orderId === order.id));
 }
 
 function productionClosureForOrder(state, order) {
@@ -6810,14 +6902,12 @@ function productionClosureForOrder(state, order) {
     if (JSON.stringify(requiredLineIds) !== JSON.stringify([...(evidence.requiredLineIds ?? [])].sort())) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de canonical productieregels." };
     for (const reference of evidence.productionJobs ?? []) {
       const job = state.productionJobs.find(({ id }) => id === reference.id);
-      if (!job || job.jobNumber !== reference.jobNumber || job.snapshotHash !== reference.snapshotHash || (job.snapshot?.artifact?.sha256 ?? null) !== (reference.artifactSha256 ?? null)) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs verwijst niet exact naar de uitgevoerde immutable productiejob." };
+      if (!job || job.status !== "COMPLETED" || job.humanAcceptance?.status !== "PASS" || job.jobNumber !== reference.jobNumber || job.snapshotHash !== reference.snapshotHash || (job.snapshot?.artifact?.sha256 ?? null) !== (reference.artifactSha256 ?? null)) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs verwijst niet exact naar een afgeronde en menselijk bevestigde immutable productiejob." };
     }
     if (hasStock) {
       const actualStockEvidence = canonicalStockCompletionEvidence(state, order);
       if (sha256(JSON.stringify(actualStockEvidence)) !== sha256(JSON.stringify(evidence.stockEvidence))) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs wijkt af van de immutable voorraadtoepassing of voorraadmutatie." };
-      const appliedQuantity = actualStockEvidence.applications.reduce((sum, item) => sum + item.quantity, 0);
-      const mutatedQuantity = -actualStockEvidence.mutations.reduce((sum, mutation) => sum + mutation.quantity, 0);
-      if (!appliedQuantity || appliedQuantity !== mutatedQuantity) return { status: "REVIEW_REQUIRED", reason: "Voorraadtoepassing en fysieke voorraadmutatie hebben verschillende cardinaliteit." };
+      if (!validStockCompletionLedger(state, order, actualStockEvidence)) return { status: "REVIEW_REQUIRED", reason: "Voorraadtoepassing en fysieke voorraadmutatie vormen geen geldige, sluitende ledger." };
     }
     return { status: "CONFIRMED", reason: null };
   }
@@ -6937,7 +7027,8 @@ function productionLineWriterIdentity(state, line) {
   }
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
     const asset = state.productionElements.find(({ id, version, revision, lifecycleStatus, productionMethod }) => id === line.source.id && (version ?? String(revision)) === line.source.version && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED");
-    if (!asset || !["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} is niet meer exact uitvoerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
+    const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
+    if (!asset || !variant || !["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} en variant ${line.source.variantId ?? "ontbreekt"} zijn niet meer exact uitvoerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
     return { id: CUTJOB_SVG_WRITER.id, version: CUTJOB_SVG_WRITER.version };
   }
   throw Object.assign(new Error("Een productieregel heeft nog geen exact uitvoerbare bron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
@@ -6961,7 +7052,8 @@ function canonicalLineSemantics(state, order, item, line, snapshot = null) {
   const profileId = line.decorationIdentity?.productionProfileId ?? item?.productionProfileId;
   const profiles = snapshot?.productionProfiles ?? state.productionProfiles;
   const profile = profiles.find(({ id }) => id === profileId);
-  const association = state.associations.find(({ id, name }) => id === item?.association || name === item?.association);
+  const associations = snapshot?.associationTruth ?? state.associations;
+  const association = associations.find(({ id, name }) => id === item?.association || name === item?.association);
   const variant = (item?.variants ?? []).find(({ id }) => id === line.variantId)
     ?? (item?.variants ?? []).find(({ id }) => (line.variantIds ?? []).includes(id) && String((item.variants ?? []).find((candidate) => candidate.id === id)?.personalizationValues?.[field] ?? "").trim() === String(line.content ?? "").trim())
     ?? (item?.variants ?? []).find(({ personalizationValues }) => String(personalizationValues?.[field] ?? "").trim() === String(line.content ?? "").trim())
@@ -6970,10 +7062,35 @@ function canonicalLineSemantics(state, order, item, line, snapshot = null) {
   return { field, allowedTypes, profileId, profile, expectedHeightMm };
 }
 
-function productionSourceRoleMatchesLine(line) {
+function approvedTeamkitRuleMatchesCurrentLine(line) {
+  if (!line.teamkitProductionContext) return false;
+  const current = teamkitPlacementRuleFromLine(line);
+  const approvedHash = line.teamkitProductionContext.approvedProductionRuleHash;
+  const recordedCurrentHash = line.teamkitProductionContext.currentProductionRuleHash;
+  const exact = approvedHash && approvedHash === recordedCurrentHash && approvedHash === current.ruleHash;
+    const intentExact = line.teamkitProductionContext.approvedProductionIntentHash
+      && line.teamkitProductionContext.approvedProductionIntentHash === line.teamkitProductionContext.currentProductionIntentHash
+      && line.teamkitProductionContext.currentProductionIntentHash === current.intentRuleHash
+      && current.status === "RESOLVED";
+  return Boolean(exact || intentExact);
+}
+
+function productionSourceRoleMatchesLine(state, line) {
   const kind = line.source?.kind;
   if (kind === "FONT" || kind === "PRODUCTION_SOURCE") return ["TEXT", "INITIALS", "NUMBER"].includes(line.type);
-  if (kind === "PRODUCTION_ELEMENT") return ["LOGO", "PRODUCTION_ELEMENT", "TEXT", "INITIALS", "NUMBER"].includes(line.type);
+  if (kind === "PRODUCTION_ELEMENT") {
+    const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
+    const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
+    if (!asset || !variant) return false;
+    const applications = new Set((asset.applications ?? []).map(({ kind }) => String(kind).toUpperCase()));
+    if (applications.has("NUMBER_SET")) {
+      const content = String(line.content ?? "");
+      if (!/^\d{1,4}$/u.test(content)) return false;
+      if (asset.numberGlyphs && [...content].some((digit) => !asset.numberGlyphs[digit])) return false;
+    }
+    if ([...applications].some((application) => ["LOGO", "SPONSOR", "ARTWORK"].includes(application)) && !["LOGO", "PRODUCTION_ELEMENT"].includes(line.type)) return false;
+    return ["LOGO", "PRODUCTION_ELEMENT", "TEXT", "INITIALS", "NUMBER"].includes(line.type);
+  }
   return false;
 }
 
@@ -7019,9 +7136,11 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     if (line.validation?.status !== "VALID") findings.push(finalProductionFinding("LINE_VALIDATION", line.validation?.reason || "De productieregel is niet gevalideerd.", { line, code: "PRODUCTION_LINE_BLOCKED" }));
     const semantics = canonicalLineSemantics(state, validationOrder, item, line, snapshot);
     if (semantics.allowedTypes && !semantics.allowedTypes.includes(line.type)) findings.push(finalProductionFinding("DECORATION_TYPE", `${semantics.field} kan niet als fysieke regeltype ${line.type} worden uitgevoerd.`, { line, evidence: `Toegestaan: ${semantics.allowedTypes.join(", ")}`, code: "PRODUCTION_DECORATION_SEMANTICS_MISMATCH" }));
-    if (line.personalizationField && identity?.placement !== line.personalizationField && !line.teamkitProductionContext) findings.push(finalProductionFinding("PLACEMENT", "De fysieke placement wijkt af van de canonieke decoration-betekenis.", { line, evidence: `${line.personalizationField} ≠ ${identity?.placement}`, code: "PRODUCTION_PLACEMENT_MISMATCH" }));
-    if (!productionSourceRoleMatchesLine(line)) findings.push(finalProductionFinding("SOURCE_ROLE", `Bronrol ${line.source?.kind ?? "ontbreekt"} is niet uitvoerbaar voor ${line.type}.`, { line, code: "PRODUCTION_SOURCE_ROLE_MISMATCH" }));
-    if (semantics.expectedHeightMm > 0 && !line.teamkitProductionContext && Math.abs(Number(line.heightMm) - semantics.expectedHeightMm) > .001) {
+    const approvedTeamkitRule = approvedTeamkitRuleMatchesCurrentLine(line);
+    if (line.personalizationField && identity?.placement !== line.personalizationField && !approvedTeamkitRule) findings.push(finalProductionFinding("PLACEMENT", "De fysieke placement wijkt af van de canonieke decoration-betekenis of approved Teamwear-regel.", { line, evidence: `${line.personalizationField} ≠ ${identity?.placement}`, code: "PRODUCTION_PLACEMENT_MISMATCH" }));
+    if (line.teamkitProductionContext && !approvedTeamkitRule) findings.push(finalProductionFinding("TEAMWEAR_RULE", "De Teamwear-regel is niet exact aan de approved en opnieuw berekende productiewaarheid gebonden.", { line, code: "TEAMWEAR_APPROVED_RULE_MISMATCH" }));
+    if (!productionSourceRoleMatchesLine(state, line)) findings.push(finalProductionFinding("SOURCE_ROLE", `Bronrol ${line.source?.kind ?? "ontbreekt"} is niet uitvoerbaar voor ${line.type}, content of variant.`, { line, code: "PRODUCTION_SOURCE_ROLE_MISMATCH" }));
+    if (semantics.expectedHeightMm > 0 && !approvedTeamkitRule && Math.abs(Number(line.heightMm) - semantics.expectedHeightMm) > .001) {
       const explicit = line.physicalTruth?.authority === "HUMAN_CONFIRMED_HISTORICAL_RECONCILIATION" && Number(line.physicalTruth?.valueMm) === Number(line.heightMm) && line.physicalTruth?.confirmedAt && line.physicalTruth?.confirmedBy;
       if (!explicit) findings.push(finalProductionFinding("DIMENSIONS", "De fysieke hoogte wijkt zonder expliciet bevestigd historisch bewijs af van de canonieke profielregel.", { line, evidence: `regel ${line.heightMm} mm · profiel ${semantics.expectedHeightMm} mm`, code: "PRODUCTION_DIMENSIONS_TRUTH_MISMATCH" }));
     }
@@ -7054,6 +7173,7 @@ function productionExecutionSnapshotBody(state, order, productionLines, validati
     association: order.association,
     associations: structuredClone(order.associations ?? []),
     items: structuredClone(order.items ?? []),
+    associationTruth: structuredClone(state.associations.filter(({ id, name }) => (order.items ?? []).some((item) => item.association === id || item.association === name))),
     productionLines: structuredClone(productionLines),
     productionProfiles: profileIds.map((id) => structuredClone(state.productionProfiles.find((profile) => profile.id === id))).filter(Boolean),
     finalValidation: structuredClone(validation),
@@ -7117,6 +7237,15 @@ function invalidateOpenProductionTruth(state, order, actor, reason) {
     order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_EXECUTION_TRUTH_INVALIDATED", at, userId: actor.id, userName: actor.name, source: "material-order-correction", details: { reason, priorExecutionHash: priorSnapshot?.executionHash ?? null, invalidatedProposalIds } });
     audit(state, actor.id, "Productie-uitvoering ongeldig gemaakt na bronwijziging", order.id, { reason, priorExecutionHash: priorSnapshot?.executionHash ?? null, invalidatedProposalIds });
   }
+}
+
+function canonicalProductionProposalIntentKey(orders) {
+  return sha256(JSON.stringify(orders.map(({ id, productionExecutionSnapshot, revision }) => ({ id, revision, executionHash: productionExecutionSnapshot?.executionHash ?? null })).sort((left, right) => left.id.localeCompare(right.id))));
+}
+
+function openProductionProposalOverlap(state, orderIds) {
+  const selected = new Set(orderIds);
+  return (state.productionProposals ?? []).find(({ status, orders }) => status === "OPEN" && (orders ?? []).some(({ id }) => selected.has(id))) ?? null;
 }
 
 function buildProductionProposalGroups(state, orders) {
@@ -7288,7 +7417,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     }
     if (line.source.kind === "PRODUCTION_ELEMENT") {
       const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
-      const variant = asset?.variants.find(({ id }) => id === line.source.variantId) ?? asset?.variants.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0);
+      const variant = asset?.variants.find(({ id }) => id === line.source.variantId);
       if (!asset || !variant) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
       const source = { id: asset.id, version: asset.version, sourceProofStatus: productionElementProof(asset), outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
       return {

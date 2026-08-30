@@ -1091,6 +1091,7 @@ export interface TeamkitProposalItem {
   /** Immutable discovery/commercial snapshot; the product master remains CatalogArticle/Catalog Foundation. */
   catalogSnapshot?: {
     catalogProductId: string;
+    catalogVariantId?: string;
     brand: string;
     supplierName: string;
     supplierArticleName: string;
@@ -1270,7 +1271,7 @@ export interface TeamkitProposal {
   approvalHistory: TeamkitProposalApproval[];
   productionSizing: TeamkitProductionSizing | null;
   fulfillmentTasks: TeamkitFulfillmentTask[];
-  deliveryEvidence?: Array<{ id: string; templateKey: string; status: string; capturedAt: string; revision: number; delivered: boolean }>;
+  deliveryEvidence?: Array<{ id: string; templateKey: string; status: string; capturedAt: string; revision: number; delivered: boolean; recipientHash?: string; contextHash?: string; invalidatedReason?: string }>;
   createdAt: string;
   createdBy: { id: string; name: string; role: SportpaleisRole };
   updatedAt: string;
