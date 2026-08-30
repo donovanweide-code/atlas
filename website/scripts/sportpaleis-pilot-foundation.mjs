@@ -664,6 +664,9 @@ export function migrateSportpaleisPilotState(input) {
     order.communication.production ??= { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt };
     order.communication.ready ??= { status: "NOT_SENT", updatedAt: order.updatedAt ?? order.createdAt };
     order.communication.requiredForIndividualOrder ??= false;
+    // Mail-SLA is order truth once the order exists. Later global setting changes
+    // are defaults for new work and must not silently reinterpret old evidence.
+    order.communication.processingDaysSnapshot ??= Number(state.settings?.processingDays ?? PILOT_SETTINGS.processingDays);
     for (const item of order.items ?? []) {
       item.association = canonicalAssociationName(item.association);
       item.sourceType ??= item.articleId ? "CATALOG" : "CUSTOM";
@@ -1443,7 +1446,10 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     const item = items[0];
     const foilColor = line.foilColor ?? item.foilColor;
     const existingIdentity = line.decorationIdentity ?? {};
-    const decorationType = line.personalizationField ?? existingIdentity.decorationType ?? line.type;
+    const sourceAsset = line.source?.kind === "PRODUCTION_ELEMENT" ? state.productionElements.find(({ id }) => id === line.source.id) : null;
+    const visualApplications = [...new Set((sourceAsset?.applications ?? []).map(({ kind }) => String(kind).toUpperCase()).filter((kind) => ["LOGO", "SPONSOR", "ARTWORK"].includes(kind)))];
+    const inferredVisualDecoration = visualApplications.length === 1 ? visualApplications[0].toLowerCase() : null;
+    const decorationType = line.personalizationField ?? existingIdentity.decorationType ?? inferredVisualDecoration ?? line.type;
     return {
       ...line,
       orderId: id,
@@ -1505,7 +1511,7 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     sourceContext,
     orderKind,
     ...(teamContext ? { teamContext } : {}),
-    communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL" && source !== "WEBSHOP_XPRT", receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
+    communication: { requiredForIndividualOrder: orderKind === "INDIVIDUAL" && source !== "WEBSHOP_XPRT", processingDaysSnapshot: Number(state.settings.processingDays), receipt: { status: "NOT_SENT", updatedAt: createdAt }, production: { status: "NOT_SENT", updatedAt: createdAt }, ready: { status: "NOT_SENT", updatedAt: createdAt } },
     notes: note ? [{ id: `note-${randomBytes(6).toString("hex")}`, scope: "order", kind: payload.noteKind === "attention" || payload.noteAttention ? "attention" : "internal", text: requiredText(note, "Opmerking", 600), authorId: user.id, authorName: user.name, createdAt }] : [],
     priority,
     attention: priority ? `Prioriteitsuitzondering: ${priority.reasonLabel}` : (payload.noteKind === "attention" || payload.noteAttention) && note ? note : productionAttentionText(items),
@@ -3723,16 +3729,18 @@ export class SportpaleisPilotService {
             stockApplicationIds: stockEvidence.applications.map(({ id }) => id),
             stockEvidence,
             explicitHumanAction: "AFRONDEN",
-            confirmedAt,
-            confirmedBy,
           };
-          order.productionCompletionEvidence = { ...completionBody, evidenceHash: sha256(JSON.stringify(completionBody)) };
+          const evidenceHash = sha256(JSON.stringify(completionBody));
+          const completionAttestationHash = sha256(JSON.stringify({ evidenceHash, confirmedAt, confirmedBy }));
+          // Keep the evidence shape/hash readable by the direct R2.14 rollback
+          // target; bind the stronger V4 human attestation in the immutable event.
+          order.productionCompletionEvidence = { ...completionBody, evidenceHash, confirmedAt, confirmedBy };
           order.stage = "DONE";
           order.revision += 1;
           order.updatedAt = confirmedAt;
           order.eventHistory ??= [];
           const pickupReady = order.fulfillment?.mode !== "DELIVERY";
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false, fulfillmentStatus: pickupReady ? "READY_FOR_PICKUP" : order.fulfillment?.status ?? "PENDING", explicitHumanAction: "AFRONDEN", completionEvidenceHash: order.productionCompletionEvidence.evidenceHash, completionMode } });
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false, fulfillmentStatus: pickupReady ? "READY_FOR_PICKUP" : order.fulfillment?.status ?? "PENDING", explicitHumanAction: "AFRONDEN", completionEvidenceHash: order.productionCompletionEvidence.evidenceHash, completionAttestationHash, completionMode } });
           if (pickupReady) {
             order.fulfillment ??= { mode: "PICKUP", status: "PENDING", updatedAt: null, updatedBy: null };
             assertFulfillmentTransition(state, order, "READY_FOR_PICKUP");
@@ -4437,11 +4445,15 @@ export class SportpaleisPilotService {
       const registrationId = `source-registration-${sha256(JSON.stringify(registrationBody)).slice(0, 32).toLowerCase()}`;
       const existingRegistration = state.productionElements.find((candidate) => candidate.registrationId === registrationId);
       if (existingRegistration) {
-        const assignmentChanged = Boolean(linkedProfile && linkedProfileField && linkedProfile.productionNumberAssetAssignments?.[linkedProfileField] !== existingRegistration.id);
+        const linkedAssociation = contexts.find(({ type }) => type === "ASSOCIATION");
+        const assignmentHeightMm = linkedProfile && linkedProfileField
+          ? profileFieldPhysicalHeightMm(state.associations.find(({ id, name }) => linkedAssociation?.id === id || linkedAssociation?.label === name || linkedProfile.associationId === id || linkedProfile.association === name), linkedProfile, linkedProfileField) || heightMm
+          : heightMm;
+        const assignmentChanged = Boolean(linkedProfile && linkedProfileField && assignedProductionNumberAssetId(state, linkedProfile, linkedProfileField, assignmentHeightMm) !== existingRegistration.id);
         if (linkedProfile && (!linkedProfile.productionNumberAssetIds?.includes(existingRegistration.id) || assignmentChanged)) {
           const previous = structuredClone(linkedProfile);
           linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), existingRegistration.id])];
-          if (linkedProfileField) linkedProfile.productionNumberAssetAssignments = { ...(linkedProfile.productionNumberAssetAssignments ?? {}), [linkedProfileField]: existingRegistration.id };
+          if (linkedProfileField) assignProductionNumberAsset(linkedProfile, linkedProfileField, assignmentHeightMm, existingRegistration.id, heightMm);
           linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
           linkedProfile.validationHistory ??= [];
           linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · bestaande registratie gekoppeld via Guided Source Setup` });
@@ -4478,7 +4490,11 @@ export class SportpaleisPilotService {
       if (linkedProfile) {
         const previous = structuredClone(linkedProfile);
         linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), element.id])];
-        if (linkedProfileField) linkedProfile.productionNumberAssetAssignments = { ...(linkedProfile.productionNumberAssetAssignments ?? {}), [linkedProfileField]: element.id };
+        const linkedAssociation = contexts.find(({ type }) => type === "ASSOCIATION");
+        const assignmentHeightMm = linkedProfileField
+          ? profileFieldPhysicalHeightMm(state.associations.find(({ id, name }) => linkedAssociation?.id === id || linkedAssociation?.label === name || linkedProfile.associationId === id || linkedProfile.association === name), linkedProfile, linkedProfileField) || heightMm
+          : heightMm;
+        if (linkedProfileField) assignProductionNumberAsset(linkedProfile, linkedProfileField, assignmentHeightMm, element.id, heightMm);
         linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
         linkedProfile.validationHistory ??= [];
         linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · expliciet gekoppeld via Guided Source Setup` });
@@ -4607,10 +4623,10 @@ export class SportpaleisPilotService {
       const templatesByChannel = { receipt: ["ORDER_RECEIVED"], production: ["ORDER_IN_PRODUCTION"], ready: ["ORDER_READY"] };
       const expectedRecipient = String(state.orders.find(({ id }) => id === orderId)?.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL");
       const attemptedRecipient = String(attempt?.recipient ?? "").trim().toLocaleLowerCase("nl-NL");
-      const valid = attempt && attempt.status === expectedTransportStatus && attempt.referenceId && attempt.referenceId === providerReference && templatesByChannel[channel].includes(attempt.templateKey) && attemptedRecipient === expectedRecipient && !Number.isNaN(Date.parse(attempt.completedAt));
+      const currentContextHash = orderCommunicationContextHash(state, state.orders.find(({ id }) => id === orderId), channel);
+      const valid = attempt && attempt.status === expectedTransportStatus && attempt.referenceId && attempt.referenceId === providerReference && templatesByChannel[channel].includes(attempt.templateKey) && attemptedRecipient === expectedRecipient && attempt.contextHash === currentContextHash && !Number.isNaN(Date.parse(attempt.completedAt));
       if (!valid) throw Object.assign(new Error("Verzonden of bezorgd vereist een server-side bewezen poging uit de gecontracteerde mailroute; clientmetadata of een vrije providerreferentie is onvoldoende."), { statusCode: 409, code: "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED" });
-      const contextHash = orderCommunicationContextHash(state, state.orders.find(({ id }) => id === orderId), channel);
-      const evidenceBody = { attemptId: attempt.id, provider: attempt.transport, providerReference: attempt.referenceId, status, acceptedAt: attempt.completedAt, channel, templateKey: attempt.templateKey, recipientHash: sha256(expectedRecipient), contextHash };
+      const evidenceBody = { attemptId: attempt.id, provider: attempt.transport, providerReference: attempt.referenceId, status, acceptedAt: attempt.completedAt, channel, templateKey: attempt.templateKey, recipientHash: sha256(expectedRecipient), contextHash: attempt.contextHash, attemptPayloadHash: attempt.payloadHash };
       verifiedDeliveryEvidence = { ...evidenceBody, evidenceHash: sha256(JSON.stringify(evidenceBody)) };
     }
     const result = await this.store.mutate(async (state) => {
@@ -6032,6 +6048,41 @@ function assertPioneersNumberSource(state, order, line) {
   throw Object.assign(new Error(`${line.preview?.label ?? line.content}: gekoppelde bron wijkt af van de gecontroleerde Pioneers-bron “${canonicalName}”; productie blijft op REVIEW.`), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_MISMATCH" });
 }
 
+function productionNumberAssignmentKey(heightMm) {
+  return Number(heightMm) > 0 ? `HEIGHT_${Number(heightMm).toFixed(2)}` : "DEFAULT";
+}
+
+function assignedProductionNumberAssetId(state, profile, field, requestedHeightMm) {
+  const heightAssignment = field ? profile?.productionNumberAssetAssignmentsByHeight?.[field]?.[productionNumberAssignmentKey(requestedHeightMm)] ?? null : null;
+  if (heightAssignment) return String(heightAssignment);
+  const assignment = field ? profile?.productionNumberAssetAssignments?.[field] : null;
+  if (!assignment || typeof assignment !== "string") return null;
+  if (!(Number(requestedHeightMm) > 0)) return String(assignment);
+  const asset = state.productionElements?.find(({ id }) => id === assignment);
+  return asset?.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01) ? String(assignment) : null;
+}
+
+function assignedProductionNumberAssetEvidence(profile, field, requestedHeightMm) {
+  return field ? profile?.productionNumberAssetAssignmentEvidenceByHeight?.[field]?.[productionNumberAssignmentKey(requestedHeightMm)] ?? null : null;
+}
+
+function assignProductionNumberAsset(profile, field, targetHeightMm, assetId, sourceHeightMm = targetHeightMm) {
+  const key = productionNumberAssignmentKey(targetHeightMm);
+  profile.productionNumberAssetAssignmentsByHeight = {
+    ...(profile.productionNumberAssetAssignmentsByHeight ?? {}),
+    [field]: { ...(profile.productionNumberAssetAssignmentsByHeight?.[field] ?? {}), [key]: assetId },
+  };
+  profile.productionNumberAssetAssignmentEvidenceByHeight = {
+    ...(profile.productionNumberAssetAssignmentEvidenceByHeight ?? {}),
+    [field]: { ...(profile.productionNumberAssetAssignmentEvidenceByHeight?.[field] ?? {}), [key]: {
+    assetId,
+    targetHeightMm: Number(targetHeightMm),
+    sourceHeightMm: Number(sourceHeightMm),
+    authority: "HUMAN_ACCEPTANCE",
+    } },
+  };
+}
+
 function associationNumberSet(state, associationName, { field = null, profileId = null, requestedHeightMm = null } = {}) {
   const association = state.associations.find(({ id, name }) => id === associationName || name === associationName);
   if (!association) return { association: null, asset: null, ambiguous: false };
@@ -6044,7 +6095,8 @@ function associationNumberSet(state, associationName, { field = null, profileId 
   };
   const profile = profileId ? state.productionProfiles?.find(({ id }) => id === profileId) : null;
   const linkedAssetIds = new Set(profile?.productionNumberAssetIds ?? []);
-  const assignedAssetId = field ? profile?.productionNumberAssetAssignments?.[field] ?? null : null;
+  const assignedAssetId = assignedProductionNumberAssetId(state, profile, field, requestedHeightMm);
+  const assignedEvidence = assignedProductionNumberAssetEvidence(profile, field, requestedHeightMm);
   const matches = state.productionElements.filter((element) => element.lifecycleStatus === "PRODUCTION_READY"
     && element.productionMethod === "SELF_PRODUCED"
     && element.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && placementMatchesField(placement))
@@ -6054,20 +6106,24 @@ function associationNumberSet(state, associationName, { field = null, profileId 
   // A managed profile is the authority for number-source applicability. An
   // association-scoped asset that is not linked to that exact profile must not
   // silently outrank the canonical set merely because it exists.
-  const linkedMatches = profileId ? matches.filter(({ id }) => assignedAssetId ? id === assignedAssetId : linkedAssetIds.has(id)) : matches;
+  const profileMatches = profileId ? matches.filter(({ id }) => linkedAssetIds.has(id) || id === assignedAssetId) : matches;
+  const assignedMatches = assignedAssetId ? profileMatches.filter(({ id }) => id === assignedAssetId) : [];
+  const assignedHasExactHeight = Number(requestedHeightMm) > 0 && assignedMatches.some((element) => element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01));
+  const assignedHasExplicitTargetAuthority = Boolean(assignedEvidence
+    && assignedEvidence.authority === "HUMAN_ACCEPTANCE"
+    && Math.abs(Number(assignedEvidence.targetHeightMm) - Number(requestedHeightMm)) <= 0.01);
+  const linkedMatches = assignedHasExactHeight || assignedHasExplicitTargetAuthority ? assignedMatches : profileMatches;
   const exactHeightMatches = Number(requestedHeightMm) > 0
     ? linkedMatches.filter((element) => element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01))
     : linkedMatches;
-  // Prefer the exact physical variant where the profile links multiple masters
-  // (for example Junior and Senior). A single explicitly linked SVG glyphmaster
-  // may still be scaled by that same profile to another confirmed height.
-  const preferred = exactHeightMatches.length ? exactHeightMatches : linkedMatches.length === 1 ? linkedMatches : [];
+  // A fixed glyphmaster is only applicable to its proven physical class. One
+  // assignment must never silently override Junior/Senior or another height.
+  const preferred = Number(requestedHeightMm) > 0
+    ? exactHeightMatches.length ? exactHeightMatches : assignedHasExplicitTargetAuthority ? assignedMatches : []
+    : linkedMatches.length === 1 ? linkedMatches : [];
   const asset = preferred.length === 1 ? preferred[0] : null;
-  // A canonical SVG glyph master can be scaled to the physical height dictated
-  // by an explicitly linked production profile. The saved variant identifies
-  // the immutable contour master; it is not allowed to overrule that profile.
   const variant = asset?.variants?.find(({ heightMm }) => Number(requestedHeightMm) > 0 && Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)
-    ?? asset?.variants?.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0)
+    ?? (assignedHasExplicitTargetAuthority || !(Number(requestedHeightMm) > 0) ? asset?.variants?.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0) : null)
     ?? null;
   return { association, asset, variant, ambiguous: preferred.length > 1 || (!exactHeightMatches.length && linkedMatches.length > 1) || Boolean(asset && !variant) };
 }
@@ -6876,7 +6932,7 @@ function orderMailContext(state, order, question = "Niet van toepassing") {
     order: {
       number: order.id,
       items: itemLines,
-      processingDays: state.settings.processingDays,
+      processingDays: Number(order.communication?.processingDaysSnapshot ?? state.settings.processingDays),
       pickupInformation: `Neem de orderreferentie ${order.id} mee bij het ophalen bij Sport 2000 Sportpaleis.`,
     },
     message: { question },
@@ -6939,17 +6995,18 @@ function productionClosureForOrder(state, order) {
     const evidence = order.productionCompletionEvidence;
     const readyEvent = order.eventHistory?.find(({ type, details }) => type === "PRODUCTION_READY" && details?.explicitHumanAction === "AFRONDEN");
     if (!evidence || !readyEvent) return { status: "REVIEW_REQUIRED", reason: "Gereed-status mist immutable Afronden-bewijs." };
-    const { evidenceHash, ...completionBody } = evidence;
-    const confirmedAt = String(evidence.confirmedAt ?? "");
-    const confirmedBy = evidence.confirmedBy;
+    const { evidenceHash, confirmedAt, confirmedBy, ...completionBody } = evidence;
+    const confirmedAtValue = String(confirmedAt ?? "");
+    const completionAttestationHash = readyEvent.details?.completionAttestationHash;
     const validAttestation = evidence.version === "CANONICAL_PRODUCTION_COMPLETION_V4"
-      && !Number.isNaN(Date.parse(confirmedAt))
+      && !Number.isNaN(Date.parse(confirmedAtValue))
       && String(confirmedBy?.userId ?? "").trim()
       && String(confirmedBy?.userName ?? "").trim()
       && ["admin", "operator"].includes(String(confirmedBy?.role ?? ""))
-      && readyEvent.at === confirmedAt
+      && readyEvent.at === confirmedAtValue
       && readyEvent.userId === confirmedBy.userId
-      && readyEvent.userName === confirmedBy.userName;
+      && readyEvent.userName === confirmedBy.userName
+      && completionAttestationHash === sha256(JSON.stringify({ evidenceHash, confirmedAt: confirmedAtValue, confirmedBy }));
     if (!validAttestation) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs mist een geldige, aan event en actor gebonden menselijke Afronden-attestatie." };
     if (sha256(JSON.stringify(completionBody)) !== evidenceHash || readyEvent.details?.completionEvidenceHash !== evidenceHash) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs heeft geen geldige immutable hash-/eventbinding." };
     const hasPlot = (evidence.requiredLineIds ?? []).length > 0;
@@ -7138,14 +7195,19 @@ function approvedTeamkitRuleMatchesCurrentLine(line) {
   return Boolean(exact || intentExact);
 }
 
-function productionElementApplicationForLine(line) {
+function productionElementApplicationsForLine(line) {
   const field = line.personalizationField ?? line.decorationIdentity?.decorationType ?? null;
-  if (["backNumber", "chestNumber", "shortsNumber"].includes(field)) return "NUMBER_SET";
-  const decoration = normalizedProductionIdentity(line.decorationIdentity?.decorationType ?? line.type);
-  if (decoration.includes("sponsor")) return "SPONSOR";
-  if (decoration.includes("logo") || line.type === "LOGO") return "LOGO";
-  if (decoration.includes("artwork") || line.type === "PRODUCTION_ELEMENT") return "ARTWORK";
-  return null;
+  if (["backNumber", "chestNumber", "shortsNumber"].includes(field)) return ["NUMBER_SET"];
+  const explicitDecoration = line.decorationIdentity?.decorationType;
+  const decoration = normalizedProductionIdentity(explicitDecoration ?? line.type);
+  if (decoration.includes("sponsor")) return ["SPONSOR"];
+  if (decoration.includes("logo")) return ["LOGO"];
+  if (decoration.includes("artwork")) return ["ARTWORK"];
+  // Legacy production lines used LOGO/PRODUCTION_ELEMENT as a visual transport
+  // type before an exact decorationIdentity existed. Preserve those approved
+  // lines, but never use this compatibility set when semantic identity exists.
+  if (!explicitDecoration && ["LOGO", "PRODUCTION_ELEMENT"].includes(line.type)) return ["LOGO", "SPONSOR", "ARTWORK"];
+  return [];
 }
 
 function productionElementPlacementMatchesField(application, field) {
@@ -7164,26 +7226,31 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
     if (!asset || !variant) return false;
-    const requiredApplication = productionElementApplicationForLine(line);
+    const requiredApplications = productionElementApplicationsForLine(line);
     const applications = asset.applications ?? [];
-    const allowedVisualApplications = line.type === "LOGO" ? ["LOGO", "SPONSOR"] : line.type === "PRODUCTION_ELEMENT" ? ["ARTWORK"] : [];
-    const application = requiredApplication === "NUMBER_SET"
+    const application = requiredApplications.includes("NUMBER_SET")
       ? applications.find(({ kind: applicationKind, placement }) => String(applicationKind).toUpperCase() === "NUMBER_SET" && productionElementPlacementMatchesField({ kind: "NUMBER_SET", placement }, semantics.field))
-      : applications.find(({ kind: applicationKind }) => allowedVisualApplications.includes(String(applicationKind).toUpperCase()));
-    if (!requiredApplication || !application) return false;
-    if (requiredApplication === "NUMBER_SET") {
+      : applications.find(({ kind: applicationKind }) => requiredApplications.includes(String(applicationKind).toUpperCase()));
+    if (!requiredApplications.length || !application) return false;
+    if (requiredApplications.includes("NUMBER_SET")) {
       const content = String(line.content ?? "");
       if (line.type !== "NUMBER") return false;
       if (!/^\d{1,4}$/u.test(content)) return false;
       if (asset.numberGlyphs && [...content].some((digit) => !asset.numberGlyphs[digit])) return false;
-      const assignedAssetId = semantics.field ? semantics.profile?.productionNumberAssetAssignments?.[semantics.field] ?? null : null;
+      const assignmentEvidence = assignedProductionNumberAssetEvidence(semantics.profile, semantics.field, semantics.expectedHeightMm);
+      const explicitlyAuthorizedTarget = assignmentEvidence?.authority === "HUMAN_ACCEPTANCE"
+        && assignmentEvidence.assetId === asset.id
+        && Math.abs(Number(assignmentEvidence.targetHeightMm) - Number(semantics.expectedHeightMm)) <= 0.01;
+      if (Number(semantics.expectedHeightMm) > 0 && Math.abs(Number(variant.heightMm) - Number(semantics.expectedHeightMm)) > 0.01 && !explicitlyAuthorizedTarget) return false;
+      if (asset.sizePolicy?.mode === "FIXED" && Number(line.heightMm) > 0 && Math.abs(Number(variant.heightMm) - Number(line.heightMm)) > 0.01 && !explicitlyAuthorizedTarget) return false;
+      const assignedAssetId = assignedProductionNumberAssetId(state, semantics.profile, semantics.field, semantics.expectedHeightMm);
       if (assignedAssetId ? assignedAssetId !== asset.id : !semantics.profile?.productionNumberAssetIds?.includes(asset.id)) return false;
     }
     const item = order?.items?.find(({ id }) => id === line.itemId);
     const association = item ? state.associations.find(({ id, name }) => id === item.association || name === item.association) : null;
     const scoped = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
     if ((asset.ownerType === "ASSOCIATION" || scoped.length) && (!association || !scoped.some(({ id, label }) => id === association.id || label === association.name))) return false;
-    return requiredApplication === "NUMBER_SET" || ["LOGO", "PRODUCTION_ELEMENT"].includes(line.type);
+    return requiredApplications.includes("NUMBER_SET") || ["LOGO", "PRODUCTION_ELEMENT"].includes(line.type);
   }
   return false;
 }
