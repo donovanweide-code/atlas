@@ -83,7 +83,7 @@ test("globale doorlooptijd is alleen default voor nieuwe orders en herinterprete
   assert.equal(later.communication.processingDaysSnapshot, originalDays + 2);
 });
 
-test("completionbewijs blijft leesbaar door R2.14 en heeft een afzonderlijke V4 actor-attestatie", async (context) => {
+test("completionbewijs blijft leesbaar door de directe R2.15 rollback en heeft een afzonderlijke V4 actor-attestatie", async (context) => {
   const { store, service, admin } = await fixture(context);
   await store.mutate(async (state) => { for (const profile of state.productionProfiles) profile.fontProfile = "Liberation Sans Regular"; state.productionJobs = []; return { state, value: null }; });
   let order = (await service.createOrder(admin.token, admin.csrfToken, { orderKind: "INDIVIDUAL", customer: "R2.16 rollback", customerEmail: "", standardPersonalization: { ...empty, backNumber: "12", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "r216-rollback-create")).value;
@@ -95,8 +95,9 @@ test("completionbewijs blijft leesbaar door R2.14 en heeft een afzonderlijke V4 
   order = await service.order(admin.token, order.id);
   assert.equal(order.productionClosure.status, "CONFIRMED");
   const evidence = order.productionCompletionEvidence;
-  const { evidenceHash, confirmedAt, confirmedBy, ...r214CompletionBody } = evidence;
-  assert.equal(sha256(JSON.stringify(r214CompletionBody)), evidenceHash);
+  const { evidenceHash, ...r215CompletionBody } = evidence;
+  const { confirmedAt, confirmedBy } = evidence;
+  assert.equal(sha256(JSON.stringify(r215CompletionBody)), evidenceHash);
   const readyEvent = order.eventHistory.find(({ type }) => type === "PRODUCTION_READY");
   assert.equal(readyEvent.details.completionAttestationHash, sha256(JSON.stringify({ evidenceHash, confirmedAt, confirmedBy })));
 });

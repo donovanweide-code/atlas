@@ -579,6 +579,19 @@ export async function inspectProductionAssetSource({ bytes, filename, mimeType =
   };
 }
 
+function assertProductionAssetSizePolicy(asset, requestedWidth, requestedHeight) {
+  const policy = asset.sizePolicy;
+  if (!policy) return;
+  const defaultWidth = Number(policy.defaultWidthMm);
+  const defaultHeight = Number(policy.defaultHeightMm);
+  if (policy.mode === "FIXED") {
+    if ((defaultWidth > 0 && Math.abs(Number(requestedWidth) - defaultWidth) > 0.01)
+      || (defaultHeight > 0 && Math.abs(Number(requestedHeight) - defaultHeight) > 0.01)) throw assetError("Deze productiebron heeft een vaste productiemaat.", "PRODUCTION_ASSET_SIZE_FIXED", 409);
+  }
+  if (policy.mode === "DEFAULT_WITH_LIMITS" && Number(requestedWidth) > 0
+    && (Number(requestedWidth) < Number(policy.minWidthMm) || Number(requestedWidth) > Number(policy.maxWidthMm))) throw assetError("De gevraagde maat valt buiten het gecontroleerde productiebeleid.", "PRODUCTION_ASSET_SIZE_OUT_OF_RANGE", 409);
+}
+
 export function productionAssetPiece({ asset, variant, line, order, foilColor }) {
   if (asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED") throw assetError("Dit beeldmerk is nog niet vrijgegeven voor eigen productie.", "PRODUCTION_ASSET_NOT_READY", 409);
   const numberSet = asset.applications?.some(({ kind }) => kind === "NUMBER_SET");
@@ -602,7 +615,7 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
     }
     const producedBounds = bounds(contours);
     return {
-      id: `${order.id}-${line.itemId ?? line.id}-${asset.id}`,
+      id: `${order.id}-${line.itemId ?? "item"}-${line.id ?? "line"}-${asset.id}`,
       sourceOrderId: order.id,
       label: line.preview?.label ?? `${asset.name} ${line.content}`,
       product: order.items.find(({ id }) => id === line.itemId)?.product ?? "Productienummers",
@@ -621,13 +634,14 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
   const requestedWidth = Number(line.widthMm || variant.widthMm);
   const requestedHeight = Number(line.heightMm || variant.heightMm);
   if (!(requestedWidth > 0) && !(requestedHeight > 0)) throw assetError("Een productieasset vereist een fysieke breedte of hoogte.", "PRODUCTION_ASSET_SIZE_MISSING", 409);
+  assertProductionAssetSizePolicy(asset, requestedWidth, requestedHeight);
   const scale = requestedWidth > 0 ? requestedWidth / sourceBounds.width : requestedHeight / sourceBounds.height;
   const derivedWidth = sourceBounds.width * scale;
   const derivedHeight = sourceBounds.height * scale;
   if (requestedWidth > 0 && requestedHeight > 0 && Math.abs(derivedHeight - requestedHeight) > 0.2) throw assetError("Breedte en hoogte wijken af van de vaste beeldverhouding.", "PRODUCTION_ASSET_ASPECT_RATIO_MISMATCH", 409);
   const contours = sourceContours.map((contour) => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x * scale, y: y * scale })) }));
   return {
-    id: `${order.id}-${line.itemId ?? line.id}-${asset.id}`,
+    id: `${order.id}-${line.itemId ?? "item"}-${line.id ?? "line"}-${asset.id}`,
     sourceOrderId: order.id,
     label: line.preview?.label ?? asset.name,
     product: order.items.find(({ id }) => id === line.itemId)?.product ?? "Productieasset",
@@ -668,7 +682,7 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
     }));
     const producedBounds = bounds(contours);
     return {
-      id: `${order.id}-${line.itemId ?? line.id}-${asset.id}-digit-${digitIndex + 1}-${digit}`,
+      id: `${order.id}-${line.itemId ?? "item"}-${line.id ?? "line"}-${asset.id}-digit-${digitIndex + 1}-${digit}`,
       sourceOrderId: order.id,
       label: `${line.preview?.label ?? `${asset.name} ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length})`,
       product: orderItem?.product ?? "Productienummers",
