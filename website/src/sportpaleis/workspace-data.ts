@@ -484,7 +484,7 @@ export interface WorkspaceOrder {
    * audited confirmation when confirmation is required.
    */
   productionReconciliation?: {
-    version: "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1" | "EXISTING_ORDER_CANONICAL_RECONCILIATION_V2";
+    version: "EXISTING_ORDER_CANONICAL_RECONCILIATION_V1" | "EXISTING_ORDER_CANONICAL_RECONCILIATION_V2" | "EXISTING_ORDER_CANONICAL_RECONCILIATION_V3";
     status: "PROVEN" | "RESOLVABLE" | "HUMAN_DECISION_REQUIRED";
     sourceKind: "STORED_CANONICAL" | "IMMUTABLE_EXECUTION_SNAPSHOT" | "HISTORICAL_EXECUTION_WITHOUT_SNAPSHOT" | "HISTORICAL_ORDER_PROJECTION";
     historicalSourceHash: string;
@@ -499,10 +499,11 @@ export interface WorkspaceOrder {
       reason: string;
       evidence: string;
       action: {
-        kind: "CONFIRM_PROJECTION" | "CHOOSE_SIZE_CLASS" | "CHOOSE_DECORATION_TYPE" | "CHOOSE_FOIL_COLOR" | "OPEN_PRODUCTION_SOURCE" | "OPEN_ORDER_CONTENT" | "OPEN_HISTORY";
+        kind: "CONFIRM_PROJECTION" | "CHOOSE_SIZE_CLASS" | "CHOOSE_DECORATION_TYPE" | "CHOOSE_FOIL_COLOR" | "CHOOSE_PHYSICAL_HEIGHT_MM" | "CHOOSE_ARTICLE_CONTEXT" | "OPEN_PRODUCTION_SOURCE" | "OPEN_ORDER_CONTENT" | "OPEN_HISTORY";
         label: string;
         target: string;
         options?: string[];
+        optionLabels?: Record<string, string>;
       };
     }[];
     evidence: string[];
@@ -517,7 +518,7 @@ export interface WorkspaceOrder {
       evidence: string;
       itemId?: string;
       decoration?: string;
-      action?: { kind: string; label: string; target: string; options?: string[] };
+      action?: { kind: string; label: string; target: string; options?: string[]; optionLabels?: Record<string, string> };
     }[];
     confirmed?: {
       at: string;

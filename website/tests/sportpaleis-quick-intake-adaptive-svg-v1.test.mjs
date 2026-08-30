@@ -109,7 +109,10 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "buitenhout-clubnummers.svg", mimeType: "image/svg+xml", dataBase64: vectorSvg().toString("base64"), intakeKind: "NUMBER_SET", conversionMethod: "HUMAN_VERIFIED_SVG" });
   const candidates = source.candidates.filter(({ reviewCategory }) => reviewCategory === "NUMBER_GLYPH");
   assert.equal(candidates.length, 10);
-  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap: Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id])), name: "Buitenhout echte SVG-contourset", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 75, heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Rug en short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const promotion = { candidateIds: candidates.map(({ id }) => id), glyphMap: Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id])), name: "Buitenhout echte SVG-contourset", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 75, heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Rug en short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" };
+  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { ...promotion, productionProfileId: "profile-source-buitenhout-mhc-backNumber" });
+  const reusedForShort = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { ...promotion, productionProfileId: "profile-source-buitenhout-mhc-shortsNumber" });
+  assert.equal(reusedForShort.id, asset.id, "één immutable glyphmaster mag expliciet aan meerdere toepasselijke profielen worden gekoppeld");
   const storedAfterPromotion = await store.read();
   const storedAsset = storedAfterPromotion.productionElements.find(({ id }) => id === asset.id);
   const storedSource = storedAfterPromotion.productionAssetSources.find(({ id }) => id === source.id);

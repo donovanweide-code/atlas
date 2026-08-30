@@ -1404,8 +1404,7 @@ function transitionTeamkitFulfillmentTask(task, payload) {
   task.status = requestedStatus;
 }
 
-function assertProductionAssetContexts(state, productionLines, associations) {
-  const associationRecords = associations.map((value) => state.associations.find(({ id, name }) => id === value || name === value)).filter(Boolean);
+function assertProductionAssetContexts(state, productionLines, order) {
   for (const line of productionLines.filter(({ source }) => source.kind === "PRODUCTION_ELEMENT")) {
     const asset = state.productionElements.find(({ id }) => id === line.source.id); if (!asset) continue;
     // Transfers are deliberately blocked by production readiness and never become
@@ -1417,7 +1416,9 @@ function assertProductionAssetContexts(state, productionLines, associations) {
       if (asset.ownerType === "ASSOCIATION") throw Object.assign(new Error(`${asset.name} mist een gecontroleerde verenigingskoppeling.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_REQUIRED" });
       continue;
     }
-    const matches = associationRecords.some((association) => scoped.some(({ id, label }) => id === association.id || label === association.name));
+    const item = order?.items?.find(({ id }) => id === line.itemId);
+    const association = item ? state.associations.find(({ id, name }) => id === item.association || name === item.association) : null;
+    const matches = association && scoped.some(({ id, label }) => id === association.id || label === association.name);
     if (!matches) throw Object.assign(new Error(`${asset.name} hoort niet bij de gekozen vereniging.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_MISMATCH" });
   }
 }
@@ -1461,7 +1462,7 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     };
   });
   const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
-  assertProductionAssetContexts(state, productionLines, associations);
+  assertProductionAssetContexts(state, productionLines, { items });
   if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
   applyProductionReadiness(items, productionLines);
   const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
@@ -3600,7 +3601,7 @@ export class SportpaleisPilotService {
         if (order.revision !== expectedRevision) {
           throw Object.assign(new Error("Order is intussen door iemand anders gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
         }
-        if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(order, "receipt")) {
+        if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(state, order, "receipt")) {
           throw Object.assign(new Error("De verplichte ontvangstbevestiging moet eerst veilig zijn vastgelegd."), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
         }
         if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
@@ -3643,7 +3644,7 @@ export class SportpaleisPilotService {
           return order;
         });
         for (const order of orders) {
-          if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(order, "receipt")) {
+          if (order.stage === "ORDER" && order.customerEmail && order.communication?.requiredForIndividualOrder && !validOrderCommunicationEvidence(state, order, "receipt")) {
             throw Object.assign(new Error(`${order.id} mist de verplichte ontvangstbevestiging.`), { statusCode: 409, code: "RECEIPT_CONFIRMATION_REQUIRED" });
           }
           if (order.stage === "CONTROL" && order.foilStates?.length && order.foilStates.every(({ status }) => status === "HOLD")) {
@@ -3710,8 +3711,10 @@ export class SportpaleisPilotService {
           const completedJobs = (progress?.entries ?? []).filter(({ status }) => status === "PRODUCED").map(({ productionJobId }) => state.productionJobs.find(({ id }) => id === productionJobId)).filter(Boolean);
           const stockEvidence = canonicalStockCompletionEvidence(state, order);
           const completionMode = productionLines.length && stockEvidence.applications.length ? "MIXED" : productionLines.length ? "PLOT" : "STOCK";
+          const confirmedAt = iso();
+          const confirmedBy = { userId: user.id, userName: user.name, role: user.role };
           const completionBody = {
-            version: "CANONICAL_PRODUCTION_COMPLETION_V3",
+            version: "CANONICAL_PRODUCTION_COMPLETION_V4",
             completionMode,
             productionExecutionHash: order.productionExecutionSnapshot?.executionHash ?? null,
             productionLineHash: sha256(JSON.stringify(productionLines)),
@@ -3720,11 +3723,13 @@ export class SportpaleisPilotService {
             stockApplicationIds: stockEvidence.applications.map(({ id }) => id),
             stockEvidence,
             explicitHumanAction: "AFRONDEN",
+            confirmedAt,
+            confirmedBy,
           };
-          order.productionCompletionEvidence = { ...completionBody, evidenceHash: sha256(JSON.stringify(completionBody)), confirmedAt: iso(), confirmedBy: { userId: user.id, userName: user.name, role: user.role } };
+          order.productionCompletionEvidence = { ...completionBody, evidenceHash: sha256(JSON.stringify(completionBody)) };
           order.stage = "DONE";
           order.revision += 1;
-          order.updatedAt = iso();
+          order.updatedAt = confirmedAt;
           order.eventHistory ??= [];
           const pickupReady = order.fulfillment?.mode !== "DELIVERY";
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_READY", at: order.updatedAt, userId: user.id, userName: user.name, source: selections.length === 1 ? "production-ready" : "bulk-production-ready", details: { customerMailSent: false, fulfillmentStatus: pickupReady ? "READY_FOR_PICKUP" : order.fulfillment?.status ?? "PENDING", explicitHumanAction: "AFRONDEN", completionEvidenceHash: order.productionCompletionEvidence.evidenceHash, completionMode } });
@@ -3880,10 +3885,7 @@ export class SportpaleisPilotService {
           audit(state, user.id, "Communicatiebewijs ongeldig gemaakt na ontvangerwijziging", order.id, { previousRecipientHash: previousEmail ? sha256(previousEmail) : null, nextRecipientHash: nextEmail ? sha256(nextEmail.toLocaleLowerCase("nl-NL")) : null });
         }
       }
-      if (payload.customerPhone !== undefined) {
-        const submittedPhone = String(payload.customerPhone ?? "").trim().slice(0, 40);
-        if (submittedPhone || !order.customerPhone) order.customerPhone = submittedPhone;
-      }
+      if (payload.customerPhone !== undefined) order.customerPhone = String(payload.customerPhone ?? "").trim().slice(0, 40);
       if (payload.deliveryMode !== undefined) {
         if (order.sourceContext?.transactionalAuthority === "ACA_XPRT") throw Object.assign(new Error("Wijzig de bezorgwijze van deze webshoporder in ACA XPRT."), { statusCode: 409, code: "XPRT_TRANSACTIONAL_AUTHORITY" });
         const mode = allowedValue(payload.deliveryMode, ["PICKUP", "DELIVERY"], "Bezorgwijze");
@@ -3920,6 +3922,7 @@ export class SportpaleisPilotService {
         itemSummary: order.items.map(({ product, quantity, size, personalization }) => ({ product, quantity, size: size ?? "", personalization })),
       };
       const changes = Object.keys(previous).filter((field) => JSON.stringify(previous[field]) !== JSON.stringify(next[field])).map((field) => ({ field, from: previous[field], to: next[field] }));
+      invalidateStaleOrderCommunicationEvidence(state, order, user, "ORDER_TRUTH_CHANGED");
       order.revision += 1; order.updatedAt = iso(); order.eventHistory ??= [];
       const correctionReason = payload.correctionReason ? requiredText(payload.correctionReason, "Correctiereden", 400) : null;
       const productionImpact = contentChanged || changes.some(({ field }) => field === "deliveryMode");
@@ -4405,6 +4408,7 @@ export class SportpaleisPilotService {
       }
       const productionProfileId = optional(payload.productionProfileId, 180) || null;
       const linkedProfile = productionProfileId ? state.productionProfiles?.find(({ id }) => id === productionProfileId) : null;
+      let linkedProfileField = null;
       if (productionProfileId && !linkedProfile) throw Object.assign(new Error("Het gekozen productieprofiel bestaat niet meer."), { statusCode: 409, code: "PRODUCTION_ASSET_PROFILE_NOT_FOUND" });
       if (linkedProfile) {
         if (!isNumberSet) throw Object.assign(new Error("Alleen een gecontroleerde SVG-nummerset kan aan een nummerprofiel worden gekoppeld."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_APPLICATION_INVALID" });
@@ -4412,8 +4416,13 @@ export class SportpaleisPilotService {
         const profileBelongsToContext = associationContext && state.articles.some(({ association, profileId, active }) => active !== false && association === associationContext.label && profileId === linkedProfile.id);
         if (!profileBelongsToContext) throw Object.assign(new Error("Kies een productieprofiel dat bij de geselecteerde vereniging en haar artikelen hoort."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_CONTEXT_MISMATCH" });
         const requestedPlacement = applications.find(({ kind }) => kind === "NUMBER_SET")?.placement ?? "";
-        const requiredField = /short|rok/iu.test(requestedPlacement) ? "shortsNumber" : /rug/iu.test(requestedPlacement) ? "backNumber" : /borst/iu.test(requestedPlacement) ? "chestNumber" : null;
-        if (!requiredField || !linkedProfile.supports?.includes(requiredField)) throw Object.assign(new Error("De gekozen toepassing hoort niet bij dit productieprofiel. Kies het profiel voor Rug, Borst of Short/rok dat deze bedrukking ondersteunt."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH" });
+        const placementFields = [
+          /rug/iu.test(requestedPlacement) ? "backNumber" : null,
+          /borst/iu.test(requestedPlacement) ? "chestNumber" : null,
+          /short|rok/iu.test(requestedPlacement) ? "shortsNumber" : null,
+        ].filter(Boolean);
+        linkedProfileField = placementFields.find((field) => linkedProfile.supports?.includes(field)) ?? null;
+        if (!linkedProfileField) throw Object.assign(new Error("De gekozen toepassing hoort niet bij dit productieprofiel. Kies het profiel voor Rug, Borst of Short/rok dat deze bedrukking ondersteunt."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH" });
       }
       const registrationBody = {
         sourceSha256: source.original.sha256,
@@ -4428,13 +4437,15 @@ export class SportpaleisPilotService {
       const registrationId = `source-registration-${sha256(JSON.stringify(registrationBody)).slice(0, 32).toLowerCase()}`;
       const existingRegistration = state.productionElements.find((candidate) => candidate.registrationId === registrationId);
       if (existingRegistration) {
-        if (linkedProfile && !linkedProfile.productionNumberAssetIds?.includes(existingRegistration.id)) {
+        const assignmentChanged = Boolean(linkedProfile && linkedProfileField && linkedProfile.productionNumberAssetAssignments?.[linkedProfileField] !== existingRegistration.id);
+        if (linkedProfile && (!linkedProfile.productionNumberAssetIds?.includes(existingRegistration.id) || assignmentChanged)) {
           const previous = structuredClone(linkedProfile);
           linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), existingRegistration.id])];
+          if (linkedProfileField) linkedProfile.productionNumberAssetAssignments = { ...(linkedProfile.productionNumberAssetAssignments ?? {}), [linkedProfileField]: existingRegistration.id };
           linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
           linkedProfile.validationHistory ??= [];
           linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · bestaande registratie gekoppeld via Guided Source Setup` });
-          audit(state, user.id, "Bestaande productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: existingRegistration.id, registrationId, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
+          audit(state, user.id, "Bestaande productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: existingRegistration.id, decorationField: linkedProfileField, registrationId, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
         }
         audit(state, user.id, "Bestaande productiebronregistratie hergebruikt", existingRegistration.id, { registrationId, sourceId: source.id, sourceSha256: source.original.sha256, productionProfileId });
         return { state, value: publicProductionElement(existingRegistration) };
@@ -4467,10 +4478,11 @@ export class SportpaleisPilotService {
       if (linkedProfile) {
         const previous = structuredClone(linkedProfile);
         linkedProfile.productionNumberAssetIds = [...new Set([...(linkedProfile.productionNumberAssetIds ?? []), element.id])];
+        if (linkedProfileField) linkedProfile.productionNumberAssetAssignments = { ...(linkedProfile.productionNumberAssetAssignments ?? {}), [linkedProfileField]: element.id };
         linkedProfile.revision = Number(linkedProfile.revision ?? 1) + 1;
         linkedProfile.validationHistory ??= [];
         linkedProfile.validationHistory.unshift({ at: iso(), userId: user.id, previous, next: structuredClone(linkedProfile), source: `${source.original.filename} · ${source.original.sha256} · expliciet gekoppeld via Guided Source Setup` });
-        audit(state, user.id, "Gecontroleerde productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: element.id, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
+        audit(state, user.id, "Gecontroleerde productiebron aan profiel gekoppeld", linkedProfile.id, { productionAssetId: element.id, decorationField: linkedProfileField, sourceId: source.id, sourceSha256: source.original.sha256, profileRevision: linkedProfile.revision });
       }
       if (source.reviewDraft) {
         const promotedIds = new Set(candidateIds);
@@ -4597,14 +4609,15 @@ export class SportpaleisPilotService {
       const attemptedRecipient = String(attempt?.recipient ?? "").trim().toLocaleLowerCase("nl-NL");
       const valid = attempt && attempt.status === expectedTransportStatus && attempt.referenceId && attempt.referenceId === providerReference && templatesByChannel[channel].includes(attempt.templateKey) && attemptedRecipient === expectedRecipient && !Number.isNaN(Date.parse(attempt.completedAt));
       if (!valid) throw Object.assign(new Error("Verzonden of bezorgd vereist een server-side bewezen poging uit de gecontracteerde mailroute; clientmetadata of een vrije providerreferentie is onvoldoende."), { statusCode: 409, code: "COMMUNICATION_DELIVERY_EVIDENCE_REQUIRED" });
-      const evidenceBody = { attemptId: attempt.id, provider: attempt.transport, providerReference: attempt.referenceId, status, acceptedAt: attempt.completedAt, channel, templateKey: attempt.templateKey, recipientHash: sha256(expectedRecipient) };
+      const contextHash = orderCommunicationContextHash(state, state.orders.find(({ id }) => id === orderId), channel);
+      const evidenceBody = { attemptId: attempt.id, provider: attempt.transport, providerReference: attempt.referenceId, status, acceptedAt: attempt.completedAt, channel, templateKey: attempt.templateKey, recipientHash: sha256(expectedRecipient), contextHash };
       verifiedDeliveryEvidence = { ...evidenceBody, evidenceHash: sha256(JSON.stringify(evidenceBody)) };
     }
     const result = await this.store.mutate(async (state) => {
       const order = state.orders.find(({ id }) => id === orderId); if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
       if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
       const at = iso(); order.communication ??= { receipt: { status: "NOT_SENT", updatedAt: at }, production: { status: "NOT_SENT", updatedAt: at }, ready: { status: "NOT_SENT", updatedAt: at } };
-      order.communication[channel] = { status, updatedAt: at, providerReference, recipientHash: order.customerEmail ? sha256(order.customerEmail.trim().toLocaleLowerCase("nl-NL")) : null, ...(verifiedDeliveryEvidence ? { deliveryEvidence: verifiedDeliveryEvidence } : {}) };
+      order.communication[channel] = { status, updatedAt: at, providerReference, recipientHash: order.customerEmail ? sha256(order.customerEmail.trim().toLocaleLowerCase("nl-NL")) : null, contextHash: orderCommunicationContextHash(state, order, channel), ...(verifiedDeliveryEvidence ? { deliveryEvidence: verifiedDeliveryEvidence } : {}) };
       if (status === "BOUNCED") order.attention = "E-mail niet bezorgd — klant bellen";
       if (status === "FAILED") order.attention = "E-mailverzending mislukt — handmatig opvolgen";
       order.revision += 1; order.updatedAt = at; order.eventHistory ??= [];
@@ -4741,23 +4754,13 @@ export class SportpaleisPilotService {
       throw Object.assign(new Error("Webshoporders gebruiken geen automatische Winkel-statusberichten."), { statusCode: 409, code: "WEBSHOP_WINKEL_MAIL_BLOCKED" });
     }
     const question = templateKey === "ORDER_QUESTION" ? requiredText(payload.question, "Vraag", 1_000) : "Niet van toepassing";
-    const itemLines = order.items.map((item) => `${item.quantity}× ${item.product}${item.association ? ` · ${item.association}` : ""} · ${item.personalization}`).join("\n");
     return {
       organizationId: "sportpaleis",
       contextType: "order",
       contextId: order.id,
       templateKey,
       recipient: order.customerEmail,
-      context: {
-        customer: { name: order.customer },
-        order: {
-          number: order.id,
-          items: itemLines,
-          processingDays: state.settings.processingDays,
-          pickupInformation: `Neem de orderreferentie ${order.id} mee bij het ophalen bij Sport 2000 Sportpaleis.`,
-        },
-        message: { question },
-      },
+      context: orderMailContext(state, order, question),
       attachments: [],
       requestedByRole: user.role,
     };
@@ -6020,7 +6023,7 @@ function assertPioneersNumberSource(state, order, line) {
   }
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
     const linked = associationNumberSet(state, PIONEERS_ASSOCIATION, { field: line.personalizationField, profileId: item.productionProfileId, requestedHeightMm: line.heightMm });
-    if (!linked.ambiguous && linked.asset?.id === line.source.id && (linked.asset.version ?? String(linked.asset.revision)) === line.source.version) return;
+    if (!linked.ambiguous && linked.asset?.id === line.source.id && linked.variant?.id === line.source.variantId && (linked.asset.version ?? String(linked.asset.revision)) === line.source.version) return;
   }
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
@@ -6041,21 +6044,32 @@ function associationNumberSet(state, associationName, { field = null, profileId 
   };
   const profile = profileId ? state.productionProfiles?.find(({ id }) => id === profileId) : null;
   const linkedAssetIds = new Set(profile?.productionNumberAssetIds ?? []);
+  const assignedAssetId = field ? profile?.productionNumberAssetAssignments?.[field] ?? null : null;
   const matches = state.productionElements.filter((element) => element.lifecycleStatus === "PRODUCTION_READY"
     && element.productionMethod === "SELF_PRODUCED"
     && element.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && placementMatchesField(placement))
     && Object.keys(element.numberGlyphs ?? {}).length === 10
     && Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => element.numberGlyphs?.[digit])
     && element.contexts?.some(({ type, id, label }) => type === "ASSOCIATION" && (id === association.id || label === association.name)));
-  const associationSpecific = matches.filter((element) => !element.verifiedSourceKey);
-  const canonicalAtRequestedHeight = matches.filter((element) => element.verifiedSourceKey
-    && (!(Number(requestedHeightMm) > 0) || element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)));
-  const preferred = associationSpecific.length
-    ? associationSpecific
-    : linkedAssetIds.size
-      ? canonicalAtRequestedHeight.filter(({ id }) => linkedAssetIds.has(id))
-      : canonicalAtRequestedHeight;
-  return { association, asset: preferred.length === 1 ? preferred[0] : null, ambiguous: preferred.length > 1 };
+  // A managed profile is the authority for number-source applicability. An
+  // association-scoped asset that is not linked to that exact profile must not
+  // silently outrank the canonical set merely because it exists.
+  const linkedMatches = profileId ? matches.filter(({ id }) => assignedAssetId ? id === assignedAssetId : linkedAssetIds.has(id)) : matches;
+  const exactHeightMatches = Number(requestedHeightMm) > 0
+    ? linkedMatches.filter((element) => element.variants?.some(({ heightMm }) => Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01))
+    : linkedMatches;
+  // Prefer the exact physical variant where the profile links multiple masters
+  // (for example Junior and Senior). A single explicitly linked SVG glyphmaster
+  // may still be scaled by that same profile to another confirmed height.
+  const preferred = exactHeightMatches.length ? exactHeightMatches : linkedMatches.length === 1 ? linkedMatches : [];
+  const asset = preferred.length === 1 ? preferred[0] : null;
+  // A canonical SVG glyph master can be scaled to the physical height dictated
+  // by an explicitly linked production profile. The saved variant identifies
+  // the immutable contour master; it is not allowed to overrule that profile.
+  const variant = asset?.variants?.find(({ heightMm }) => Number(requestedHeightMm) > 0 && Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)
+    ?? asset?.variants?.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0)
+    ?? null;
+  return { association, asset, variant, ambiguous: preferred.length > 1 || (!exactHeightMatches.length && linkedMatches.length > 1) || Boolean(asset && !variant) };
 }
 
 function profileFieldPhysicalHeightMm(association, profile, field, variant = null) {
@@ -6319,7 +6333,7 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
           personalizationField: field,
           decorationIdentity: { orderId, itemId: item.id, articleNumber: item.articleNumber, decorationType: field, placement: field, value: content, foilColor: item.foilColor, productionProfileId: profile?.id ?? item.productionProfileId, occurrenceId: variant.id, targetGroup: field === "backNumber" ? String(values.backNumberSizeClass ?? variant.backNumberProduction?.sizeClass ?? "").trim().toUpperCase() || null : null },
           content,
-          source: linkedNumberSet.asset ? { kind: "PRODUCTION_ELEMENT", id: linkedNumberSet.asset.id, version: linkedNumberSet.asset.version ?? String(linkedNumberSet.asset.revision), variantId: linkedNumberSet.asset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0)?.id ?? null } : versionedSource ? {
+          source: linkedNumberSet.asset ? { kind: "PRODUCTION_ELEMENT", id: linkedNumberSet.asset.id, version: linkedNumberSet.asset.version ?? String(linkedNumberSet.asset.revision), variantId: linkedNumberSet.variant?.id ?? null } : versionedSource ? {
             kind: "PRODUCTION_SOURCE",
             id: versionedSource.id,
             version: versionedSource.version,
@@ -6561,7 +6575,7 @@ export function reconcileExistingOrderProductionTruth(state, order) {
 
   if (["PRINT", "DONE"].includes(order.stage)) {
     const item = order.items?.[0] ?? { id: "unknown", product: order.id };
-    const finding = existingOrderFinding(order, item, 0, "EXECUTION_SNAPSHOT", item.personalization || item.product, "De historische productie-uitvoering mist een immutable execution snapshot en wordt niet uit actuele configuratie herberekend.", order.sourceContext?.provenance ?? `Historische order ${order.id}`, { kind: "OPEN_HISTORY", label: "Historische uitvoering controleren", target: `historie/${order.id}` });
+    const finding = existingOrderFinding(order, item, 0, "EXECUTION_SNAPSHOT", item.personalization || item.product, "De historische productie-uitvoering mist een immutable execution snapshot en wordt niet uit actuele configuratie herberekend.", order.sourceContext?.provenance ?? `Historische order ${order.id}`, { kind: "OPEN_HISTORY", label: "Historische uitvoering controleren", target: `productie/historie?query=${encodeURIComponent(order.id)}` });
     return { version: EXISTING_ORDER_RECONCILIATION_VERSION, status: "HUMAN_DECISION_REQUIRED", sourceKind: "HISTORICAL_EXECUTION_WITHOUT_SNAPSHOT", historicalSourceHash, projectionHash: null, productionLines: [], findings: [finding], evidence: ["Fail-closed: actieve configuratie mag historische fysieke uitvoering niet herschrijven."], ...(decisions.length ? { decisions } : {}) };
   }
 
@@ -6575,7 +6589,7 @@ export function reconcileExistingOrderProductionTruth(state, order) {
     const context = resolveHistoricalArticleContext(state, order, historicalItem);
     let article = context.article;
     if (context.ambiguous) {
-      const finding = existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, `Artikelnummer ${historicalItem.articleNumber ?? "onbekend"} komt in meerdere contexten voor; Workspace kiest nooit stil de eerste match.`, context.candidates.map(({ id, association }) => `${id} · ${association}`).join(" | "), { kind: "CHOOSE_ARTICLE_CONTEXT", label: "Artikelcontext kiezen", target: `orders/${order.id}#productieherstel`, options: context.candidates.map(({ id }) => id) });
+      const finding = existingOrderFinding(order, historicalItem, itemIndex, "ARTICLE_CONTEXT", historicalItem.personalization || historicalItem.product, `Artikelnummer ${historicalItem.articleNumber ?? "onbekend"} komt in meerdere contexten voor; Workspace kiest nooit stil de eerste match.`, context.candidates.map(({ id, association }) => `${id} · ${association}`).join(" | "), { kind: "CHOOSE_ARTICLE_CONTEXT", label: "Artikelcontext kiezen", target: `orders/${order.id}#productieherstel`, options: context.candidates.map(({ id }) => id), optionLabels: Object.fromEntries(context.candidates.map((candidate) => [candidate.id, `${candidate.articleNumber ?? candidate.id} · ${candidate.product ?? candidate.name ?? "Artikel"} · ${candidate.color ?? candidate.variant ?? "variant onbekend"} · ${candidate.association}`])) });
       const decision = existingOrderDecision(decisions, finding);
       const selected = decision && finding.action.options.includes(decision.value) ? state.articles.find(({ id }) => id === decision.value) : null;
       if (selected) { article = selected; requiresConfirmation = true; evidence.push(`${historicalItem.id}: ${decision.byUserName} koppelde de historische regel expliciet aan ${selected.articleNumber} · ${selected.association}.`); }
@@ -6680,7 +6694,7 @@ export function reconcileExistingOrderProductionTruth(state, order) {
       evidence.push(`${item.id}: expliciete historische fysieke hoogte ${dimension.raw} komt exact overeen met de canonieke projectie.`);
       continue;
     }
-    const finding = existingOrderFinding(order, item, 0, "DIMENSIONS", line.preview?.label ?? line.content, `Historische fysieke hoogte ${dimension.raw} wijkt af van profielhoogte ${line.heightMm} mm; Workspace overschrijft geen van beide stil.`, `${dimension.raw} · profiel ${line.decorationIdentity?.productionProfileId ?? item.productionProfileId}`, { kind: "CHOOSE_PHYSICAL_HEIGHT_MM", label: "Fysieke hoogte kiezen", target: `orders/${order.id}#productieherstel`, options: [String(dimension.valueMm), String(line.heightMm)] });
+    const finding = existingOrderFinding(order, item, 0, "DIMENSIONS", line.preview?.label ?? line.content, `Historische fysieke hoogte ${dimension.raw} wijkt af van profielhoogte ${line.heightMm} mm; Workspace overschrijft geen van beide stil.`, `${dimension.raw} · profiel ${line.decorationIdentity?.productionProfileId ?? item.productionProfileId}`, { kind: "CHOOSE_PHYSICAL_HEIGHT_MM", label: "Fysieke hoogte kiezen", target: `orders/${order.id}#productieherstel`, options: [String(dimension.valueMm), String(line.heightMm)], optionLabels: { [String(dimension.valueMm)]: `${dimension.valueMm} mm · expliciet in historische orderbron`, [String(line.heightMm)]: `${line.heightMm} mm · huidig canoniek productieprofiel` } });
     const decision = existingOrderDecision(decisions, finding);
     if (decision && finding.action.options.includes(decision.value)) {
       const selectedHeight = Number(decision.value);
@@ -6855,11 +6869,49 @@ function productionSourceLabel(sourceChannel) {
   return ({ STORE: "Winkel", WEBSHOP_XPRT: "Webshop", TEAM_MAIL: "Teamorder", INVOICE: "Factuur", MANUAL: "Handmatig" })[sourceChannel] ?? "Andere bron";
 }
 
-function validOrderCommunicationEvidence(order, channel) {
+function orderMailContext(state, order, question = "Niet van toepassing") {
+  const itemLines = (order.items ?? []).map((item) => `${item.quantity}× ${item.product}${item.association ? ` · ${item.association}` : ""} · ${item.personalization}`).join("\n");
+  return {
+    customer: { name: order.customer },
+    order: {
+      number: order.id,
+      items: itemLines,
+      processingDays: state.settings.processingDays,
+      pickupInformation: `Neem de orderreferentie ${order.id} mee bij het ophalen bij Sport 2000 Sportpaleis.`,
+    },
+    message: { question },
+  };
+}
+
+function orderCommunicationContextHash(state, order, channel) {
+  if (!order) return null;
+  const templateByChannel = { receipt: "ORDER_RECEIVED", production: "ORDER_IN_PRODUCTION", ready: "ORDER_READY" };
+  if (!templateByChannel[channel]) return null;
+  return sha256(JSON.stringify(orderMailContext(state, order)));
+}
+
+function invalidateStaleOrderCommunicationEvidence(state, order, user, reason) {
+  if (!order.communication) return;
+  const at = iso();
+  for (const channel of ["receipt", "production", "ready"]) {
+    const evidence = order.communication[channel];
+    if (!evidence || evidence.status === "NOT_SENT") continue;
+    const currentContextHash = orderCommunicationContextHash(state, order, channel);
+    if (evidence.contextHash && evidence.contextHash === currentContextHash) continue;
+    order.communication.history ??= [];
+    order.communication.history.push({ channel, ...structuredClone(evidence), invalidatedAt: at, invalidatedReason: reason, currentContextHash });
+    order.communication[channel] = { status: "NOT_SENT", updatedAt: at, invalidatedReason: reason, recipientHash: order.customerEmail ? sha256(order.customerEmail.trim().toLocaleLowerCase("nl-NL")) : null, contextHash: currentContextHash };
+    order.eventHistory ??= [];
+    order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "COMMUNICATION_EVIDENCE_INVALIDATED", at, userId: user.id, userName: user.name, source: "order-truth-correction", details: { channel, reason, previousContextHash: evidence.contextHash ?? null, currentContextHash } });
+    audit(state, user.id, "Communicatiebewijs ongeldig gemaakt na gewijzigde orderwaarheid", order.id, { channel, reason, previousContextHash: evidence.contextHash ?? null, currentContextHash });
+  }
+}
+
+function validOrderCommunicationEvidence(state, order, channel) {
   const evidence = order.communication?.[channel];
   const recipient = String(order.customerEmail ?? "").trim().toLocaleLowerCase("nl-NL");
   if (!evidence || !recipient || !["CAPTURED", "SMTP_ACCEPTED", "SENT", "DELIVERED"].includes(evidence.status)) return false;
-  return Boolean(evidence.providerReference && evidence.recipientHash === sha256(recipient));
+  return Boolean(evidence.providerReference && evidence.recipientHash === sha256(recipient) && evidence.contextHash && evidence.contextHash === orderCommunicationContextHash(state, order, channel));
 }
 
 function canonicalStockCompletionEvidence(state, order) {
@@ -6887,7 +6939,18 @@ function productionClosureForOrder(state, order) {
     const evidence = order.productionCompletionEvidence;
     const readyEvent = order.eventHistory?.find(({ type, details }) => type === "PRODUCTION_READY" && details?.explicitHumanAction === "AFRONDEN");
     if (!evidence || !readyEvent) return { status: "REVIEW_REQUIRED", reason: "Gereed-status mist immutable Afronden-bewijs." };
-    const { evidenceHash, confirmedAt, confirmedBy, ...completionBody } = evidence;
+    const { evidenceHash, ...completionBody } = evidence;
+    const confirmedAt = String(evidence.confirmedAt ?? "");
+    const confirmedBy = evidence.confirmedBy;
+    const validAttestation = evidence.version === "CANONICAL_PRODUCTION_COMPLETION_V4"
+      && !Number.isNaN(Date.parse(confirmedAt))
+      && String(confirmedBy?.userId ?? "").trim()
+      && String(confirmedBy?.userName ?? "").trim()
+      && ["admin", "operator"].includes(String(confirmedBy?.role ?? ""))
+      && readyEvent.at === confirmedAt
+      && readyEvent.userId === confirmedBy.userId
+      && readyEvent.userName === confirmedBy.userName;
+    if (!validAttestation) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs mist een geldige, aan event en actor gebonden menselijke Afronden-attestatie." };
     if (sha256(JSON.stringify(completionBody)) !== evidenceHash || readyEvent.details?.completionEvidenceHash !== evidenceHash) return { status: "REVIEW_REQUIRED", reason: "Gereed-bewijs heeft geen geldige immutable hash-/eventbinding." };
     const hasPlot = (evidence.requiredLineIds ?? []).length > 0;
     const hasStock = (evidence.stockEvidence?.applications ?? []).length > 0;
@@ -7075,21 +7138,52 @@ function approvedTeamkitRuleMatchesCurrentLine(line) {
   return Boolean(exact || intentExact);
 }
 
-function productionSourceRoleMatchesLine(state, line) {
+function productionElementApplicationForLine(line) {
+  const field = line.personalizationField ?? line.decorationIdentity?.decorationType ?? null;
+  if (["backNumber", "chestNumber", "shortsNumber"].includes(field)) return "NUMBER_SET";
+  const decoration = normalizedProductionIdentity(line.decorationIdentity?.decorationType ?? line.type);
+  if (decoration.includes("sponsor")) return "SPONSOR";
+  if (decoration.includes("logo") || line.type === "LOGO") return "LOGO";
+  if (decoration.includes("artwork") || line.type === "PRODUCTION_ELEMENT") return "ARTWORK";
+  return null;
+}
+
+function productionElementPlacementMatchesField(application, field) {
+  if (application.kind !== "NUMBER_SET") return true;
+  const placement = normalizedProductionIdentity(application.placement);
+  if (field === "backNumber") return placement.includes("rug");
+  if (field === "shortsNumber") return placement.includes("short") || placement.includes("rok");
+  if (field === "chestNumber") return placement.includes("borst");
+  return false;
+}
+
+function productionSourceRoleMatchesLine(state, order, line, semantics) {
   const kind = line.source?.kind;
   if (kind === "FONT" || kind === "PRODUCTION_SOURCE") return ["TEXT", "INITIALS", "NUMBER"].includes(line.type);
   if (kind === "PRODUCTION_ELEMENT") {
     const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
     if (!asset || !variant) return false;
-    const applications = new Set((asset.applications ?? []).map(({ kind }) => String(kind).toUpperCase()));
-    if (applications.has("NUMBER_SET")) {
+    const requiredApplication = productionElementApplicationForLine(line);
+    const applications = asset.applications ?? [];
+    const allowedVisualApplications = line.type === "LOGO" ? ["LOGO", "SPONSOR"] : line.type === "PRODUCTION_ELEMENT" ? ["ARTWORK"] : [];
+    const application = requiredApplication === "NUMBER_SET"
+      ? applications.find(({ kind: applicationKind, placement }) => String(applicationKind).toUpperCase() === "NUMBER_SET" && productionElementPlacementMatchesField({ kind: "NUMBER_SET", placement }, semantics.field))
+      : applications.find(({ kind: applicationKind }) => allowedVisualApplications.includes(String(applicationKind).toUpperCase()));
+    if (!requiredApplication || !application) return false;
+    if (requiredApplication === "NUMBER_SET") {
       const content = String(line.content ?? "");
+      if (line.type !== "NUMBER") return false;
       if (!/^\d{1,4}$/u.test(content)) return false;
       if (asset.numberGlyphs && [...content].some((digit) => !asset.numberGlyphs[digit])) return false;
+      const assignedAssetId = semantics.field ? semantics.profile?.productionNumberAssetAssignments?.[semantics.field] ?? null : null;
+      if (assignedAssetId ? assignedAssetId !== asset.id : !semantics.profile?.productionNumberAssetIds?.includes(asset.id)) return false;
     }
-    if ([...applications].some((application) => ["LOGO", "SPONSOR", "ARTWORK"].includes(application)) && !["LOGO", "PRODUCTION_ELEMENT"].includes(line.type)) return false;
-    return ["LOGO", "PRODUCTION_ELEMENT", "TEXT", "INITIALS", "NUMBER"].includes(line.type);
+    const item = order?.items?.find(({ id }) => id === line.itemId);
+    const association = item ? state.associations.find(({ id, name }) => id === item.association || name === item.association) : null;
+    const scoped = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
+    if ((asset.ownerType === "ASSOCIATION" || scoped.length) && (!association || !scoped.some(({ id, label }) => id === association.id || label === association.name))) return false;
+    return requiredApplication === "NUMBER_SET" || ["LOGO", "PRODUCTION_ELEMENT"].includes(line.type);
   }
   return false;
 }
@@ -7139,7 +7233,7 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     const approvedTeamkitRule = approvedTeamkitRuleMatchesCurrentLine(line);
     if (line.personalizationField && identity?.placement !== line.personalizationField && !approvedTeamkitRule) findings.push(finalProductionFinding("PLACEMENT", "De fysieke placement wijkt af van de canonieke decoration-betekenis of approved Teamwear-regel.", { line, evidence: `${line.personalizationField} ≠ ${identity?.placement}`, code: "PRODUCTION_PLACEMENT_MISMATCH" }));
     if (line.teamkitProductionContext && !approvedTeamkitRule) findings.push(finalProductionFinding("TEAMWEAR_RULE", "De Teamwear-regel is niet exact aan de approved en opnieuw berekende productiewaarheid gebonden.", { line, code: "TEAMWEAR_APPROVED_RULE_MISMATCH" }));
-    if (!productionSourceRoleMatchesLine(state, line)) findings.push(finalProductionFinding("SOURCE_ROLE", `Bronrol ${line.source?.kind ?? "ontbreekt"} is niet uitvoerbaar voor ${line.type}, content of variant.`, { line, code: "PRODUCTION_SOURCE_ROLE_MISMATCH" }));
+    if (!productionSourceRoleMatchesLine(state, validationOrder, line, semantics)) findings.push(finalProductionFinding("SOURCE_ROLE", `Bronrol ${line.source?.kind ?? "ontbreekt"} is niet exact toepasbaar op vereniging, profiel, decoration, fysieke maat en variant.`, { line, code: "PRODUCTION_SOURCE_ROLE_MISMATCH" }));
     if (semantics.expectedHeightMm > 0 && !approvedTeamkitRule && Math.abs(Number(line.heightMm) - semantics.expectedHeightMm) > .001) {
       const explicit = line.physicalTruth?.authority === "HUMAN_CONFIRMED_HISTORICAL_RECONCILIATION" && Number(line.physicalTruth?.valueMm) === Number(line.heightMm) && line.physicalTruth?.confirmedAt && line.physicalTruth?.confirmedBy;
       if (!explicit) findings.push(finalProductionFinding("DIMENSIONS", "De fysieke hoogte wijkt zonder expliciet bevestigd historisch bewijs af van de canonieke profielregel.", { line, evidence: `regel ${line.heightMm} mm · profiel ${semantics.expectedHeightMm} mm`, code: "PRODUCTION_DIMENSIONS_TRUTH_MISMATCH" }));
@@ -7155,7 +7249,7 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     const effectiveOrder = { ...validationOrder, productionLines };
     const hasStructuredCardinalitySource = (validationOrder.items ?? []).some((item) => (item.variants ?? []).some((variant) => nonEmptyPersonalization(variant.personalizationValues)) || nonEmptyPersonalization(item.personalizationValues));
     if (!allowHistoricalSourceSnapshot || hasStructuredCardinalitySource) try { assertOrderProductionDecorationCardinality(state, effectiveOrder); } catch (error) { findings.push(finalProductionFinding("DECORATION_CARDINALITY", error.message, { evidence: JSON.stringify({ code: error.code, identity: error.identity, expected: error.expected, actual: error.actual }), code: error.code })); }
-    if (!allowHistoricalSourceSnapshot) try { assertProductionAssetContexts(state, productionLines, [...new Set([validationOrder.association, ...(validationOrder.associations ?? [])].filter(Boolean))]); } catch (error) { findings.push(finalProductionFinding("SOURCE_CONTEXT", error.message, { code: error.code })); }
+    if (!allowHistoricalSourceSnapshot) try { assertProductionAssetContexts(state, productionLines, validationOrder); } catch (error) { findings.push(finalProductionFinding("SOURCE_CONTEXT", error.message, { code: error.code })); }
   }
   const normalized = findings.map((finding) => ({ ...finding })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   const validationBody = { version: FINAL_PRODUCTION_VALIDATOR_VERSION, orderId: order.id, orderRevision: order.revision, lineHash: sha256(JSON.stringify(productionLines)), findings: normalized };

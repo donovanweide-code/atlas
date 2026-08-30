@@ -90,7 +90,7 @@ test("correctie-UX houdt opslaan bereikbaar, contact compact en e-mail optioneel
   assert.match(orderDetail, /Naam, e-mail of telefoon wijzigen/u);
   assert.match(orderDetail, /Contactgegevens opslaan/u);
   assert.match(orderDetail, /Artikelen en bedrukking blijven ongewijzigd/u);
-  const managedCorrection = source.slice(source.indexOf("Bezorgwijze of productiecorrectie"), source.indexOf("button class=\"sp-button sp-button--secondary\">Correctie opslaan", source.indexOf("Bezorgwijze of productiecorrectie")));
+  const managedCorrection = source.slice(source.indexOf("Klant- of bezorggegevens corrigeren"), source.indexOf("button class=\"sp-button sp-button--secondary\">Correctie opslaan", source.indexOf("Klant- of bezorggegevens corrigeren")));
   assert.match(managedCorrection, /E-mail \(optioneel\)<input name="customerEmail" type="email" value=/u);
   assert.doesNotMatch(managedCorrection, /name="customerEmail"[^>]*\brequired\b/u);
   assert.match(styles, /\.sp-correction-toolbar \{ position: sticky;[^]*top: calc\(var\(--sp-topbar\) \+ 10px\)/u);

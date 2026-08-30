@@ -69,7 +69,7 @@ test("bestaande orders kunnen hun e-mailadres leeg bewaren en blijven bruikbaar"
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload("bestaand@example.nl"), "optional-email-existing-0001")).value;
   const updated = await service.updateOrder(storeUser.token, storeUser.csrfToken, created.id, { customerEmail: "", customerPhone: "" }, created.revision);
   assert.equal(updated.customerEmail, "");
-  assert.equal(updated.customerPhone, "06 12345678");
+  assert.equal(updated.customerPhone, "", "een expliciet geleegd optioneel telefoonnummer blijft niet als verouderde klantwaarheid staan");
   assert.equal(updated.customer, "Klant zonder e-mail");
   const advanced = await service.advanceOrder(operator.token, operator.csrfToken, updated.id, updated.revision, "optional-email-existing-control-0001");
   assert.equal(advanced.value.stage, "CONTROL");

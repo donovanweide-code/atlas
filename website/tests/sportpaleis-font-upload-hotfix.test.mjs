@@ -55,7 +55,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   const beforeFont = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "INDIVIDUAL",
     customer: "Regressie Bedrukken met nieuwe fontbron",
-    customerEmail: "font-regression@example.test",
+    customerEmail: "",
     customerPhone: "0612345678",
     standardPersonalization: { initials: "SP", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
     items: [{ articleId: "sp-live-141709", size: "M", quantity: 1, deviation: false, overrides: {} }],
@@ -75,12 +75,6 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.ok(state.audit.some(({ action, subject }) => action === "Productiefont toegevoegd" && subject === added.id));
   const order = state.orders.find(({ id }) => id === beforeFont.id);
   assert.deepEqual(order.productionLines[0].source, { kind: "FONT", id: added.id, version: added.version, sha256: added.sha256 });
-  await store.mutate((current) => {
-    const target = current.orders.find(({ id }) => id === order.id);
-    target.communication.receipt = { status: "CAPTURED", updatedAt: new Date().toISOString(), providerReference: "font-regression-fixture", recipientHash: createHash("sha256").update(target.customerEmail.trim().toLocaleLowerCase("nl-NL")).digest("hex") };
-    target.revision += 1;
-    return { state: current, value: null };
-  });
   const afterReceipt = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === order.id);
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, order.id, afterReceipt.revision, "font-regression-control")).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "font-regression-proposal")).value;
