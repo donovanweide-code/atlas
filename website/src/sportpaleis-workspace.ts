@@ -291,7 +291,7 @@ function shell(html: string, state: PilotBootstrap, current: string, title: stri
   const candidateMode = fullWorkspaceCandidateActive();
   const contexts = new Set(state.capabilities.workContexts ?? user.workContexts ?? []);
   const teamwearNav = state.capabilities.teamwearExperiencePilot ? nav(`${BASE}/voorstellen`, "Teamwear", current) : "";
-  const visualStudioNav = ["admin", "operator"].includes(user.role) ? nav(`${BASE}/studio`, "Creative Studio", current) : "";
+  const visualStudioNav = state.capabilities.creativeStudio ? nav(`${BASE}/studio`, "Creative Studio", current) : "";
   const workNav = `${nav(`${BASE}/overzicht`, "Vandaag", current)}${nav(`${BASE}/orders`, "Orders", current)}${teamwearNav}${visualStudioNav}${contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : ""}${contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : ""}${nav(`${BASE}/zoeken`, "Zoeken", current)}`;
   const orderActions = contexts.has("STORE") ? nav(`${BASE}/orders/nieuw`, "Bedrukken", current) : "";
   const adminNav = user.role === "admin" ? `${nav(`${BASE}/beheer`, "Beheer", current)}` : user.role === "operator" ? `${nav(`${BASE}/beheer/artikelen`, "Artikelvolgorde", current)}` : "";
@@ -1707,8 +1707,8 @@ function page(state: PilotBootstrap, current: string): { title: string; html: st
   if (current === `${BASE}/webshop`) return contexts.has("WEBSHOP") ? { title: "Webshop", html: webshopImport(state) } : { title: "Geen toegang", html: empty("Webshopcontext is niet toegestaan") };
   if (current === `${BASE}/alles`) return contexts.has("ALL") ? { title: "Alles", html: allWorkspace(state) } : { title: "Geen toegang", html: empty("Organisatiebreed zoeken is niet toegestaan") };
   if (current === `${BASE}/orders`) return { title: "Orders", html: orders(state) };
-  if (current === `${BASE}/studio`) return ["admin", "operator"].includes(state.currentUser.role) ? { title: "Creative Studio", html: visualStudio(state) } : { title: "Geen toegang", html: empty("Creative Studio hoort bij de creatieve Sportpaleis-werkrol") };
-  if (current.startsWith(`${BASE}/studio/`)) return ["admin", "operator"].includes(state.currentUser.role) ? { title: "Creative Studio", html: visualStudio(state, decodeURIComponent(current.slice(`${BASE}/studio/`.length))) } : { title: "Geen toegang", html: empty("Creative Studio hoort bij de creatieve Sportpaleis-werkrol") };
+  if (current === `${BASE}/studio`) return state.capabilities.creativeStudio ? { title: "Creative Studio", html: visualStudio(state) } : { title: "Geen toegang", html: empty("Creative Studio is niet beschikbaar in deze pilot") };
+  if (current.startsWith(`${BASE}/studio/`)) return state.capabilities.creativeStudio ? { title: "Creative Studio", html: visualStudio(state, decodeURIComponent(current.slice(`${BASE}/studio/`.length))) } : { title: "Geen toegang", html: empty("Creative Studio is niet beschikbaar in deze pilot") };
   if (current === `${BASE}/voorstellen` && state.capabilities.teamwearExperiencePilot) return { title: "Teamwear", html: teamkitProposalList(state, BASE) };
   if (current === `${BASE}/voorstellen/nieuw` && state.capabilities.teamwearExperiencePilot) return { title: "Nieuw voorstel", html: teamkitProposalCreate(state, BASE) };
   if (current.startsWith(`${BASE}/voorstellen/`) && state.capabilities.teamwearExperiencePilot) { const proposalId = decodeURIComponent(current.slice(`${BASE}/voorstellen/`.length)); return new URLSearchParams(location.search).get("mode") === "beheer" ? { title: "Voorsteldetails", html: teamkitProposalDetail(state, proposalId, BASE).replace("Teamkit samenstellen", "Teamwear samenstellen") } : { title: "Teamwear Experience", html: teamkitProposalExperience(state, proposalId, BASE) }; }

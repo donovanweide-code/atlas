@@ -2155,6 +2155,13 @@ function assertRole(user, allowed) {
   }
 }
 
+function assertCreativeStudioAccess(user, enabled) {
+  if (enabled !== true) {
+    throw Object.assign(new Error("Creative Studio is niet beschikbaar in deze pilot."), { statusCode: 403, code: "CREATIVE_STUDIO_DISABLED" });
+  }
+  assertRole(user, ["admin", "operator"]);
+}
+
 const SPORTPALEIS_REVIEW_CANDIDATES = Object.freeze([Object.freeze({
   id: "spw-r20-human-review-20260827",
   title: "Sportpaleis R20 · Bibliotheek + Teamwear",
@@ -2185,7 +2192,7 @@ function reviewModeAllowed(user, principalIds, reviewCandidates) {
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -2198,6 +2205,7 @@ export class SportpaleisPilotService {
     this.productionAssetUploadsEnabled = productionAssetUploadsEnabled === true;
     this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
+    this.creativeStudioEnabled = creativeStudioEnabled === true;
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
     this.installedProductionAssetRoot = installedProductionAssetRoot === null ? null : path.resolve(installedProductionAssetRoot);
@@ -2663,7 +2671,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || entry.subject.startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, creativeStudio: this.creativeStudioEnabled && ["admin", "operator"].includes(user.role), reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -3506,7 +3514,7 @@ export class SportpaleisPilotService {
   async createVisualComposition(token, csrfToken, payload, idempotencyKey) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_VISUAL_COMPOSITION", () => {
         const uploaded = payload.sourceFile && typeof payload.sourceFile === "object" ? payload.sourceFile : null;
@@ -3537,7 +3545,7 @@ export class SportpaleisPilotService {
 
   async visualCompositionSource(token, compositionId) {
     const { user } = await this.authenticate(token);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     const state = await this.store.read();
     const composition = state.visualCompositions.find(({ id }) => id === compositionId);
     if (!composition?.sourceRef || !composition.sourceDataBase64) throw Object.assign(new Error("Directe beeldbron niet gevonden."), { statusCode: 404, code: "VISUAL_SOURCE_NOT_FOUND" });
@@ -3549,7 +3557,7 @@ export class SportpaleisPilotService {
   async updateVisualComposition(token, csrfToken, compositionId, payload) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     const result = await this.store.mutate(async (state) => {
       const index = state.visualCompositions.findIndex(({ id }) => id === compositionId);
       if (index < 0) throw Object.assign(new Error("Visual Studio-compositie niet gevonden."), { statusCode: 404, code: "VISUAL_COMPOSITION_NOT_FOUND" });
@@ -3564,7 +3572,7 @@ export class SportpaleisPilotService {
   async submitVisualCompositionReview(token, csrfToken, compositionId, payload) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     const result = await this.store.mutate(async (state) => {
       const index = state.visualCompositions.findIndex(({ id }) => id === compositionId);
       if (index < 0) throw Object.assign(new Error("Visual Studio-compositie niet gevonden."), { statusCode: 404, code: "VISUAL_COMPOSITION_NOT_FOUND" });
@@ -3579,7 +3587,7 @@ export class SportpaleisPilotService {
   async createCreativeVectorDraft(token, csrfToken, payload, idempotencyKey) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     if (!this.productionAssetUploadsEnabled) throw Object.assign(new Error("Bronuploads zijn uitgeschakeld."), { statusCode: 403, code: "CREATIVE_VECTOR_UPLOADS_DISABLED" });
     const bytes = Buffer.from(requiredText(payload.dataBase64, "Beeldbron", 12 * 1024 * 1024), "base64");
     const filename = requiredText(payload.filename, "Bestandsnaam", 180);
@@ -3612,7 +3620,7 @@ export class SportpaleisPilotService {
 
   async creativeVectorDraftFile(token, draftId, kind) {
     const { user } = await this.authenticate(token);
-    assertRole(user, ["admin", "operator"]);
+    assertCreativeStudioAccess(user, this.creativeStudioEnabled);
     const state = await this.store.read();
     const draft = state.creativeVectorDrafts?.find(({ id }) => id === draftId);
     if (!draft) throw Object.assign(new Error("Vectorvoorstel niet gevonden."), { statusCode: 404, code: "CREATIVE_VECTOR_DRAFT_NOT_FOUND" });
