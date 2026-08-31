@@ -299,6 +299,14 @@ export function assertAuthoritativeProposalVisualProof(snapshot) {
   return assessment;
 }
 
+export function assertImmutableAuthoritativeProposalVisualProof(snapshot) {
+  const assessment = assertAuthoritativeProposalVisualProof(snapshot);
+  if (!snapshot.visualProof || JSON.stringify(snapshot.visualProof) !== JSON.stringify(assessment)) {
+    throw error("Maak eerst een nieuwe voorstelrevision met exact reproduceerbare authoritative visual-proof truth.", "TEAMKIT_VISUAL_PROOF_REVISION_REQUIRED", 409, { visualProof: assessment });
+  }
+  return assessment;
+}
+
 const STATIC_TEAMWEAR_IMAGE_FILES = Object.freeze({
   "asc-shirt-home": "asc-shirt-home.webp", "asc-match-shorts": "asc-match-shorts.webp", "asc-socks": "asc-socks.webp", "asc-polo": "asc-polo.webp",
   "asc-full-zip-jacket": "asc-full-zip-jacket.webp", "asc-zip-top": "asc-zip-top.webp", "asc-training-pants": "asc-training-pants.webp",
@@ -483,7 +491,7 @@ async function drawPdfGarment(context, item, side, x, y, width, height, state, p
 
 export async function generateProposalPdf(snapshot, approved = false, { state = null, proposal = null } = {}) {
   for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
-  assertAuthoritativeProposalVisualProof(snapshot);
+  assertImmutableAuthoritativeProposalVisualProof(snapshot);
   const document = new PDFDocument({ title: `${snapshot.proposalNumber} V${snapshot.revision}`, author: "Sport 2000 Sportpaleis", creator: "Sportpaleis Teamwear", producer: "WBD Workspace", compressionLevel: 9 });
   const pages = snapshot.items.length ? Array.from({ length: Math.ceil(snapshot.items.length / 4) }, (_, index) => snapshot.items.slice(index * 4, index * 4 + 4)) : [[]];
   for (const [pageIndex, page] of pages.entries()) {
@@ -506,6 +514,7 @@ export async function generateProposalPdf(snapshot, approved = false, { state = 
 export function approvedFulfillmentTasks(proposal, revision, state, now = new Date()) {
   const snapshot = revision.snapshot; const tasks = [];
   for (const item of snapshot.items) assertCanonicalTeamkitItemSurfaceTruth(item);
+  assertImmutableAuthoritativeProposalVisualProof(snapshot);
   for (const item of snapshot.items) for (const placement of item.placements) {
     const sizing = proposal.productionSizing?.approvedRevision === revision.number ? proposal.productionSizing.items.find(({ itemId }) => itemId === item.id) : null;
     const quantity = sizing?.quantity ?? item.quantity; const sizes = sizing?.sizes ?? item.sizes;
@@ -561,10 +570,18 @@ export function validateTeamkitProposalState(state) {
     if (!TEAMKIT_PROPOSAL_STATUSES.includes(proposal.status) || !Number.isInteger(proposal.currentRevision) || proposal.currentRevision < 1 || !Number.isInteger(proposal.aggregateRevision) || proposal.aggregateRevision < 1) throw new Error("Ongeldige voorstelstatus of revisie.");
     const sourceIds = new Set();
     for (const source of proposal.sources) { if (sourceIds.has(source.id) || !source.immutable || proposalSha256(Buffer.from(source.dataBase64 ?? "", "base64")) !== source.sha256) throw new Error("Immutable voorstelbron ontbreekt of is gewijzigd."); sourceIds.add(source.id); }
+    const consequentialVisualProofRevisions = new Set([
+      proposal.approval?.revision,
+      ...(proposal.approvalHistory ?? []).map(({ revision }) => revision),
+      ...(proposal.fulfillmentTasks ?? []).map(({ approvedRevision }) => approvedRevision),
+    ].filter(Number.isInteger));
     for (const revision of proposal.revisions) {
       if (revision.snapshotHash !== proposalSha256(JSON.stringify(revision.snapshot)) || revision.previewSha256 !== proposalSha256(revision.previewHtml)) throw new Error("Voorstelrevision is gewijzigd.");
-      const visualProof = assessAuthoritativeProposalVisualProof(revision.snapshot);
-      if (JSON.stringify(revision.snapshot.visualProof) !== JSON.stringify(visualProof)) throw new Error("De immutable voorstelrevision mist exact reproduceerbare authoritative visual-proof truth.");
+      if (revision.snapshot.visualProof === undefined) {
+        if (consequentialVisualProofRevisions.has(revision.number)) throw new Error("Een approved of downstream gebruikte voorstelrevision mist exact reproduceerbare authoritative visual-proof truth.");
+      } else if (JSON.stringify(revision.snapshot.visualProof) !== JSON.stringify(assessAuthoritativeProposalVisualProof(revision.snapshot))) {
+        throw new Error("De immutable voorstelrevision mist exact reproduceerbare authoritative visual-proof truth.");
+      }
       for (const item of revision.snapshot.items) for (const placement of item.placements) if (placement.productionRule) {
         const { ruleHash, ...ruleBody } = placement.productionRule;
         if (ruleHash !== proposalSha256(JSON.stringify(ruleBody))) throw new Error("Teamwear productie-instelling is gewijzigd.");
@@ -572,7 +589,7 @@ export function validateTeamkitProposalState(state) {
     }
     proposal.approvalHistory ??= [];
     const approvals = [...proposal.approvalHistory, ...(proposal.approval ? [proposal.approval] : [])]; const approvedRevisions = new Set();
-    for (const approval of approvals) { const revision = proposal.revisions.find(({ number }) => number === approval.revision); const pdf = Buffer.from(approval.pdfBase64, "base64"); if (approvedRevisions.has(approval.revision) || !revision || revision.snapshotHash !== approval.snapshotHash || proposalSha256(approval.previewHtml) !== approval.previewSha256 || proposalSha256(pdf) !== approval.pdfSha256 || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Approved proposal is niet exact reproduceerbaar."); assertAuthoritativeProposalVisualProof(revision.snapshot); approvedRevisions.add(approval.revision); }
+    for (const approval of approvals) { const revision = proposal.revisions.find(({ number }) => number === approval.revision); const pdf = Buffer.from(approval.pdfBase64, "base64"); if (approvedRevisions.has(approval.revision) || !revision || revision.snapshotHash !== approval.snapshotHash || proposalSha256(approval.previewHtml) !== approval.previewSha256 || proposalSha256(pdf) !== approval.pdfSha256 || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Approved proposal is niet exact reproduceerbaar."); assertImmutableAuthoritativeProposalVisualProof(revision.snapshot); approvedRevisions.add(approval.revision); }
     if (proposal.productionSizing) {
       const sizing = proposal.productionSizing; const approval = approvals.find(({ revision }) => revision === sizing.approvedRevision);
       const sizingBody = { proposalId: proposal.id, approvedRevision: sizing.approvedRevision, revision: sizing.revision, items: sizing.items };

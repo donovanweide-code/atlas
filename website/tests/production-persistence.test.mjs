@@ -13,7 +13,11 @@ import {
   SportpaleisFileStore,
   SportpaleisPilotService,
 } from "../scripts/sportpaleis-pilot-foundation.mjs";
-import { SportpaleisMariaDbStore, SportpaleisMariaDbStoreError } from "../scripts/sportpaleis-mariadb-store.mjs";
+import {
+  SportpaleisMariaDbStore,
+  SportpaleisMariaDbStoreError,
+  secretSafeMariaDbStartupDiagnostic,
+} from "../scripts/sportpaleis-mariadb-store.mjs";
 import {
   SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   createSportpaleisProductionMailFoundation,
@@ -141,6 +145,25 @@ test("productieconfiguratie is fail-closed, DB-only en houdt secrets buiten logb
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_SUMMA_ENABLED: "true" }), /exact false/);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_FONT_UPLOADS_ENABLED: "false" }), /exact true/);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...environment, SPORTPALEIS_PRODUCTION_ASSET_UPLOADS_ENABLED: "false" }), /exact true/);
+});
+
+test("MariaDB startupdiagnose classificeert oorzaken zonder secrets of connection values", () => {
+  const wrapped = (code, cause = null) => new SportpaleisMariaDbStoreError("Workspace MariaDB-initialisatie is mislukt.", code, cause);
+  const cases = [
+    [wrapped("DATABASE_CONNECTION_FAILED", Object.assign(new Error("dns"), { code: "ENOTFOUND" })), "DNS/CONNECT"],
+    [wrapped("DATABASE_CONNECTION_FAILED", Object.assign(new Error("auth"), { code: "ER_ACCESS_DENIED_ERROR", sqlState: "28000", errno: 1045 })), "AUTH"],
+    [wrapped("DATABASE_CONNECTION_FAILED", Object.assign(new Error("tls"), { code: "CERT_HAS_EXPIRED" })), "TLS"],
+    [wrapped("DATABASE_INITIALIZATION_FAILED", Object.assign(new Error("db"), { code: "ER_BAD_DB_ERROR" })), "DATABASE_NOT_FOUND"],
+    [wrapped("DATABASE_INITIALIZATION_FAILED", Object.assign(new Error("permission"), { code: "ER_TABLEACCESS_DENIED_ERROR" })), "PERMISSION"],
+    [wrapped("DATABASE_INITIALIZATION_FAILED", new Error("legacy state validation failed")), "SCHEMA"],
+    [wrapped("DATABASE_CONNECTION_FAILED", Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })), "TIMEOUT"],
+    [new Error("invalid runtime config"), "DRIVER/CONFIG"],
+  ];
+  for (const [error, expected] of cases) assert.equal(secretSafeMariaDbStartupDiagnostic(error).causeClass, expected);
+  const secret = wrapped("DATABASE_CONNECTION_FAILED", Object.assign(new Error("password=do-not-log host=db.internal"), { code: "ER_ACCESS_DENIED_ERROR" }));
+  const serialized = JSON.stringify(secretSafeMariaDbStartupDiagnostic(secret));
+  assert.doesNotMatch(serialized, /do-not-log|db\.internal|password/iu);
+  assert.deepEqual(Object.keys(secretSafeMariaDbStartupDiagnostic(secret)).sort(), ["causeClass", "causeCode", "causeErrno", "causeSqlState", "errorCode"].sort());
 });
 
 test("production startup controleert Atlas en Workspace vóór luisteren en valt niet terug op files", async () => {

@@ -78,7 +78,7 @@ import { createCreativeVectorCandidate } from "../src/sportpaleis/creative-vecto
 import { cleanupEvidenceManifest, preliveCleanupInventory } from "./sportpaleis-prelive-order-cleanup.mjs";
 import {
   approvedFulfillmentTasks,
-  assertAuthoritativeProposalVisualProof,
+  assertImmutableAuthoritativeProposalVisualProof,
   createCustomerAccess,
   createProposalRevision,
   customerProposal,
@@ -2926,7 +2926,7 @@ export class SportpaleisPilotService {
       if (status === "READY_FOR_APPROVAL") {
         const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision);
         if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
-        assertAuthoritativeProposalVisualProof(revision.snapshot);
+        assertImmutableAuthoritativeProposalVisualProof(revision.snapshot);
       }
       proposal.status = status; proposal.aggregateRevision += 1; proposal.updatedAt = iso(); proposal.updatedBy = { id: user.id, name: user.name, role: user.role }; if (status === "ARCHIVED") proposal.archivedAt = proposal.updatedAt;
       audit(state, user.id, status === "READY_FOR_APPROVAL" ? "Goedkeuring gevraagd" : status === "ARCHIVED" ? "Voorstel gearchiveerd" : "Voorstelstatus gewijzigd", proposal.id, { status, revision: proposal.currentRevision });
@@ -2984,7 +2984,7 @@ export class SportpaleisPilotService {
       if (!["SENT_TO_CUSTOMER", "READY_FOR_APPROVAL"].includes(proposal.status)) throw Object.assign(new Error("Sportpaleis heeft deze versie nog niet voor akkoord vrijgegeven."), { statusCode: 409, code: "PROPOSAL_APPROVAL_NOT_READY" });
       if (revisionNumber !== proposal.currentRevision) throw Object.assign(new Error("Deze preview is niet meer de actuele versie."), { statusCode: 409, code: "PROPOSAL_REVISION_STALE", currentRevision: proposal.currentRevision });
       const revision = proposal.revisions.find(({ number }) => number === revisionNumber); if (!revision) throw Object.assign(new Error("De exacte voorstelversie ontbreekt."), { statusCode: 409, code: "PROPOSAL_REVISION_MISSING" });
-      assertAuthoritativeProposalVisualProof(revision.snapshot);
+      assertImmutableAuthoritativeProposalVisualProof(revision.snapshot);
       const customerName = requiredText(payload.customerName, "Naam", 160); const customerEmail = validEmail(payload.customerEmail ?? proposal.customer.email); const pdf = await generateProposalPdf(revision.snapshot, true, { state, proposal }); const previewHtml = renderProposalPreview(revision.snapshot, { customer: true });
       proposal.approval = { revision: revisionNumber, approvedAt: iso(), customerName, customerEmail, accessContextId: proposal.customerAccess.id, snapshotHash: revision.snapshotHash, previewHtml, previewSha256: proposalSha256(previewHtml), pdfBase64: pdf.toString("base64"), pdfSha256: proposalSha256(pdf), artifactFilename: `${proposal.proposalNumber}-V${revisionNumber}-akkoord.pdf` };
       const legacySizingComplete = revision.snapshot.items.length > 0 && revision.snapshot.items.every(({ quantity, sizes }) => Number.isInteger(quantity) && quantity > 0 && Array.isArray(sizes) && sizes.length > 0);
@@ -3060,6 +3060,7 @@ export class SportpaleisPilotService {
       if (!proposal.approval || proposal.status !== "APPROVED") throw Object.assign(new Error("Alleen een exact goedgekeurd voorstel kan naar interne productie."), { statusCode: 409, code: "TEAMKIT_APPROVAL_REQUIRED" });
       const revision = proposal.revisions.find(({ number }) => number === proposal.approval.revision);
       if (!revision || revision.snapshotHash !== proposal.approval.snapshotHash) throw Object.assign(new Error("De immutable approved revision is niet exact beschikbaar."), { statusCode: 409, code: "TEAMKIT_APPROVAL_EVIDENCE_INVALID" });
+      assertImmutableAuthoritativeProposalVisualProof(revision.snapshot);
       const tasks = proposal.fulfillmentTasks.filter(({ approvedRevision, route, kind }) => approvedRevision === revision.number && route === "INTERN_BEDRUKKEN" && kind === "INTERNAL_PRODUCTION");
       if (!tasks.length) throw Object.assign(new Error("Dit voorstel bevat geen interne bedrukking voor de approved revision."), { statusCode: 409, code: "TEAMKIT_INTERNAL_PRODUCTION_EMPTY" });
       const grouped = new Map();

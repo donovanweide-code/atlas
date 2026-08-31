@@ -8,7 +8,7 @@ import {
   productionDatabaseCredentialsFromEnvironment,
 } from "./workspace-runtime-config.mjs";
 import { verifyAtlasMariaDbBoundary } from "./atlas-mariadb-boundary.mjs";
-import { SportpaleisMariaDbStore } from "./sportpaleis-mariadb-store.mjs";
+import { SportpaleisMariaDbStore, secretSafeMariaDbStartupDiagnostic } from "./sportpaleis-mariadb-store.mjs";
 import {
   SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   createSportpaleisProductionMailFoundation,
@@ -606,7 +606,12 @@ async function start() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   start().catch((error) => {
-    process.stderr.write(`${JSON.stringify({ level: "error", event: "workspace-runtime-start-failed", message: error instanceof Error ? error.message : "Unknown error" })}\n`);
+    process.stderr.write(`${JSON.stringify({
+      level: "error",
+      event: "workspace-runtime-start-failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+      ...secretSafeMariaDbStartupDiagnostic(error),
+    })}\n`);
     process.exitCode = 1;
   });
 }

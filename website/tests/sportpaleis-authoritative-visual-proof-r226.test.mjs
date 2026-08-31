@@ -11,9 +11,12 @@ import {
 } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import {
   assessAuthoritativeProposalVisualProof,
+  assertImmutableAuthoritativeProposalVisualProof,
   generateProposalPdf,
   proposalSnapshot,
+  proposalSha256,
   renderProposalPreview,
+  validateTeamkitProposalState,
 } from "../src/sportpaleis/teamkit-proposals.mjs";
 import { canonicalTeamkitArticleSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 
@@ -130,6 +133,45 @@ test("FRONT-only approval remains possible when only authoritative FRONT is used
   assert.equal(approved.visualApproval.status, "PROVEN");
   const persisted = (await store.read()).teamkitProposals.find(({ id }) => id === initial.id);
   assert.match(Buffer.from(persisted.approval.pdfBase64, "base64").subarray(0, 5).toString("ascii"), /^%PDF-/u);
+});
+
+test("historische niet-consequente revisions zonder visualProof blijven leesbaar maar kunnen niet opnieuw worden goedgekeurd", async (context) => {
+  const front = placement({ id: "legacy-front-name", side: "FRONT", preset: "FRONT_CENTER_LARGE", text: "SPORTPALEIS" });
+  const { store, service, operator, proposal: created } = await createProposal(context, "116386", [front]);
+  await store.mutate(async (state) => {
+    const proposal = state.teamkitProposals.find(({ id }) => id === created.id);
+    const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision);
+    delete revision.snapshot.visualProof;
+    revision.snapshotHash = proposalSha256(JSON.stringify(revision.snapshot));
+    return { state };
+  });
+  const state = await store.read();
+  const proposal = state.teamkitProposals.find(({ id }) => id === created.id);
+  const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision);
+  assert.doesNotThrow(() => validateTeamkitProposalState(structuredClone(state)));
+  assert.throws(
+    () => assertImmutableAuthoritativeProposalVisualProof(revision.snapshot),
+    (error) => error.code === "TEAMKIT_VISUAL_PROOF_REVISION_REQUIRED",
+  );
+  await assert.rejects(
+    service.setTeamkitProposalStatus(operator.token, operator.csrfToken, proposal.id, { status: "READY_FOR_APPROVAL", expectedRevision: proposal.aggregateRevision }),
+    (error) => error.code === "TEAMKIT_VISUAL_PROOF_REVISION_REQUIRED",
+  );
+});
+
+test("een legacy revision zonder visualProof blijft fail-closed zodra approval of downstream gebruik ernaar verwijst", async (context) => {
+  const front = placement({ id: "legacy-consequential-front", side: "FRONT", preset: "FRONT_CENTER_LARGE", text: "SPORTPALEIS" });
+  const { store, proposal: created } = await createProposal(context, "116386", [front]);
+  const state = await store.read();
+  const proposal = state.teamkitProposals.find(({ id }) => id === created.id);
+  const revision = proposal.revisions.find(({ number }) => number === proposal.currentRevision);
+  delete revision.snapshot.visualProof;
+  revision.snapshotHash = proposalSha256(JSON.stringify(revision.snapshot));
+  proposal.fulfillmentTasks.push({ approvedRevision: revision.number });
+  assert.throws(
+    () => validateTeamkitProposalState(state),
+    /approved of downstream gebruikte voorstelrevision mist exact reproduceerbare authoritative visual-proof truth/u,
+  );
 });
 
 test("mixed FRONT/BACK approval succeeds only with exact variant-bound media for both used surfaces", async (context) => {

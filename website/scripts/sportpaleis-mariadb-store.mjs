@@ -28,6 +28,39 @@ export class SportpaleisMariaDbStoreError extends Error {
   }
 }
 
+const STARTUP_CAUSE_CLASSES = Object.freeze({
+  DNS_CONNECT: "DNS/CONNECT",
+  AUTH: "AUTH",
+  TLS: "TLS",
+  DATABASE_NOT_FOUND: "DATABASE_NOT_FOUND",
+  PERMISSION: "PERMISSION",
+  SCHEMA: "SCHEMA",
+  DRIVER_CONFIG: "DRIVER/CONFIG",
+  TIMEOUT: "TIMEOUT",
+});
+
+export function secretSafeMariaDbStartupDiagnostic(error) {
+  const chain = [];
+  for (let current = error; current && chain.length < 6; current = current.cause) chain.push(current);
+  const codes = chain.map(({ code }) => String(code ?? "").toUpperCase()).filter(Boolean);
+  const joined = codes.join(" ");
+  let causeClass = STARTUP_CAUSE_CLASSES.DRIVER_CONFIG;
+  if (/ETIMEDOUT|POOL_ACQUIRE_TIMEOUT|ER_GET_CONNECTION_TIMEOUT/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.TIMEOUT;
+  else if (/ER_ACCESS_DENIED_ERROR|ER_ACCESS_DENIED_NO_PASSWORD_ERROR/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.AUTH;
+  else if (/CERT|SSL|TLS|HANDSHAKE/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.TLS;
+  else if (/ER_BAD_DB_ERROR|UNKNOWN_DATABASE/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.DATABASE_NOT_FOUND;
+  else if (/ER_DBACCESS_DENIED_ERROR|ER_TABLEACCESS_DENIED_ERROR|ER_COLUMNACCESS_DENIED_ERROR|ER_PROCACCESS_DENIED_ERROR|ER_COMMAND_DENIED_ERROR/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.PERMISSION;
+  else if (/DATABASE_MIGRATION|DATABASE_STATE|DATABASE_REVISION|DATABASE_EVIDENCE|ER_NO_SUCH_TABLE|ER_BAD_FIELD_ERROR|ER_PARSE_ERROR|DATABASE_INITIALIZATION_FAILED/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.SCHEMA;
+  else if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|DATABASE_CONNECTION_FAILED/u.test(joined)) causeClass = STARTUP_CAUSE_CLASSES.DNS_CONNECT;
+  return Object.freeze({
+    causeClass,
+    errorCode: String(error?.code ?? "INTERNAL_ERROR"),
+    causeCode: String(chain.slice(1).find(({ code }) => code)?.code ?? "UNCLASSIFIED_CAUSE"),
+    causeErrno: chain.slice(1).find(({ errno }) => Number.isInteger(errno))?.errno ?? null,
+    causeSqlState: String(chain.slice(1).find(({ sqlState }) => sqlState)?.sqlState ?? "") || null,
+  });
+}
+
 function withTransactionOutcome(error, { phase, rollbackStatus, rollbackError = null }) {
   if ((typeof error !== "object" && typeof error !== "function") || error === null) return error;
   for (const [key, value] of Object.entries({ transactionPhase: phase, transactionRollbackStatus: rollbackStatus })) {
