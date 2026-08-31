@@ -352,6 +352,7 @@ export interface ProductionProfile {
   validationHistory?: { at: string; userId: string; previous: unknown; next: unknown; source: string }[];
   backNumberSizeClasses?: Partial<Record<BackNumberSizeClass, { physicalHeightMm: number | null; sourceValueMm?: number | null; status: "VALIDATED" | "SOURCE_CONFIGURED" | "DATA_GAP"; source: string }>>;
   productionSourceSetId?: string;
+  productionSourceSetFields?: (keyof OrderPersonalization)[];
   outputWriterId?: string;
   productionNumberAssetIds?: string[];
   supports?: (keyof OrderPersonalization)[];
@@ -376,6 +377,8 @@ export interface AssociationConfiguration {
     assetId: string | null;
     reference: string | null;
     referenceKind: "VECTOR_CONTOUR_REFERENCE" | null;
+    /** Exact personalization applications for which this non-font reference is authoritative. */
+    referenceFields?: (keyof OrderPersonalization)[];
     referenceAsset?: { filename: string; format: string; sha256: string; status: "PRESENT_NOT_A_FONT_FILE" } | null;
     exception: string | null;
     reason: string | null;

@@ -18,6 +18,13 @@ import { parseTeamProductionLines } from "../src/sportpaleis/team-production-lin
 
 const profile = (association, field) => ({ id: `profile-source-${association}-${field}`, supports: [field] });
 const article = (association, supports = [], personalizationPolicy = undefined) => ({ association, supports, personalizationPolicy, profileId: `profile-${association.toLowerCase().replaceAll(" ", "-")}` });
+const geometryHash = "a".repeat(64);
+const executableVisual = (name, association, kind = "SPONSOR") => ({
+  id: name.toLowerCase(), name, lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: `source-${name}`,
+  sourceSelection: { geometryHash }, controlledVector: { geometryHash, contours: [[[0, 0], [10, 0], [10, 5], [0, 5]]] },
+  variants: [{ id: `${name}-100mm`, widthMm: 100, heightMm: 50 }], sizePolicy: { defaultWidthMm: 100, defaultHeightMm: 50 },
+  ownerType: "ASSOCIATION", contexts: [{ type: "ASSOCIATION", id: association.toLowerCase(), label: association }], applications: [{ kind }],
+});
 
 test("commerciale artikelopties worden generiek aangevuld vanuit fysieke verenigingstruth en producttype", () => {
   const state = createSportpaleisProductionBootstrap();
@@ -67,15 +74,14 @@ test("concrete MHC-order bewaart naam én rugnummer server-side zonder catalogus
 });
 
 test("Vrije opdruk projecteert alle visuele productierijpe bronnen; context rangschikt maar verbergt niet", () => {
-  const ready = (name, association, kind = "SPONSOR") => ({ id: name.toLowerCase(), name, lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: `source-${name}`, ownerType: "ASSOCIATION", contexts: [{ type: "ASSOCIATION", id: association.toLowerCase(), label: association }], applications: [{ kind }] });
-  const elements = [ready("Kroonenberg", "Club A"), ready("Yanmar", "Club B", "LOGO"), ready("Ruitenheer", "Club C", "ARTWORK"), ready("Nummerset", "Club D", "NUMBER_SET"), { ...ready("Concept", "Club A"), lifecycleStatus: "REVIEW" }];
+  const elements = [executableVisual("Kroonenberg", "Club A"), executableVisual("Yanmar", "Club B", "LOGO"), executableVisual("Ruitenheer", "Club C", "ARTWORK"), executableVisual("Nummerset", "Club D", "NUMBER_SET"), { ...executableVisual("Concept", "Club A"), lifecycleStatus: "REVIEW" }];
   assert.deepEqual(projectProductionReadyVisualAssets(elements, "").map(({ name }) => name), ["Kroonenberg", "Yanmar", "Ruitenheer"]);
   assert.deepEqual(projectProductionReadyVisualAssets(elements, "Club B", { includeAll: false }).map(({ name }) => name), ["Yanmar"]);
   assert.deepEqual(projectProductionReadyVisualAssets(elements, "Onbekende club", { includeAll: false }), []);
 });
 
 test("één broncontextcontract staat expliciete Vrije opdruk toe en houdt vereniging/artikel/order strikt", () => {
-  const visual = { id: "asset-visual", name: "Toekomst Sponsor", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: "source-visual", ownerType: "ASSOCIATION", contexts: [{ type: "ASSOCIATION", id: "club-a", label: "Club A" }], applications: [{ kind: "SPONSOR" }] };
+  const visual = { ...executableVisual("Toekomst Sponsor", "Club A"), id: "asset-visual", sourceId: "source-visual", contexts: [{ type: "ASSOCIATION", id: "club-a", label: "Club A" }] };
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "CUSTOM", associationIdentities: ["Vrije bedrukking"] }).allowed, true);
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "TEAM", associationIdentities: ["club-b", "Club B"] }).code, "PRODUCTION_ASSET_CONTEXT_MISMATCH");
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "TEAM", associationIdentities: ["club-a", "Club A"] }).allowed, true);
@@ -158,7 +164,7 @@ test("Vrije opdruk implementeert één generieke snelle productieflow en duideli
 });
 
 test("bronprojectie en bulkerkenning blijven interactief bij toekomstige catalogusomvang", () => {
-  const elements = Array.from({ length: 5_000 }, (_, index) => ({ id: `asset-${index}`, name: `Asset ${index}`, lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: `source-${index}`, ownerType: "ASSOCIATION", contexts: [{ type: "ASSOCIATION", id: `club-${index % 100}`, label: `Club ${index % 100}` }], applications: [{ kind: index % 2 ? "SPONSOR" : "LOGO" }] }));
+  const elements = Array.from({ length: 5_000 }, (_, index) => ({ ...executableVisual(`Asset ${index}`, `Club ${index % 100}`, index % 2 ? "SPONSOR" : "LOGO"), id: `asset-${index}`, sourceId: `source-${index}` }));
   const rows = Array.from({ length: 50 }, (_, index) => `${index + 1} x 2`).join("\n");
   const start = performance.now();
   assert.equal(projectProductionReadyVisualAssets(elements, "Club 37").length, 5_000);

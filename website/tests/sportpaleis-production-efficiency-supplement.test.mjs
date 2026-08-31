@@ -13,7 +13,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-efficiency-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: { kevin: password, patrick: "Efficiency-Operator-2026!", collega: "Efficiency-Store-2026!", "donovan-support": "Efficiency-Support-2026!" } });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-PRODUCTION-EFFICIENCY-TEST" });
+  const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve(import.meta.dirname, ".."), runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-PRODUCTION-EFFICIENCY-TEST" });
   await service.initialize();
   return { root, store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password }) };
 }

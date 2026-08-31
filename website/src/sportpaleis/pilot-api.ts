@@ -315,10 +315,10 @@ export class SportpaleisPilotApi {
     deliveryMode?: "PICKUP" | "DELIVERY";
     deliveryAddress?: { postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; lookupStatus: "VERIFIED" | "MANUAL_FALLBACK" };
     productionLines?: readonly { id?: string; type: SportpaleisProductionLine["type"]; content: string; sourceId: string; widthMm: number; heightMm: number; foilColor?: string; quantity: number; previewLabel?: string; provenance?: string; placementRole?: string; placementRule?: Pick<NonNullable<SportpaleisProductionLine["placementRule"]>, "compositionId" | "compositeText" | "segmentIndex" | "segmentCount" | "alignment"> }[];
-  }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
+  }, operationKey?: string): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("order") },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": operationKey || idempotencyKey("order") },
       body: JSON.stringify({ orderKind: input.orderKind ?? "INDIVIDUAL", ...input }),
     }));
   }
@@ -604,7 +604,7 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean }): Promise<SportpaleisProductionFont> {
+  async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean; productionProfileId?: string; applicationField?: keyof OrderPersonalization; associationId?: string }): Promise<SportpaleisProductionFont> {
     return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

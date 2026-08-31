@@ -104,12 +104,12 @@ test("Guided Setup en Studio exposen de concrete bronactie en touch-safe canvasc
   const styles = await readFile(new URL("../src/styles/sportpaleis-teamwear.css", import.meta.url), "utf8");
   const workspaceStyles = await readFile(new URL("../src/styles/sportpaleis-workspace.css", import.meta.url), "utf8");
   assert.match(workspace, /HUMAN SOURCE ACTION REQUIRED/u);
-  assert.match(workspace, /\$\{sourceProfile\.fontProfile\} productiebron ontbreekt/u);
+  assert.match(workspace, /\$\{sourceProfile\.fontProfile\} letter-\/fontbron ontbreekt/u);
   assert.match(workspace, /setup=source&context=/u);
   assert.match(workspace, /productionProfileId/u);
   assert.match(workspace, /applicationPlacement/u);
   assert.match(workspace, /Bestaande bron aan dit profiel koppelen/u);
-  assert.match(workspace, /numberSourceProfiles/u);
+  assert.match(workspace, /numberSourceRequirements/u);
   assert.match(workspace, /fontSourceRows/u);
   assert.match(workspace, /guidedProfile \|\| pendingSourceCount/u);
   assert.match(studio, /studio-zoom-fit/u);

@@ -35,7 +35,7 @@ import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-pro
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
-import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, productionAssetContextDecision } from "../src/sportpaleis/production-practice-contract.mjs";
+import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, productionAssetContextDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -203,7 +203,7 @@ PRODUCTION_PROFILES.push(
   { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
   { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
   { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myriad Pro Bold", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
-  { id: "profile-pioneers-shirt", name: "Almere Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
+  { id: "profile-pioneers-shirt", name: "Almere Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, productionSourceSetFields: ["backNumber"], outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
   { id: "profile-pioneers-shorts", name: "Almere Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
 );
 const profileSlug = (value) => String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -1020,6 +1020,7 @@ export function validateSportpaleisPilotState(input) {
     if (!existing) state.productionProfiles.push(structuredClone(profile));
     else {
       if (profile.productionSourceSetId) existing.productionSourceSetId = profile.productionSourceSetId;
+      if (profile.productionSourceSetFields) existing.productionSourceSetFields = structuredClone(profile.productionSourceSetFields);
       if (profile.outputWriterId) existing.outputWriterId = profile.outputWriterId;
     }
   }
@@ -1070,6 +1071,7 @@ export function validateSportpaleisPilotState(input) {
   for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
     if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
   }
+  if (new Set(state.productionElements.map(({ id }) => id)).size !== state.productionElements.length) throw new Error("Dubbele productie-element-ID.");
   const registrationIds = state.productionElements.map(({ registrationId }) => registrationId).filter(Boolean);
   if (new Set(registrationIds).size !== registrationIds.length) throw new Error("Dubbele productiebronregistratie.");
   for (const profile of state.productionProfiles ?? []) if ((profile.productionNumberAssetIds ?? []).some((id) => !state.productionElements.some((asset) => asset.id === id && asset.lifecycleStatus === "PRODUCTION_READY"))) throw new Error("Productieprofiel verwijst naar een ontbrekende of niet-productierijpe bron.");
@@ -3133,6 +3135,20 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
     if (!this.fontUploadsEnabled) throw Object.assign(new Error("Fontuploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
     const result = await this.store.mutate(async (state) => {
+      const guidedProfileId = optional(payload.productionProfileId, 180) || null;
+      const guidedField = optional(payload.applicationField, 40) || null;
+      const guidedAssociationId = optional(payload.associationId, 180) || null;
+      let guidedProfile = null;
+      if (guidedProfileId || guidedField || guidedAssociationId) {
+        if (!guidedProfileId || !guidedField || !guidedAssociationId) throw Object.assign(new Error("De bedoelde lettertoepassing is onvolledig. Open de bron opnieuw vanuit Ontbrekende productiebronnen."), { statusCode: 400, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_INCOMPLETE" });
+        guidedProfile = state.productionProfiles.find(({ id }) => id === guidedProfileId);
+        const guidedAssociation = state.associations.find(({ id }) => id === guidedAssociationId);
+        const profileBelongsToAssociation = guidedProfile && guidedAssociation && state.articles.some(({ association, profileId, active }) => active !== false && association === guidedAssociation.name && profileId === guidedProfile.id);
+        if (!guidedProfile || !guidedAssociation || !profileBelongsToAssociation || !guidedProfile.supports?.includes(guidedField)) throw Object.assign(new Error("De bedoelde lettertoepassing hoort niet bij dit productieprofiel en deze vereniging."), { statusCode: 409, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_MISMATCH" });
+        const requirement = canonicalLineSourceRequirement(state, guidedAssociation, guidedProfile, guidedField);
+        if (requirement.kind !== "MANAGED_FONT") throw Object.assign(new Error("Voor deze toepassing verwacht Workspace een SVG/vector-nummerset. Een fontbestand kan die bron niet vervangen."), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_TYPE_MISMATCH", expectedSourceType: requirement.kind, applicationField: guidedField });
+        if (requirement.canonicalName && normalizedProductionIdentity(payload.name) !== normalizedProductionIdentity(requirement.canonicalName)) throw Object.assign(new Error(`Voor deze toepassing is ${requirement.canonicalName} de bevestigde letterbron. Een andere fontnaam wordt niet stil gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_NAME_MISMATCH" });
+      }
       const filename = requiredText(payload.filename, "Bestandsnaam", 180);
       const dataBase64 = requiredText(payload.dataBase64, "Fontbron", 7_500_000);
       let bytes; try { bytes = Buffer.from(dataBase64, "base64"); } catch { bytes = Buffer.alloc(0); }
@@ -3140,7 +3156,14 @@ export class SportpaleisPilotService {
       const signature = bytes.subarray(0, 4).toString("hex"); const format = FONT_SIGNATURES.get(signature);
       if (!format || !filename.toLowerCase().endsWith(format.extension)) throw Object.assign(new Error("Gebruik een geldig TTF-, OTF-, WOFF- of WOFF2-bestand met overeenkomende bestandsextensie."), { statusCode: 400, code: "FONT_SIGNATURE_INVALID" });
       const hash = sha256(bytes).toUpperCase(); const existing = state.productionFonts.find(({ sha256: candidate }) => candidate === hash);
-      if (existing) { const { sourceDataBase64: _sourceDataBase64, ...publicFont } = existing; return { state, value: structuredClone(publicFont) }; }
+      if (existing) {
+        if (guidedProfile) {
+          if (guidedProfile.canonicalFontSourceId && guidedProfile.canonicalFontSourceId !== existing.id) throw Object.assign(new Error(`Letterprofiel ${guidedProfile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: guidedProfile.id, currentSourceId: guidedProfile.canonicalFontSourceId, requestedSourceId: existing.id });
+          guidedProfile.canonicalFontSourceId = existing.id;
+          audit(state, user.id, "Bestaande productiefont aan toepassing gekoppeld", existing.id, { sha256: hash, profileId: guidedProfile.id, applicationField: guidedField, associationId: guidedAssociationId });
+        }
+        const { sourceDataBase64: _sourceDataBase64, ...publicFont } = existing; return { state, value: structuredClone(publicFont) };
+      }
       try { validateManagedFontBytes(bytes); }
       catch (error) { throw Object.assign(new Error("De fontbron is geen technisch leesbaar outline-font."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
       const addedAt = iso(); const id = `font-${hash.slice(0, 16).toLowerCase()}`;
@@ -3149,12 +3172,12 @@ export class SportpaleisPilotService {
       state.productionFonts.push(font);
       const normalizedFontName = normalizedProductionIdentity(font.name);
       const boundProfileIds = [];
-      for (const profile of state.productionProfiles.filter(({ fontProfile }) => normalizedProductionIdentity(fontProfile) === normalizedFontName)) {
+      for (const profile of state.productionProfiles.filter(({ id, fontProfile }) => normalizedProductionIdentity(fontProfile) === normalizedFontName && (!guidedProfile || id === guidedProfile.id))) {
         if (profile.canonicalFontSourceId && profile.canonicalFontSourceId !== id) throw Object.assign(new Error(`Letterprofiel ${profile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: profile.id, currentSourceId: profile.canonicalFontSourceId, requestedSourceId: id });
         profile.canonicalFontSourceId = id;
         boundProfileIds.push(profile.id);
       }
-      audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds });
+      audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds, applicationField: guidedField, associationId: guidedAssociationId });
       const { sourceDataBase64: _sourceDataBase64, ...publicFont } = font;
       return { state, value: structuredClone(publicFont) };
     });
@@ -4679,6 +4702,7 @@ export class SportpaleisPilotService {
         ].filter(Boolean);
         linkedProfileField = placementFields.find((field) => linkedProfile.supports?.includes(field)) ?? null;
         if (!linkedProfileField) throw Object.assign(new Error("De gekozen toepassing hoort niet bij dit productieprofiel. Kies het profiel voor Rug, Borst of Short/rok dat deze bedrukking ondersteunt."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH" });
+        if (!["backNumber", "chestNumber", "shortsNumber"].includes(linkedProfileField)) throw Object.assign(new Error("Een SVG-nummerset kan uitsluitend aan een expliciete nummer-toepassing worden gekoppeld."), { statusCode: 409, code: "PRODUCTION_ASSET_SOURCE_TYPE_MISMATCH", expectedSourceType: "MANAGED_FONT", applicationField: linkedProfileField });
       }
       const registrationBody = {
         sourceSha256: source.original.sha256,
@@ -6256,6 +6280,11 @@ function assertOrderProductionDecorationCardinality(state, order) {
       const placementId = line.teamkitProductionContext?.proposalPlacementId;
       if (placementId) actualByPlacement.set(placementId, Number(actualByPlacement.get(placementId) ?? 0) + Number(line.quantity));
     }
+    if (order.orderKind === "CUSTOM" && (order.productionLines ?? []).length) {
+      const intendedQuantity = (order.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
+      const physicalQuantity = (order.productionLines ?? []).reduce((sum, line) => sum + Number(line.quantity ?? 0), 0);
+      if (intendedQuantity !== physicalQuantity) throw Object.assign(new Error("Het aantal vrije opdrukken komt niet exact overeen met de fysieke productieregels."), { statusCode: 409, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH", expected: intendedQuantity, actual: physicalQuantity });
+    }
     if (order.teamkitContext?.kind === "TEAMKIT_APPROVAL") {
       const expectedPlacementIds = new Set((order.teamkitContext.placementRefs ?? []).map(({ placementId }) => placementId));
       if (actualByPlacement.size !== expectedPlacementIds.size || [...actualByPlacement.keys()].some((placementId) => !expectedPlacementIds.has(placementId))) throw Object.assign(new Error("De Teamwear-productieregels komen niet één-op-één overeen met de approved placements."), { statusCode: 409, code: "PRODUCTION_DECORATION_CARDINALITY_MISMATCH" });
@@ -6547,7 +6576,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
     }
     const defaults = state.settings.productionDefaults ?? PILOT_SETTINGS.productionDefaults;
     const maximumObjectWidthMm = defaults.maxSafeTrackWidthMm;
-    if (widthMm > maximumObjectWidthMm) validation = { status: "BLOCKED", reason: `De gevraagde breedte past niet binnen ${defaults.workingWidthMm} mm veilige werkbreedte met ${defaults.edgeMarginMm} mm randafstand.` };
+    if (!productionObjectFitsTrack({ widthMm, heightMm, maximumTrackWidthMm: maximumObjectWidthMm, allowedRotations: [0, 90] })) validation = { status: "BLOCKED", reason: `De opdruk past ook na veilige rotatie niet binnen ${defaults.workingWidthMm} mm werkbreedte met ${defaults.edgeMarginMm} mm randafstand.` };
     const requestedFoilColor = String(line.foilColor ?? "").trim();
     const canonicalFoilColor = requestedFoilColor ? managedFoilColor(state, requestedFoilColor) : null;
     if (requestedFoilColor && !canonicalFoilColor) throw Object.assign(new Error("Kies een actieve beheerde foliekleur."), { statusCode: 400, code: "PRODUCTION_LINE_FOIL_COLOR_INVALID" });
@@ -6639,8 +6668,9 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
         const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(configuredHeight > 0);
         const requestedHeightMm = configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
         const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association, { field, profileId: profile?.id, requestedHeightMm }) : { association: null, asset: null, ambiguous: false };
+        const applicationSourceSetId = profileSourceSetAppliesToField(profile, field) ? profile.productionSourceSetId : null;
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
-          sourceSetId: profile?.productionSourceSetId,
+          sourceSetId: applicationSourceSetId,
           outputWriterId: profile?.outputWriterId,
           lineType,
           content,
@@ -6657,8 +6687,8 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
             ? "De canonieke 20 mm-maat voor het tussenvoegsel ontbreekt."
           : linkedNumberSet.asset || versionedSource || managedFont
           ? null
-          : profile?.productionSourceSetId
-            ? `In productiebronset ${profile.productionSourceSetId} bestaat geen gevalideerde ${lineType.toLowerCase()}bron voor “${content}” op ${requestedHeightMm} mm.`
+          : applicationSourceSetId
+            ? `In productiebronset ${applicationSourceSetId} bestaat geen gevalideerde ${lineType.toLowerCase()}bron voor “${content}” op ${requestedHeightMm} mm.`
             : `De bevestigde productiebron voor ${profile?.fontProfile ?? "dit profiel"} is niet als lokaal contour/fontbestand gekoppeld.`;
         raw.push({
           id: `catalog-line-${randomBytes(6).toString("hex")}`,
@@ -7449,6 +7479,23 @@ function finalProductionFinding(field, reason, { line = null, item = null, evide
   };
 }
 
+function profileSourceSetAppliesToField(profile, field) {
+  return Boolean(profile?.productionSourceSetId && Array.isArray(profile.productionSourceSetFields) && profile.productionSourceSetFields.includes(field));
+}
+
+function canonicalLineSourceRequirement(state, association, profile, field, expectedHeightMm = 0) {
+  if (profileSourceSetAppliesToField(profile, field)) return { kind: "VERIFIED_PRODUCTION_SOURCE_SET", sourceSetId: profile.productionSourceSetId, field, placement: field, provenance: profile.validation?.source ?? association?.fontEvidence?.provenance ?? null };
+  const assignedAssetId = assignedProductionNumberAssetId(state, profile, field, expectedHeightMm);
+  const assignmentEvidence = assignedProductionNumberAssetEvidence(profile, field, expectedHeightMm);
+  if (assignedAssetId && assignmentEvidence?.authority === "HUMAN_ACCEPTANCE") return { kind: "VECTOR_GLYPH_SET", field, placement: field, assignedAssetId, assignedAssetVersion: assignmentEvidence.assetVersion, geometryHash: assignmentEvidence.sourceGeometryHash, provenance: `Human Acceptance · ${assignmentEvidence.assignmentHash}` };
+  const referenceFields = Array.isArray(association?.fontEvidence?.referenceFields) ? association.fontEvidence.referenceFields : [];
+  const vectorReference = referenceFields.includes(field) && association?.fontEvidence?.referenceKind === "VECTOR_CONTOUR_REFERENCE" ? association.fontEvidence.referenceAsset : null;
+  if (vectorReference?.sha256) {
+    return { kind: "VECTOR_GLYPH_SET", field, placement: field, filename: vectorReference.filename, sha256: vectorReference.sha256, provenance: association.fontEvidence.provenance };
+  }
+  return { kind: "MANAGED_FONT", field, placement: field, canonicalName: profile?.fontProfile ?? association?.fontEvidence?.canonicalName ?? null, provenance: association?.fontEvidence?.provenance ?? null };
+}
+
 function canonicalLineSemantics(state, order, item, line, snapshot = null) {
   const field = line.personalizationField ?? line.decorationIdentity?.decorationType ?? null;
   const allowedTypes = field === "initials" ? ["INITIALS"] : field === "name" ? ["TEXT"] : ["backNumber", "chestNumber"].includes(field) ? ["NUMBER"] : field === "shortsNumber" ? (/^\d{1,4}$/u.test(String(line.content)) ? ["NUMBER"] : ["TEXT"]) : null;
@@ -7462,7 +7509,7 @@ function canonicalLineSemantics(state, order, item, line, snapshot = null) {
     ?? (item?.variants ?? []).find(({ personalizationValues }) => String(personalizationValues?.[field] ?? "").trim() === String(line.content ?? "").trim())
     ?? null;
   const expectedHeightMm = field ? profileFieldPhysicalHeightMm(association, profile, field, variant) : 0;
-  return { field, allowedTypes, profileId, profile, expectedHeightMm };
+  return { field, allowedTypes, profileId, profile, association, expectedHeightMm, sourceRequirement: canonicalLineSourceRequirement(state, association, profile, field, expectedHeightMm) };
 }
 
 function approvedTeamkitRuleMatchesCurrentLine(line) {
@@ -7505,6 +7552,7 @@ function productionElementPlacementMatchesField(application, field) {
 function productionSourceRoleMatchesLine(state, order, line, semantics) {
   const kind = line.source?.kind;
   if (kind === "FONT") {
+    if (semantics.sourceRequirement?.kind !== "MANAGED_FONT") return false;
     if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type)) return false;
     const selectedFont = state.productionFonts.find(({ id }) => id === line.source?.id);
     const profileResolution = semantics.profile ? canonicalManagedFontResolution(state, semantics.profile) : null;
@@ -7527,6 +7575,7 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     return true;
   }
   if (kind === "PRODUCTION_SOURCE") {
+    if (semantics.sourceRequirement?.kind !== "VERIFIED_PRODUCTION_SOURCE_SET") return false;
     if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type) || !semantics.profile?.productionSourceSetId) return false;
     const source = productionSourceByIdentity(line.source.id, line.source.version);
     return Boolean(source
@@ -7540,6 +7589,27 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
     if (!asset || !variant) return false;
+    if (semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
+      const sourceRecord = state.productionAssetSources?.find(({ id }) => id === asset.sourceId);
+      const exactReferencedSource = String(sourceRecord?.original?.sha256 ?? "").toUpperCase() === String(semantics.sourceRequirement.sha256).toUpperCase();
+      const assignmentEvidence = assignedProductionNumberAssetEvidence(semantics.profile, semantics.field, semantics.expectedHeightMm);
+      const assignmentEvidenceBody = assignmentEvidence ? {
+        assetId: assignmentEvidence.assetId,
+        assetVersion: assignmentEvidence.assetVersion,
+        sourceGeometryHash: assignmentEvidence.sourceGeometryHash ?? null,
+        targetHeightMm: Number(assignmentEvidence.targetHeightMm),
+        sourceHeightMm: Number(assignmentEvidence.sourceHeightMm),
+        authority: assignmentEvidence.authority,
+      } : null;
+      const exactHumanAcceptedReplacement = sourceRecord?.conversion?.method === "HUMAN_VERIFIED_SVG"
+        && sourceRecord?.fidelity?.status === "MATCHED"
+        && assignmentEvidence?.authority === "HUMAN_ACCEPTANCE"
+        && assignmentEvidence.assetId === asset.id
+        && assignmentEvidence.assetVersion === (asset.version ?? String(asset.revision))
+        && assignmentEvidence.sourceGeometryHash === asset.sourceSelection?.geometryHash
+        && assignmentEvidence.assignmentHash === sha256(JSON.stringify(assignmentEvidenceBody));
+      if (!exactReferencedSource && !exactHumanAcceptedReplacement) return false;
+    }
     const identity = line.decorationIdentity;
     if (identity?.assetId && (identity.assetId !== asset.id || identity.assetVersion !== (asset.version ?? String(asset.revision)))) return false;
     const requiredApplications = productionElementApplicationsForLine(line);
@@ -7642,9 +7712,19 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     if (!Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1) findings.push(finalProductionFinding("QUANTITY", "Het fysieke aantal moet een positief geheel getal zijn.", { line, code: "PRODUCTION_QUANTITY_INVALID" }));
     if (line.validation?.status !== "VALID") findings.push(finalProductionFinding("LINE_VALIDATION", line.validation?.reason || "De productieregel is niet gevalideerd.", { line, code: "PRODUCTION_LINE_BLOCKED" }));
     const semantics = canonicalLineSemantics(state, validationOrder, item, line, snapshot);
-    if (["FONT", "PROFILE"].includes(line.source?.kind) && ["TEXT", "INITIALS", "NUMBER"].includes(line.type) && semantics.profile) {
+    if (["FONT", "PROFILE"].includes(line.source?.kind) && ["TEXT", "INITIALS", "NUMBER"].includes(line.type) && semantics.profile && semantics.sourceRequirement?.kind === "MANAGED_FONT") {
       const canonicalFont = canonicalManagedFontResolution(state, semantics.profile);
       if (canonicalFont.status !== "RESOLVED") findings.push(finalProductionFinding("CANONICAL_FONT_SOURCE", `De canonieke fontmaster ${semantics.profile.fontProfile || "ontbreekt"} is ${canonicalFont.status.toLocaleLowerCase("nl-NL")} en blokkeert fysieke productie.`, { line, evidence: JSON.stringify(canonicalFont.provenance), code: `PRODUCTION_CANONICAL_FONT_${canonicalFont.status}` }));
+    }
+    if (semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
+      const exactSourceAvailable = state.productionElements.some((asset) => {
+        const sourceRecord = state.productionAssetSources?.find(({ id }) => id === asset.sourceId);
+        if (String(sourceRecord?.original?.sha256 ?? "").toUpperCase() === String(semantics.sourceRequirement.sha256).toUpperCase()) return true;
+        const evidence = assignedProductionNumberAssetEvidence(semantics.profile, semantics.field, semantics.expectedHeightMm);
+        const evidenceBody = evidence ? { assetId: evidence.assetId, assetVersion: evidence.assetVersion, sourceGeometryHash: evidence.sourceGeometryHash ?? null, targetHeightMm: Number(evidence.targetHeightMm), sourceHeightMm: Number(evidence.sourceHeightMm), authority: evidence.authority } : null;
+        return sourceRecord?.conversion?.method === "HUMAN_VERIFIED_SVG" && sourceRecord?.fidelity?.status === "MATCHED" && evidence?.authority === "HUMAN_ACCEPTANCE" && evidence.assetId === asset.id && evidence.assetVersion === (asset.version ?? String(asset.revision)) && evidence.sourceGeometryHash === asset.sourceSelection?.geometryHash && evidence.assignmentHash === sha256(JSON.stringify(evidenceBody));
+      });
+      if (!exactSourceAvailable) findings.push(finalProductionFinding("CANONICAL_VECTOR_SOURCE", `De gecontroleerde nummerbron ${semantics.sourceRequirement.filename} is nog niet als uitvoerbare productiebron gekoppeld.`, { line, evidence: JSON.stringify({ filename: semantics.sourceRequirement.filename, sha256: semantics.sourceRequirement.sha256, association: semantics.association?.name }), code: "PRODUCTION_CANONICAL_VECTOR_SOURCE_UNRESOLVED" }));
     }
     if (semantics.allowedTypes && !semantics.allowedTypes.includes(line.type)) findings.push(finalProductionFinding("DECORATION_TYPE", `${semantics.field} kan niet als fysieke regeltype ${line.type} worden uitgevoerd.`, { line, evidence: `Toegestaan: ${semantics.allowedTypes.join(", ")}`, code: "PRODUCTION_DECORATION_SEMANTICS_MISMATCH" }));
     const approvedTeamkitRule = approvedTeamkitRuleMatchesCurrentLine(line);

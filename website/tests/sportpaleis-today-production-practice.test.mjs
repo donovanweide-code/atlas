@@ -16,7 +16,7 @@ async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-today-practice-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-TODAY-PRODUCTION-PRACTICE-TEST", allowedOrigin: "http://127.0.0.1", uploadsEnabled: true });
+  const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve(import.meta.dirname, ".."), runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-TODAY-PRODUCTION-PRACTICE-TEST", allowedOrigin: "http://127.0.0.1", uploadsEnabled: true });
   await service.initialize();
   return { root, store, service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), operator: await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick }) };
 }

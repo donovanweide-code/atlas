@@ -21,11 +21,12 @@ const profileSlug = (value) => String(value ?? "").normalize("NFKD").replace(/[\
  * capability model. A field is usable when the exact article surface permits
  * it and association Product Truth contains both a physical dimension and a
  * matching canonical production profile. Existing explicit article fields are
- * always preserved.
+ * preserved because they can carry authoritative migrated Product Truth; a
+ * separate article/product-surface conflict boundary validates new mutations.
  */
 export function canonicalArticlePersonalizationFields({ article, association, productionProfiles, productType }) {
-  const fields = new Set(article?.supports ?? Object.keys(article?.personalizationPolicy?.fields ?? {}));
   const possible = PRODUCT_TYPE_FIELDS[productType] ?? [];
+  const fields = new Set(article?.supports ?? Object.keys(article?.personalizationPolicy?.fields ?? {}));
   const associationSlug = profileSlug(association?.name ?? article?.association);
   const articleProfile = productionProfiles?.find((profile) => profile.id === article?.profileId);
   for (const field of possible) {
@@ -38,6 +39,45 @@ export function canonicalArticlePersonalizationFields({ article, association, pr
   return [...fields];
 }
 
+const exactGeometryHash = (value) => /^[a-f0-9]{64}$/iu.test(String(value ?? ""));
+
+/**
+ * A lifecycle label is not execution proof. This decision is deliberately
+ * shared by UI projection and server-side selection so an employee never sees
+ * a source as productierijp that the output boundary must reject later.
+ */
+export function executableProductionAssetDecision(asset) {
+  if (!asset || asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED" || !asset.sourceId) {
+    return { allowed: false, code: "PRODUCTION_ASSET_NOT_READY", reason: "De productiebron is niet exact productierijp en brongebonden." };
+  }
+  const geometryHash = asset.sourceSelection?.geometryHash;
+  if (!exactGeometryHash(geometryHash) || asset.controlledVector?.geometryHash !== geometryHash || !asset.controlledVector?.contours?.length) {
+    return { allowed: false, code: "PRODUCTION_ASSET_GEOMETRY_UNPROVEN", reason: "De productiebron mist gecontroleerd geometriebewijs." };
+  }
+  const dimensionalVariant = (asset.variants ?? []).find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0);
+  const dimensionalPolicy = Number(asset.sizePolicy?.defaultWidthMm) > 0 && Number(asset.sizePolicy?.defaultHeightMm) > 0;
+  if (!dimensionalVariant && !dimensionalPolicy) {
+    return { allowed: false, code: "PRODUCTION_ASSET_SIZE_UNPROVEN", reason: "De productiebron mist een bewezen fysieke maat." };
+  }
+  if ((asset.applications ?? []).some(({ kind }) => kind === "NUMBER_SET")) {
+    const completeGlyphs = Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => {
+      const glyph = asset.numberGlyphs?.[digit];
+      return exactGeometryHash(glyph?.geometryHash) && glyph?.contours?.length;
+    });
+    if (!completeGlyphs) return { allowed: false, code: "PRODUCTION_ASSET_GLYPHS_UNPROVEN", reason: "De nummerbron mist één of meer gecontroleerde cijfers." };
+  }
+  return { allowed: true, code: "PRODUCTION_ASSET_EXECUTABLE", reason: null };
+}
+
+export function productionObjectFitsTrack({ widthMm, heightMm, maximumTrackWidthMm, allowedRotations = [0] }) {
+  const width = Number(widthMm);
+  const height = Number(heightMm);
+  const maximum = Number(maximumTrackWidthMm);
+  if (!(width > 0) || !(height > 0) || !(maximum > 0)) return false;
+  return [...new Set(allowedRotations.map((rotation) => ((Number(rotation) % 180) + 180) % 180))]
+    .some((rotation) => (rotation === 90 ? height : width) <= maximum);
+}
+
 /**
  * Association context ranks sources; it never makes a production-ready source
  * disappear from Vrije opdruk. Teamwear can still request strict context by
@@ -45,8 +85,9 @@ export function canonicalArticlePersonalizationFields({ article, association, pr
  */
 export function projectProductionReadyVisualAssets(elements, contextLabel = "", { includeAll = true } = {}) {
   const normalizedContext = String(contextLabel).toLocaleLowerCase("nl-NL");
-  return (elements ?? []).filter(({ lifecycleStatus, productionMethod, sourceId, ownerType, contexts, applications }) => {
-    if (lifecycleStatus !== "PRODUCTION_READY" || productionMethod !== "SELF_PRODUCED" || !sourceId) return false;
+  return (elements ?? []).filter((asset) => {
+    const { ownerType, contexts, applications } = asset;
+    if (!executableProductionAssetDecision(asset).allowed) return false;
     if (!(applications ?? []).some(({ kind }) => ["LOGO", "SPONSOR", "ARTWORK"].includes(String(kind).toUpperCase()))) return false;
     const associationContexts = (contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
     if (!associationContexts.length) return ownerType !== "ASSOCIATION" || includeAll;
@@ -65,9 +106,8 @@ const contextIdentityMatches = (context, identities) => identities.has(String(co
  * and ORDER scopes remain exact physical/provenance boundaries.
  */
 export function productionAssetContextDecision({ asset, orderKind, associationIdentities = [], articleIdentities = [], orderId = null }) {
-  if (!asset || asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED" || !asset.sourceId) {
-    return { allowed: false, code: "PRODUCTION_ASSET_NOT_READY", reason: "De productiebron is niet exact productierijp en brongebonden." };
-  }
+  const executable = executableProductionAssetDecision(asset);
+  if (!executable.allowed) return executable;
   const contexts = asset.contexts ?? [];
   const associationScopes = contexts.filter(({ type }) => type === "ASSOCIATION");
   const articleScopes = contexts.filter(({ type }) => type === "ARTICLE");

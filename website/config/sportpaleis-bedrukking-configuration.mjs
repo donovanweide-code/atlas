@@ -1,12 +1,12 @@
 import { SPORTPALEIS_ASSOCIATION_LOGOS } from "./sportpaleis-association-logos.generated.mjs";
 import { SPORTPALEIS_LIVE_ASSOCIATION_CATALOGS } from "./sportpaleis-final-prelive-catalog.generated.mjs";
 
-export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-008-20260828";
+export const SPORTPALEIS_CONFIGURATION_VERSION = "SPW-CONFIG-BEDRUKKING-009-20260831";
 
 export const SPORTPALEIS_FONT_CONFIRMATION = Object.freeze({
-  id: "SPW-HUMAN-FONT-CONFIRMATION-001-20260812",
-  confirmedAt: "2026-08-12",
-  authority: "Human-confirmed Sportpaleis vereniging-naar-lettertype-tabel, door Donovan aangeleverd in de Codex-opdracht van 2026-08-12",
+  id: "SPW-HUMAN-FONT-CONFIRMATION-002-20260831",
+  confirmedAt: "2026-08-31",
+  authority: "Human-confirmed Sportpaleis vereniging-naar-lettertype-tabel (2026-08-12), aangevuld met Donovan Product Truth (2026-08-31) dat letter- en nummerbronnen per toepassing afzonderlijk bindt",
   limitation: "De bevestiging bewijst de fontnaam en eventuele mapverwijzing, niet de aanwezigheid, identiteit, licentie of productiebruikbaarheid van een TTF/OTF/WOFF-fontbestand.",
 });
 
@@ -21,17 +21,17 @@ export const SPORTPALEIS_FONT_ASSET_INVENTORY = Object.freeze([
 
 const FONT_CONFIRMATION_BY_ASSOCIATION = Object.freeze({
   "Almere'81": Object.freeze({ confirmedValue: "Myriad Pro - Italic", canonicalName: "Myriad Pro Italic" }),
-  "Almere Pioneers": Object.freeze({ confirmedValue: "FFF englisch + bronverwijzing", canonicalName: "FFF englisch", reference: "Pioneers nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
+  "Almere Pioneers": Object.freeze({ confirmedValue: "FFF englisch + bronverwijzing", canonicalName: "FFF englisch", reference: "Pioneers nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE", referenceFields: Object.freeze(["backNumber"]) }),
   "As,8o": Object.freeze({ confirmedAssociationName: "AS '80", confirmedValue: "Spain", canonicalName: "Spain", associationNameStatus: "NORMALIZED_MATCH" }),
   "A.S.C. Waterwijk": Object.freeze({ confirmedAssociationName: "ASC Waterwijk", confirmedValue: "schluber; spain = thuis wedstrijdshirt/short", canonicalName: "Schluber", exception: "Spain voor thuiswedstrijdshirt en thuiswedstrijdshort", associationNameStatus: "NORMALIZED_MATCH" }),
   Brouwersports: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
-  "Buitenhout MHC": Object.freeze({ confirmedValue: "Myrad pro - Bold / bedoeld als Myriad Pro Bold + verwijzing", canonicalName: "Myriad Pro Bold", reference: "Buitenhout - Lelystad nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
+  "Buitenhout MHC": Object.freeze({ confirmedValue: "Myrad pro - Bold / bedoeld als Myriad Pro Bold + verwijzing", canonicalName: "Myriad Pro Bold", reference: "Buitenhout - Lelystad nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE", referenceFields: Object.freeze(["backNumber"]) }),
   DCG: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
   EKVA: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
   "FC Almere": Object.freeze({ confirmedValue: "schluber; spain = thuis wedstrijdshirt/short", canonicalName: "Schluber", exception: "Spain voor thuiswedstrijdshirt en thuiswedstrijdshort" }),
   "FC Huizen": Object.freeze({ confirmedValue: "spain", canonicalName: "Spain" }),
   HBSA: Object.freeze({ confirmedAssociationName: "FSA", confirmedValue: "Viking-Normal", canonicalName: "Viking-Normal", associationNameStatus: "MISMATCH", applied: false, reason: "De Human Confirmation noemt FSA, terwijl de bestaande bronvereniging HBSA heet. Deze identiteiten zijn niet zonder aanvullend bewijs gelijkgesteld." }),
-  "MHC Lelystad": Object.freeze({ confirmedValue: "Myrad pro - Bold", canonicalName: "Myriad Pro Bold", reference: "Buitenhout - Lelystad nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE" }),
+  "MHC Lelystad": Object.freeze({ confirmedValue: "Myrad pro - Bold", canonicalName: "Myriad Pro Bold", reference: "Buitenhout - Lelystad nummers.ai", referenceKind: "VECTOR_CONTOUR_REFERENCE", referenceFields: Object.freeze(["backNumber"]) }),
   Najaden: Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber" }),
   "SC Buitenboys": Object.freeze({ confirmedValue: "schluber", canonicalName: "Schluber", exception: "Shortnummer gebruikt Spain Euro 2016 / SpainEuro-Regular" }),
   "SC Geinburgia": Object.freeze({ confirmedValue: "Spain", canonicalName: "Spain" }),
@@ -110,6 +110,7 @@ const association = (row, name, sourceName, fontProfile, foilColors, dimensions 
     referenceAsset: inventory?.referenceAsset ?? null,
     reference: confirmation?.reference ?? null,
     referenceKind: confirmation?.referenceKind ?? null,
+    referenceFields: confirmation?.referenceFields ?? Object.freeze([]),
     exception: confirmation?.exception ?? null,
     reason: confirmation?.reason ?? null,
     provenance: SPORTPALEIS_FONT_CONFIRMATION,

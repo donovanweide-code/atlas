@@ -82,7 +82,8 @@ test("Guided Setup stuurt alleen bewezen productievereisten naar het juiste behe
   assert.match(workspaceSource, /validation\.foilColor === "DATA_GAP" \? "foliekleur"/u);
   assert.doesNotMatch(workspaceSource, /validation\.cutContour === "DATA_GAP" \? "gecontroleerde snijlijnen"/u);
   assert.doesNotMatch(workspaceSource, /validation\.physicalCutOutput === "DATA_GAP" \? "bewezen fysieke snijoutput"/u);
-  assert.match(workspaceSource, /gecontroleerde bron voor \$\{sourceProfile\.fontProfile\}/u);
+  assert.match(workspaceSource, /gecontroleerde SVG-nummerset voor/u);
+  assert.match(workspaceSource, /gecontroleerde letter-\/fontbron voor/u);
   assert.match(workspaceSource, /beheer\/productieprofielen\?vereniging=\$\{encodeURIComponent\(association\.name\)\}/u);
   assert.match(workspaceSource, /beheer\/verenigingen\?vereniging=\$\{encodeURIComponent\(association\.name\)\}/u);
   assert.match(workspaceSource, /Workspace past plaatsing en spiegeling automatisch toe/u);
