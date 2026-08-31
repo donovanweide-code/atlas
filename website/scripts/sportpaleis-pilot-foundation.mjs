@@ -35,6 +35,7 @@ import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-pro
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
+import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, productionAssetContextDecision } from "../src/sportpaleis/production-practice-contract.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -1616,15 +1617,16 @@ function assertProductionAssetContexts(state, productionLines, order) {
     // plot geometry. Context isolation is consequential for sources that can
     // actually enter the self-produced SVG/PlotJob route.
     if (asset.productionMethod !== "SELF_PRODUCED") continue;
-    const scoped = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
-    if (!scoped.length) {
-      if (asset.ownerType === "ASSOCIATION") throw Object.assign(new Error(`${asset.name} mist een gecontroleerde verenigingskoppeling.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_REQUIRED" });
-      continue;
-    }
     const item = order?.items?.find(({ id }) => id === line.itemId);
     const association = item ? state.associations.find(({ id, name }) => id === item.association || name === item.association) : null;
-    const matches = association && scoped.some(({ id, label }) => id === association.id || label === association.name);
-    if (!matches) throw Object.assign(new Error(`${asset.name} hoort niet bij de gekozen vereniging.`), { statusCode: 409, code: "PRODUCTION_ASSET_CONTEXT_MISMATCH" });
+    const decision = productionAssetContextDecision({
+      asset,
+      orderKind: order?.orderKind,
+      associationIdentities: [item?.association, association?.id, association?.name].filter(Boolean),
+      articleIdentities: [item?.id, item?.articleId, item?.articleNumber].filter(Boolean),
+      orderId: order?.id,
+    });
+    if (!decision.allowed) throw Object.assign(new Error(decision.reason), { statusCode: 409, code: decision.code });
   }
 }
 
@@ -1669,8 +1671,12 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
       },
     };
   });
+  if (orderKind === "CUSTOM") for (const item of items) {
+    const colors = canonicalOrderFoilColors({ items: [], productionLines: productionLines.filter(({ itemId }) => itemId === item.id) });
+    if (colors.length) item.foilColor = colors.length === 1 ? colors[0] : "Meerdere kleuren";
+  }
   const associations = [...new Set(items.map(({ association }) => association).filter((association) => association && association !== "Geen vereniging"))];
-  assertProductionAssetContexts(state, productionLines, { items });
+  assertProductionAssetContexts(state, productionLines, { id, orderKind, items });
   if (orderKind === "INDIVIDUAL" && !productionLines.length) productionLines = deriveCatalogProductionLines(state, id, items);
   applyProductionReadiness(items, productionLines);
   const teamContext = orderKind === "TEAM" ? requiredText(payload.teamContext || payload.customer || (associations.length === 1 ? associations[0] : "Teamorder"), "Team / opdrachtgever / omschrijving", 120) : null;
@@ -1724,7 +1730,7 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     operationalFacts: {},
     eventHistory: [{ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "button" }],
     totalPieces: items.reduce((sum, item) => sum + item.quantity, 0),
-    foilStates: [...new Set([...items.map(({ foilColor }) => foilColor), ...productionLines.map(({ foilColor }) => foilColor).filter(Boolean)])].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
+    foilStates: canonicalOrderFoilColors({ items, productionLines }).map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" })),
     items,
     productionLines,
   };
@@ -4154,7 +4160,7 @@ export class SportpaleisPilotService {
         order.associations = associations;
         order.association = associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging";
         order.totalPieces = items.reduce((sum, item) => sum + item.quantity, 0);
-        order.foilStates = [...new Set(items.map(({ foilColor }) => foilColor))].map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" }));
+        order.foilStates = canonicalOrderFoilColors({ items, productionLines: order.productionLines }).map((color) => ({ color, status: color.toLowerCase() === "rood" ? "HOLD" : "READY" }));
         const manualAttention = order.priority ? `Prioriteitsuitzondering: ${order.priority.reasonLabel ?? order.priority.reason}` : [...(order.notes ?? [])].reverse().find(({ kind }) => kind === "attention")?.text;
         const recalculatedAttention = manualAttention || productionAttentionText(items);
         if (recalculatedAttention) order.attention = recalculatedAttention;
@@ -7565,18 +7571,21 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
         && Math.abs(Number(assignmentEvidence.sourceHeightMm) - Number(variant.heightMm)) <= 0.01;
       if (Number(semantics.expectedHeightMm) > 0 && Math.abs(Number(variant.heightMm) - Number(semantics.expectedHeightMm)) > 0.01 && !explicitlyAuthorizedTarget) return false;
       if (asset.sizePolicy?.mode === "FIXED" && Number(line.heightMm) > 0 && Math.abs(Number(variant.heightMm) - Number(line.heightMm)) > 0.01 && !explicitlyAuthorizedTarget) return false;
-      const assignedAssetId = assignedProductionNumberAssetId(state, semantics.profile, semantics.field, semantics.expectedHeightMm);
-      if (assignedAssetId ? assignedAssetId !== asset.id : !semantics.profile?.productionNumberAssetIds?.includes(asset.id)) return false;
+      if (order?.orderKind !== "CUSTOM") {
+        const assignedAssetId = assignedProductionNumberAssetId(state, semantics.profile, semantics.field, semantics.expectedHeightMm);
+        if (assignedAssetId ? assignedAssetId !== asset.id : !semantics.profile?.productionNumberAssetIds?.includes(asset.id)) return false;
+      }
     }
     const item = order?.items?.find(({ id }) => id === line.itemId);
     const association = item ? state.associations.find(({ id, name }) => id === item.association || name === item.association) : null;
-    const scoped = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
-    if ((asset.ownerType === "ASSOCIATION" || scoped.length) && (!association || !scoped.some(({ id, label }) => id === association.id || label === association.name))) return false;
-    const articleScopes = (asset.contexts ?? []).filter(({ type }) => type === "ARTICLE");
-    const articleIdentities = new Set([item?.id, item?.articleId, item?.articleNumber].filter(Boolean).map(String));
-    if (articleScopes.length && !articleScopes.some(({ id, label }) => articleIdentities.has(String(id)) || articleIdentities.has(String(label)))) return false;
-    const orderScopes = (asset.contexts ?? []).filter(({ type }) => type === "ORDER");
-    if (orderScopes.length && !orderScopes.some(({ id, label }) => String(id) === String(order.id) || String(label) === String(order.id))) return false;
+    const contextDecision = productionAssetContextDecision({
+      asset,
+      orderKind: order?.orderKind,
+      associationIdentities: [item?.association, association?.id, association?.name].filter(Boolean),
+      articleIdentities: [item?.id, item?.articleId, item?.articleNumber].filter(Boolean),
+      orderId: order?.id,
+    });
+    if (!contextDecision.allowed) return false;
     if (!requiredApplications.includes("NUMBER_SET")) {
       const policy = asset.sizePolicy;
       const widthMm = Number(line.widthMm);
@@ -8200,6 +8209,9 @@ function validateItems(value, state, standardPersonalization, options = {}) {
       const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
       if (!profile) throw Object.assign(new Error("Artikel mist een productieprofiel."), { statusCode: 400, code: "PROFILE_MISSING" });
       const labels = { initials: "Initialen", name: "Naam", backNumber: "Rug", chestNumber: "Borst", shortsNumber: "Short" };
+      let productType = "OTHER";
+      try { productType = canonicalTeamkitArticleSurfaceTruth(article).productType; } catch { /* Unresolved surface truth can never grant an extra field. */ }
+      const allowedPersonalizationFields = canonicalArticlePersonalizationFields({ article, association, productionProfiles: state.productionProfiles, productType });
       const variants = requestedVariants.map((variant) => {
         const variantQuantity = Number(variant.quantity);
         if (!Number.isInteger(variantQuantity) || variantQuantity < 1 || variantQuantity > maximumQuantity) throw Object.assign(new Error("Ongeldig aantal in artikelvariant."), { statusCode: 400, code: "VALIDATION_ERROR" });
@@ -8209,19 +8221,19 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         const deviation = Boolean(variant.deviation);
         const overrideInput = variant.overrides ?? {};
         const overrides = deviation ? validatePersonalization(overrideInput, { ...options, requireBackNumberSizeClass: false }) : { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", initialsSemantic: null };
-        const forbiddenOverrides = PERSONALIZATION_FIELDS.filter((field) => !article.supports.includes(field) && Boolean(overrides[field]));
+        const forbiddenOverrides = PERSONALIZATION_FIELDS.filter((field) => !allowedPersonalizationFields.includes(field) && Boolean(overrides[field]));
         if (forbiddenOverrides.length) throw Object.assign(new Error(`${article.name} staat deze bedrukking niet toe.`), { statusCode: 400, code: "ARTICLE_PERSONALIZATION_NOT_ALLOWED" });
         const hasExplicitOverride = (key) => deviation && (
           String(overrideInput[key] ?? "").trim() !== ""
           || key === "initialsInfix" && Object.hasOwn(overrideInput, key) && String(overrideInput.initials ?? "").trim() !== ""
         );
-        const appliedFields = Object.fromEntries(article.supports.map((key) => [key, hasExplicitOverride(key) ? overrides[key] : standardPersonalization[key] ?? ""]));
-        if (article.supports.includes("initials")) appliedFields.initialsInfix = hasExplicitOverride("initialsInfix") ? overrides.initialsInfix : standardPersonalization.initialsInfix ?? "";
+        const appliedFields = Object.fromEntries(allowedPersonalizationFields.map((key) => [key, hasExplicitOverride(key) ? overrides[key] : standardPersonalization[key] ?? ""]));
+        if (allowedPersonalizationFields.includes("initials")) appliedFields.initialsInfix = hasExplicitOverride("initialsInfix") ? overrides.initialsInfix : standardPersonalization.initialsInfix ?? "";
         const selectedBackNumberSizeClass = hasExplicitOverride("backNumberSizeClass") ? overrides.backNumberSizeClass : standardPersonalization.backNumberSizeClass;
         const appliedBackNumberSizeClass = appliedFields.backNumber ? selectedBackNumberSizeClass || inferBackNumberSizeClass(association, article, enteredSize) : "";
         if (appliedFields.backNumber && options.requireBackNumberSizeClass === true && !BACK_NUMBER_SIZE_CLASSES.has(appliedBackNumberSizeClass)) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 400, code: "BACK_NUMBER_SIZE_CLASS_REQUIRED" });
         const applied = { ...appliedFields, backNumberSizeClass: appliedBackNumberSizeClass };
-        const policy = article.personalizationPolicy ?? { mode: "combination", fields: Object.fromEntries(article.supports.map((key) => [key, "optional"])) };
+        const policy = { mode: article.personalizationPolicy?.mode ?? "combination", fields: Object.fromEntries(allowedPersonalizationFields.map((key) => [key, article.personalizationPolicy?.fields?.[key] ?? "optional"])) };
         const populated = Object.entries(appliedFields).filter(([key, entry]) => key !== "initialsInfix" && entry);
         if (policy.mode === "mutually-exclusive" && populated.length > 1) throw Object.assign(new Error(`${article.name} staat slechts één bedrukkingstype tegelijk toe.`), { statusCode: 400, code: "PERSONALIZATION_MUTUALLY_EXCLUSIVE" });
         for (const [key, requirement] of Object.entries(policy.fields ?? {})) if (requirement === "required" && !applied[key]) throw Object.assign(new Error(`${article.name} vereist ${labels[key].toLowerCase()}.`), { statusCode: 400, code: "PERSONALIZATION_REQUIRED" });

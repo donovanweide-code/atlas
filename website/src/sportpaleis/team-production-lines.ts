@@ -7,6 +7,14 @@ export function parseTeamProductionLines(input: string): TeamProductionLine[] {
   const results: TeamProductionLine[] = [];
   for (const raw of input.split(/[\n,;]+/).map((value) => value.trim()).filter(Boolean)) {
     if (/[?]/u.test(raw) || /\b(?:een|één|twee|drie|vier|vijf|zes|zeven|acht|negen)\b/iu.test(raw) && !/^nummer\s+.+?\s+twee\s+keer$/iu.test(raw)) throw new Error(`Deze regel begrijp ik niet helemaal: "${raw}". Gebruik bijvoorbeeld 'DW x 2'.`);
+    const columns = raw.split(/\t+/u).map((value) => value.trim()).filter(Boolean);
+    if (columns.length > 1) {
+      const quantity = Number(columns.at(-1));
+      const value = columns.slice(0, -1).join(" ");
+      if (!value || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw new Error("Gebruik bij geplakte Excel-regels: waarde, tab, aantal (maximaal 999).");
+      results.push({ value, quantity });
+      continue;
+    }
     const range = raw.match(/^(?:nummer\s+)?(\d+)\s*(?:t\/?m|tot(?:\s+en\s+met)?|[-–])\s*(\d+)$/i);
     if (range) {
       const start = Number(range[1]);
