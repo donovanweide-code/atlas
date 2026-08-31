@@ -53,6 +53,7 @@ test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resul
     ATLAS_DB_USER: "atlas_app",
     ATLAS_DB_PASSWORD: "do-not-return-atlas",
     SPORTPALEIS_UPLOADS_ENABLED: "false",
+    SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "false",
     SPORTPALEIS_FONT_UPLOADS_ENABLED: "true",
     SPORTPALEIS_MAIL_MODE: "capture",
     SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: "false",
@@ -62,6 +63,7 @@ test("productionconfig faalt vroeg en houdt toekomstige secrets buiten het resul
     DEBUG: "false",
   });
   assert.equal(config.host, "0.0.0.0");
+  assert.equal(config.creativeStudioEnabled, false);
   assert.equal(config.port, 8080);
   assert.equal(config.futureDependencies.database, true);
   assert.doesNotMatch(JSON.stringify(config), /do-not-return|postgres:/);
@@ -247,4 +249,36 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   assert.equal(users.status, 200); assert.match(users.body, /Sportpaleis Workspace/);
   const unknown = await request("/publieke-onbekende-route");
   assert.equal(unknown.status, 404);
+});
+
+test("Creative Studio pilotboundary weigert directe en legacy routes vóór de SPA wordt geserveerd", async (context) => {
+  const temporary = await mkdtemp(path.join(tmpdir(), "spw-studio-boundary-runtime-"));
+  context.after(() => rm(temporary, { recursive: true, force: true }));
+  await mkdir(path.join(temporary, "assets"));
+  await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
+  await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><div id=app></div>");
+  await writeAuthoritativeProductionAssets(temporary);
+  const config = parseWorkspaceRuntimeConfig({ NODE_ENV: "test", APP_ENV: "test", PORT: "0", WORKSPACE_DIST_DIR: temporary, WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", RELEASE_ID: "spw-studio-boundary", SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "false" });
+  const server = await createWorkspaceRuntimeServer({ config });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const address = server.address(); assert.ok(address && typeof address === "object");
+  const request = (route) => new Promise((resolve, reject) => {
+    const outbound = httpRequest({ hostname: "127.0.0.1", port: address.port, path: route, headers: { Host: "workspace.sportpaleis.nl" } }, (response) => {
+      const chunks = []; response.on("data", (chunk) => chunks.push(chunk)); response.on("end", () => resolve({ status: response.statusCode, location: response.headers.location, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    outbound.on("error", reject); outbound.end();
+  });
+  for (const route of ["/studio", "/studio/visual-123", "/workspace/sportpaleis/studio", "/workspace/sportpaleis/studio/visual-123"]) {
+    const response = await request(route);
+    assert.equal(response.status, 303);
+    assert.equal(response.location, route.startsWith("/workspace/sportpaleis") ? "/workspace/sportpaleis/overzicht" : "/overzicht");
+    assert.doesNotMatch(response.body, /Sportpaleis Workspace|Workspace shell marker/u);
+  }
+  const production = await request("/productie");
+  const printing = await request("/orders/nieuw");
+  const freePrinting = await request("/orders/eigen-artikel");
+  assert.equal(production.status, 200);
+  assert.equal(printing.status, 200);
+  assert.equal(freePrinting.status, 200);
 });

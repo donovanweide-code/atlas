@@ -19,6 +19,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   activeReviewCandidateIds: readonly string[],
  *   reviewAccessEnabled: boolean,
  *   reviewAccessIssuerPrincipalIds: readonly string[],
+ *   creativeStudioEnabled: boolean,
  *   distDir: string,
  *   logLevel: LogLevel,
  *   productionDatabases: Readonly<{
@@ -64,6 +65,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   SPORTPALEIS_REVIEW_PRINCIPAL_IDS: { phase: "Sportpaleis Review Mode V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ENABLED: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ISSUER_IDS: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
+  SPORTPALEIS_CREATIVE_STUDIO_ENABLED: { phase: "Sportpaleis controlled pilot exposure", requiredInProduction: true, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
   WORKSPACE_DB_HOST: { phase: "production persistence", requiredInProduction: true, secret: false },
@@ -148,6 +150,16 @@ function requiredLiteral(env, name, expected) {
   return actual;
 }
 
+function booleanValue(env, name, { requiredInProduction = false, productionMode = false, defaultValue = false } = {}) {
+  const raw = value(env, name);
+  if (!raw) {
+    if (requiredInProduction && productionMode) throw new WorkspaceRuntimeConfigError(`${name} is verplicht in production mode.`);
+    return defaultValue;
+  }
+  if (!new Set(["true", "false"]).has(raw)) throw new WorkspaceRuntimeConfigError(`${name} moet true of false zijn.`);
+  return raw === "true";
+}
+
 function parseHttpUrl(raw, name) {
   let parsed;
   try {
@@ -227,6 +239,11 @@ export function parseWorkspaceRuntimeConfig(env) {
   if (reviewAccessEnabled && (!reviewAccessIssuerPrincipalIds.length || !activeReviewCandidateIds.length)) {
     throw new WorkspaceRuntimeConfigError("Tijdelijke reviewtoegang vereist een Human GO-issuer en een actieve immutable candidate.");
   }
+  const creativeStudioEnabled = booleanValue(env, "SPORTPALEIS_CREATIVE_STUDIO_ENABLED", {
+    requiredInProduction: true,
+    productionMode,
+    defaultValue: true,
+  });
 
   const logLevel = value(env, "LOG_LEVEL") || "info";
   if (!new Set(["debug", "info", "warn", "error"]).has(logLevel)) {
@@ -267,6 +284,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     activeReviewCandidateIds,
     reviewAccessEnabled,
     reviewAccessIssuerPrincipalIds,
+    creativeStudioEnabled,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,
     productionDatabases,

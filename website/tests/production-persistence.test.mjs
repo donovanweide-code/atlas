@@ -54,6 +54,7 @@ function productionEnvironment() {
     ATLAS_DB_USER: "wbd_atlas_app",
     ATLAS_DB_PASSWORD: "atlas-secret-not-returned",
     SPORTPALEIS_UPLOADS_ENABLED: "false",
+    SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "false",
     SPORTPALEIS_FONT_UPLOADS_ENABLED: "true",
     SPORTPALEIS_MAIL_MODE: "capture",
     SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: "false",

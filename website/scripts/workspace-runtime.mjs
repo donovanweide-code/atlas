@@ -347,6 +347,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           productionAssetUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.productionAssetUploadsEnabled : true,
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
+          creativeStudioEnabled: config.creativeStudioEnabled,
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
           reviewPrincipalIds: config.reviewPrincipalIds,
           activeReviewCandidateIds: config.activeReviewCandidateIds,
@@ -443,6 +444,18 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     const requestHost = String(request.headers.host ?? "").split(":")[0].toLowerCase();
     const canonicalSportpaleisRequest = Boolean(canonicalSportpaleisHost && requestHost === canonicalSportpaleisHost);
     const canonicalWbdRequest = requestHost === canonicalWbdHost;
+    const creativeStudioPath = pathname === "/studio"
+      || pathname.startsWith("/studio/")
+      || pathname === `${sportpaleisBoundary}/studio`
+      || pathname.startsWith(`${sportpaleisBoundary}/studio/`);
+
+    if (!config.creativeStudioEnabled && creativeStudioPath) {
+      response.statusCode = 303;
+      response.setHeader("Location", pathname.startsWith(sportpaleisBoundary) ? `${sportpaleisBoundary}/overzicht` : "/overzicht");
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+      return;
+    }
 
     if (pathname.startsWith("/api/wbd/v1/") || pathname === "/health/wbd" || pathname === "/ready/wbd") {
       if (!canonicalWbdRequest) {

@@ -79,6 +79,8 @@ export interface PilotBootstrap extends SportpaleisWorkspaceState {
     quickPinEnabled: boolean;
     /** Exact per-principal server decision; defaults false for every account. */
     teamwearExperiencePilot: boolean;
+    /** Server-authoritative runtime exposure. False removes the standalone Studio surface and APIs. */
+    creativeStudio: boolean;
     /** Exact server-side principal decision. Candidate code is lazy and has no production mutation authority. */
     reviewMode: boolean;
     /** Human-GO scoped, short-lived Codex review principal. Never a customer seat. */
