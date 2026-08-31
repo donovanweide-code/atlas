@@ -258,7 +258,8 @@ test("Creative Studio pilotboundary weigert directe en legacy routes vóór de S
   await writeFile(path.join(temporary, "workspace.html"), "<!doctype html><title>Workspace shell marker</title><div id=app></div>");
   await writeFile(path.join(temporary, "sportpaleis.html"), "<!doctype html><title>Sportpaleis Workspace</title><div id=app></div>");
   await writeAuthoritativeProductionAssets(temporary);
-  const config = parseWorkspaceRuntimeConfig({ NODE_ENV: "test", APP_ENV: "test", PORT: "0", WORKSPACE_DIST_DIR: temporary, WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", RELEASE_ID: "spw-studio-boundary", SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "false" });
+  const config = parseWorkspaceRuntimeConfig({ NODE_ENV: "test", APP_ENV: "test", PORT: "0", WORKSPACE_DIST_DIR: temporary, WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", RELEASE_ID: "spw-studio-boundary" });
+  assert.equal(config.creativeStudioEnabled, false);
   const server = await createWorkspaceRuntimeServer({ config });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   context.after(() => new Promise((resolve) => server.close(resolve)));

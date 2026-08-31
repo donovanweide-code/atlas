@@ -65,7 +65,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   SPORTPALEIS_REVIEW_PRINCIPAL_IDS: { phase: "Sportpaleis Review Mode V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ENABLED: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ISSUER_IDS: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
-  SPORTPALEIS_CREATIVE_STUDIO_ENABLED: { phase: "Sportpaleis controlled pilot exposure", requiredInProduction: true, secret: false },
+  SPORTPALEIS_CREATIVE_STUDIO_ENABLED: { phase: "Sportpaleis controlled pilot exposure", requiredInProduction: false, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
   WORKSPACE_DB_HOST: { phase: "production persistence", requiredInProduction: true, secret: false },
@@ -240,9 +240,9 @@ export function parseWorkspaceRuntimeConfig(env) {
     throw new WorkspaceRuntimeConfigError("Tijdelijke reviewtoegang vereist een Human GO-issuer en een actieve immutable candidate.");
   }
   const creativeStudioEnabled = booleanValue(env, "SPORTPALEIS_CREATIVE_STUDIO_ENABLED", {
-    requiredInProduction: true,
+    requiredInProduction: false,
     productionMode,
-    defaultValue: true,
+    defaultValue: false,
   });
 
   const logLevel = value(env, "LOG_LEVEL") || "info";

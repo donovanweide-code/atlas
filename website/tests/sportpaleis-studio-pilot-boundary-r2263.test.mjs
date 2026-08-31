@@ -68,14 +68,14 @@ test("R2.26.3 geeft Studio uitsluitend via één server-authoritative runtimecap
   assert.equal((await enabled.service.bootstrap(enabled.storeUser.token)).capabilities.creativeStudio, false);
 });
 
-test("productionconfig vereist een expliciete Studio pilotbeslissing en accepteert alleen booleans", () => {
+test("productionconfig houdt Studio zonder expliciete pilotbeslissing veilig uitgeschakeld", () => {
   const base = {
     NODE_ENV: "production", APP_ENV: "production", PUBLIC_BASE_URL: "https://webuildanddesign.nl", WORKSPACE_BASE_URL: "https://workspace.sportpaleis.nl", WBD_WORKSPACE_BASE_URL: "https://workspace.webuildanddesign.nl", RELEASE_ID: "SPW-R2.26.3-TEST",
     WORKSPACE_DB_HOST: "127.0.0.1", WORKSPACE_DB_NAME: "workspace", WORKSPACE_DB_USER: "workspace", WORKSPACE_DB_PASSWORD: "secret",
     ATLAS_DB_HOST: "127.0.0.1", ATLAS_DB_NAME: "atlas", ATLAS_DB_USER: "atlas", ATLAS_DB_PASSWORD: "secret",
     SPORTPALEIS_UPLOADS_ENABLED: "false", SPORTPALEIS_FONT_UPLOADS_ENABLED: "true", SPORTPALEIS_MAIL_MODE: "capture", SPORTPALEIS_HARDWARE_OUTPUT_ENABLED: "false", SPORTPALEIS_DIRECT_PRINT_ENABLED: "false", SPORTPALEIS_SUMMA_ENABLED: "false", ATLAS_RUNTIME_MODE: "boundary-only", DEBUG: "false",
   };
-  assert.throws(() => parseWorkspaceRuntimeConfig(base), /SPORTPALEIS_CREATIVE_STUDIO_ENABLED is verplicht/u);
+  assert.equal(parseWorkspaceRuntimeConfig(base).creativeStudioEnabled, false);
   assert.throws(() => parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "off" }), /moet true of false/u);
   assert.equal(parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "false" }).creativeStudioEnabled, false);
   assert.equal(parseWorkspaceRuntimeConfig({ ...base, SPORTPALEIS_CREATIVE_STUDIO_ENABLED: "true" }).creativeStudioEnabled, true);
