@@ -121,9 +121,14 @@ test("concrete Vrije opdruk gebruikt een expliciet gekozen productierijpe nummer
   }, "r2266-free-number-source")).value;
   assert.equal(created.productionLines[0].source.id, source.id);
   assert.equal(created.productionLines[0].content, "34");
+  assert.ok(created.productionLines[0].widthMm > 0);
+  assert.equal(created.productionLines[0].heightMm, 200);
   assert.equal(created.items[0].foilColor, "Wit");
   assert.deepEqual(created.foilStates.map(({ color }) => color), ["Wit"]);
   assert.ok(!created.foilStates.some(({ color }) => color === "Onbekend"));
+  const ready = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
+  assert.equal(ready.productionStatus, "READY");
+  assert.equal(ready.productionStatusReason, null);
 });
 
 test("decorationregels bepalen generiek de fysieke kleur en synthetische artikelmetadata maakt geen lege batch", () => {

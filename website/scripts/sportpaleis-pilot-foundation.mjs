@@ -6700,15 +6700,18 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       };
     }
     const initialsInfix = ["INITIALS_FIRST", "INITIALS_INFIX", "INITIALS_LAST"].includes(line.placementRole);
-    const widthMm = Number(line.widthMm); const heightMm = Number(line.heightMm); const quantity = Number(line.quantity);
+    const numberAsset = type === "NUMBER" ? state.productionElements.find((asset) => asset.id === line.sourceId && executableProductionAssetDecision(asset).allowed && asset.applications?.some(({ kind }) => kind === "NUMBER_SET")) : null;
+    const numberVariant = numberAsset?.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantHeight) > 0 && (Number(variantWidth) > 0 || numberAsset.sizePolicy?.widthDerived === true));
+    if (numberAsset && (!numberVariant || Array.from(content).some((digit) => !numberAsset.numberGlyphs?.[digit]))) throw Object.assign(new Error("De nummerbron bevat niet alle gevraagde cijfers."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MISSING" });
+    const requestedWidthMm = Number(line.widthMm); const heightMm = Number(line.heightMm); const quantity = Number(line.quantity);
+    const widthMm = numberAsset?.sizePolicy?.widthDerived === true
+      ? Array.from(content).reduce((sum, digit) => { const glyph = numberAsset.numberGlyphs[digit]; return sum + glyph.widthUnits / glyph.heightUnits * heightMm; }, Math.max(0, content.length - 1) * NUMBER_GLYPH_SPACING_MM)
+      : requestedWidthMm;
     if ((!initialsInfix && (!(widthMm >= 1 && widthMm <= 1000) || !(heightMm >= 1 && heightMm <= 1000))) || (initialsInfix && (!(widthMm >= 0 && widthMm <= 1000) || !(heightMm >= 0 && heightMm <= 1000))) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Afmetingen moeten geldig zijn en aantal 1â€“999."), { statusCode: 400, code: "PRODUCTION_LINE_DIMENSIONS_INVALID" });
     let source; let proofStatus = "CONFIGURED"; let validation = { status: "VALID", reason: null };
     if (["TEXT", "INITIALS", "NUMBER"].includes(type)) {
-      const numberAsset = type === "NUMBER" ? state.productionElements.find((asset) => asset.id === line.sourceId && executableProductionAssetDecision(asset).allowed && asset.applications?.some(({ kind }) => kind === "NUMBER_SET")) : null;
       if (numberAsset) {
-        const variant = numberAsset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
-        if (!variant || Array.from(content).some((digit) => !numberAsset.numberGlyphs?.[digit])) throw Object.assign(new Error("De nummerbron bevat niet alle gevraagde cijfers."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MISSING" });
-        source = { kind: "PRODUCTION_ELEMENT", id: numberAsset.id, version: numberAsset.version ?? String(numberAsset.revision), variantId: variant.id };
+        source = { kind: "PRODUCTION_ELEMENT", id: numberAsset.id, version: numberAsset.version ?? String(numberAsset.revision), variantId: numberVariant.id };
         proofStatus = productionElementProof(numberAsset);
       }
       const font = state.productionFonts.find(({ id }) => id === line.sourceId);
@@ -7853,10 +7856,26 @@ function productionElementPlacementMatchesField(application, field) {
   return false;
 }
 
+function explicitlyBoundFreeProductionLine(order, line, semantics) {
+  const item = order?.items?.find(({ id }) => id === line.itemId);
+  const identity = line.decorationIdentity;
+  return Boolean(order?.orderKind === "CUSTOM"
+    && item?.sourceType === "CUSTOM"
+    && item.productionProfileId == null
+    && !line.personalizationField
+    && !semantics.association
+    && !semantics.profile
+    && identity?.orderId === order.id
+    && identity.itemId === item.id
+    && identity.value === line.content
+    && identity.productionProfileId === line.source?.id);
+}
+
 function productionSourceRoleMatchesLine(state, order, line, semantics) {
   const kind = line.source?.kind;
+  const freeProduction = explicitlyBoundFreeProductionLine(order, line, semantics);
   if (kind === "FONT") {
-    if (semantics.sourceRequirement?.kind !== "MANAGED_FONT") return false;
+    if (!freeProduction && semantics.sourceRequirement?.kind !== "MANAGED_FONT") return false;
     if (!["TEXT", "INITIALS", "NUMBER"].includes(line.type)) return false;
     const selectedFont = state.productionFonts.find(({ id }) => id === line.source?.id);
     const profileResolution = semantics.profile ? canonicalManagedFontResolution(state, semantics.profile) : null;
@@ -7866,7 +7885,7 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     if (profileResolution && profileResolution.status !== "RESOLVED") return false;
     const requiredFont = profileResolution?.font ?? selectedFont;
     if (!requiredFont || requiredFont.status !== "TECHNICALLY_VALID" || !requiredFont.provenance || !/^[A-F0-9]{64}$/u.test(String(requiredFont.sha256 ?? "").toUpperCase())) return false;
-    if (!productionFontExecutableDecision(requiredFont, semantics.field || "FREE_PRINT").allowed) return false;
+    if (!productionFontExecutableDecision(requiredFont, freeProduction ? "FREE_PRINT" : semantics.field || "FREE_PRINT").allowed) return false;
     const exactIdentity = line.source.id === requiredFont.id
       && line.source.version === requiredFont.version
       && String(line.source.sha256 ?? "").toUpperCase() === String(requiredFont.sha256).toUpperCase();
@@ -7895,7 +7914,7 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
     if (!asset || !variant) return false;
     if (!executableProductionAssetDecision(asset).allowed) return false;
-    if (semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
+    if (!freeProduction && semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
       const sourceRecord = state.productionAssetSources?.find(({ id }) => id === asset.sourceId);
       const exactReferencedSource = String(sourceRecord?.original?.sha256 ?? "").toUpperCase() === String(semantics.sourceRequirement.sha256).toUpperCase();
       const assignmentEvidence = assignedProductionNumberAssetEvidence(semantics.profile, semantics.field, semantics.expectedHeightMm);
@@ -7922,10 +7941,10 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     }
     const identity = line.decorationIdentity;
     if (identity?.assetId && (identity.assetId !== asset.id || identity.assetVersion !== (asset.version ?? String(asset.revision)))) return false;
-    const requiredApplications = productionElementApplicationsForLine(line);
+    const requiredApplications = freeProduction && line.type === "NUMBER" ? ["NUMBER_SET"] : productionElementApplicationsForLine(line);
     const applications = asset.applications ?? [];
     const application = requiredApplications.includes("NUMBER_SET")
-      ? applications.find(({ kind: applicationKind, placement }) => String(applicationKind).toUpperCase() === "NUMBER_SET" && productionElementPlacementMatchesField({ kind: "NUMBER_SET", placement }, semantics.field))
+      ? applications.find(({ kind: applicationKind, placement }) => String(applicationKind).toUpperCase() === "NUMBER_SET" && (freeProduction || productionElementPlacementMatchesField({ kind: "NUMBER_SET", placement }, semantics.field)))
       : applications.find(({ kind: applicationKind }) => requiredApplications.includes(String(applicationKind).toUpperCase()));
     if (!requiredApplications.length || !application) return false;
     if (requiredApplications.includes("NUMBER_SET")) {
