@@ -350,6 +350,20 @@ test("MariaDB-store hergebruikt gevalideerde state bij gelijke revision en inval
   assert.equal(pool.fullStateReads, fullReadsAfterInitialize + 2);
 });
 
+test("MariaDB-store geeft authenticated reads één immutable snapshot zonder full-state clones per request", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const first = await store.readSnapshot();
+  const second = await store.readSnapshot();
+  assert.equal(first, second);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.settings), true);
+  assert.throws(() => { first.settings.processingDays = 99; }, TypeError);
+  assert.equal((await store.read()).settings.processingDays, first.settings.processingDays);
+});
+
 test("MariaDB-store behoudt functionele fouten na rollback en vertaalt alleen echte DB-fouten", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));

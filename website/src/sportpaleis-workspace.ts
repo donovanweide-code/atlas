@@ -1964,6 +1964,7 @@ async function activateProductionFonts(app: HTMLElement, state: PilotBootstrap):
 }
 
 export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void {
+  const applicationStartedAt = performance.now();
   let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!icon) { icon = document.createElement("link"); icon.rel = "icon"; document.head.append(icon); }
   icon.type = "image/svg+xml"; icon.href = "/sportpaleis-pwa-icon.svg";
@@ -2208,8 +2209,41 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     const id = decodeURIComponent(detailId);
     if (!state.orders.some((order) => order.id === id)) state.orders.push(await api.order(id));
   };
-  const load = async (): Promise<void> => { try { state = await api.bootstrap(); candidateReviewAuthorized = state.capabilities.reviewMode === true; leaveUnauthorizedCandidateRoute(); await Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]); searchIndex = buildWorkspaceSearchIndex(state, BASE); if (selectedCompletionOrders.size === 0) for (const order of state.orders.filter((candidate) => isOperationalOrder(candidate) && candidate.stage === "PRINT" && candidate.productionClosure?.status === "ELIGIBLE")) selectedCompletionOrders.add(order.id); notice = ""; } catch (error) { if (error instanceof PilotApiError && [401, 403].includes(error.status)) { state = undefined; searchIndex = []; candidateReviewAuthorized = false; } else { state = api.cachedBootstrap(); candidateReviewAuthorized = state?.capabilities.reviewMode === true; leaveUnauthorizedCandidateRoute(); searchIndex = state ? buildWorkspaceSearchIndex(state, BASE) : []; notice = state ? "Server tijdelijk niet bereikbaar · alleen lezen" : message(error); } } };
-  const refresh = async (): Promise<void> => { await load(); sharedSyncFormDirty = false; deferredSharedRevision = null; render(); };
+  let latestLoadPerformance: { bootstrapMs: number; routeProjectionMs: number; clientProjectionMs: number } | null = null;
+  const load = async (): Promise<void> => {
+    const bootstrapStartedAt = performance.now();
+    try {
+      state = await api.bootstrap();
+      const bootstrapMs = performance.now() - bootstrapStartedAt;
+      candidateReviewAuthorized = state.capabilities.reviewMode === true;
+      leaveUnauthorizedCandidateRoute();
+      const routeProjectionStartedAt = performance.now();
+      await Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]);
+      const routeProjectionMs = performance.now() - routeProjectionStartedAt;
+      const clientProjectionStartedAt = performance.now();
+      searchIndex = buildWorkspaceSearchIndex(state, BASE);
+      if (selectedCompletionOrders.size === 0) for (const order of state.orders.filter((candidate) => isOperationalOrder(candidate) && candidate.stage === "PRINT" && candidate.productionClosure?.status === "ELIGIBLE")) selectedCompletionOrders.add(order.id);
+      latestLoadPerformance = { bootstrapMs, routeProjectionMs, clientProjectionMs: performance.now() - clientProjectionStartedAt };
+      notice = "";
+    } catch (error) {
+      latestLoadPerformance = null;
+      if (error instanceof PilotApiError && [401, 403].includes(error.status)) { state = undefined; searchIndex = []; candidateReviewAuthorized = false; }
+      else { state = api.cachedBootstrap(); candidateReviewAuthorized = state?.capabilities.reviewMode === true; leaveUnauthorizedCandidateRoute(); searchIndex = state ? buildWorkspaceSearchIndex(state, BASE) : []; notice = state ? "Server tijdelijk niet bereikbaar · alleen lezen" : message(error); }
+    }
+  };
+  const refresh = async (): Promise<void> => {
+    await load();
+    sharedSyncFormDirty = false;
+    deferredSharedRevision = null;
+    const renderStartedAt = performance.now();
+    render();
+    if (state && latestLoadPerformance) console.info("sportpaleis-usable-state", {
+      route: path(),
+      ...Object.fromEntries(Object.entries(latestLoadPerformance).map(([key, value]) => [key, Math.round(value * 10) / 10])),
+      renderMs: Math.round((performance.now() - renderStartedAt) * 10) / 10,
+      timeToUsableMs: Math.round((performance.now() - applicationStartedAt) * 10) / 10,
+    });
+  };
   const checkSharedRevision = async (trigger: "interval" | "visible" | "focus" | "safe-boundary"): Promise<void> => {
     if (!state || !isSharedStatusRoute() || document.visibilityState !== "visible" || sharedSyncInFlight) return;
     sharedSyncInFlight = true;
@@ -3049,10 +3083,10 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
         throw error;
       }
     }
-    const options = await api.demoOptions();
-    demoEnabled = options.enabled;
-    await api.session();
+    const demoOptions = api.demoOptions().then((options) => { demoEnabled = options.enabled; }).catch(() => undefined);
     await refresh();
+    await demoOptions;
+    if (!state) render();
   };
   void initialize().catch((error) => { activationNotice = path() === `${BASE}/review-toegang` ? message(error) : ""; render(); });
 }

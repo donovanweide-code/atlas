@@ -98,6 +98,7 @@ import {
 
 const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = "sportpaleis_session";
+const BOOTSTRAP_CSRF_PREFIX = "session-bound:";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const PERSONAL_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -2609,7 +2610,7 @@ export class SportpaleisPilotService {
 
   async authenticate(token, now = new Date()) {
     if (!token) throw Object.assign(new Error("Aanmelding vereist."), { statusCode: 401, code: "UNAUTHENTICATED" });
-    const state = await this.store.read();
+    const state = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
     const session = state.sessions.find(({ idHash }) => safeEqualHex(idHash, sha256(token)));
     if (!session) {
       if (this.reviewDeveloperAccessPolicy) {
@@ -2756,6 +2757,7 @@ export class SportpaleisPilotService {
       revision: state.revision,
       currentUserId: user.id,
       currentUser: sessionUser,
+      csrfToken: session.csrfHash ? `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` : undefined,
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
@@ -5999,7 +6001,12 @@ export class SportpaleisPilotService {
 
   async #assertCsrf(token, csrfToken) {
     const { session } = await this.authenticate(token);
-    if (!csrfToken || !safeEqualHex(session.csrfHash, sha256(csrfToken))) {
+    const presented = String(csrfToken ?? "");
+    const bootstrapVerifier = presented.startsWith(BOOTSTRAP_CSRF_PREFIX) ? presented.slice(BOOTSTRAP_CSRF_PREFIX.length) : "";
+    const valid = bootstrapVerifier
+      ? safeEqualHex(session.csrfHash, bootstrapVerifier)
+      : Boolean(presented) && safeEqualHex(session.csrfHash, sha256(presented));
+    if (!valid) {
       throw Object.assign(new Error("Ongeldige requestbeveiliging."), { statusCode: 403, code: "CSRF_INVALID" });
     }
   }

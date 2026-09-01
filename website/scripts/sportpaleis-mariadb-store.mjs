@@ -89,6 +89,12 @@ function jsonValue(value) {
   return structuredClone(value);
 }
 
+function immutableSnapshot(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) immutableSnapshot(nested);
+  return Object.freeze(value);
+}
+
 function databaseOptions(config) {
   return {
     host: config.host,
@@ -201,14 +207,14 @@ export class SportpaleisMariaDbStore {
     }
   }
 
-  async read() {
+  async readSnapshot() {
     if (this.cachedState && this.cachedRevision !== null) {
       const revisionRows = await this.pool.query(
         "SELECT revision FROM sp_runtime_state WHERE organization_id = ?",
         ["sport-2000-sportpaleis-bv"],
       );
       if (revisionRows.length === 1 && Number(revisionRows[0].revision) === this.cachedRevision) {
-        return structuredClone(this.cachedState);
+        return this.cachedState;
       }
     }
     const rows = await this.pool.query(
@@ -223,7 +229,11 @@ export class SportpaleisMariaDbStore {
       throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
     }
     this.#remember(state);
-    return structuredClone(state);
+    return this.cachedState;
+  }
+
+  async read() {
+    return structuredClone(await this.readSnapshot());
   }
 
   async mutate(mutator) {
@@ -300,7 +310,7 @@ export class SportpaleisMariaDbStore {
   }
 
   #remember(state) {
-    this.cachedState = structuredClone(state);
+    this.cachedState = immutableSnapshot(structuredClone(state));
     this.cachedRevision = Number(state.revision);
   }
 }
