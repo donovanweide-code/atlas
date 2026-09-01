@@ -113,6 +113,13 @@ export interface OrderHistoryPage {
   bounded: true;
 }
 
+export interface ProductionCompletionProjection {
+  revision: number;
+  orders: WorkspaceOrder[];
+  productionJobs: ProductionJob[];
+  productionProposals: ProductionProposal[];
+}
+
 export interface MailPreview {
   sender: string;
   senderAddressStatus: string;
@@ -596,7 +603,7 @@ export class SportpaleisPilotApi {
     return responseBody(await fetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }));
   }
 
-  async completeProductionJob(productionJobId: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
+  async completeProductionJob(productionJobId: string): Promise<{ duplicate: boolean; value: ProductionJob; projection?: ProductionCompletionProjection }> {
     return responseBody(await this.#mutatingFetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-complete") },

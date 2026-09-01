@@ -10,7 +10,7 @@ import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-
 const passwords = { kevin: "Color-Choice-Admin-2026!", patrick: "Color-Choice-Operator-2026!", collega: "Color-Choice-Store-2026!", "donovan-support": "Color-Choice-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
 
-async function fixture(context, key) {
+async function fixture(context, key, { secondaryColor = "Blauw" } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), `sportpaleis-color-choice-${key}-`));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
@@ -20,10 +20,10 @@ async function fixture(context, key) {
   const operator = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
   let state = await service.bootstrap(admin.token);
   const pioneers = state.associations.find(({ name }) => name === "Almere Pioneers");
-  await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit", "Blauw"], defaultFoilColor: "Wit" });
+  await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit", secondaryColor], defaultFoilColor: "Wit" });
   state = await service.bootstrap(admin.token);
   const blueArticle = state.articles.find(({ id }) => id === "sp-live-116386");
-  await service.updateArticle(admin.token, admin.csrfToken, blueArticle.id, { expectedRevision: blueArticle.revision, foilColorOverride: "Blauw" });
+  await service.updateArticle(admin.token, admin.csrfToken, blueArticle.id, { expectedRevision: blueArticle.revision, foilColorOverride: secondaryColor });
   const created = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "INDIVIDUAL", customer: `Kleurkeuze ${key}`, customerEmail: "", customerPhone: "0612345678",
     standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
@@ -36,8 +36,8 @@ async function fixture(context, key) {
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, receipt.revision, `color-choice-${key}-control`)).value;
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, `color-choice-${key}-proposal`)).value;
   const byColor = (color) => proposal.groups.find(({ foilColor }) => foilColor === color);
-  assert.ok(byColor("Wit") && byColor("Blauw"));
-  return { service, admin, operator, controlled, proposal, white: byColor("Wit"), blue: byColor("Blauw") };
+  assert.ok(byColor("Wit") && byColor(secondaryColor));
+  return { service, admin, operator, controlled, proposal, white: byColor("Wit"), blue: byColor(secondaryColor) };
 }
 
 test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en rondt alleen gekozen kleur af", async (context) => {
@@ -104,6 +104,51 @@ test("gelijktijdige medewerkerkeuzes leveren nooit twee actieve kleuren in dezel
   assert.equal(saved.groups.filter(({ status }) => status === "OPEN").length, 1);
 });
 
+test("ZWART Bedrukt promoveert WIT over voorstelgrenzen en groepeert gelijke WIT-output atomisch", async (context) => {
+  const { service, admin, operator, proposal, white, blue: black } = await fixture(context, "black-white-hotfix", { secondaryColor: "Zwart" });
+  const blackJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: black.id, orders: black.orders }, "black-white-hotfix-black-job")).value;
+  assert.equal(blackJob.snapshot.productionGroup.foilColor, "Zwart");
+
+  const secondCreated = (await service.createOrder(admin.token, admin.csrfToken, {
+    orderKind: "INDIVIDUAL", customer: "Tweede WIT-groep", customerEmail: "", customerPhone: "0612345678",
+    standardPersonalization: { ...empty, backNumber: "2", backNumberSizeClass: "SENIOR" },
+    items: [
+      { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: empty },
+      { articleId: "sp-live-116388", size: "L", quantity: 1, deviation: false, overrides: empty },
+    ],
+  }, "black-white-hotfix-second-order")).value;
+  const secondReceipt = await captureReceipt(service, admin, secondCreated, "black-white-hotfix-second-receipt");
+  const secondControlled = (await service.advanceOrder(admin.token, admin.csrfToken, secondCreated.id, secondReceipt.revision, "black-white-hotfix-second-control")).value;
+
+  const beforeConflict = await service.bootstrap(admin.token);
+  await assert.rejects(
+    service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, { orders: [{ id: secondControlled.id, expectedRevision: secondControlled.revision }], foilColor: "Wit" }, "black-white-hotfix-white-too-early"),
+    (error) => error.code === "PRODUCTION_PHYSICAL_STEP_CONFLICT",
+  );
+  const afterConflict = await service.bootstrap(admin.token);
+  assert.equal(afterConflict.revision, beforeConflict.revision, "geblokkeerde WIT-keuze laat state atomisch ongemoeid");
+
+  const completed = await service.completeProductionJob(operator.token, operator.csrfToken, blackJob.id, "black-white-hotfix-black-printed");
+  assert.equal(completed.value.status, "COMPLETED");
+  assert.equal(completed.projection.productionJobs[0].status, "COMPLETED");
+  assert.ok(completed.projection.productionProposals.some(({ id }) => id === proposal.id));
+
+  const afterBlack = await service.bootstrap(admin.token);
+  const currentSecond = afterBlack.orders.find(({ id }) => id === secondControlled.id);
+  const preparedWhite = (await service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, {
+    orders: [{ id: currentSecond.id, expectedRevision: currentSecond.revision }], foilColor: "Wit",
+  }, "black-white-hotfix-white-after-black")).value;
+  assert.equal(preparedWhite.proposal.id, proposal.id, "gelijke WIT-output gebruikt het bestaande voorstel");
+  assert.equal(preparedWhite.job.snapshot.productionGroup.foilColor, "Wit");
+  assert.deepEqual([...preparedWhite.job.snapshot.orderIds].sort(), [...new Set([white.orders[0].id, currentSecond.id])].sort());
+
+  const finalState = await service.bootstrap(admin.token);
+  const savedProposal = finalState.productionProposals.find(({ id }) => id === proposal.id);
+  const savedWhite = savedProposal.groups.find(({ productionJobId }) => productionJobId === preparedWhite.job.id);
+  assert.deepEqual(savedWhite.orders.map(({ id }) => id).sort(), [white.orders[0].id, currentSecond.id].sort());
+  assert.equal(finalState.productionProposals.filter(({ orders }) => orders.some(({ id }) => id === currentSecond.id)).length, 1, "geen tweede los WIT-voorstel aangemaakt");
+});
+
 test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /availableColorCount > 1 \? "Welke foliekleur wil je nu produceren\?" : "Nu maken"/u);
@@ -113,4 +158,7 @@ test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze
   assert.match(source, /data-remaining-open-production-group/u);
   assert.match(source, /blijft centraal aanwezig en wordt beschikbaar zodra de actieve kleur Bedrukt is gemeld/u);
   assert.match(source, /nu produceren/u);
+  assert.match(source, /state\.readOnlyFallback = true;[\s\S]*productieacties uitgeschakeld/u);
+  assert.match(source, /if \(state\.readOnlyFallback\) \{[\s\S]*state = await api\.bootstrap\(\)/u);
+  assert.match(source, /const actionsDisabled = Boolean\(state\.readOnlyFallback\)/u);
 });

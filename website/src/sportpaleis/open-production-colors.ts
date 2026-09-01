@@ -4,6 +4,12 @@ import { isOperationalProductionOrder } from "../workspace-search.ts";
 
 type ProductionGroup = NonNullable<ProductionProposal["groups"]>[number];
 
+export interface OpenProductionProjectionIndex {
+  orders: Map<string, WorkspaceOrder>;
+  jobs: Map<string, PilotBootstrap["productionJobs"][number]>;
+  printed: Map<string, Set<string>>;
+}
+
 function normalizedColor(value: unknown): string {
   return String(value ?? "").trim().toLocaleLowerCase("nl-NL");
 }
@@ -20,6 +26,15 @@ function printedLineKeys(order: WorkspaceOrder): Set<string> {
     }
   }
   return keys;
+}
+
+export function createOpenProductionProjectionIndex(state: Pick<PilotBootstrap, "orders" | "productionJobs">): OpenProductionProjectionIndex {
+  const orders = new Map(state.orders.filter(isOperationalProductionOrder).map((order) => [order.id, order]));
+  return {
+    orders,
+    jobs: new Map(state.productionJobs.map((job) => [job.id, job])),
+    printed: new Map([...orders].map(([id, order]) => [id, printedLineKeys(order)])),
+  };
 }
 
 function lineColor(order: WorkspaceOrder, lineId: string): string {
@@ -42,9 +57,8 @@ export interface OpenProductionColorContext {
  * PRODUCTION_GROUP_PRINTED event. Proposals, SVGs and awaiting PlotJobs are
  * deliberately only preparation evidence and never close a color.
  */
-export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders" | "productionProposals" | "productionJobs">): OpenProductionColorContext[] {
-  const orders = new Map(state.orders.filter(isOperationalProductionOrder).map((order) => [order.id, order]));
-  const printed = new Map([...orders].map(([id, order]) => [id, printedLineKeys(order)]));
+export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders" | "productionProposals" | "productionJobs">, projection = createOpenProductionProjectionIndex(state)): OpenProductionColorContext[] {
+  const { orders, jobs, printed } = projection;
   const contexts = new Map<string, OpenProductionColorContext>();
   const referenced = new Set<string>();
   const add = (foilColor: string, orderId: string, lineId: string, groupId?: string, jobId?: string) => {
@@ -60,7 +74,7 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
 
   for (const proposal of state.productionProposals ?? []) {
     for (const group of proposal.groups ?? []) {
-      const job = group.productionJobId ? state.productionJobs.find(({ id }) => id === group.productionJobId) : undefined;
+      const job = group.productionJobId ? jobs.get(group.productionJobId) : undefined;
       if (job?.status === "COMPLETED") continue;
       for (const ref of group.productionLineRefs) {
         const order = orders.get(ref.orderId);
@@ -83,14 +97,12 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
   return [...contexts.values()].sort((left, right) => left.foilColor.localeCompare(right.foilColor, "nl-NL"));
 }
 
-export function unprintedProductionGroup(state: Pick<PilotBootstrap, "orders" | "productionJobs">, group: ProductionGroup): ProductionGroup | null {
-  const job = group.productionJobId ? state.productionJobs.find(({ id }) => id === group.productionJobId) : undefined;
+export function unprintedProductionGroup(state: Pick<PilotBootstrap, "orders" | "productionJobs">, group: ProductionGroup, projection = createOpenProductionProjectionIndex(state)): ProductionGroup | null {
+  const job = group.productionJobId ? projection.jobs.get(group.productionJobId) : undefined;
   if (job?.status === "COMPLETED") return null;
-  const orderMap = new Map(state.orders.filter(isOperationalProductionOrder).map((order) => [order.id, order]));
-  const printed = new Map([...orderMap].map(([id, order]) => [id, printedLineKeys(order)]));
   const productionLineRefs = group.productionLineRefs.filter(({ orderId, lineId }) => {
-    const order = orderMap.get(orderId);
-    return Boolean(order?.productionLines?.some(({ id }) => id === lineId)) && !printed.get(orderId)?.has(`${orderId}|${lineId}`);
+    const order = projection.orders.get(orderId);
+    return Boolean(order?.productionLines?.some(({ id }) => id === lineId)) && !projection.printed.get(orderId)?.has(`${orderId}|${lineId}`);
   });
   if (!productionLineRefs.length) return null;
   const includedOrderIds = new Set(productionLineRefs.map(({ orderId }) => orderId));

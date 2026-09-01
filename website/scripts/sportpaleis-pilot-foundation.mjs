@@ -3418,25 +3418,47 @@ export class SportpaleisPilotService {
           if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });
           return order;
         });
-        const createdAt = iso();
         const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
         if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
-        const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
         for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE" });
         const groups = buildProductionProposalGroups(state, orders);
-        const proposal = {
-          id: `production-proposal-${randomBytes(10).toString("hex")}`,
-          proposalNumber: `PV-${new Date(createdAt).getUTCFullYear()}-${String(highest + 1).padStart(4, "0")}`,
-          createdAt,
-          initiatedBy: { userId: user.id, name: user.name, role: user.role },
-          orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })),
-          groups,
-          status: "OPEN",
-          productionJobId: null,
-          productionJobIds: [],
-        };
-        const requestedGroups = groups.filter(({ foilColor }) => foilColor.toLocaleLowerCase("nl-NL") === requestedFoilColor.toLocaleLowerCase("nl-NL"));
-        const currentGroup = requestedGroups.find(({ id }) => productionGroupSequenceState(state, proposal, id) === "CURRENT");
+        const requestedNewGroups = groups.filter(({ foilColor }) => normalizedProductionFoilColor(foilColor) === normalizedProductionFoilColor(requestedFoilColor));
+        const mergeTarget = requestedNewGroups.length === 1 ? (state.productionProposals ?? []).flatMap((candidate) => candidate.status === "OPEN"
+          ? (candidate.groups ?? []).filter((group) => group.status === "OPEN"
+            && productionGroupCompatibilityKey(group) === productionGroupCompatibilityKey(requestedNewGroups[0]))
+            .map((group) => ({ proposal: candidate, group }))
+          : []).find(({ proposal, group }) => productionGroupSequenceState(state, proposal, group.id) === "CURRENT") : null;
+        const createdAt = iso();
+        let proposal;
+        if (mergeTarget) {
+          proposal = mergeTarget.proposal;
+          const proposalOrderIds = new Set(proposal.orders.map(({ id }) => id));
+          for (const order of orders) if (!proposalOrderIds.has(order.id)) {
+            proposal.orders.push({ id: order.id, expectedRevision: order.revision });
+            proposalOrderIds.add(order.id);
+          }
+          for (const newGroup of groups) {
+            const compatible = proposal.groups.find((group) => group.status === "OPEN" && productionGroupCompatibilityKey(group) === productionGroupCompatibilityKey(newGroup));
+            if (compatible) mergeOpenProductionGroup(compatible, newGroup);
+            else proposal.groups.push(newGroup);
+          }
+        } else {
+          const highest = state.productionProposals.reduce((value, candidate) => Math.max(value, Number(String(candidate.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
+          proposal = {
+            id: `production-proposal-${randomBytes(10).toString("hex")}`,
+            proposalNumber: `PV-${new Date(createdAt).getUTCFullYear()}-${String(highest + 1).padStart(4, "0")}`,
+            createdAt,
+            initiatedBy: { userId: user.id, name: user.name, role: user.role },
+            orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })),
+            groups,
+            status: "OPEN",
+            productionJobId: null,
+            productionJobIds: [],
+          };
+        }
+        const requestedGroups = proposal.groups.filter(({ status, foilColor }) => status === "OPEN" && normalizedProductionFoilColor(foilColor) === normalizedProductionFoilColor(requestedFoilColor));
+        const currentGroup = requestedGroups.find((group) => (!mergeTarget || productionGroupCompatibilityKey(group) === productionGroupCompatibilityKey(requestedNewGroups[0]))
+          && productionGroupSequenceState(state, proposal, group.id) === "CURRENT");
         if (!currentGroup) throw Object.assign(new Error(requestedGroups.length ? "Er is al een andere fysieke kleurstap actief. Rond die eerst af; er is niets opgeslagen." : `${requestedFoilColor} is geen beschikbare OPEN foliekleur; er is niets opgeslagen.`), { statusCode: 409, code: requestedGroups.length ? "PRODUCTION_PHYSICAL_STEP_CONFLICT" : "PRODUCTION_GROUP_NOT_AVAILABLE" });
         if (!managedFoilColor(state, currentGroup.foilColor)) throw Object.assign(new Error("De huidige productiegroep heeft geen actieve beheerde foliekleur."), { statusCode: 409, code: "PRODUCTION_FOIL_COLOR_UNMANAGED" });
         if (payload.supplement) {
@@ -3469,10 +3491,11 @@ export class SportpaleisPilotService {
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.nextProductionJobSequence += 1;
-        state.productionProposals.unshift(proposal);
+        if (!mergeTarget) state.productionProposals.unshift(proposal);
         state.productionJobs.unshift(job);
         currentGroup.status = "CONVERTED";
         currentGroup.productionJobId = job.id;
+        proposal.productionJobIds ??= [];
         proposal.productionJobIds.push(job.id);
         if (proposal.groups.every(({ status }) => status === "CONVERTED")) { proposal.status = "CONVERTED"; proposal.productionJobId = job.id; }
         for (const order of currentOrders) {
@@ -3480,7 +3503,7 @@ export class SportpaleisPilotService {
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { productionJobId: job.id, jobNumber, productionGroupId: currentGroup.id, foilColor: currentGroup.foilColor, productionLineRefs: currentGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id) } });
           syncOpenProposalOrderRevisions(state, order);
         }
-        audit(state, user.id, "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), hardwareSendPerformed: false });
+        audit(state, user.id, mergeTarget ? "Gelijke foliekleur veilig aan bestaand productievoorstel toegevoegd" : "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), productionGroupId: currentGroup.id, foilColor: currentGroup.foilColor, sameColorGroupMerged: Boolean(mergeTarget), hardwareSendPerformed: false });
         audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, foilColor: currentGroup.foilColor, physicalStepSelectedBy: user.name, snapshotHash: job.snapshotHash, ...(currentGroup.efficiencyEvidence ? { efficiencyAnalysisHash: currentGroup.efficiencyEvidence.analysisHash, productionSupplementIds: currentGroup.supplements.map(({ id }) => id), customerOrderLinesCreatedForSupplement: false } : {}), hardwareSendPerformed: false });
         return { proposal, job };
       });
@@ -3602,7 +3625,17 @@ export class SportpaleisPilotService {
       }, { productionJobId });
       return { state, value: outcome };
     });
-    return result.value;
+    const completedJob = result.value.value;
+    const affectedOrderIds = new Set(completedJob.snapshot?.orderIds ?? []);
+    return {
+      ...result.value,
+      projection: {
+        revision: result.state.revision,
+        orders: result.state.orders.filter(({ id }) => affectedOrderIds.has(id)).map((order) => publicOrderWithProductionTruth(result.state, order, { includeReconciliation: true })),
+        productionJobs: [structuredClone(completedJob)],
+        productionProposals: result.state.productionProposals.filter(({ groups }) => (groups ?? []).some(({ productionJobId }) => productionJobId === completedJob.id)).map((proposal) => structuredClone(proposal)),
+      },
+    };
   }
 
   async replotProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
@@ -7356,16 +7389,66 @@ function syncOpenProposalOrderRevisions(state, order) {
   }
 }
 
+function normalizedProductionFoilColor(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("nl-NL");
+}
+
+function operationalProductionGroup(state, group) {
+  return (group?.productionLineRefs ?? []).some(({ orderId, lineId }) => {
+    const order = state.orders.find(({ id }) => id === orderId);
+    return Boolean(order
+      && !order.deletion
+      && order.productionArchive?.status !== "ARCHIVED"
+      && order.stage !== "DONE"
+      && (order.productionLines ?? []).some(({ id }) => id === lineId));
+  });
+}
+
+function activePhysicalProductionGroups(state) {
+  return (state.productionProposals ?? []).flatMap((proposal) => (proposal.groups ?? []).filter((group) => {
+    if (!group.productionJobId || !operationalProductionGroup(state, group)) return false;
+    return state.productionJobs.find(({ id }) => id === group.productionJobId)?.status === "AWAITING_HUMAN_CHECK";
+  }).map((group) => ({ proposal, group })));
+}
+
+function productionGroupCompatibilityKey(group) {
+  return [
+    String(group?.sourceChannel ?? "STORE"),
+    normalizedProductionFoilColor(group?.foilColor),
+    String(group?.outputWriter?.id ?? ""),
+    String(group?.outputWriter?.version ?? ""),
+  ].join("|");
+}
+
+function mergeOpenProductionGroup(target, source) {
+  const orderIds = new Set(target.orders.map(({ id }) => id));
+  for (const selection of source.orders) if (!orderIds.has(selection.id)) {
+    target.orders.push(structuredClone(selection));
+    orderIds.add(selection.id);
+  }
+  const lineKeys = new Set(target.productionLineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`));
+  for (const ref of source.productionLineRefs) if (!lineKeys.has(`${ref.orderId}|${ref.lineId}`)) {
+    target.productionLineRefs.push(structuredClone(ref));
+    lineKeys.add(`${ref.orderId}|${ref.lineId}`);
+  }
+  target.label = `${target.foilColor}${target.sourceChannel === "STORE" ? "" : ` · ${productionSourceLabel(target.sourceChannel)}`} — ${target.orders.length} ${target.orders.length === 1 ? "order" : "orders"}`;
+  return target;
+}
+
 function productionGroupSequenceState(state, proposal, groupId) {
   const groups = proposal?.groups ?? [];
   const group = groups.find(({ id }) => id === groupId);
   if (!group) return "UNKNOWN";
   const jobStatus = (candidate) => candidate.productionJobId ? state.productionJobs.find(({ id }) => id === candidate.productionJobId)?.status : null;
   if (jobStatus(group) === "COMPLETED") return "COMPLETED";
-  const activeGroup = groups.find((candidate) => jobStatus(candidate) === "AWAITING_HUMAN_CHECK");
-  if (activeGroup) return activeGroup.id === group.id ? "CURRENT" : "LATER";
   const dependencies = Array.isArray(group.dependsOnGroupIds) ? group.dependsOnGroupIds : [];
   if (dependencies.some((dependencyId) => jobStatus(groups.find(({ id }) => id === dependencyId) ?? {}) !== "COMPLETED")) return "LATER";
+  const activeGroups = activePhysicalProductionGroups(state);
+  if (activeGroups.length) {
+    if (jobStatus(group) === "AWAITING_HUMAN_CHECK") return "CURRENT";
+    const activeColors = new Set(activeGroups.map(({ group: activeGroup }) => normalizedProductionFoilColor(activeGroup.foilColor)));
+    return activeColors.size === 1 && activeColors.has(normalizedProductionFoilColor(group.foilColor)) ? "CURRENT" : "LATER";
+  }
   return group.status === "OPEN" ? "CURRENT" : "UNKNOWN";
 }
 

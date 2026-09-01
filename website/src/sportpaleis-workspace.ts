@@ -4,7 +4,7 @@ import "./styles/sportpaleis-teamwear.css";
 import { articleImage } from "./sportpaleis/catalog-images.ts";
 import { createCutJobBatch, createProductionPreview, createReferencePieces, sha256, SPORTPALEIS_MACHINE_CONSTRAINTS } from "./sportpaleis/direct-print/index.ts";
 import { calculateBedrukkenCheckoutTotal, canAccessAdmin, type AssociationConfiguration, type BackNumberSizeClass, type CatalogArticle, type ManagedCheckoutPriceLine, type ProductionJob, type ProductionLineType, type ProductionProofStatus, type ProductionProposal, type SportpaleisProductionFont, type SportpaleisVisualComposition, type TeamkitProposal, type TeamkitProposalItem, type ValidationStatus, type WorkspaceOrder } from "./sportpaleis/workspace-data.ts";
-import { PilotApiError, SportpaleisPilotApi, type PilotBootstrap } from "./sportpaleis/pilot-api.ts";
+import { PilotApiError, SportpaleisPilotApi, type PilotBootstrap, type ProductionCompletionProjection } from "./sportpaleis/pilot-api.ts";
 import { associationPersonalizationModel, isOrderablePrintedArticle, type CatalogPrintField } from "./sportpaleis/order-personalization.ts";
 import { exactManagedFontForLine, managedFontIdentity } from "./sportpaleis/managed-font-client-gate.ts";
 import { productionPieceFromSource, productionSourceByIdentity } from "./sportpaleis/production-sources.ts";
@@ -12,7 +12,7 @@ import { parseTeamProductionLines } from "./sportpaleis/team-production-lines.ts
 import { renderWorkspaceIcon } from "./workspace-icons.ts";
 import type { SequentialStepState } from "./workspace-sequence.ts";
 import { buildWorkspaceSearchIndex, isConfirmedPilotTestOrder, isFinalCleanStartOrder, isOperationalOrder, isOperationalProductionOrder, queryWorkspaceSearch, type WorkspaceSearchItem } from "./workspace-search.ts";
-import { openProductionColorContexts, unprintedProductionGroup } from "./sportpaleis/open-production-colors.ts";
+import { createOpenProductionProjectionIndex, openProductionColorContexts, unprintedProductionGroup, type OpenProductionProjectionIndex } from "./sportpaleis/open-production-colors.ts";
 import { appendProposalItem, appendProposalPlacement, proposalItemsFromEditor, teamkitProposalCreate, teamkitProposalDetail, teamkitProposalList } from "./sportpaleis-teamkit-workspace.ts";
 import { activateTeamkitExperience, catalogProductCard, teamkitCatalogSelectionIdentity, teamkitProposalExperience } from "./sportpaleis-teamkit-experience.ts";
 import { buildTeamwearRelationships } from "./sportpaleis-teamwear-foundations.ts";
@@ -63,6 +63,26 @@ export function applyFreeProductionBulkSettings(lines: FreeProductionLine[], sel
   return changed;
 }
 interface ProductionEfficiencyResult { status: "FIT" | "NO_SAFE_REST_CAPACITY"; analysisHash: string; supplement: Record<string, unknown>; evidence: { baseUsedLengthMm: number; augmentedUsedLengthMm: number; utilizationBeforePercent: number; utilizationAfterPercent: number; customerOrderLinesCreated: false }; historyEvidence: { matchingCompletedObjects: number; source: "IMMUTABLE_COMPLETED_PRODUCTION_JOBS" } }
+
+export function applyProductionCompletionProjection(state: PilotBootstrap, projection: ProductionCompletionProjection): void {
+  const replaceById = <T extends { id: string }>(current: T[], updates: T[]): T[] => {
+    const replacements = new Map(updates.map((entry) => [entry.id, entry]));
+    const seen = new Set<string>();
+    const next = current.map((entry) => {
+      const replacement = replacements.get(entry.id);
+      if (!replacement) return entry;
+      seen.add(entry.id);
+      return replacement;
+    });
+    for (const entry of updates) if (!seen.has(entry.id)) next.push(entry);
+    return next;
+  };
+  state.revision = projection.revision;
+  state.orders = replaceById(state.orders, projection.orders);
+  state.productionJobs = replaceById(state.productionJobs, projection.productionJobs);
+  state.productionProposals = replaceById(state.productionProposals ?? [], projection.productionProposals);
+  state.readOnlyFallback = false;
+}
 interface ProductionAssetDraft { id: string; assetId: string; widthMm: number; heightMm: number; foilColor: string; quantity: number; }
 interface PendingProductionLine { id: string; type: ProductionLineType; content: string; sourceId: string; widthMm: number; heightMm: number; foilColor?: string; quantity: number; previewLabel: string; provenance: string; personalizationField?: PrintField; placementRole?: "INITIALS_FIRST" | "INITIALS_INFIX" | "INITIALS_LAST"; placementRule?: { compositionId: string; compositeText: string; segmentIndex: 0 | 1 | 2; segmentCount: 3; alignment: "CENTER" } }
 interface DraftOrderMeta { customer: string; customerEmail: string; customerPhone: string; internalNote: string; noteAttention: boolean; priorityEnabled: boolean; alignedWith: string; priorityReason: string; priorityExplanation: string; deliveryMode: "PICKUP" | "DELIVERY"; postalCode: string; houseNumber: string; houseNumberSuffix: string; street: string; city: string; }
@@ -787,40 +807,47 @@ function production(state: PilotBootstrap): string {
 
 function productionExecution(state: PilotBootstrap, blocked: WorkspaceOrder[], batches: [string, WorkspaceOrder[]][], pref: PilotBootstrap["preferences"][string]): string {
   const operationalOrders = state.orders.filter(isOperationalProductionOrder);
+  const projection = createOpenProductionProjectionIndex(state);
+  const physicalState = productionPhysicalStepState(state, projection);
+  const actionsDisabled = Boolean(state.readOnlyFallback);
   const showReady = activeProductionFilter === "ready" || activeProductionFilter === "all";
   const showAttention = activeProductionFilter === "attention" || activeProductionFilter === "all";
   const showPrinting = activeProductionFilter === "printing" || activeProductionFilter === "all";
   const showDone = activeProductionFilter === "done" || activeProductionFilter === "all";
   const activeOrderIds = new Set(operationalOrders.map(({ id }) => id));
   const managedFoilColors = new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => color.trim().toLocaleLowerCase("nl-NL")));
-  const proposals = (state.productionProposals ?? []).filter((proposal) => (proposal.groups ?? []).some((group) => Boolean(unprintedProductionGroup(state, group))));
+  const proposals = (state.productionProposals ?? []).filter((proposal) => (proposal.groups ?? []).some((group) => Boolean(unprintedProductionGroup(state, group, projection))));
   const statusCounts = { attention: blocked.length, ready: operationalOrders.filter(({ productionStatus }) => productionStatus === "READY").length, printing: operationalOrders.filter(({ productionStatus }) => isActiveProductionStatus(productionStatus)).length, done: operationalOrders.filter(({ productionStatus }) => productionStatus === "DONE").length };
   const layout = state.settings.productionDefaults ?? { workingWidthMm: 440, minimumGapMm: 6.4 };
-  const proposalGroupSets = proposals.map((proposal) => ({ proposal, groups: proposalGroups(proposal, proposal.orders.map(({ id }) => state.orders.find((order) => order.id === id)).filter((order): order is WorkspaceOrder => Boolean(order))).map((group) => unprintedProductionGroup(state, group)).filter((group): group is NonNullable<typeof group> => Boolean(group)) }));
+  const proposalGroupSets = proposals.map((proposal) => ({ proposal, groups: proposalGroups(proposal, proposal.orders.map(({ id }) => projection.orders.get(id)).filter((order): order is WorkspaceOrder => Boolean(order))).map((group) => unprintedProductionGroup(state, group, projection)).filter((group): group is NonNullable<typeof group> => Boolean(group)) }));
   const openGroups = proposalGroupSets.flatMap(({ proposal, groups }) => groups
-    .filter(({ id, status, orders }) => status === "OPEN" && orders.some(({ id: orderId }) => activeOrderIds.has(orderId)) && proposalGroupSequenceState(state, groups, id) === "CURRENT")
+    .filter(({ id, status, orders }) => status === "OPEN" && orders.some(({ id: orderId }) => activeOrderIds.has(orderId)) && proposalGroupSequenceState(state, groups, id, physicalState, projection) === "CURRENT")
     .map((group) => ({ proposal, group })))
     .filter(({ group }) => managedFoilColors.has(group.foilColor.trim().toLocaleLowerCase("nl-NL")));
   const remainingOpenGroups = proposalGroupSets.flatMap(({ proposal, groups }) => groups
-    .filter(({ id, status, orders }) => status === "OPEN" && orders.some(({ id: orderId }) => activeOrderIds.has(orderId)) && proposalGroupSequenceState(state, groups, id) === "LATER")
+    .filter(({ id, status, orders }) => status === "OPEN" && orders.some(({ id: orderId }) => activeOrderIds.has(orderId)) && proposalGroupSequenceState(state, groups, id, physicalState, projection) === "LATER")
     .map((group) => ({ proposal, group })))
     .filter(({ group }) => managedFoilColors.has(group.foilColor.trim().toLocaleLowerCase("nl-NL")));
   const currentJobs = proposalGroupSets.flatMap(({ proposal, groups }) => groups
-    .filter(({ id, status, productionJobId }) => status === "CONVERTED" && Boolean(productionJobId) && proposalGroupSequenceState(state, groups, id) === "CURRENT")
-    .map((group) => ({ proposal, group, job: state.productionJobs.find(({ id }) => id === group.productionJobId) })))
+    .filter(({ id, status, productionJobId }) => status === "CONVERTED" && Boolean(productionJobId) && proposalGroupSequenceState(state, groups, id, physicalState, projection) === "CURRENT")
+    .map((group) => ({ proposal, group, job: group.productionJobId ? projection.jobs.get(group.productionJobId) : undefined })))
     .filter(({ job }) => job?.status === "AWAITING_HUMAN_CHECK");
   const proposedOrderIds = new Set(proposalGroupSets.flatMap(({ groups }) => groups.flatMap(({ orders }) => orders.map(({ id }) => id))));
   const readyForProposal = operationalOrders.filter(({ id, productionStatus }) => productionStatus === "READY" && !proposedOrderIds.has(id));
   const readyOrderIds = new Set(readyForProposal.map(({ id }) => id));
-  const directReadyGroups = batches.map(([foilColor, orders]) => [foilColor, orders.filter(({ id }) => readyOrderIds.has(id))] as [string, WorkspaceOrder[]]).filter(([, orders]) => orders.length > 0);
-  const groupDetails = (group: NonNullable<ProductionProposal["groups"]>[number]) => `<details class="sp-production-batch-details"><summary>+ Bekijk wat meegaat</summary><p class="sp-muted">Deze opgeslagen fysieke groep wordt als één geheel gecontroleerd en gemaakt.</p>${group.orders.map(({ id }) => { const order = state.orders.find((candidate) => candidate.id === id); const refs = group.productionLineRefs.filter(({ orderId }) => orderId === id); return `<article><span aria-hidden="true">✓</span><div><strong>${esc(id)} · ${esc(order?.customer ?? "Onbekende order")}</strong><span>${refs.map(({ lineId }) => { const line = order?.productionLines?.find(({ id: candidate }) => candidate === lineId); return line ? `${esc(line.content)} × ${line.quantity}` : "Opdruk controleren"; }).join(" · ")}</span></div></article>`; }).join("")}</details>`;
+  const allDirectReadyGroups = batches.map(([foilColor, orders]) => [foilColor, orders.filter(({ id }) => readyOrderIds.has(id))] as [string, WorkspaceOrder[]]).filter(([, orders]) => orders.length > 0);
+  const directReadyGroups = allDirectReadyGroups.filter(([foilColor]) => !physicalState.activeColors.size || (physicalState.activeColors.size === 1 && physicalState.activeColors.has(normalizedFoilColor(foilColor))));
+  const waitingDirectReadyGroups = allDirectReadyGroups.filter(([foilColor]) => !directReadyGroups.some(([current]) => normalizedFoilColor(current) === normalizedFoilColor(foilColor)));
+  const groupDetails = (group: NonNullable<ProductionProposal["groups"]>[number]) => `<details class="sp-production-batch-details"><summary>+ Bekijk wat meegaat</summary><p class="sp-muted">Deze opgeslagen fysieke groep wordt als één geheel gecontroleerd en gemaakt.</p>${group.orders.map(({ id }) => { const order = projection.orders.get(id); const refs = group.productionLineRefs.filter(({ orderId }) => orderId === id); return `<article><span aria-hidden="true">✓</span><div><strong>${esc(id)} · ${esc(order?.customer ?? "Onbekende order")}</strong><span>${refs.map(({ lineId }) => { const line = order?.productionLines?.find(({ id: candidate }) => candidate === lineId); return line ? `${esc(line.content)} × ${line.quantity}` : "Opdruk controleren"; }).join(" · ")}</span></div></article>`; }).join("")}</details>`;
   const directDetails = (orders: WorkspaceOrder[], foilColor: string) => `<details class="sp-production-batch-details"><summary>+ Bekijk wat meegaat</summary><p class="sp-muted">Alles is veilig voorgeselecteerd. Vink alleen een echte uitzondering uit vóór de definitieve controle.</p>${orders.map((order) => `<article><label><input type="checkbox" data-direct-production-order-select="${esc(`${foilColor}|${order.id}`)}" checked><span><strong>${esc(order.id)} · ${esc(order.customer)}</strong><small>${(order.productionLines ?? []).filter((line) => canonicalProductionLineFoilColor(order, line).toLocaleLowerCase("nl-NL") === foilColor.toLocaleLowerCase("nl-NL")).map((line) => `${esc(line.content)} × ${line.quantity}`).join(" · ") || `${order.totalPieces} exemplaren`}</small></span></label></article>`).join("")}</details>`;
-  const openColorContexts = openProductionColorContexts(state);
-  const availableColorCount = openColorContexts.length;
-  const persistedGroupCards = openGroups.map(({ proposal, group }) => { const objectCount = productionGroupObjectCount(state.orders, group); const orderReferences = group.orders.map(({ id }) => id).join(" · "); const busyKey = `proposal:${group.id}`; const selectedBusy = productionProposalBusyKey === busyKey; const waiting = productionProposalBusy && !selectedBusy; return `<article class="sp-production-ready-group"><div><p class="sp-eyebrow">BESCHIKBARE FOLIEKLEUR</p><strong>${esc(group.foilColor.toUpperCase())}</strong><small>${objectCount} ${objectCount === 1 ? "opdruk" : "opdrukken"} · ${group.orders.length} ${group.orders.length === 1 ? "order" : "orders"}</small><p class="sp-production-order-refs">${esc(orderReferences)}</p>${groupDetails(group)}</div><div class="sp-production-proposal-actions"><label class="sp-production-select-all"><input type="checkbox" data-production-group-select="${esc(group.id)}" checked ${productionProposalBusy ? "disabled" : ""}> Alles selecteren · hele batch</label><button class="sp-button sp-button--primary" data-action="confirm-production-proposal" data-proposal-id="${esc(proposal.id)}" data-proposal-group-id="${esc(group.id)}" data-order-ids="${esc(group.orders.map(({ id }) => id).join(","))}" ${productionProposalBusy ? `disabled${selectedBusy ? ' aria-busy="true"' : ""}` : ""}>${selectedBusy ? `${esc(group.foilColor.toUpperCase())} · Productievoorstel maken…` : waiting ? `${esc(group.foilColor.toUpperCase())} · Wacht op huidige fysieke stap` : `${esc(group.foilColor.toUpperCase())} nu produceren`}</button></div></article>`; }).join("");
+  const openColorContexts = openProductionColorContexts(state, projection);
+  const availableColorCount = new Set([...openGroups.map(({ group }) => normalizedFoilColor(group.foilColor)), ...directReadyGroups.map(([foilColor]) => normalizedFoilColor(foilColor))]).size;
+  const persistedGroupCards = openGroups.map(({ proposal, group }) => { const objectCount = productionGroupObjectCount(state.orders, group); const orderReferences = group.orders.map(({ id }) => id).join(" · "); const busyKey = `proposal:${group.id}`; const selectedBusy = productionProposalBusyKey === busyKey; const waiting = productionProposalBusy && !selectedBusy; const disabled = productionProposalBusy || actionsDisabled; return `<article class="sp-production-ready-group"><div><p class="sp-eyebrow">BESCHIKBARE FOLIEKLEUR</p><strong>${esc(group.foilColor.toUpperCase())}</strong><small>${objectCount} ${objectCount === 1 ? "opdruk" : "opdrukken"} · ${group.orders.length} ${group.orders.length === 1 ? "order" : "orders"}</small><p class="sp-production-order-refs">${esc(orderReferences)}</p>${groupDetails(group)}</div><div class="sp-production-proposal-actions"><label class="sp-production-select-all"><input type="checkbox" data-production-group-select="${esc(group.id)}" checked ${disabled ? "disabled" : ""}> Alles selecteren · hele batch</label><button class="sp-button sp-button--primary" data-action="confirm-production-proposal" data-proposal-id="${esc(proposal.id)}" data-proposal-group-id="${esc(group.id)}" data-order-ids="${esc(group.orders.map(({ id }) => id).join(","))}" ${disabled ? `disabled${selectedBusy ? ' aria-busy="true"' : ""}` : ""}>${selectedBusy ? `${esc(group.foilColor.toUpperCase())} · Productievoorstel maken…` : waiting ? `${esc(group.foilColor.toUpperCase())} · verzoek wordt verwerkt` : `${esc(group.foilColor.toUpperCase())} nu produceren`}</button></div></article>`; }).join("");
   const remainingGroupCards = remainingOpenGroups.map(({ group }) => { const objectCount = productionGroupObjectCount(state.orders, group); const orderReferences = group.orders.map(({ id }) => id).join(" · "); return `<article class="sp-production-ready-group sp-production-ready-group--pending" data-remaining-open-production-group="${esc(group.id)}"><div><p class="sp-eyebrow">NOG TE PRODUCEREN</p><strong>${esc(group.foilColor.toUpperCase())}</strong><small>${objectCount} ${objectCount === 1 ? "opdruk" : "opdrukken"} · blijft OPEN</small><p class="sp-production-order-refs">${esc(orderReferences)}</p>${groupDetails(group)}</div><div class="sp-safe-note"><strong>Wacht op huidige fysieke stap</strong><p>Deze foliekleur blijft centraal aanwezig en wordt beschikbaar zodra de actieve kleur Bedrukt is gemeld.</p></div></article>`; }).join("");
   const directGroupCards = directReadyGroups.map(([foilColor, orders]) => {
-    const objectCount = productionColorObjectCount(orders, foilColor);
+    const colorContext = openColorContexts.find((context) => normalizedFoilColor(context.foilColor) === normalizedFoilColor(foilColor));
+    const contextOrders = colorContext?.orderIds ?? orders.map(({ id }) => id);
+    const objectCount = colorContext ? colorContext.productionLineRefs.reduce((sum, { orderId, lineId }) => sum + Number(projection.orders.get(orderId)?.productionLines?.find(({ id }) => id === lineId)?.quantity ?? 0), 0) : productionColorObjectCount(orders, foilColor);
     const busyKey = `direct:${foilColor}`;
     const selectedBusy = productionProposalBusyKey === busyKey;
     const waiting = productionProposalBusy && !selectedBusy;
@@ -832,10 +859,14 @@ function productionExecution(state: PilotBootstrap, blocked: WorkspaceOrder[], b
       ? `<div class="sp-safe-note sp-production-efficiency-result" data-tone="success"><strong>Past aantoonbaar in dezelfde folielengte</strong><p>${efficiency.evidence.baseUsedLengthMm.toFixed(1)} → ${efficiency.evidence.augmentedUsedLengthMm.toFixed(1)} mm · benutting ${efficiency.evidence.utilizationBeforePercent.toFixed(1)}% → ${efficiency.evidence.utilizationAfterPercent.toFixed(1)}%.</p><p>Dit wordt interne folie-opvulling, nooit een klantorderregel.</p><button class="sp-button sp-button--secondary" type="button" data-action="prepare-efficient-production-color" data-foil-color="${esc(foilColor)}" data-order-ids="${esc(orderIds)}">Efficiënter produceren</button></div>`
       : `<div class="sp-safe-note sp-production-efficiency-result" data-tone="neutral"><strong>Niet toevoegen</strong><p>De invoer past niet aantoonbaar binnen dezelfde gebruikte folielengte. Snel produceren blijft ongewijzigd beschikbaar.</p></div>` : "";
     const efficiencyForm = fonts.length ? `<details class="sp-production-efficiency" ${efficiency ? "open" : ""}><summary>Vrije folieruimte benutten</summary><form data-production-efficiency-form data-foil-color="${esc(foilColor)}" data-order-ids="${esc(orderIds)}"><p>Alleen na een echte geometriecontrole. Er ontstaat geen klantorder of extra bewijsregel.</p><div class="sp-production-efficiency-fields"><label>Soort<select name="type"><option value="NUMBER">Nummer</option><option value="INITIALS">Initialen</option><option value="TEXT">Vrije tekst</option></select></label><label>Waarde<input name="content" required maxlength="160" placeholder="Bijvoorbeeld 99"></label><label>Lettertype<select name="sourceId">${fonts.map(({ id, name }) => `<option value="${esc(id)}" ${id === defaultFont?.id ? "selected" : ""}>${esc(name)}</option>`).join("")}</select></label><label>Hoogte (mm)<input name="heightMm" type="number" min="1" max="430" step="0.1" value="80" required></label><label>Aantal<input name="quantity" type="number" min="1" max="999" value="1" required></label></div><button class="sp-button sp-button--secondary" type="submit">Controleer restcapaciteit</button></form>${efficiencyResult}</details>` : "";
-    return `<article class="sp-production-ready-group"><div><p class="sp-eyebrow">BESCHIKBARE FOLIEKLEUR</p><strong>${esc(foilColor.toUpperCase())}</strong><small>${objectCount} ${objectCount === 1 ? "opdruk" : "opdrukken"} · ${orders.length} ${orders.length === 1 ? "order" : "orders"}</small>${directDetails(orders, foilColor)}${efficiencyForm}</div><div class="sp-production-proposal-actions"><label class="sp-production-select-all"><input type="checkbox" data-direct-production-select="${esc(foilColor)}" checked ${productionProposalBusy ? "disabled" : ""}> Alles selecteren · hele batch</label><button class="sp-button sp-button--primary" data-action="prepare-and-print-production-color" data-foil-color="${esc(foilColor)}" data-order-ids="${esc(orderIds)}" ${productionProposalBusy ? `disabled${selectedBusy ? ' aria-busy="true"' : ""}` : ""}>${selectedBusy ? `${esc(foilColor.toUpperCase())} · Productievoorstel maken…` : waiting ? `${esc(foilColor.toUpperCase())} · Wacht op huidige fysieke stap` : `Snel produceren · ${esc(foilColor.toUpperCase())}`}</button></div></article>`;
+    const disabled = productionProposalBusy || actionsDisabled;
+    const groupingNote = colorContext?.proposalGroupIds.length ? `<p class="sp-muted">Bestaand OPEN ${esc(foilColor.toUpperCase())}-werk (${esc(contextOrders.join(" · "))}) wordt server-side alleen bij gelijke bronroute en outputwriter in dezelfde immutable groep opgenomen.</p>` : "";
+    return `<article class="sp-production-ready-group"><div><p class="sp-eyebrow">BESCHIKBARE FOLIEKLEUR</p><strong>${esc(foilColor.toUpperCase())}</strong><small>${objectCount} ${objectCount === 1 ? "opdruk" : "opdrukken"} · ${contextOrders.length} ${contextOrders.length === 1 ? "order" : "orders"}</small>${groupingNote}${directDetails(orders, foilColor)}${efficiencyForm}</div><div class="sp-production-proposal-actions"><label class="sp-production-select-all"><input type="checkbox" data-direct-production-select="${esc(foilColor)}" checked ${disabled ? "disabled" : ""}> Alles selecteren · hele batch</label><button class="sp-button sp-button--primary" data-action="prepare-and-print-production-color" data-foil-color="${esc(foilColor)}" data-order-ids="${esc(orderIds)}" ${disabled ? `disabled${selectedBusy ? ' aria-busy="true"' : ""}` : ""}>${selectedBusy ? `${esc(foilColor.toUpperCase())} · Productievoorstel maken…` : waiting ? `${esc(foilColor.toUpperCase())} · verzoek wordt verwerkt` : `Snel produceren · ${esc(foilColor.toUpperCase())}`}</button></div></article>`;
   }).join("");
+  const waitingDirectGroupCards = waitingDirectReadyGroups.map(([foilColor, orders]) => `<article class="sp-production-ready-group sp-production-ready-group--pending" data-waiting-direct-production-color="${esc(normalizedFoilColor(foilColor))}"><div><p class="sp-eyebrow">NOG TE PRODUCEREN</p><strong>${esc(foilColor.toUpperCase())}</strong><small>${productionColorObjectCount(orders, foilColor)} opdrukken · ${orders.length} ${orders.length === 1 ? "order" : "orders"}</small><p class="sp-production-order-refs">${esc(orders.map(({ id }) => id).join(" · "))}</p></div><div class="sp-safe-note"><strong>Andere fysieke kleur is nog niet Bedrukt bevestigd</strong><p>Deze kleur wordt automatisch opnieuw beoordeeld zodra de actieve productiejob softwarematig als Bedrukt is vastgelegd.</p></div></article>`).join("");
+  const currentPhysicalCards = currentJobs.map(({ group, job }) => job ? `<article class="sp-production-ready-group sp-production-ready-group--current" data-current-physical-production-job="${esc(job.id)}"><div><p class="sp-eyebrow">HUIDIGE FYSIEKE STAP</p><strong>${esc(group.foilColor.toUpperCase())}</strong><small>${esc(job.jobNumber)} · ${esc(group.orders.map(({ id }) => id).join(" · "))}</small><p>Fysiek gereed? Bevestig Bedrukt; daarna worden alle resterende kleuren direct opnieuw geprojecteerd.</p></div><div class="sp-production-proposal-actions"><a class="sp-button sp-button--secondary" data-link href="${BASE}/productie/historie/${encodeURIComponent(job.id)}">Open productiebestand</a><button class="sp-button sp-button--primary" data-action="complete-production-job" data-production-job-id="${esc(job.id)}" ${actionsDisabled || productionProposalBusy ? "disabled" : ""}>Bedrukt · ${esc(group.foilColor.toUpperCase())}</button></div></article>` : "").join("");
   const contextualFeedback = productionActionFeedback ? `<div class="sp-safe-note sp-production-action-feedback" data-production-action-feedback data-tone="${productionActionFeedback.tone}" role="status" aria-live="polite"><strong>${esc(productionActionFeedback.message)}</strong></div>` : "";
-  const proposalPanel = `<section class="sp-panel sp-production-proposals sp-production-primary-actions"><div class="sp-panel__head"><div><p class="sp-eyebrow">VOLGENDE FYSIEKE STAP</p><h2>${availableColorCount > 1 ? "Welke foliekleur wil je nu produceren?" : "Nu maken"}</h2><p>${availableColorCount > 1 ? "Alle nog niet Bedrukt afgeronde kleuren blijven zichtbaar. Kies de fysieke stap die nu op de machine aansluit." : availableColorCount === 1 ? "De enige veilige foliekleur staat klaar." : "Er staat nu geen foliekleur klaar om te produceren."} Een voorstel of productiebestand rondt een kleur nooit af; alleen Bedrukt doet dat.</p></div><span class="sp-count">${availableColorCount}</span></div>${contextualFeedback}${persistedGroupCards}${directGroupCards}${remainingGroupCards}${persistedGroupCards || directGroupCards || remainingGroupCards ? "" : `<p class="sp-muted">Nog geen nieuwe fysieke batch klaar.</p>`}</section>`;
+  const proposalPanel = `<section class="sp-panel sp-production-proposals sp-production-primary-actions"><div class="sp-panel__head"><div><p class="sp-eyebrow">VOLGENDE FYSIEKE STAP</p><h2>${availableColorCount > 1 ? "Welke foliekleur wil je nu produceren?" : "Nu maken"}</h2><p>${availableColorCount > 1 ? "Alle veilig beschikbare kleuren blijven zichtbaar. Kies de fysieke stap die nu op de machine aansluit." : availableColorCount === 1 ? "De enige veilige foliekleur staat klaar." : currentJobs.length ? "Bevestig eerst de getoonde fysieke productiejob als Bedrukt." : "Er staat nu geen foliekleur klaar om te produceren."} Een voorstel of productiebestand rondt een kleur nooit af; alleen Bedrukt doet dat.</p></div><span class="sp-count">${availableColorCount}</span></div>${state.readOnlyFallback ? `<div class="sp-safe-note" data-tone="error"><strong>Workspace-service niet bereikbaar · productieacties uitgeschakeld</strong><p>De laatst bekende status blijft alleen-lezen zichtbaar. Hervat pas nadat de actuele serverstatus geladen is.</p></div>` : ""}${contextualFeedback}${currentPhysicalCards}${persistedGroupCards}${directGroupCards}${remainingGroupCards}${waitingDirectGroupCards}${currentPhysicalCards || persistedGroupCards || directGroupCards || remainingGroupCards || waitingDirectGroupCards ? "" : `<p class="sp-muted">Nog geen nieuwe fysieke batch klaar.</p>`}</section>`;
   const productionSearchOrders = operationalOrders.filter(({ stage, productionStatus }) => ["CONTROL", "PRINT", "DONE"].includes(stage) || productionStatus === "READY" || isActiveProductionStatus(productionStatus));
   const productionSearchPanel = `<details class="sp-panel sp-context-details sp-store-search"><summary>Order zoeken</summary><div class="sp-context-details__body"><p>Open rechtstreeks een productieorder.</p><label class="sp-search"><input type="search" data-production-order-search placeholder="Ordernummer, klant of team"></label><div class="sp-store-results" data-production-order-search-results>${productionSearchOrders.map((order) => `<a hidden data-link href="${BASE}/orders/${encodeURIComponent(order.id)}" data-production-order-search-row="${esc(`${order.id} ${order.sourceContext?.externalReference ?? ""} ${order.customer} ${order.teamContext ?? ""} ${order.association}`.toLowerCase())}"><span><strong>${esc(order.id)} · ${esc(order.customer)}</strong><small>${esc(order.sourceContext?.externalReference ? `${order.sourceContext.externalReference} · ` : "")}${esc(operationalOrderStatus(order).label)}</small></span><b>Openen ›</b></a>`).join("")}</div><small data-production-order-search-count>Voer een ordernummer, klant of team in.</small></div></details>`;
   const attentionPanel = `<section class="sp-panel sp-production-attention-list" id="productie-aandacht"><div class="sp-panel__head"><div><p class="sp-eyebrow">AANDACHT NODIG</p><h2>Alleen echte uitzonderingen</h2></div><span class="sp-count">${blocked.length}</span></div>${blocked.map((order) => { const guidance = productionAttentionGuidance(state, order); return `<article class="sp-production-attention-item"><div><strong>${esc(order.id)} · ${esc(guidance.signal)}</strong><p>${esc(guidance.explanation)}</p></div><a class="sp-button sp-button--secondary" data-link href="${esc(guidance.href)}">${esc(guidance.action)}</a></article>`; }).join("") || `<p class="sp-muted">Geen uitzonderingen in dit filter.</p>`}</section>`;
@@ -1117,18 +1148,47 @@ function proposalGroups(proposal: ProductionProposal, orders: WorkspaceOrder[]):
   }];
 }
 
-function proposalGroupSequenceState(state: PilotBootstrap, groups: NonNullable<ProductionProposal["groups"]>, groupId: string): SequentialStepState {
+interface ProductionPhysicalStepState {
+  activeColors: Set<string>;
+  activeGroupIds: Set<string>;
+}
+
+function normalizedFoilColor(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("nl-NL");
+}
+
+function productionPhysicalStepState(state: PilotBootstrap, projection = createOpenProductionProjectionIndex(state)): ProductionPhysicalStepState {
+  const activeColors = new Set<string>();
+  const activeGroupIds = new Set<string>();
+  for (const proposal of state.productionProposals ?? []) for (const group of proposal.groups ?? []) {
+    if (!group.productionJobId || projection.jobs.get(group.productionJobId)?.status !== "AWAITING_HUMAN_CHECK") continue;
+    const operational = group.productionLineRefs.some(({ orderId, lineId }) => {
+      const order = projection.orders.get(orderId);
+      return Boolean(order && order.stage !== "DONE" && order.productionArchive?.status !== "ARCHIVED" && order.productionLines?.some(({ id }) => id === lineId));
+    });
+    if (!operational) continue;
+    activeGroupIds.add(group.id);
+    activeColors.add(normalizedFoilColor(group.foilColor));
+  }
+  return { activeColors, activeGroupIds };
+}
+
+function proposalGroupSequenceState(state: PilotBootstrap, groups: NonNullable<ProductionProposal["groups"]>, groupId: string, physicalState?: ProductionPhysicalStepState, projection?: OpenProductionProjectionIndex): SequentialStepState {
   const group = groups.find(({ id }) => id === groupId);
   if (!group) return "UNKNOWN";
-  const jobStatus = (candidate: NonNullable<ProductionProposal["groups"]>[number]) => candidate.productionJobId ? state.productionJobs.find(({ id }) => id === candidate.productionJobId)?.status : null;
+  const index = projection ?? createOpenProductionProjectionIndex(state);
+  const jobStatus = (candidate: NonNullable<ProductionProposal["groups"]>[number]) => candidate.productionJobId ? index.jobs.get(candidate.productionJobId)?.status : null;
   if (jobStatus(group) === "COMPLETED") return "COMPLETED";
-  const activeGroup = groups.find((candidate) => jobStatus(candidate) === "AWAITING_HUMAN_CHECK");
-  if (activeGroup) return activeGroup.id === group.id ? "CURRENT" : "LATER";
   const dependencies = group.dependsOnGroupIds ?? [];
   if (dependencies.some((dependencyId) => {
     const dependency = groups.find(({ id }) => id === dependencyId);
     return !dependency || jobStatus(dependency) !== "COMPLETED";
   })) return "LATER";
+  const physical = physicalState ?? productionPhysicalStepState(state, index);
+  if (physical.activeColors.size) {
+    if (physical.activeGroupIds.has(group.id)) return "CURRENT";
+    return physical.activeColors.size === 1 && physical.activeColors.has(normalizedFoilColor(group.foilColor)) ? "CURRENT" : "LATER";
+  }
   return group.status === "OPEN" ? "CURRENT" : "UNKNOWN";
 }
 
@@ -2151,17 +2211,30 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   const load = async (): Promise<void> => { try { state = await api.bootstrap(); candidateReviewAuthorized = state.capabilities.reviewMode === true; leaveUnauthorizedCandidateRoute(); await Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]); searchIndex = buildWorkspaceSearchIndex(state, BASE); if (selectedCompletionOrders.size === 0) for (const order of state.orders.filter((candidate) => isOperationalOrder(candidate) && candidate.stage === "PRINT" && candidate.productionClosure?.status === "ELIGIBLE")) selectedCompletionOrders.add(order.id); notice = ""; } catch (error) { if (error instanceof PilotApiError && [401, 403].includes(error.status)) { state = undefined; searchIndex = []; candidateReviewAuthorized = false; } else { state = api.cachedBootstrap(); candidateReviewAuthorized = state?.capabilities.reviewMode === true; leaveUnauthorizedCandidateRoute(); searchIndex = state ? buildWorkspaceSearchIndex(state, BASE) : []; notice = state ? "Server tijdelijk niet bereikbaar · alleen lezen" : message(error); } } };
   const refresh = async (): Promise<void> => { await load(); sharedSyncFormDirty = false; deferredSharedRevision = null; render(); };
   const checkSharedRevision = async (trigger: "interval" | "visible" | "focus" | "safe-boundary"): Promise<void> => {
-    if (!state || state.readOnlyFallback || !isSharedStatusRoute() || document.visibilityState !== "visible" || sharedSyncInFlight) return;
+    if (!state || !isSharedStatusRoute() || document.visibilityState !== "visible" || sharedSyncInFlight) return;
     sharedSyncInFlight = true;
     try {
       const { revision } = await api.currentRevision();
+      if (state.readOnlyFallback) {
+        state = await api.bootstrap();
+        deferredSharedRevision = null;
+        notice = "Workspace-service hersteld · actuele productiestatus geladen.";
+        render({ preserveScroll: true });
+        return;
+      }
       if (revision === state.revision) { deferredSharedRevision = null; return; }
       if (sharedSyncFormDirty || hasFocusedEditor()) { deferredSharedRevision = revision; showDeferredSyncNotice(); return; }
       state = await api.bootstrap();
       deferredSharedRevision = null;
       notice = trigger === "safe-boundary" ? "Actuele wijzigingen van een collega zijn veilig geladen." : "Werkplek automatisch bijgewerkt met de laatste status.";
       render({ preserveScroll: true });
-    } catch { /* Tijdelijke synchronisatiefout verandert de bestaande fail-closed werkstate niet. */ }
+    } catch {
+      if (!state.readOnlyFallback) {
+        state.readOnlyFallback = true;
+        notice = "Workspace-service niet bereikbaar · productieacties uitgeschakeld";
+        render({ preserveScroll: true });
+      }
+    }
     finally { sharedSyncInFlight = false; }
   };
   const focusLocationHashTarget = (): void => {
@@ -2412,7 +2485,33 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     if (button.dataset.action === "bulk-complete-production-orders") { const selected = state.orders.filter(({ id, deletion, stage }) => !deletion && stage === "PRINT" && selectedCompletionOrders.has(id)); if (!selected.length) { notice = "Selecteer minimaal één order In productie."; render(); return; } button.setAttribute("disabled", ""); void api.completeProductionOrders(selected).then(async ({ value }) => { selectedCompletionOrders.clear(); bulkCompletionFeedback = { completed: value.completed.map(({ id }) => id), skipped: value.skipped.map(({ id, reason }) => ({ id, reason })) }; await load(); notice = `${value.completed.length} order${value.completed.length === 1 ? "" : "s"} afgerond en voor afhalen direct Klaar om op te halen; ${value.skipped.length} overgeslagen.`; render(); }).catch(async (e) => { await load(); notice = message(e); render(); }); }
     if (button.dataset.action === "complete-one-production-order" && button.dataset.orderId) { const order = state.orders.find(({ id }) => id === button.dataset.orderId); if (!order) return; button.setAttribute("disabled", ""); void api.completeProductionOrders([order]).then(async ({ value }) => { await load(); notice = value.completed.length ? `${order.id} is afgerond en staat voor afhalen Klaar om op te halen. Er is geen klantmail verstuurd.` : `${order.id} is niet afgerond: ${value.skipped[0]?.reason ?? "servercontrole niet geslaagd"}`; render(); }).catch(async (e) => { await load(); notice = message(e); render(); }); }
     if (button.dataset.action === "confirm-production-proposal") { if (productionProposalBusy) return; const groupSelection = button.dataset.proposalGroupId ? app.querySelector<HTMLInputElement>(`[data-production-group-select="${CSS.escape(button.dataset.proposalGroupId)}"]`) : null; if (groupSelection && !groupSelection.checked) { productionActionFeedback = { tone: "error", message: "Kies Alles selecteren voor deze foliekleur." }; render({ preserveScroll: true }); return; } const ids = (button.dataset.orderIds ?? "").split(",").filter(Boolean); const selected = ids.map((id) => state!.orders.find((order) => order.id === id)).filter((order): order is WorkspaceOrder => Boolean(order)); const startedAt = performance.now(); productionProposalBusy = true; productionProposalBusyKey = `proposal:${button.dataset.proposalGroupId ?? ""}`; productionActionFeedback = { tone: "progress", message: "Productievoorstel maken… Workspace blijft bezig tot de servercontrole klaar is." }; render({ preserveScroll: true }); void api.createProductionJob(selected, button.dataset.proposalId, button.dataset.proposalGroupId).then(async ({ value }) => { productionProposalBusy = false; productionProposalBusyKey = null; selectedOrders.clear(); await load(); const elapsedSeconds = ((performance.now() - startedAt) / 1000).toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); productionActionFeedback = { tone: "success", message: `${value.jobNumber}: alle geselecteerde opdrukken zijn in ${elapsedSeconds} s exact vastgelegd.` }; go(`${BASE}/productie/historie/${value.id}`); }).catch(async (e) => { productionProposalBusy = false; productionProposalBusyKey = null; await load(); productionActionFeedback = { tone: "error", message: message(e) }; notice = ""; render({ preserveScroll: true }); }); }
-    if (button.dataset.action === "complete-production-job" && button.dataset.productionJobId) { const job = state.productionJobs.find(({ id }) => id === button.dataset.productionJobId); button.setAttribute("disabled", ""); void api.completeProductionJob(button.dataset.productionJobId).then(async ({ value }) => { lastCompletedProductionBatch = job ? { jobId: job.id, foilColor: job.snapshot.productionGroup.foilColor, orderIds: [...job.snapshot.orderIds] } : null; activeProductionFilter = "printing"; await load(); notice = `${value.jobNumber}: deze fysieke batch is als Bedrukt vastgelegd. De orders blijven In productie tot expliciet Gereed.`; go(`${BASE}/productie`); }).catch((e) => { notice = message(e); render(); }); }
+    if (button.dataset.action === "complete-production-job" && button.dataset.productionJobId) {
+      if (productionProposalBusy) return;
+      const job = state.productionJobs.find(({ id }) => id === button.dataset.productionJobId);
+      const startedAt = performance.now();
+      productionProposalBusy = true;
+      productionProposalBusyKey = `complete:${button.dataset.productionJobId}`;
+      productionActionFeedback = { tone: "progress", message: `${job?.jobNumber ?? "Productiejob"} als Bedrukt vastleggen…` };
+      render({ preserveScroll: true });
+      void api.completeProductionJob(button.dataset.productionJobId).then(async ({ value, projection }) => {
+        lastCompletedProductionBatch = job ? { jobId: job.id, foilColor: job.snapshot.productionGroup.foilColor, orderIds: [...job.snapshot.orderIds] } : null;
+        activeProductionFilter = "printing";
+        if (projection) applyProductionCompletionProjection(state!, projection);
+        else await load();
+        productionProposalBusy = false;
+        productionProposalBusyKey = null;
+        const elapsedSeconds = ((performance.now() - startedAt) / 1000).toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        productionActionFeedback = { tone: "success", message: `${value.jobNumber}: Bedrukt vastgelegd in ${elapsedSeconds} s; resterende foliekleuren zijn direct opnieuw beoordeeld.` };
+        notice = `${value.jobNumber}: deze fysieke batch is als Bedrukt vastgelegd. De orders blijven In productie tot expliciet Gereed.`;
+        go(`${BASE}/productie`);
+      }).catch((e) => {
+        productionProposalBusy = false;
+        productionProposalBusyKey = null;
+        productionActionFeedback = { tone: "error", message: message(e) };
+        notice = message(e);
+        render({ preserveScroll: true });
+      });
+    }
     if (button.dataset.action === "toggle-foil-roll" && button.dataset.rollId) { const roll = state.foilRolls.find(({ id }) => id === button.dataset.rollId); if (!roll) return; button.setAttribute("disabled", ""); void api.updateFoilRoll(roll.id, { active: roll.active === false }).then(refresh).catch((e) => { notice = message(e); render(); }); }
     if (button.dataset.action === "capture-mail") { const form = button.closest<HTMLFormElement>("[data-mail-form]"); if (!form) return; const data = new FormData(form); const orderId = form.dataset.orderId!; button.setAttribute("disabled", ""); void api.captureOrderMail(orderId, String(data.get("templateKey")) as "ORDER_RECEIVED" | "ORDER_IN_PRODUCTION" | "ORDER_READY" | "ORDER_QUESTION", String(data.get("question") ?? "")).then(async (result) => { await load(); notice = result.duplicate ? "Dit bericht was al vastgelegd." : "Bericht veilig vastgelegd."; render(); }).catch((e) => { const output = app.querySelector<HTMLElement>("[data-mail-preview]"); if (output) output.insertAdjacentHTML("beforeend", `<p class="sp-mail-result is-error">${esc(message(e))}</p>`); button.removeAttribute("disabled"); }); }
   });
