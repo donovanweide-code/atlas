@@ -6,7 +6,7 @@ import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
 
 const POINT_TO_MM = 25.4 / 72;
-export const NUMBER_GLYPH_SPACING_MM = 30;
+export const NUMBER_GLYPH_SPACING_MM = 5;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
 const MAX_POINTS = 250_000;
@@ -609,7 +609,7 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
       const translateX = offsetX - glyphBounds.minX * scale;
       contours.push(...glyph.contours.map((contour) => ({ ...contour, id: `${digit}-${contour.id}-${contours.length + 1}`, points: contour.points.map(({ x, y }) => ({ x: translateX + x * scale, y: y * scale })) })));
       // The business rule is a physical free contour gap, not typographic
-      // advance/kerning. Position the next contour exactly 30 mm after this
+      // advance/kerning. Position the next contour exactly 5 mm after this
       // glyph's right-most production contour.
       offsetX += glyphBounds.width * scale + NUMBER_GLYPH_SPACING_MM;
     }

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   SPORTPALEIS_ASSOCIATIONS,
+  SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM,
   SPORTPALEIS_CONFIGURATION_VERSION,
   SPORTPALEIS_FONT_CONFIRMATION,
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
@@ -144,7 +145,7 @@ function canonicalManagedFont(assetId) {
   const {
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
     provenance, authority, status, allowedInStore, artifactPath, familyName, subfamilyName, fullName,
-    postscriptName, aliases, authoritativeIdentity,
+    postscriptName, aliases, authoritativeIdentity, admission,
   } = asset;
   return Object.freeze({
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
@@ -156,11 +157,12 @@ function canonicalManagedFont(assetId) {
     ...(postscriptName ? { postscriptName } : {}),
     ...(aliases ? { aliases: [...aliases] } : {}),
     ...(authoritativeIdentity ? { authoritativeIdentity } : {}),
+    ...(admission ? { admission: structuredClone(admission) } : {}),
   });
 }
-const PILOT_FONT = canonicalManagedFont("font-liberation-sans-regular-f8ace1f8");
-const SPAIN_EURO_2016_FONT = canonicalManagedFont("font-5d083befacdf98ae");
-const CANONICAL_PRODUCTION_FONTS = Object.freeze([PILOT_FONT, SPAIN_EURO_2016_FONT]);
+const CANONICAL_PRODUCTION_FONTS = Object.freeze(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter(({ kind }) => kind === "MANAGED_FONT").map(({ id }) => canonicalManagedFont(id)));
+const PILOT_FONT = CANONICAL_PRODUCTION_FONTS.find(({ id }) => id === "font-liberation-sans-regular-f8ace1f8");
+const SPAIN_EURO_2016_FONT = CANONICAL_PRODUCTION_FONTS.find(({ id }) => id === "font-5d083befacdf98ae");
 
 function reconcileCanonicalProductionFonts(state) {
   state.productionFonts ??= [];
@@ -223,8 +225,8 @@ for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) =>
 const ARTICLE_IMAGE_KEYS = new Set(ARTICLE_CATALOG.map(({ imageKey }) => imageKey));
 
 const PRODUCTION_PROFILES = [
-  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-keeper", name: "A.S.C. keeperstrui · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Senior rugnummer 22 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior/Senior rugnummer 20 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } } },
+  { id: "profile-keeper", name: "A.S.C. keeperstrui · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior/Senior rugnummer 20 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } } },
   { id: "profile-shorts", name: "A.S.C. wedstrijdshort · pijp", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-initials", name: "A.S.C. initialen · borst", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-none", name: "Geen bedrukking", placement: "Niet van toepassing", referenceDistanceCm: null, sizeLabel: "Geen", fontProfile: "Niet van toepassing", foilColor: "Niet van toepassing", mirror: false, rotationDeg: 0, supports: [], instruction: "Dit artikel heeft standaard geen bedrukking." },
@@ -242,7 +244,7 @@ PRODUCTION_PROFILES.push(
   { id: "profile-fc-unmapped-number", name: "FC Almere live optie ‘Nummer’ · betekenis onbevestigd", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: [], instruction: "DATA_GAP: live optie ‘Nummer’ is niet bevestigd als rug-, borst- of shortnummer en mag niet naar productie." },
   { id: "profile-dcg-initials-set", name: "DCG trainingspak · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "Verenigingsinstellingen voor DCG zijn leidend. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald." },
   { id: "profile-mhc-shirt-away", name: "MHC Lelystad uitshirt · naam/rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Naam 3,2 cm · Rug Senior 22 cm", fontProfile: "Myriad Pro Bold", foilColor: "Zwart", mirror: null, rotationDeg: null, supports: ["name", "backNumber"], instruction: "Verenigingsinstellingen voor MHC Lelystad zijn leidend. Uit is zwart; nummer is outline; naam met hoofdletter. Positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Wordt door de vereniging-Juniorregel bepaald." } } },
-  { id: "profile-pioneers-shirt", name: "Almere Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior bronwaarde 16 cm · Rug Senior fysiek 20 cm · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], productionSourceSetId: PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID, productionSourceSetFields: ["backNumber"], outputWriterId: CUTJOB_SVG_WRITER.id, instruction: "Snijtest 001 valideert de fysieke snijlijnen voor Pioneers-rugnummers 2, 34 en 77 op 200 mm. Positie, referentieafstand, spiegeling en rotatie zijn niet-blokkerende pilot-aandachtspunten en worden door Productie bepaald.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "VALIDATED", source: "Snijtest 001 · bestaande projectdocumentatie plus human confirmation 2026-08-10: fysieke productietest en snijlijnen correct" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 160, status: "DATA_GAP", source: "info bedrukkingen 2026.xlsx bevat 16 cm; fysieke Junior-output is niet getest" } } },
+  { id: "profile-pioneers-shirt", name: "Almere Pioneers shirt · nummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior/Senior 20 cm · breedte proportioneel afgeleid · Borst 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber", "name"], instruction: "De immutable Pioneers-SVG is genormaliseerd naar tien enkelglyphs 0–9; ieder rugnummer wordt op 200 mm hoogte en zonder horizontale vervorming gezet. Positie, spiegeling en rotatie volgen de productieregel.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } } },
   { id: "profile-pioneers-shorts", name: "Almere Pioneers short · shortnummer/naam", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer bronwaarde 8 cm · Naam 2 cm/max. 9 cm breed", fontProfile: "FFF englisch", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber", "name"], instruction: "DATA_GAP: de fysieke Snijtest 001 betrof Senior-rugnummers op 200 mm en bewijst geen shortplaatsing of shortoutput op 80 mm." },
 );
 const profileSlug = (value) => String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -265,6 +267,7 @@ export function canonicalProductionProfileForDecoration(state, item, field) {
 }
 for (const association of SPORTPALEIS_ASSOCIATIONS) {
   for (const [field, label, dimensionKey] of sourceProfileFields) {
+    if (!(association.productionApplications ?? []).includes(field)) continue;
     const id = `profile-source-${profileSlug(association.name)}-${field}`;
     const dimensionCm = association.dimensionsCm[dimensionKey];
     const fontConfigured = Boolean(association.fontProfile && !["X", "DATA_GAP"].includes(association.fontProfile));
@@ -286,7 +289,7 @@ for (const association of SPORTPALEIS_ASSOCIATIONS) {
           SENIOR: dimensionCm == null
             ? { physicalHeightMm: null, status: "DATA_GAP", source: `${association.source.file} · ${association.source.sheet}!${association.source.range}` }
             : { physicalHeightMm: dimensionCm * 10, status: "SOURCE_CONFIGURED", source: `${association.source.file} · ${association.source.sheet}!${association.source.range}` },
-          JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
+          JUNIOR: { physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
         },
       } : {}),
       sourceValidation: {
@@ -311,6 +314,13 @@ PRODUCTION_PROFILES.push({
   instruction: "Bronconfiguratie: thuis wit; nummer outline; naam met hoofdletter. Workspace past plaatsing, spiegeling en veilige rotatie automatisch toe.",
   backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A13:J13" }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } },
 });
+for (const profile of PRODUCTION_PROFILES.filter(({ supports }) => supports?.includes("backNumber"))) {
+  profile.backNumberSizeClasses = {
+    SENIOR: { physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
+    JUNIOR: { physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
+  };
+  profile.sizeLabel = String(profile.sizeLabel ?? "Rugnummer").replace(/(?:Junior[^·]*·\s*)?Senior\s*(?:rugnummer\s*)?\d+(?:[,.]\d+)?\s*cm/iu, "Junior/Senior rugnummer 20 cm");
+}
 for (const profile of PRODUCTION_PROFILES) {
   profile.revision = 1;
   profile.validationHistory = [];
@@ -749,12 +759,15 @@ export function migrateSportpaleisPilotState(input) {
   for (const profile of state.productionProfiles ?? []) if (typeof profile.name === "string") profile.name = profile.name.replaceAll(LEGACY_PIONEERS_ASSOCIATION, CANONICAL_PIONEERS_ASSOCIATION);
   if (!Array.isArray(state.associations) || !state.associations.length) state.associations = structuredClone(SPORTPALEIS_ASSOCIATIONS);
   else if (previousConfigurationVersion !== SPORTPALEIS_CONFIGURATION_VERSION) {
-    state.associations = SPORTPALEIS_ASSOCIATIONS.map((sourceAssociation) => {
+    const canonicalAssociations = SPORTPALEIS_ASSOCIATIONS.map((sourceAssociation) => {
       const existing = state.associations.find(({ id, name }) => id === sourceAssociation.id || name === sourceAssociation.name);
       if (!existing) return structuredClone(sourceAssociation);
       const existingValidatedJunior = existing.juniorValidationStatus === "VALIDATED" && Number(existing.juniorPhysicalHeightMm) > 0;
       return {
         ...structuredClone(sourceAssociation),
+        ...structuredClone(existing),
+        id: sourceAssociation.id,
+        name: sourceAssociation.name,
         active: existing.active,
         notes: existing.notes,
         fontProfile: sourceAssociation.fontEvidence?.applied && sourceAssociation.fontEvidence.confirmationStatus === "MATCH"
@@ -773,6 +786,8 @@ export function migrateSportpaleisPilotState(input) {
         workspaceLogo: structuredClone(existing.workspaceLogo ?? sourceAssociation.workspaceLogo),
       };
     });
+    const retainedAssociationRecords = state.associations.filter((existing) => !SPORTPALEIS_ASSOCIATIONS.some(({ id, name }) => id === existing.id || name === existing.name));
+    state.associations = [...canonicalAssociations, ...structuredClone(retainedAssociationRecords)];
   }
   for (const association of state.associations) {
     association.revision ??= 1;
@@ -818,6 +833,14 @@ export function migrateSportpaleisPilotState(input) {
       if (existing.id !== sourceArticle.id) articleIdRemap.set(existing.id, sourceArticle.id);
       return {
         ...structuredClone(sourceArticle),
+        ...structuredClone(existing),
+        id: sourceArticle.id,
+        articleNumber: sourceArticle.articleNumber,
+        supplierArticleNumber: sourceArticle.supplierArticleNumber,
+        name: sourceArticle.name,
+        association: sourceArticle.association,
+        imageKey: sourceArticle.imageKey,
+        catalogProvenance: structuredClone(sourceArticle.catalogProvenance),
         active: existing.active ?? sourceArticle.active,
         displayOrder: existing.displayOrder ?? sourceArticle.displayOrder,
         revision: Number(existing.revision ?? 1) + 1,
@@ -896,7 +919,7 @@ export function migrateSportpaleisPilotState(input) {
     for (const profile of PRODUCTION_PROFILES) {
       const index = state.productionProfiles.findIndex(({ id }) => id === profile.id);
       if (index < 0) state.productionProfiles.push(structuredClone(profile));
-      else if (Number(state.productionProfiles[index].revision ?? 1) <= 1) state.productionProfiles[index] = structuredClone(profile);
+      else if (Number(state.productionProfiles[index].revision ?? 1) <= 1) state.productionProfiles[index] = { ...structuredClone(profile), ...structuredClone(state.productionProfiles[index]), id: profile.id };
     }
     reconcileVerifiedProductionNumberSources(state);
     const warning = "Correctieronde 1: verenigingsbron behouden; kledingmaten 116–164 gebruiken de human-confirmed Juniorregel van 200 mm";
@@ -948,7 +971,7 @@ export function migrateSportpaleisPilotState(input) {
     state.productionProfiles = [
       ...PRODUCTION_PROFILES.map((sourceProfile) => {
         const existing = state.productionProfiles.find(({ id }) => id === sourceProfile.id);
-        return !existing || Number(existing.revision ?? 1) <= 1 ? structuredClone(sourceProfile) : existing;
+        return !existing ? structuredClone(sourceProfile) : Number(existing.revision ?? 1) <= 1 ? { ...structuredClone(sourceProfile), ...structuredClone(existing), id: sourceProfile.id } : existing;
       }),
       ...state.productionProfiles.filter(({ id }) => !knownProfileIds.has(id)),
     ];
@@ -1103,7 +1126,14 @@ export function validateSportpaleisPilotState(input) {
     if (!source.original?.immutable || sha256(Buffer.from(source.original.dataBase64, "base64")).toUpperCase() !== source.original.sha256) throw new Error("Immutable productieassetbron ontbreekt of is gewijzigd.");
     if (!source.candidates?.length || source.candidates.some(({ geometryHash, controlledVector }) => sha256(JSON.stringify(controlledVector.contours)).toUpperCase() !== geometryHash)) throw new Error("Productieassetkandidaten zijn gewijzigd of onvolledig.");
     if (!Number.isInteger(Number(source.revision ?? 1)) || Number(source.revision ?? 1) < 1 || !["REFERENCE_REQUIRED", "MATCHED", "MISMATCH"].includes(source.fidelity?.status ?? "REFERENCE_REQUIRED")) throw new Error("Ongeldige bronfidelitystatus.");
-    if (source.original?.format === "SVG" && (source.conversion?.method !== "HUMAN_VERIFIED_SVG" || source.inspection?.engine !== "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1" || source.fidelity?.status !== "MATCHED")) throw new Error("Een SVG-productiebron mist het canonical SVG-validatiecontract.");
+    if (source.normalized) {
+      if (!source.normalized.immutable || sha256(Buffer.from(source.normalized.dataBase64, "base64")).toUpperCase() !== source.normalized.sha256 || source.normalized.derivedFromSha256 !== source.original.sha256 || source.conversion?.derivedFromSha256 !== source.original.sha256 || source.conversion?.normalizedSha256 !== source.normalized.sha256) throw new Error("Een genormaliseerde productiebron mist de immutable original→normalized hashketen.");
+    }
+    if (source.original?.format === "SVG") {
+      const directVerified = source.conversion?.method === "HUMAN_VERIFIED_SVG";
+      const deterministicallyNormalized = Boolean(source.normalized && /^WBD_[A-Z0-9_]+_V\d+$/u.test(String(source.conversion?.method ?? "")));
+      if ((!directVerified && !deterministicallyNormalized) || source.inspection?.engine !== "WBD_PRODUCTION_ASSET_SVG_INTAKE_V1" || source.fidelity?.status !== "MATCHED") throw new Error("Een SVG-productiebron mist het canonical SVG-validatiecontract.");
+    }
     if (source.conversion?.method === "ILLUSTRATOR_MANUAL_VECTOR_PDF_EXPORT") {
       const reference = state.productionAssetSources.find(({ id }) => id === source.conversion.derivedFromSourceId);
       if (!reference || reference.original.sha256 !== source.conversion.derivedFromSha256 || source.fidelity?.referenceSha256 !== reference.original.sha256) throw new Error("Afgeleide productiebron mist immutable herleidbaarheid naar het origineel.");
@@ -2277,6 +2307,17 @@ function inspectProductionFontRequest(state, payload) {
   let admissionProof;
   try { admissionProof = inspectManagedFontAdmission(bytes, { representativeValues }); }
   catch (error) { throw Object.assign(new Error(error?.message ?? "De fontbron is niet production-executable."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
+  if (guidedProfile) {
+    const guidedAssociation = state.associations.find(({ id }) => id === guidedAssociationId);
+    const requirement = canonicalLineSourceRequirement(state, guidedAssociation, guidedProfile, guidedField);
+    const expectedIdentity = normalizedSourceIdentity(requirement.canonicalName);
+    const actualIdentities = [admissionProof.metadata.familyName, admissionProof.metadata.fullName, admissionProof.metadata.postscriptName]
+      .map(normalizedSourceIdentity)
+      .filter(Boolean);
+    if (expectedIdentity && !actualIdentities.some((identity) => identity === expectedIdentity || identity.includes(expectedIdentity) || expectedIdentity.includes(identity))) {
+      throw Object.assign(new Error(`De interne fontidentity hoort niet bij de bevestigde letterbron ${requirement.canonicalName}. De zichtbare uploadnaam is geen bronbewijs.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_IDENTITY_MISMATCH", expectedIdentity: requirement.canonicalName, actualIdentities: admissionProof.metadata });
+    }
+  }
   const hash = sha256(bytes).toUpperCase();
   const inspectionSha256 = sha256(JSON.stringify({ schemaVersion: 1, name, filename, sourceSha256: hash, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, productionProfileId: guidedProfileId, applicationField: guidedField, associationId: guidedAssociationId })).toUpperCase();
   return { name, filename, bytes, format, hash, guidedProfile, guidedProfileId, guidedField, guidedAssociationId, admissionProof, inspectionSha256 };
@@ -3257,7 +3298,7 @@ export class SportpaleisPilotService {
       const provenance = optional(payload.provenance, 500) || `Door ${user.name} toegevoegd via Beheer op ${addedAt}`;
       const applicationBindings = [...new Set([...(guidedField ? [guidedField] : []), ...(payload.allowedInStore !== false ? ["FREE_PRINT"] : [])])];
       if (!applicationBindings.length) throw Object.assign(new Error("Koppel de fontbron aan een concrete lettertoepassing of Vrije opdruk."), { statusCode: 409, code: "PRODUCTION_FONT_APPLICATION_REQUIRED" });
-      const font = { id, name, originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, authority: "ADMIN_VERIFIED_UPLOAD", status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, authoritativeIdentity: id, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64"), ...admissionProof.metadata, admission: { lifecycle: "AUTHORITATIVE", sourceType: "FONT", stages: ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "HUMAN_CONFIRMED", "AUTHORITATIVE"], applicationBindings, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, confirmedAt: addedAt, confirmedBy: { userId: user.id, name: user.name } } };
+      const font = { id, name, originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, authority: "ADMIN_VERIFIED_UPLOAD", status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, authoritativeIdentity: id, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64"), ...admissionProof.metadata, admission: { lifecycle: "AUTHORITATIVE", sourceType: "FONT", authority: "ADMIN_VERIFIED_UPLOAD", stages: ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "PREVIEWED", "HUMAN_CONFIRMED", "AUTHORITATIVE"], applicationBindings, sourceSha256: admissionProof.sourceSha256, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, confirmedAt: addedAt, confirmedBy: { userId: user.id, name: user.name } } };
       state.productionFonts.push(font);
       const boundProfileIds = [];
       for (const profile of guidedProfile ? [guidedProfile] : []) {
@@ -4857,7 +4898,7 @@ export class SportpaleisPilotService {
         ...(hasProductionSize ? { sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm } } : {}),
         defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
         ...(productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
-        ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
+        ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
         sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED", conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION" }, physicallyProvenContour: null },
         revision: 1,
         variants: [{ id: `variant-${registrationId.slice(-12)}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
@@ -6236,17 +6277,17 @@ function reconcileVerifiedProductionNumberSources(state) {
     if (!existing) {
       const element = structuredClone(entry.element);
       element.sourceId = sourceId;
-      element.sourceLayers.vectorSource.sha256 = entry.source.original.sha256;
+      element.sourceLayers.vectorSource.sha256 = entry.source.normalized?.sha256 ?? entry.source.original.sha256;
       element.sourceLayers.validatedCutContour.sourceId = sourceId;
       state.productionElements.push(element);
       const auditId = `audit-${VERIFIED_NUMBER_SOURCE_EVENT.toLocaleLowerCase("en-US")}-${entry.definition.key}`;
-      if (!state.audit.some(({ id }) => id === auditId)) state.audit.unshift({ id: auditId, at: "2026-08-25T00:00:00.000Z", userId: "system:verified-source-import", action: "Gecontroleerde SVG-nummerset opgenomen", subject: element.id, details: { sourceId, sourceSha256: entry.source.original.sha256, sourceFilename: entry.source.original.filename, assetVersion: element.version, physicalHeightMm: entry.definition.heightMm, placement: entry.definition.placement, sourceBytesImmutable: true, geometryAiGenerated: false } });
+      if (!state.audit.some(({ id }) => id === auditId)) state.audit.unshift({ id: auditId, at: "2026-09-01T00:00:00.000Z", userId: "system:verified-source-import", action: "Gecontroleerde SVG-nummerset opgenomen", subject: element.id, details: { sourceId, sourceSha256: entry.source.original.sha256, sourceFilename: entry.source.original.filename, normalizedSha256: entry.source.normalized?.sha256 ?? entry.source.original.sha256, normalizedFilename: entry.source.normalized?.filename ?? entry.source.original.filename, assetVersion: element.version, physicalHeightMm: entry.definition.heightMm, placement: entry.definition.placement, sourceBytesImmutable: true, geometryAiGenerated: false } });
     }
   }
   const assetsByKey = new Map(state.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).map((element) => [element.verifiedSourceKey, element.id]));
   const links = new Map([
-    ["profile-pioneers-shirt", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
-    ["profile-source-almere-pioneers-backNumber", ["pioneers-rug-senior-200", "pioneers-rug-junior-160"]],
+    ["profile-pioneers-shirt", ["pioneers-rug-senior-200"]],
+    ["profile-source-almere-pioneers-backNumber", ["pioneers-rug-senior-200"]],
     ["profile-pioneers-shorts", ["pioneers-short-80"]],
     ["profile-source-almere-pioneers-shortsNumber", ["pioneers-short-80"]],
   ]);
@@ -6254,7 +6295,8 @@ function reconcileVerifiedProductionNumberSources(state) {
     { field: "backNumber", dimensionKey: "backNumberSenior", expectedCm: 20, sourceKey: "hockey-rug-200" },
     { field: "shortsNumber", dimensionKey: "shortsNumber", expectedCm: 7.5, sourceKey: "hockey-short-75" },
   ];
-  for (const association of state.associations?.filter(({ name }) => /\bMHC\b/iu.test(name)) ?? []) {
+  const hockeyNumberAssociations = new Set(["MHC Lelystad", "Almeerse Hockeyclub", "Buitenhout MHC"]);
+  for (const association of state.associations?.filter(({ name }) => hockeyNumberAssociations.has(name)) ?? []) {
     const associationProfilePrefix = `profile-source-${profileSlug(association.name)}-`;
     for (const rule of hockeySourceRules) {
       if (Math.abs(Number(association.dimensionsCm?.[rule.dimensionKey]) - rule.expectedCm) > 0.001) continue;
@@ -6264,7 +6306,7 @@ function reconcileVerifiedProductionNumberSources(state) {
         element.contexts ??= [];
         element.contexts.push({ type: "ASSOCIATION", id: association.id, label: association.name });
       }
-      for (const profile of state.productionProfiles?.filter(({ id, supports }) => id.startsWith(associationProfilePrefix) && supports?.includes(rule.field)) ?? []) {
+      for (const profile of state.productionProfiles?.filter(({ id, supports }) => supports?.includes(rule.field) && (id.startsWith(associationProfilePrefix) || association.name === "MHC Lelystad" && ["profile-mhc-shirt-home", "profile-mhc-shirt-away"].includes(id))) ?? []) {
         links.set(profile.id, [rule.sourceKey]);
       }
     }
@@ -6273,10 +6315,15 @@ function reconcileVerifiedProductionNumberSources(state) {
     const profile = state.productionProfiles?.find(({ id }) => id === profileId);
     if (!profile) continue;
     profile.productionNumberAssetIds = keys.map((key) => assetsByKey.get(key)).filter(Boolean);
+    for (const key of keys) {
+      const asset = state.productionElements.find(({ id }) => id === assetsByKey.get(key));
+      const binding = key.includes("rug") ? { field: "backNumber", heightMm: 200 } : key.includes("short") ? { field: "shortsNumber", heightMm: key.startsWith("hockey-") ? 75 : 80 } : null;
+      if (asset && binding) assignProductionNumberAsset(profile, binding.field, binding.heightMm, asset);
+    }
     if (keys.includes("pioneers-rug-senior-200")) {
       profile.backNumberSizeClasses ??= {};
-      profile.backNumberSizeClasses.SENIOR = { physicalHeightMm: 200, status: "VALIDATED", source: "Pioneers rugnummers senior 20cm.svg · SHA-256 58343DD0C38F913C871E3AB421A48AF48304FAED80BFF67A5CF407DA65EE839C · bestaande fysieke Senior-validatie blijft authoritative" };
-      profile.backNumberSizeClasses.JUNIOR = { physicalHeightMm: 160, status: "SOURCE_CONFIGURED", source: "Pioneers rugnummers junior 16cm.svg · SHA-256 1C336C5E380A3100DDFD2318302D2AC10ACE60F4E44F4E544509DD628920522B" };
+      profile.backNumberSizeClasses.SENIOR = { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "rug nummers Pioneers senior 20cm.svg · immutable SHA-256 FD6716E5911EB5AB239D291808DC490ECF305FD3F30C49E183AB063097C67143 · normalized SHA-256 5CC303321ADCB7BF9F0722E6BDFE8CCAD6BBABA28139AF77DB08CA3C478BD709" };
+      profile.backNumberSizeClasses.JUNIOR = { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE };
     }
     if (keys.includes("pioneers-short-80")) profile.sizeLabel = "Shortnummer 8 cm · gecontroleerde SVG-contourset";
   }
@@ -6448,7 +6495,8 @@ function assertPioneersNumberSource(state, order, line) {
   }
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
-    if (font && productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT").allowed && normalizedProductionIdentity(font.name) === normalizedProductionIdentity(canonicalName)) return;
+    const profile = state.productionProfiles.find(({ id }) => id === line.decorationIdentity?.productionProfileId);
+    if (font && profile && productionFontAssociationDecision({ fonts: state.productionFonts, profile, application: line.personalizationField || "FREE_PRINT", selectedSourceId: font.id }).allowed) return;
   }
   throw Object.assign(new Error(`${line.preview?.label ?? line.content}: gekoppelde bron wijkt af van de gecontroleerde Pioneers-bron “${canonicalName}”; productie blijft op REVIEW.`), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_MISMATCH" });
 }
@@ -6468,7 +6516,7 @@ function assignedProductionNumberAssetId(state, profile, field, requestedHeightM
 }
 
 function assignedProductionNumberAssetEvidence(profile, field, requestedHeightMm) {
-  return field ? profile?.productionNumberAssetAssignmentEvidenceByHeight?.[field]?.[productionNumberAssignmentKey(requestedHeightMm)] ?? null : null;
+  return field ? profile?.productionNumberAssetAssignmentEvidenceByHeight?.[field]?.[productionNumberAssignmentKey(requestedHeightMm)] ?? profile?.productionNumberAssetAssignmentEvidence?.[field] ?? null : null;
 }
 
 function assignProductionNumberAsset(profile, field, targetHeightMm, asset, sourceHeightMm = targetHeightMm) {
@@ -6478,6 +6526,7 @@ function assignProductionNumberAsset(profile, field, targetHeightMm, asset, sour
     ...(profile.productionNumberAssetAssignmentsByHeight ?? {}),
     [field]: { ...(profile.productionNumberAssetAssignmentsByHeight?.[field] ?? {}), [key]: assetId },
   };
+  profile.productionNumberAssetAssignments = { ...(profile.productionNumberAssetAssignments ?? {}), [field]: assetId };
   const evidenceBody = {
     assetId,
     assetVersion: asset.version ?? String(asset.revision),
@@ -6490,6 +6539,7 @@ function assignProductionNumberAsset(profile, field, targetHeightMm, asset, sour
     ...(profile.productionNumberAssetAssignmentEvidenceByHeight ?? {}),
     [field]: { ...(profile.productionNumberAssetAssignmentEvidenceByHeight?.[field] ?? {}), [key]: { ...evidenceBody, assignmentHash: sha256(JSON.stringify(evidenceBody)) } },
   };
+  profile.productionNumberAssetAssignmentEvidence = { ...(profile.productionNumberAssetAssignmentEvidence ?? {}), [field]: { ...evidenceBody, assignmentHash: sha256(JSON.stringify(evidenceBody)) } };
 }
 
 function associationNumberSet(state, associationName, { field = null, profileId = null, requestedHeightMm = null } = {}) {
@@ -6554,6 +6604,27 @@ function profileFieldPhysicalHeightMm(association, profile, field, variant = nul
     if (singleValue > 0) return singleValue;
   }
   return 0;
+}
+
+/**
+ * Compatibility assurance needs one real physical Product Truth size without
+ * silently choosing a size for an actual order. Runtime order validation keeps
+ * using profileFieldPhysicalHeightMm with its exact variant; this helper is
+ * only the deterministic representative size for generated source proof.
+ */
+export function representativeProductionApplicationHeightMm(association, profile, field) {
+  if (field === "backNumber") {
+    const senior = Number(profile?.backNumberSizeClasses?.SENIOR?.physicalHeightMm)
+      || Number(association?.dimensionsCm?.backNumberSenior) * 10;
+    if (senior > 0) return senior;
+    const validated = Object.values(profile?.backNumberSizeClasses ?? {})
+      .filter(({ status }) => status !== "DATA_GAP")
+      .map(({ physicalHeightMm }) => Number(physicalHeightMm))
+      .filter((height) => height > 0)
+      .sort((left, right) => right - left);
+    return validated[0] ?? 0;
+  }
+  return profileFieldPhysicalHeightMm(association, profile, field);
 }
 
 function validateProductionLines(value, state, user, orderKind, options = {}) {
@@ -7600,7 +7671,7 @@ function canonicalLineSourceRequirement(state, association, profile, field, expe
   const assignmentEvidence = assignedProductionNumberAssetEvidence(profile, field, expectedHeightMm);
   if (assignedAssetId && assignmentEvidence?.authority === "HUMAN_ACCEPTANCE") return { kind: "VECTOR_GLYPH_SET", field, placement: field, assignedAssetId, assignedAssetVersion: assignmentEvidence.assetVersion, geometryHash: assignmentEvidence.sourceGeometryHash, provenance: `Human Acceptance · ${assignmentEvidence.assignmentHash}` };
   const referenceFields = Array.isArray(association?.fontEvidence?.referenceFields) ? association.fontEvidence.referenceFields : [];
-  const vectorReference = referenceFields.includes(field) && association?.fontEvidence?.referenceKind === "VECTOR_CONTOUR_REFERENCE" ? association.fontEvidence.referenceAsset : null;
+  const vectorReference = referenceFields.includes(field) && association?.fontEvidence?.referenceKind === "VECTOR_CONTOUR_REFERENCE" ? association.fontEvidence.vectorReferenceAsset : null;
   if (vectorReference?.sha256) {
     return { kind: "VECTOR_GLYPH_SET", field, placement: field, filename: vectorReference.filename, sha256: vectorReference.sha256, provenance: association.fontEvidence.provenance };
   }
@@ -7652,6 +7723,8 @@ export function productionSourceAssociationDecision(state, { associationId, prof
     if (resolution.status !== "RESOLVED") return { allowed: false, code: `PRODUCTION_FONT_${resolution.status}`, reason: "De canonieke fontmaster is niet exact resolveerbaar.", requirement };
     const decision = productionFontAssociationDecision({ fonts: state.productionFonts, profile, application: field, selectedSourceId: candidate?.id ?? resolution.font.id });
     if (!decision.allowed) return { ...decision, requirement };
+    if (candidate && !candidate.version) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISSING", reason: "De gekozen fontbron mist een immutable versie.", requirement };
+    if (candidate?.version && candidate.version !== resolution.font.version) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISMATCH", reason: "De gekozen fontversie hoort niet bij de canonieke association.", requirement };
     if (candidate?.sha256 && String(candidate.sha256).toUpperCase() !== String(resolution.font.sha256).toUpperCase()) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_HASH_MISMATCH", reason: "De gekozen bronbytes horen niet bij de canonieke association.", requirement };
     return { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "FONT", id: resolution.font.id, version: resolution.font.version, sha256: resolution.font.sha256 } };
   }
@@ -7659,6 +7732,8 @@ export function productionSourceAssociationDecision(state, { associationId, prof
     if (candidate && candidate.kind !== "VERIFIED_PRODUCTION_SOURCE_SET") return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_TYPE_MISMATCH", reason: "Voor deze toepassing is de geverifieerde production source set vereist.", requirement };
     if (candidate?.id && candidate.id !== requirement.sourceSetId) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_ID_MISMATCH", reason: "De gekozen production source set hoort niet bij deze association.", requirement };
     const sources = availableProductionSourceIdentities().filter(({ sourceSetId, outputWriterId }) => sourceSetId === requirement.sourceSetId && (!profile.outputWriterId || outputWriterId === profile.outputWriterId));
+    if (candidate && !candidate.version) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISSING", reason: "De gekozen production source set mist een immutable versie.", requirement };
+    if (candidate?.version && !sources.some(({ version }) => version === candidate.version)) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISMATCH", reason: "De gekozen production-source-setversie hoort niet bij deze association.", requirement };
     return sources.length
       ? { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "VERIFIED_PRODUCTION_SOURCE_SET", id: requirement.sourceSetId, versions: [...new Set(sources.map(({ version }) => version))] } }
       : { allowed: false, code: "PRODUCTION_SOURCE_SET_UNRESOLVED", reason: "De geverifieerde production source set is niet uitvoerbaar aanwezig.", requirement };
@@ -7669,6 +7744,8 @@ export function productionSourceAssociationDecision(state, { associationId, prof
   if (!asset) return { allowed: false, code: linked.ambiguous ? "PRODUCTION_VECTOR_SOURCE_CONFLICT" : "PRODUCTION_VECTOR_SOURCE_MISSING", reason: "De authoritative SVG/vector-nummerset is niet exact beschikbaar.", requirement };
   const reuse = productionAssetReuseDecision({ asset, targetAssociationIdentities: [association.id, association.name], applicationField: field });
   if (!reuse.allowed) return { ...reuse, requirement };
+  if (candidate && !candidate.version) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISSING", reason: "De gekozen vectorasset mist een immutable versie.", requirement };
+  if (candidate?.version && candidate.version !== (asset.version ?? String(asset.revision))) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_VERSION_MISMATCH", reason: "De gekozen vectorassetversie hoort niet bij deze association.", requirement };
   if (requirement.assignedAssetId && asset.id !== requirement.assignedAssetId) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_ID_MISMATCH", reason: "De SVG/vectorbron hoort niet bij dit productieprofiel.", requirement };
   return { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision) } };
 }
@@ -7677,10 +7754,26 @@ export function productionSourceAssociationDecision(state, { associationId, prof
 export function productionSourceCompatibilityMatrix(state) {
   const applicationRows = associationProfileApplications(state).map(({ key, association, profile, field }) => {
     const decision = productionSourceAssociationDecision(state, { associationId: association.id, profileId: profile.id, applicationField: field });
-    return { key, associationId: association.id, association: association.name, profileId: profile.id, application: field, expectedSourceType: decision.requirement?.kind ?? null, source: decision.source ?? null, readiness: decision.allowed ? "VALID" : "BLOCKED", code: decision.code, reason: decision.reason };
+    const physicalHeightMm = representativeProductionApplicationHeightMm(association, profile, field);
+    const physicalTruthProven = physicalHeightMm > 0;
+    return {
+      key,
+      associationId: association.id,
+      association: association.name,
+      profileId: profile.id,
+      application: field,
+      representativeValue: field === "initials" ? "MW" : field === "name" ? "VAN DER MEER" : "34",
+      physicalHeightMm: physicalTruthProven ? physicalHeightMm : null,
+      expectedSourceType: decision.requirement?.kind ?? null,
+      requirement: decision.requirement ?? null,
+      source: decision.source ?? null,
+      readiness: decision.allowed && physicalTruthProven ? "VALID" : "BLOCKED",
+      code: decision.allowed && !physicalTruthProven ? "PRODUCTION_PHYSICAL_SIZE_UNPROVEN" : decision.code,
+      reason: decision.allowed && !physicalTruthProven ? "De association mist een exacte fysieke Product Truth-maat voor deze toepassing." : decision.reason,
+    };
   });
   const assetRows = [];
-  for (const asset of state.productionElements ?? []) {
+  for (const asset of (state.productionElements ?? []).filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
     for (const application of asset.applications ?? []) {
       for (const context of (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION")) {
         const association = state.associations.find(({ id, name }) => id === context.id || name === context.label);
@@ -7689,7 +7782,18 @@ export function productionSourceCompatibilityMatrix(state) {
           ? productionAssetContextDecision({ asset, orderKind: "ASSOCIATION", associationIdentities: [association.id, association.name] })
           : executable;
         const key = `${association?.id ?? context.id}|asset:${asset.id}|${application.kind}:${application.placement}`;
-        assetRows.push({ key, associationId: association?.id ?? context.id, association: association?.name ?? context.label, profileId: null, application: `${application.kind}:${application.placement}`, expectedSourceType: application.kind === "NUMBER_SET" ? "VECTOR_GLYPH_SET" : "LOGO_ARTWORK", source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision) }, readiness: contextual.allowed ? "VALID" : "BLOCKED", code: contextual.code, reason: contextual.reason });
+        const variant = asset.variants?.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0);
+        const applicationField = application.kind !== "NUMBER_SET" ? null
+          : /short|rok/iu.test(application.placement) ? "shortsNumber"
+            : /borst|chest/iu.test(application.placement) ? "chestNumber"
+              : "backNumber";
+        const canonicalAssociationSource = !applicationField || applicationRows.some((row) => row.associationId === association?.id
+          && row.application === applicationField
+          && row.readiness === "VALID"
+          && row.source?.id === asset.id
+          && Number(row.physicalHeightMm) === Number(variant?.heightMm ?? asset.sizePolicy?.defaultHeightMm));
+        const associationReady = contextual.allowed && canonicalAssociationSource;
+        assetRows.push({ key, associationId: association?.id ?? context.id, association: association?.name ?? context.label, profileId: null, application: `${application.kind}:${application.placement}`, representativeValue: application.kind === "NUMBER_SET" ? "34" : asset.name, physicalHeightMm: Number(variant?.heightMm ?? asset.sizePolicy?.defaultHeightMm) || null, expectedSourceType: application.kind === "NUMBER_SET" ? "VECTOR_GLYPH_SET" : "LOGO_ARTWORK", source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision), sha256: asset.sourceLayers?.vectorSource?.sha256 ?? null, geometrySha256: asset.controlledVector?.geometryHash ?? null }, softwareReadiness: executable.allowed ? "EXECUTABLE" : "BLOCKED", readiness: associationReady ? "VALID" : "BLOCKED", code: contextual.allowed && !canonicalAssociationSource ? "PRODUCTION_ASSET_NOT_CANONICAL_ASSOCIATION_SOURCE" : contextual.code, reason: contextual.allowed && !canonicalAssociationSource ? "De bronfile is technisch uitvoerbaar, maar is niet de actuele canonieke bron en fysieke variant van dit verenigingsprofiel." : contextual.reason });
       }
     }
   }
@@ -7810,7 +7914,11 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
         && assignmentEvidence.assetVersion === (asset.version ?? String(asset.revision))
         && assignmentEvidence.sourceGeometryHash === asset.sourceSelection?.geometryHash
         && assignmentEvidence.assignmentHash === sha256(JSON.stringify(assignmentEvidenceBody));
-      if (!exactReferencedSource && !exactHumanAcceptedReplacement) return false;
+      const exactAssignedSource = semantics.sourceRequirement.assignedAssetId === asset.id
+        && semantics.sourceRequirement.assignedAssetVersion === (asset.version ?? String(asset.revision))
+        && semantics.sourceRequirement.geometryHash === asset.sourceSelection?.geometryHash
+        && sourceRecord?.fidelity?.status === "MATCHED";
+      if (!exactReferencedSource && !exactHumanAcceptedReplacement && !exactAssignedSource) return false;
     }
     const identity = line.decorationIdentity;
     if (identity?.assetId && (identity.assetId !== asset.id || identity.assetVersion !== (asset.version ?? String(asset.revision)))) return false;
@@ -7920,6 +8028,10 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
     }
     if (semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
       const exactSourceAvailable = state.productionElements.some((asset) => {
+        if (semantics.sourceRequirement.assignedAssetId) return asset.id === semantics.sourceRequirement.assignedAssetId
+          && (asset.version ?? String(asset.revision)) === semantics.sourceRequirement.assignedAssetVersion
+          && asset.sourceSelection?.geometryHash === semantics.sourceRequirement.geometryHash
+          && executableProductionAssetDecision(asset).allowed;
         const sourceRecord = state.productionAssetSources?.find(({ id }) => id === asset.sourceId);
         if (String(sourceRecord?.original?.sha256 ?? "").toUpperCase() === String(semantics.sourceRequirement.sha256).toUpperCase()) return true;
         const evidence = assignedProductionNumberAssetEvidence(semantics.profile, semantics.field, semantics.expectedHeightMm);

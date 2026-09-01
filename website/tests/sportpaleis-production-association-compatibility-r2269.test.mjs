@@ -58,6 +58,8 @@ test("generated wrong club/application/type/source/hash matrix blijft volledig f
     const wrongType = row.expectedSourceType === "MANAGED_FONT" ? "PRODUCTION_ELEMENT" : "FONT";
     assert.equal(productionSourceAssociationDecision(state, { ...base, candidate: { kind: wrongType, id: row.source.id } }).allowed, false, `wrong type: ${row.key}`);
     assert.equal(productionSourceAssociationDecision(state, { ...base, candidate: { kind: row.source.kind, id: `${row.source.id}-wrong`, sha256: row.source.sha256 } }).allowed, false, `wrong source: ${row.key}`);
+    assert.equal(productionSourceAssociationDecision(state, { ...base, candidate: { ...row.source, version: undefined } }).allowed, false, `missing version: ${row.key}`);
+    assert.equal(productionSourceAssociationDecision(state, { ...base, candidate: { ...row.source, version: "WRONG-VERSION" } }).allowed, false, `wrong version: ${row.key}`);
     if (row.source.kind === "FONT") assert.equal(productionSourceAssociationDecision(state, { ...base, candidate: { ...row.source, sha256: "A".repeat(64) } }).allowed, false, `wrong hash: ${row.key}`);
   }
 });
@@ -69,7 +71,43 @@ test("compatibility matrix bevat actuele associationprofielen plus actieve artic
   assert.deepEqual(second, first, "de matrix is deterministisch");
   assert.equal(new Set(first.map(({ key }) => key)).size, first.length, "iedere association/application heeft één identity");
   assert.ok(first.some(({ expectedSourceType }) => expectedSourceType === "MANAGED_FONT"));
-  assert.ok(first.some(({ expectedSourceType }) => expectedSourceType === "VERIFIED_PRODUCTION_SOURCE_SET"));
-  assert.ok(state.associations.filter(({ active }) => active !== false).every((association) => first.some(({ associationId }) => associationId === association.id)), "iedere actieve verenigingscontext is vertegenwoordigd");
+  assert.ok(first.some(({ expectedSourceType }) => expectedSourceType === "VECTOR_GLYPH_SET"));
+  assert.ok(state.associations.filter(({ active, productionApplications }) => active !== false && productionApplications?.length).every((association) => first.some(({ associationId }) => associationId === association.id)), "iedere actieve toepasselijke verenigingscontext is vertegenwoordigd");
+  assert.equal(first.some(({ association }) => association === "Sloeproeien"), false, "no-print context genereert geen kunstmatige source association");
+  assert.equal(first.some(({ association }) => association === "Seedorf TDG"), false, "Seedorf projecteert zonder concrete toepassing geen mogelijke personalisaties");
   assert.ok(first.every(({ readiness }) => ["VALID", "BLOCKED"].includes(readiness)));
+});
+
+test("configuration bump bewaart beheerdata, custom associations en hun assetcontexten lossless", () => {
+  const state = createSportpaleisProductionBootstrap(new Date("2026-09-01T00:00:00.000Z"));
+  const association = state.associations[0];
+  association.defaultFoilColor = "Sentinel Magenta";
+  association.customContinuityField = { authority: "HUMAN_ADMIN_EDIT", value: 17 };
+  const customAssociation = { ...structuredClone(association), id: "association-custom-sentinel", name: "Custom Sentinel Club", revision: 3 };
+  state.associations.push(customAssociation);
+  const article = state.articles.find(({ id }) => id === "sp-live-131240");
+  article.priceConfiguration = { articleUnitPriceEur: 123.45, personalizationUnitPricesEur: { initials: 6.78 }, sourceLabel: "HUMAN_ADMIN_EDIT" };
+  article.availableSizes = ["SENTINEL-SIZE"];
+  article.customContinuityField = "ARTICLE-SENTINEL";
+  const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
+  profile.instruction = "HUMAN CUSTOM INSTRUCTION";
+  profile.customContinuityField = "PROFILE-SENTINEL";
+  const asset = state.productionElements[0];
+  asset.contexts.push({ type: "ASSOCIATION", id: customAssociation.id, label: customAssociation.name });
+  state.configurationVersion = "SPW-BEDRUKKING-CONFIGURATION-008";
+
+  const migrated = validateSportpaleisPilotState(state);
+  assert.equal(migrated.associations.find(({ id }) => id === association.id).defaultFoilColor, "Sentinel Magenta");
+  assert.deepEqual(migrated.associations.find(({ id }) => id === association.id).customContinuityField, association.customContinuityField);
+  assert.equal(migrated.associations.find(({ id }) => id === customAssociation.id).name, customAssociation.name);
+  assert.ok(migrated.productionElements.find(({ id }) => id === asset.id).contexts.some(({ id }) => id === customAssociation.id));
+  const migratedArticle = migrated.articles.find(({ id }) => id === article.id);
+  assert.equal(migratedArticle.priceConfiguration.articleUnitPriceEur, 123.45);
+  assert.deepEqual(migratedArticle.priceConfiguration.personalizationUnitPricesEur, { initials: 6.78 });
+  assert.equal(migratedArticle.priceConfiguration.sourceLabel, "HUMAN_ADMIN_EDIT");
+  assert.deepEqual(migratedArticle.availableSizes, article.availableSizes);
+  assert.equal(migratedArticle.customContinuityField, "ARTICLE-SENTINEL");
+  const migratedProfile = migrated.productionProfiles.find(({ id }) => id === profile.id);
+  assert.equal(migratedProfile.instruction, "HUMAN CUSTOM INSTRUCTION");
+  assert.equal(migratedProfile.customContinuityField, "PROFILE-SENTINEL");
 });

@@ -644,7 +644,7 @@ export interface SportpaleisProductionElement {
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
   controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
   numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;
-  numberComposition?: { freeContourSpacingMm: 30; measurement: "CONTOUR_TO_CONTOUR" };
+  numberComposition?: { freeContourSpacingMm: 5; measurement: "CONTOUR_TO_CONTOUR"; glyphHeightMm?: number; widthMode?: "DERIVED_FROM_GLYPH_CONTOURS" };
   sourceLayers?: {
     visualSource: { filename: string; mimeType: string; sha256: string } | null;
     vectorSource: { filename: string; mimeType: string; sha256: string } | null;

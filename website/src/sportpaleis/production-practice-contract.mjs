@@ -40,25 +40,23 @@ export function canonicalArticlePersonalizationFields({ article, association, pr
 }
 
 const exactGeometryHash = (value) => /^[a-f0-9]{64}$/iu.test(String(value ?? ""));
-const REQUIRED_FONT_ADMISSION_STAGES = ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "HUMAN_CONFIRMED", "AUTHORITATIVE"];
+const REQUIRED_FONT_ADMISSION_STAGES = ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "PREVIEWED", "HUMAN_CONFIRMED", "AUTHORITATIVE"];
 const REQUIRED_VECTOR_ADMISSION_STAGES = ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "PREVIEWED", "HUMAN_CONFIRMED", "AUTHORITATIVE"];
 
 export function productionFontExecutableDecision(font, application = "FREE_PRINT") {
   if (!font || font.status !== "TECHNICALLY_VALID" || !font.authoritativeIdentity || font.authoritativeIdentity !== font.id || !exactGeometryHash(font.sha256) || !font.provenance) {
     return { allowed: false, code: "PRODUCTION_FONT_NOT_AUTHORITATIVE", reason: "De fontbron mist exacte authoritative identity, hash of provenance." };
   }
-  // Release-packaged canonical fonts predate the upload admission ledger. Their
-  // immutable registry identity remains the equivalent authority proof.
-  if (font.registryProjection === "SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET") {
-    return ["OPEN_FONT_SOURCE", "HUMAN_PRODUCT_TRUTH"].includes(font.authority)
-      ? { allowed: true, code: "PRODUCTION_FONT_REGISTERED_AUTHORITY", reason: null }
-      : { allowed: false, code: "PRODUCTION_FONT_AUTHORITY_INVALID", reason: "De geregistreerde productiefont mist geldige authoritative registry authority." };
-  }
-  if (!font.admission) return ["OPEN_FONT_SOURCE", "HUMAN_PRODUCT_TRUTH"].includes(font.authority)
-    ? { allowed: true, code: "PRODUCTION_FONT_REGISTERED_AUTHORITY", reason: null }
-    : { allowed: false, code: "PRODUCTION_FONT_ADMISSION_MISSING", reason: "Een niet-geregistreerde fontupload mist de volledige toelatingsketen." };
+  if (!font.admission) return { allowed: false, code: "PRODUCTION_FONT_ADMISSION_MISSING", reason: "De fontbron mist de volledige toelatings- en uitvoerbaarheidsketen." };
   if (font.admission.lifecycle !== "AUTHORITATIVE" || font.admission.sourceType !== "FONT" || REQUIRED_FONT_ADMISSION_STAGES.some((stage) => !font.admission.stages?.includes(stage))) {
     return { allowed: false, code: "PRODUCTION_FONT_ADMISSION_INCOMPLETE", reason: "De fontbron heeft de toelatingsketen niet volledig doorlopen." };
+  }
+  if (font.admission.authority !== font.authority || String(font.admission.sourceSha256 ?? "").toUpperCase() !== String(font.sha256).toUpperCase()) {
+    return { allowed: false, code: "PRODUCTION_FONT_ADMISSION_SOURCE_MISMATCH", reason: "Het executabilitybewijs hoort niet bij deze exacte bronauthority en bytes." };
+  }
+  const metadata = font.admission.metadata ?? {};
+  if (["familyName", "subfamilyName", "fullName", "postscriptName"].some((field) => font[field] && metadata[field] !== font[field])) {
+    return { allowed: false, code: "PRODUCTION_FONT_ADMISSION_IDENTITY_MISMATCH", reason: "De interne fontidentity wijkt af van de authoritative registratie." };
   }
   if (!font.admission.applicationBindings?.includes(application)) {
     return { allowed: false, code: "PRODUCTION_FONT_APPLICATION_MISMATCH", reason: "De fontbron is niet voor deze exacte toepassing bevestigd." };
@@ -106,12 +104,13 @@ export function executableProductionAssetDecision(asset) {
   if (!exactGeometryHash(geometryHash) || asset.controlledVector?.geometryHash !== geometryHash || !asset.controlledVector?.contours?.length) {
     return { allowed: false, code: "PRODUCTION_ASSET_GEOMETRY_UNPROVEN", reason: "De productiebron mist gecontroleerd geometriebewijs." };
   }
-  const dimensionalVariant = (asset.variants ?? []).find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0);
-  const dimensionalPolicy = Number(asset.sizePolicy?.defaultWidthMm) > 0 && Number(asset.sizePolicy?.defaultHeightMm) > 0;
+  const numberSet = (asset.applications ?? []).some(({ kind }) => kind === "NUMBER_SET");
+  const dimensionalVariant = (asset.variants ?? []).find(({ widthMm, heightMm }) => Number(heightMm) > 0 && (numberSet || Number(widthMm) > 0));
+  const dimensionalPolicy = Number(asset.sizePolicy?.defaultHeightMm) > 0 && (numberSet && asset.sizePolicy?.heightFixed === true && asset.sizePolicy?.widthDerived === true || Number(asset.sizePolicy?.defaultWidthMm) > 0);
   if (!dimensionalVariant && !dimensionalPolicy) {
     return { allowed: false, code: "PRODUCTION_ASSET_SIZE_UNPROVEN", reason: "De productiebron mist een bewezen fysieke maat." };
   }
-  if ((asset.applications ?? []).some(({ kind }) => kind === "NUMBER_SET")) {
+  if (numberSet) {
     const completeGlyphs = Array.from({ length: 10 }, (_, digit) => String(digit)).every((digit) => {
       const glyph = asset.numberGlyphs?.[digit];
       return exactGeometryHash(glyph?.geometryHash) && glyph?.contours?.length;

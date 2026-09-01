@@ -97,7 +97,7 @@ function vectorSvg() {
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 100">${groups}</svg>`);
 }
 
-test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt met 200/75 mm en 30 mm multi-digit spacing", async (context) => {
+test("authoritative hockey-SVG blijft leidend in normale orders met 200/75 mm en 5 mm multi-digit spacing", async (context) => {
   const { root, service, store, admin, operator } = await fixture(context);
   const persisted = await store.read(); const association = persisted.associations.find(({ name }) => name === "Buitenhout MHC");
   await store.mutate(async (state) => {
@@ -116,6 +116,8 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   const storedAfterPromotion = await store.read();
   const storedAsset = storedAfterPromotion.productionElements.find(({ id }) => id === asset.id);
   const storedSource = storedAfterPromotion.productionAssetSources.find(({ id }) => id === source.id);
+  const canonicalBackAsset = storedAfterPromotion.productionElements.find(({ verifiedSourceKey }) => verifiedSourceKey === "hockey-rug-200");
+  const canonicalShortAsset = storedAfterPromotion.productionElements.find(({ verifiedSourceKey }) => verifiedSourceKey === "hockey-short-75");
   assert.equal(asset.numberComposition.freeContourSpacingMm, NUMBER_GLYPH_SPACING_MM);
   for (const [digit, candidate] of candidates.entries()) {
     const storedCandidate = storedSource.candidates.find(({ id }) => id === candidate.id);
@@ -167,21 +169,21 @@ test("gekoppelde SVG-clubnummerset wordt automatisch in normale orders gebruikt 
   }
   const back = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey rug", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "18", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "fixture-hockey-back", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-back-18")).value;
   const shorts = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey short", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, shortsNumber: "23" }, items: [{ articleId: "fixture-hockey-short", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-short-23")).value;
-  assert.equal(back.productionLines[0].source.id, asset.id); assert.equal(back.productionLines[0].heightMm, 200);
-  assert.equal(shorts.productionLines[0].source.id, asset.id); assert.equal(shorts.productionLines[0].heightMm, 75);
+  assert.equal(back.productionLines[0].source.id, canonicalBackAsset.id); assert.equal(back.productionLines[0].heightMm, 200);
+  assert.equal(shorts.productionLines[0].source.id, canonicalShortAsset.id); assert.equal(shorts.productionLines[0].heightMm, 75);
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, back.id, back.revision, "hockey-back-control")).value;
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "hockey-back-proposal")).value;
   const job = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, orders: proposal.orders }, "hockey-back-job")).value;
-  assert.ok(job.snapshot.productionLines.some(({ source }) => source.id === asset.id && source.version === asset.version));
-  assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).version, asset.version);
-  assert.equal(job.snapshot.logoSources.find(({ id }) => id === asset.id).sourceId, source.id);
+  assert.ok(job.snapshot.productionLines.some(({ source }) => source.id === canonicalBackAsset.id && source.version === canonicalBackAsset.version));
+  assert.equal(job.snapshot.logoSources.find(({ id }) => id === canonicalBackAsset.id).version, canonicalBackAsset.version);
+  assert.equal(job.snapshot.logoSources.find(({ id }) => id === canonicalBackAsset.id).sourceId, canonicalBackAsset.sourceId);
   assert.ok(job.snapshot.layout.productionGeometry?.groups.length > 0);
   assert.equal(job.snapshot.layout.objectCount, 1, "semantisch rugnummer 18 blijft één herkenbare fysieke set");
   assert.equal(job.snapshot.productionLines[0].content, "18", "de semantische orderbetekenis blijft ongewijzigd");
   assert.deepEqual(job.snapshot.layout.placements.map(({ semanticGroup }) => semanticGroup.value), ["18"]);
   assert.deepEqual(job.snapshot.layout.placements[0].physicalMembers.map(({ digit }) => digit), ["1", "8"]);
-  assert.ok(job.snapshot.layout.placements.every(({ semanticGroup, physicalMembers }) => semanticGroup.garmentCompositionSpacingMm === 30 && semanticGroup.productionProfileId === "profile-source-buitenhout-mhc-backNumber" && physicalMembers.every(({ assetIdentity }) => assetIdentity.assetId === asset.id && assetIdentity.assetVersion === asset.version)));
-  assert.ok(job.snapshot.layout.placements.every(({ rotationApplied, mirrorApplied, vectorProfile }) => [0, 90, 180, 270].includes(rotationApplied) && mirrorApplied === true && vectorProfile?.includes(`@${asset.version}#`)));
+  assert.ok(job.snapshot.layout.placements.every(({ semanticGroup, physicalMembers }) => semanticGroup.garmentCompositionSpacingMm === NUMBER_GLYPH_SPACING_MM && semanticGroup.productionProfileId === "profile-source-buitenhout-mhc-backNumber" && physicalMembers.every(({ assetIdentity }) => assetIdentity.assetId === canonicalBackAsset.id && assetIdentity.assetVersion === canonicalBackAsset.version)));
+  assert.ok(job.snapshot.layout.placements.every(({ rotationApplied, mirrorApplied, vectorProfile }) => [0, 90, 180, 270].includes(rotationApplied) && mirrorApplied === true && vectorProfile?.includes(`@${canonicalBackAsset.version}#`)));
   assert.equal(typeof job.snapshot.artifact.sha256, "string");
   assert.equal(typeof job.snapshot.artifact.productionDataHash, "string");
   const artifactSvg = await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8");

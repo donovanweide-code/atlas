@@ -41,7 +41,7 @@ test("één canonical 0–9-bron componeert alleen de gevraagde cijfers op de ge
     id: "canonical-number-master", version: "1", name: "Canonical 0-9", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED",
     applications: [{ kind: "NUMBER_SET" }], sourceSelection: { geometryHash: "A".repeat(64) },
     numberGlyphs: Object.fromEntries(Array.from({ length: 10 }, (_, digit) => [String(digit), glyph(digit)])),
-    numberComposition: { freeContourSpacingMm: 30 },
+    numberComposition: { freeContourSpacingMm: 5 },
   };
   const order = { id: "SP-CANONICAL-NUMBER", association: "Sportpaleis", items: [] };
   const line = { id: "number-34", content: "34", widthMm: 0, heightMm: 200, preview: { label: "Rugnummer 34" } };

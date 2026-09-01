@@ -5,6 +5,7 @@ ops/production/spw-immutable-release.sh text eol=lf
 ops/production/test/run-immutable-release-foundation.sh text eol=lf
 ops/production/test/verify-immutable-candidate-dry-run.sh text eol=lf
 website/tests/fixtures/sportpaleis/city-logos-jeugd-2026-authoritative.svg -whitespace
+website/public/assets/organizations/sportpaleis/number-sources/Almere-Pioneers-rugnummers-20cm.original.svg -whitespace
 ops/release-engine/README.md text eol=lf
 ops/release-engine/* text eol=lf
 ops/release-engine/contracts/*.json text eol=lf

@@ -74,11 +74,17 @@ test("MHC letters en rugnummer behouden afzonderlijke authoritative brontypen", 
   const mhc = state.associations.find(({ name }) => name === "MHC Lelystad");
   assert.deepEqual(mhc.fontEvidence.referenceFields, ["backNumber"]);
   const validation = validateFinalProductionTruth(state, created);
-  const backNumberFindings = validation.findings.filter(({ lineId }) => lineId === created.productionLines.find(({ personalizationField }) => personalizationField === "backNumber").id);
-  const nameFindings = validation.findings.filter(({ lineId }) => lineId === created.productionLines.find(({ personalizationField }) => personalizationField === "name").id);
-  assert.ok(backNumberFindings.some(({ code }) => code === "PRODUCTION_CANONICAL_VECTOR_SOURCE_UNRESOLVED"));
+  const backNumberLine = created.productionLines.find(({ personalizationField }) => personalizationField === "backNumber");
+  const nameLine = created.productionLines.find(({ personalizationField }) => personalizationField === "name");
+  const backNumberFindings = validation.findings.filter(({ lineId }) => lineId === backNumberLine.id);
+  const nameFindings = validation.findings.filter(({ lineId }) => lineId === nameLine.id);
+  assert.equal(backNumberLine.source.kind, "PRODUCTION_ELEMENT");
+  assert.equal(backNumberLine.source.id, "production-asset-verified-hockey-rug-200");
+  assert.equal(nameLine.source.kind, "FONT");
+  assert.equal(nameLine.source.id, "font-b91eef2aed805a9e");
+  assert.ok(!backNumberFindings.some(({ code }) => code === "PRODUCTION_CANONICAL_VECTOR_SOURCE_UNRESOLVED"));
   assert.ok(!backNumberFindings.some(({ code }) => String(code).startsWith("PRODUCTION_CANONICAL_FONT_")), "een vectorreferentie wordt niet langer als ontbrekend TTF-font uitgelegd");
-  assert.ok(nameFindings.some(({ code }) => String(code).startsWith("PRODUCTION_CANONICAL_FONT_")));
+  assert.ok(!nameFindings.some(({ code }) => String(code).startsWith("PRODUCTION_CANONICAL_FONT_")));
   assert.ok(!nameFindings.some(({ code }) => code === "PRODUCTION_CANONICAL_VECTOR_SOURCE_UNRESOLVED"), "de rugnummer-SVG wordt niet als letterbron hergebruikt");
 });
 
@@ -93,6 +99,21 @@ test("fontupload kan een expliciete MHC rugnummer-SVG-toepassing niet oplossen",
     name: "Myriad Pro Bold", filename: "Myriad-Pro-Bold.ttf", dataBase64: bytes.toString("base64"), provenance: "type-boundary challenge", allowedInStore: false, humanAcceptance: true,
     productionProfileId: profile.id, applicationField: "backNumber", associationId: association.id,
   }), (error) => error.code === "PRODUCTION_FONT_SOURCE_TYPE_MISMATCH" && error.expectedSourceType === "VECTOR_GLYPH_SET");
+});
+
+test("zichtbare Myriad-naam kan Liberation-bytes niet aan MHC letters binden", async (context) => {
+  const { service, admin } = await fixture(context, "mhc-font-identity", { fontUploadsEnabled: true });
+  const state = await service.bootstrap(admin.token);
+  const article = state.articles.find(({ id }) => id === "sp-live-101119");
+  const profile = state.productionProfiles.find(({ id }) => id === article.profileId);
+  const association = state.associations.find(({ name }) => name === "MHC Lelystad");
+  const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
+  const payload = {
+    name: "Myriad Pro Bold", filename: "Myriad-Pro-Bold.ttf", dataBase64: bytes.toString("base64"), provenance: "internal-identity challenge", allowedInStore: false, humanAcceptance: true,
+    productionProfileId: profile.id, applicationField: "name", associationId: association.id,
+  };
+  await assert.rejects(service.inspectProductionFont(admin.token, admin.csrfToken, payload), (error) => error.code === "PRODUCTION_CANONICAL_FONT_IDENTITY_MISMATCH" && error.actualIdentities.familyName === "Liberation Sans");
+  await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, payload), (error) => error.code === "PRODUCTION_CANONICAL_FONT_IDENTITY_MISMATCH");
 });
 
 test("Vrije-opdruk UI bewaart één operation identity tijdens retry en begrenst asset-DOM", async () => {

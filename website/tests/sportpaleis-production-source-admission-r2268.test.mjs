@@ -47,9 +47,11 @@ test("geregistreerde Spain-bron blijft executable maar filename-only of verkeerd
   const spain = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.find(({ id }) => id === "font-5d083befacdf98ae");
   assert.equal(productionFontExecutableDecision(spain, "shortsNumber").allowed, true);
   assert.equal(productionFontExecutableDecision({ ...spain, authority: "ADMIN_VERIFIED_UPLOAD" }, "shortsNumber").allowed, false);
-  const admitted = { ...spain, authority: "ADMIN_VERIFIED_UPLOAD", admission: { lifecycle: "AUTHORITATIVE", sourceType: "FONT", stages: stages.filter((stage) => stage !== "PREVIEWED"), applicationBindings: ["name"], metadata: { familyName: "Spain Euro 2016", subfamilyName: "Regular", fullName: "Spain Euro 2016 Regular", postscriptName: "SpainEuro-Regular", unitsPerEm: 1000, glyphCount: 100 }, representativeProofs: [{ content: "MW", geometrySha256: hash, widthMm: 20, heightMm: 20 }], executabilitySha256: hash, confirmedAt: "2026-08-31T00:00:00.000Z", confirmedBy: { userId: "admin", name: "Donovan" } } };
+  const admitted = { ...spain, authority: "ADMIN_VERIFIED_UPLOAD", admission: { lifecycle: "AUTHORITATIVE", sourceType: "FONT", authority: "ADMIN_VERIFIED_UPLOAD", stages, applicationBindings: ["name"], sourceSha256: spain.sha256, metadata: { familyName: "Spain Euro 2016", subfamilyName: "Regular", fullName: "Spain Euro 2016 Regular", postscriptName: "SpainEuro-Regular", unitsPerEm: 1000, glyphCount: 100 }, representativeProofs: [{ content: "MW", geometrySha256: hash, widthMm: 20, heightMm: 20 }], executabilitySha256: hash, confirmedAt: "2026-08-31T00:00:00.000Z", confirmedBy: { userId: "admin", name: "Donovan" } } };
   assert.equal(productionFontExecutableDecision(admitted, "name").allowed, true);
   assert.equal(productionFontExecutableDecision(admitted, "backNumber").code, "PRODUCTION_FONT_APPLICATION_MISMATCH");
+  const withoutPreview = { ...admitted, admission: { ...admitted.admission, stages: stages.filter((stage) => stage !== "PREVIEWED") } };
+  assert.equal(productionFontExecutableDecision(withoutPreview, "name").code, "PRODUCTION_FONT_ADMISSION_INCOMPLETE");
 });
 
 test("SVG-nummerset en logo/artwork zijn alleen executable met exacte admission en toepassing", () => {

@@ -25,10 +25,12 @@ export function normalizeAndValidateManagedFontContours(contours) {
   }));
   const validation = validateGeometry(normalized);
   if (!validation.valid) {
-    throw managedFontError(
+    const error = managedFontError(
       "Dit productievoorstel kan nog niet worden voorbereid. Controleer de productiegegevens.",
       "PRODUCTION_FONT_GEOMETRY_INVALID",
     );
+    error.geometryIssues = validation.issues.map(({ code, contourId }) => ({ code, contourId: contourId ?? null }));
+    throw error;
   }
   return normalized;
 }

@@ -203,7 +203,8 @@ test("Beheerde nummerbron zet willekeurige combinaties zonder fontsubstitutie en
   const firstRight = Math.max(...piece.contours[0].points.map(({ x }) => x));
   const secondLeft = Math.min(...piece.contours[1].points.map(({ x }) => x));
   assert.equal(Number((secondLeft - firstRight).toFixed(6)), NUMBER_GLYPH_SPACING_MM);
-  assert.ok(piece.requestedPhysicalSizeMm.widthMm > 90);
+  const expectedWidth = (9.3 / 20 * 75) + NUMBER_GLYPH_SPACING_MM + (9.4 / 20 * 75);
+  assert.equal(Number(piece.requestedPhysicalSizeMm.widthMm.toFixed(6)), Number(expectedWidth.toFixed(6)));
 });
 
 test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyphgeometrie", async (context) => {
@@ -215,7 +216,7 @@ test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyph
   const glyphMap = Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id]));
   const association = (await store.read()).associations[0];
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers vereniging", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
-  assert.deepEqual(asset.numberComposition, { freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" });
+  assert.deepEqual(asset.numberComposition, { freeContourSpacingMm: 5, measurement: "CONTOUR_TO_CONTOUR" });
   assert.equal(asset.lifecycleStatus, "PRODUCTION_READY");
   assert.equal(asset.contexts[0].id, association.id);
   assert.equal(asset.variants[0].widthMm, 75);

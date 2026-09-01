@@ -59,7 +59,7 @@ async function createBuitenboysJob(service, admin, suffix) {
 }
 
 test("centrale registry bindt iedere static production asset aan exacte sourcebytes en provenance", async () => {
-  assert.deepEqual(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.map(({ id }) => id).sort(), ["font-5d083befacdf98ae", "font-liberation-sans-regular-f8ace1f8"]);
+  assert.deepEqual(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.map(({ id }) => id).sort(), ["font-0f330cf7aa7dd6c6", "font-5d083befacdf98ae", "font-985b2931e85cec60", "font-b91eef2aed805a9e", "font-e952ada73367d722", "font-liberation-sans-regular-f8ace1f8"]);
   assert.equal(new Set(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.map(({ id }) => id)).size, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.length);
   assert.equal(new Set(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.map(({ sourcePath }) => sourcePath)).size, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.length);
   assert.equal(new Set(SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.map(({ artifactPath }) => artifactPath)).size, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.length);
@@ -71,7 +71,7 @@ test("centrale registry bindt iedere static production asset aan exacte sourceby
   }
   const spain = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.find(({ id }) => id === "font-5d083befacdf98ae");
   assert.deepEqual([spain.familyName, spain.subfamilyName, spain.fullName, spain.postscriptName, spain.sha256], [OWNER_SUPPLIED_FONT_EVIDENCE.spain.familyName, OWNER_SUPPLIED_FONT_EVIDENCE.spain.subfamilyName, OWNER_SUPPLIED_FONT_EVIDENCE.spain.fullName, OWNER_SUPPLIED_FONT_EVIDENCE.spain.postscriptName, OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256]);
-  assert.equal(authoritativeProductionAssetManifest().assets.length, 2);
+  assert.equal(authoritativeProductionAssetManifest().assets.length, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.length);
 });
 
 test("bootstrap managed fonts zijn een exacte projectie van de authoritative registry", () => {
@@ -127,8 +127,8 @@ test("embedded glyphmasters en code-contourbronnen behouden hun eigen immutable 
   assert.equal(verified.length, 5);
   for (const entry of verified) {
     const bytes = Buffer.from(entry.source.original.dataBase64, "base64");
-    assert.equal(sha256(bytes), entry.definition.sha256);
-    assert.equal(entry.element.lifecycleStatus, "PRODUCTION_READY");
+    assert.equal(sha256(bytes), entry.definition.originalSha256 ?? entry.definition.sha256);
+    assert.equal(entry.element.lifecycleStatus, entry.definition.key === "pioneers-rug-junior-160" ? "SUPERSEDED_BY_PRODUCT_TRUTH_200MM" : "PRODUCTION_READY");
   }
   for (const value of ["2", "34", "77"]) {
     const source = productionSourceByIdentity(`pioneers-rugnummer-${value}-200mm`, "Sportpaleis-Snijtest-001");

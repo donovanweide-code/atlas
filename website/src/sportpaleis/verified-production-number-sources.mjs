@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 
+import { PIONEERS_NUMBER_SOURCE_DEFINITION } from "./pioneers-number-source.generated.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
+import { validateGeometry } from "./direct-print/geometry.ts";
 
-const SOURCE_DEFINITIONS = Object.freeze([
+const LEGACY_SOURCE_DEFINITIONS = Object.freeze([
   {
     "key": "pioneers-rug-junior-160",
     "filename": "1-Pioneers-rugnummers-junior-16cm.svg",
@@ -65,12 +67,69 @@ const SOURCE_DEFINITIONS = Object.freeze([
   }
 ]);
 
+const SOURCE_DEFINITIONS = Object.freeze(LEGACY_SOURCE_DEFINITIONS.map((definition) => {
+  if (definition.key === "pioneers-rug-senior-200") return PIONEERS_NUMBER_SOURCE_DEFINITION;
+  if (definition.key === "pioneers-rug-junior-160") return { ...definition, lifecycleStatus: "SUPERSEDED_BY_PRODUCT_TRUTH_200MM", supersededAt: "2026-09-01", supersededBy: "pioneers-rug-senior-200" };
+  return definition;
+}));
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex").toUpperCase();
 }
 
-function normalizedAggregate(candidates) {
-  const contours = candidates.flatMap((candidate) => candidate.controlledVector.contours.map((contour) => ({
+const PRODUCTION_CONTOUR_SPIKE_RETURN_TOLERANCE_MM = 0.01;
+const PRODUCTION_CONTOUR_DUPLICATE_POINT_TOLERANCE_MM = 0.01;
+
+function pointDistance(left, right) {
+  return Math.hypot(Number(left.x) - Number(right.x), Number(left.y) - Number(right.y));
+}
+
+function productionSafeContour(contour) {
+  let points = contour.points.map(({ x, y }) => ({ x: Number(x), y: Number(y) }));
+  const sourceWasClosed = points.length > 1 && pointDistance(points[0], points.at(-1)) <= PRODUCTION_CONTOUR_DUPLICATE_POINT_TOLERANCE_MM;
+  let removedPointCount = 0;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const next = [];
+    for (const point of points) {
+      if (next.length > 0 && pointDistance(point, next.at(-1)) <= PRODUCTION_CONTOUR_DUPLICATE_POINT_TOLERANCE_MM) {
+        removedPointCount += 1;
+        changed = true;
+        continue;
+      }
+      if (next.length >= 2 && pointDistance(point, next.at(-2)) <= PRODUCTION_CONTOUR_SPIKE_RETURN_TOLERANCE_MM) {
+        next.pop();
+        removedPointCount += 2;
+        changed = true;
+        continue;
+      }
+      next.push(point);
+    }
+    points = next;
+  }
+  if (sourceWasClosed && points.length > 1 && pointDistance(points[0], points.at(-1)) <= PRODUCTION_CONTOUR_DUPLICATE_POINT_TOLERANCE_MM) {
+    points[points.length - 1] = { ...points[0] };
+  }
+  return { contour: { ...contour, points }, removedPointCount };
+}
+
+function productionSafeCandidate(candidate, { strict, sourceKey }) {
+  let removedPointCount = 0;
+  const contours = candidate.controlledVector.contours.map((contour) => {
+    const normalized = productionSafeContour(contour);
+    removedPointCount += normalized.removedPointCount;
+    return normalized.contour;
+  });
+  const validation = validateGeometry(contours);
+  if (strict && !validation.valid) {
+    throw new Error(`Production source ${sourceKey} glyph ${candidate.id} is not executable: ${validation.issues.map(({ code }) => code).join(", ")}`);
+  }
+  return Object.freeze({ candidate, contours: Object.freeze(contours), removedPointCount, validation });
+}
+
+function normalizedAggregate(candidates, contoursByCandidate) {
+  const contours = candidates.flatMap((candidate) => contoursByCandidate.get(candidate.id).map((contour) => ({
     ...contour,
     points: contour.points.map(({ x, y }) => ({
       x: x + Number(candidate.controlledVector.sourceOriginMm?.x ?? 0),
@@ -91,33 +150,51 @@ function normalizedAggregate(candidates) {
 }
 
 function verifiedEntry(definition) {
-  const bytes = Buffer.from(definition.dataBase64, "base64");
-  if (sha256(bytes) !== definition.sha256) throw new Error(`Verified production source ${definition.filename} changed.`);
-  const inspected = inspectProductionAssetSvg({ bytes, filename: definition.filename, mimeType: "image/svg+xml", intakeKind: "NUMBER_SET" });
+  const originalBytes = Buffer.from(definition.originalDataBase64 ?? definition.dataBase64, "base64");
+  const productionBytes = Buffer.from(definition.dataBase64, "base64");
+  const originalSha256 = definition.originalSha256 ?? definition.sha256;
+  if (sha256(originalBytes) !== originalSha256) throw new Error(`Immutable original production source ${definition.originalFilename ?? definition.filename} changed.`);
+  if (sha256(productionBytes) !== definition.sha256) throw new Error(`Normalized production source ${definition.filename} changed.`);
+  const originalInspected = inspectProductionAssetSvg({ bytes: originalBytes, filename: definition.originalFilename ?? definition.filename, mimeType: "image/svg+xml", intakeKind: "NUMBER_SET" });
+  const inspected = inspectProductionAssetSvg({ bytes: productionBytes, filename: definition.filename, mimeType: "image/svg+xml", intakeKind: "NUMBER_SET" });
   if (inspected.candidates.length !== 10 || new Set(inspected.candidates.map(({ geometryHash }) => geometryHash)).size !== 10) throw new Error(`${definition.filename} must contain exactly ten distinct vector glyphs.`);
+  const glyphCandidates = definition.normalization?.normalizedGlyphGeometrySha256ByDigit
+    ? Array.from({ length: 10 }, (_, digit) => {
+      const expected = definition.normalization.normalizedGlyphGeometrySha256ByDigit[String(digit)];
+      const candidate = inspected.candidates.find(({ geometryHash }) => geometryHash === expected);
+      if (!candidate) throw new Error(`${definition.filename} mist de genormaliseerde identity voor cijfer ${digit}.`);
+      return candidate;
+    })
+    : inspected.candidates;
+  const strictProductionValidation = (definition.lifecycleStatus ?? "PRODUCTION_READY") === "PRODUCTION_READY";
+  const productionSafeGlyphs = glyphCandidates.map((candidate) => productionSafeCandidate(candidate, { strict: strictProductionValidation, sourceKey: definition.key }));
+  const contoursByCandidate = new Map(productionSafeGlyphs.map(({ candidate, contours }) => [candidate.id, contours]));
+  const removedNearReturnPointCount = productionSafeGlyphs.reduce((sum, { removedPointCount }) => sum + removedPointCount, 0);
+  const contourNormalization = Object.freeze({ method: "REMOVE_ZERO_AREA_NEAR_RETURN_SPIKES_V1", returnToleranceMm: PRODUCTION_CONTOUR_SPIKE_RETURN_TOLERANCE_MM, consecutivePointToleranceMm: PRODUCTION_CONTOUR_DUPLICATE_POINT_TOLERANCE_MM, removedPointCount: removedNearReturnPointCount });
   const source = Object.freeze({
-    id: `production-source-${definition.sha256.slice(0, 16).toLowerCase()}`,
+    id: `production-source-${originalSha256.slice(0, 16).toLowerCase()}`,
     version: `1-${definition.sha256.slice(0, 12)}`,
     revision: 1,
     intakeKind: "NUMBER_SET",
-    original: Object.freeze({ ...inspected.source, dataBase64: definition.dataBase64 }),
-    conversion: Object.freeze({ method: "HUMAN_VERIFIED_SVG", methodVersion: "1", derivedFromSourceId: null, derivedFromSha256: null }),
-    fidelity: Object.freeze({ status: "MATCHED", comparisonMethod: "CANONICAL_SVG_PREVIEW", referenceSha256: definition.sha256, checkedAt: "2026-08-25T00:00:00.000Z", checkedBy: Object.freeze({ userId: "system:verified-source-import", name: "Sportpaleis gecontroleerde productiebron" }), note: "De immutable aangeleverde SVG is rechtstreeks als contourbron gebruikt; tekstannotaties zijn aantoonbaar uitgesloten van productiegeometrie." }),
-    provenance: "Bestaand digitaal Sportpaleis-productiebestand, read-only aangeleverd en SHA-256 geborgd op 2026-08-25.",
+    original: Object.freeze({ ...originalInspected.source, dataBase64: (definition.originalDataBase64 ?? definition.dataBase64), immutable: true }),
+    normalized: Object.freeze({ ...inspected.source, dataBase64: definition.dataBase64, derivedFromSha256: originalSha256 }),
+    conversion: Object.freeze({ method: definition.normalization?.method ?? "HUMAN_VERIFIED_SVG", methodVersion: "1", derivedFromSourceId: `production-source-${originalSha256.slice(0, 16).toLowerCase()}`, derivedFromSha256: originalSha256, normalizedSha256: definition.sha256, normalization: definition.normalization ?? null, contourNormalization }),
+    fidelity: Object.freeze({ status: "MATCHED", comparisonMethod: definition.normalization ? "DETERMINISTIC_GLYPH_IDENTITY_AND_CONTOUR_REINSPECTION" : "CANONICAL_SVG_PREVIEW", referenceSha256: originalSha256, normalizedSha256: definition.sha256, checkedAt: "2026-09-01T00:00:00.000Z", checkedBy: Object.freeze({ userId: "system:verified-source-import", name: "Sportpaleis gecontroleerde productiebron" }), note: definition.normalization ? "Het immutable origineel is visueel en geometrisch geïdentificeerd; twee samengestelde dubbele objecten zijn uitgesloten en de tien enkelglyphs 0–9 zijn deterministisch opnieuw geïnspecteerd." : "De immutable aangeleverde SVG is rechtstreeks als contourbron gebruikt; tekstannotaties zijn aantoonbaar uitgesloten van productiegeometrie." }),
+    provenance: definition.normalization ? `Donovan immutable source ${definition.originalFilename} → ${originalSha256} → deterministic normalized production source ${definition.filename} → ${definition.sha256}.` : "Bestaand digitaal Sportpaleis-productiebestand, read-only aangeleverd en SHA-256 geborgd op 2026-08-25.",
     uploadedAt: "2026-08-25T00:00:00.000Z",
     uploadedBy: Object.freeze({ userId: "system:verified-source-import", name: "Sportpaleis gecontroleerde productiebron" }),
-    inspection: Object.freeze(inspected.inspection),
+    inspection: Object.freeze({ ...inspected.inspection, originalCandidateCount: originalInspected.candidates.length, normalizedCandidateCount: inspected.candidates.length }),
     documentPreviewSvg: inspected.documentPreviewSvg,
     candidates: Object.freeze(inspected.candidates),
   });
-  const aggregateContours = normalizedAggregate(inspected.candidates);
+  const aggregateContours = normalizedAggregate(glyphCandidates, contoursByCandidate);
   const geometryHash = sha256(Buffer.from(JSON.stringify(aggregateContours)));
-  const numberGlyphs = Object.freeze(Object.fromEntries(inspected.candidates.map((candidate, digit) => [String(digit), Object.freeze({
+  const numberGlyphs = Object.freeze(Object.fromEntries(productionSafeGlyphs.map(({ candidate, contours }, digit) => [String(digit), Object.freeze({
     candidateId: candidate.id,
-    geometryHash: candidate.geometryHash,
+    geometryHash: sha256(Buffer.from(JSON.stringify(contours))),
     widthUnits: candidate.boundsMm.width,
     heightUnits: candidate.boundsMm.height,
-    contours: candidate.controlledVector.contours,
+    contours,
   })])));
   const element = Object.freeze({
     id: `production-asset-verified-${definition.key}`,
@@ -128,22 +205,23 @@ function verifiedEntry(definition) {
     sourceStatus: "AVAILABLE",
     sourceId: source.id,
     version: `1-${geometryHash.slice(0, 12)}`,
-    lifecycleStatus: "PRODUCTION_READY",
+    lifecycleStatus: definition.lifecycleStatus ?? "PRODUCTION_READY",
     productionMethod: "SELF_PRODUCED",
     contexts: Object.freeze([{ type: definition.contextType, id: definition.contextId, label: definition.ownerName }]),
     applications: Object.freeze([{ kind: "NUMBER_SET", placement: definition.placement }]),
-    sourceSelection: Object.freeze({ candidateIds: inspected.candidates.map(({ id }) => id), selectionRef: inspected.candidates.map(({ selectionRef }) => selectionRef).join("+"), geometryHash }),
+    sourceSelection: Object.freeze({ candidateIds: glyphCandidates.map(({ id }) => id), selectionRef: glyphCandidates.map(({ selectionRef }) => selectionRef).join("+"), geometryHash }),
     controlledVector: Object.freeze({ format: "WBD_CONTOURS_V1", geometryHash, contourCount: aggregateContours.length, pointCount: aggregateContours.reduce((sum, contour) => sum + contour.points.length, 0), contours: aggregateContours }),
-    sizePolicy: Object.freeze({ mode: "FIXED", aspectRatioLocked: true, defaultWidthMm: definition.heightMm, defaultHeightMm: definition.heightMm, minWidthMm: definition.heightMm, maxWidthMm: definition.heightMm }),
+    sizePolicy: Object.freeze({ mode: "PROPORTIONAL_FREE", aspectRatioLocked: true, heightFixed: true, widthDerived: true, defaultWidthMm: 0, defaultHeightMm: definition.heightMm, minWidthMm: 0, maxWidthMm: 1000 }),
     defaultFoilColor: null,
     numberGlyphs,
-    numberComposition: Object.freeze({ freeContourSpacingMm: 30, measurement: "CONTOUR_TO_CONTOUR" }),
-    sourceLayers: Object.freeze({ visualSource: null, vectorSource: Object.freeze({ filename: definition.filename, mimeType: "image/svg+xml", sha256: definition.sha256 }), validatedCutContour: Object.freeze({ sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: "MATCHED", conversionMethod: "HUMAN_VERIFIED_SVG" }), physicallyProvenContour: null }),
+    contourNormalization,
+    numberComposition: Object.freeze({ freeContourSpacingMm: 5, measurement: "CONTOUR_TO_CONTOUR", glyphHeightMm: definition.heightMm, widthMode: "DERIVED_FROM_GLYPH_CONTOURS" }),
+    sourceLayers: Object.freeze({ visualSource: null, vectorSource: Object.freeze({ filename: definition.filename, mimeType: "image/svg+xml", sha256: definition.sha256, originalFilename: definition.originalFilename ?? definition.filename, originalSha256 }), validatedCutContour: Object.freeze({ sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: "MATCHED", conversionMethod: definition.normalization?.method ?? "HUMAN_VERIFIED_SVG" }), physicallyProvenContour: null }),
     revision: 1,
-    variants: Object.freeze([{ id: `variant-verified-${definition.key}`, label: definition.placement, widthMm: definition.heightMm, heightMm: definition.heightMm, productionMode: "INTERNAL_PLOT", currentStock: null, minimumStock: null, targetStock: null }]),
+    variants: Object.freeze([{ id: `variant-verified-${definition.key}`, label: definition.placement, widthMm: 0, heightMm: definition.heightMm, productionMode: "INTERNAL_PLOT", currentStock: null, minimumStock: null, targetStock: null }]),
     verifiedSourceKey: definition.key,
   });
-  return Object.freeze({ definition: Object.freeze({ ...definition, dataBase64: undefined }), source, element });
+  return Object.freeze({ definition: Object.freeze({ ...definition, dataBase64: undefined, originalDataBase64: undefined }), source, element });
 }
 
 const VERIFIED_ENTRIES = Object.freeze(SOURCE_DEFINITIONS.map(verifiedEntry));
