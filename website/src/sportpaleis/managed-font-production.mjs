@@ -69,9 +69,40 @@ export function validateManagedFontBytes(bytes) {
   if (!hasOutline) throw managedFontError("De fontbron bevat geen bruikbare vectorcontouren.", "FONT_FILE_INVALID");
   return Object.freeze({
     familyName: String(font.familyName ?? "").trim() || null,
+    subfamilyName: String(font.subfamilyName ?? "").trim() || null,
+    fullName: String(font.fullName ?? "").trim() || null,
     postscriptName: String(font.postscriptName ?? "").trim() || null,
     unitsPerEm: font.unitsPerEm,
     glyphCount: font.numGlyphs,
+  });
+}
+
+/**
+ * One admission proof for every uploaded production font. It intentionally
+ * uses the same outline engine as physical output: a readable filename or an
+ * installed OS font can never satisfy this boundary.
+ */
+export function inspectManagedFontAdmission(bytes, { representativeValues = ["MW", "SPORTPALEIS", "34"] } = {}) {
+  const sourceBytes = Buffer.from(bytes);
+  const sourceSha256 = sha256(sourceBytes);
+  const metadata = validateManagedFontBytes(sourceBytes);
+  const values = [...new Set(representativeValues.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (!values.length) throw managedFontError("Minimaal één representatieve productiewaarde is vereist.", "PRODUCTION_FONT_ADMISSION_VALUES_MISSING");
+  const fontRecord = { id: `font-${sourceSha256.slice(0, 16).toLowerCase()}`, version: sourceSha256.slice(0, 12), sha256: sourceSha256, status: "TECHNICALLY_VALID" };
+  const proofs = values.map((content, index) => {
+    const first = createManagedFontProductionPiece({ fontRecord, bytes: sourceBytes, content, widthMm: 100, heightMm: 20, id: `admission-${index + 1}`, sourceOrderId: "ADMISSION", product: "Font admission", association: "Sportpaleis", foilColor: "Wit" });
+    const second = createManagedFontProductionPiece({ fontRecord, bytes: sourceBytes, content, widthMm: 100, heightMm: 20, id: `admission-${index + 1}`, sourceOrderId: "ADMISSION", product: "Font admission", association: "Sportpaleis", foilColor: "Wit" });
+    const normalized = (piece) => piece.contours.map(({ closed, points }) => ({ closed, points }));
+    const firstHash = sha256(Buffer.from(JSON.stringify(normalized(first))));
+    const secondHash = sha256(Buffer.from(JSON.stringify(normalized(second))));
+    if (firstHash !== secondHash) throw managedFontError("De fontbron levert geen deterministische productiecontour.", "PRODUCTION_FONT_NON_DETERMINISTIC");
+    return Object.freeze({ content, geometrySha256: firstHash, widthMm: first.requestedPhysicalSizeMm.widthMm, heightMm: first.requestedPhysicalSizeMm.heightMm });
+  });
+  return Object.freeze({
+    sourceSha256,
+    metadata,
+    representativeProofs: Object.freeze(proofs),
+    executabilitySha256: sha256(Buffer.from(JSON.stringify({ sourceSha256, metadata, proofs }))),
   });
 }
 

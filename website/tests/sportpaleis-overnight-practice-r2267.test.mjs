@@ -16,10 +16,11 @@ import { executableProductionAssetDecision, productionObjectFitsTrack } from "..
 const emptyPersonalization = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
 const geometryHash = "B".repeat(64);
 const executableAsset = {
-  id: "asset-proof", name: "Bewezen bron", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: "source-proof",
+  id: "asset-proof", registrationId: "source-registration-proof", name: "Bewezen bron", lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: "source-proof",
   sourceSelection: { geometryHash }, controlledVector: { geometryHash, contours: [[[0, 0], [20, 0], [20, 10], [0, 10]]] },
   variants: [{ id: "asset-proof-100", widthMm: 100, heightMm: 50 }], sizePolicy: { mode: "FIXED", defaultWidthMm: 100, defaultHeightMm: 50 },
-  applications: [{ kind: "LOGO" }], contexts: [],
+  applications: [{ kind: "LOGO", placement: null }], contexts: [{ type: "GENERIC", id: "generic", label: "Algemeen" }],
+  sourceLayers: { vectorSource: { filename: "proof.svg", mimeType: "image/svg+xml", sha256: geometryHash }, validatedCutContour: { sourceId: "source-proof", version: "1", sha256: geometryHash } },
 };
 
 async function fixture(context, suffix, options = {}) {
@@ -89,7 +90,7 @@ test("fontupload kan een expliciete MHC rugnummer-SVG-toepassing niet oplossen",
   const association = state.associations.find(({ name }) => name === "MHC Lelystad");
   const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
   await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, {
-    name: "Myriad Pro Bold", filename: "Myriad-Pro-Bold.ttf", dataBase64: bytes.toString("base64"), provenance: "type-boundary challenge", allowedInStore: false,
+    name: "Myriad Pro Bold", filename: "Myriad-Pro-Bold.ttf", dataBase64: bytes.toString("base64"), provenance: "type-boundary challenge", allowedInStore: false, humanAcceptance: true,
     productionProfileId: profile.id, applicationField: "backNumber", associationId: association.id,
   }), (error) => error.code === "PRODUCTION_FONT_SOURCE_TYPE_MISMATCH" && error.expectedSourceType === "VECTOR_GLYPH_SET");
 });

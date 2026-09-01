@@ -18,9 +18,26 @@ export interface SportpaleisProductionFont {
   addedAt: string;
   uploadedBy: { userId: string; name: string };
   provenance: string;
+  authority?: "OPEN_FONT_SOURCE" | "HUMAN_PRODUCT_TRUTH" | "ADMIN_VERIFIED_UPLOAD";
   status: "TECHNICALLY_VALID" | "REJECTED" | "INACTIVE";
   allowedInStore: boolean;
   sourceUrl: string;
+  familyName?: string | null;
+  subfamilyName?: string | null;
+  fullName?: string | null;
+  postscriptName?: string | null;
+  authoritativeIdentity?: string;
+  admission?: {
+    lifecycle: "AUTHORITATIVE";
+    sourceType: "FONT";
+    stages: ("STORED" | "IDENTIFIED" | "VALIDATED" | "APPLICATION_COMPATIBLE" | "PRODUCTION_EXECUTABLE" | "HUMAN_CONFIRMED" | "AUTHORITATIVE")[];
+    applicationBindings: (keyof OrderPersonalization | "FREE_PRINT")[];
+    metadata: { familyName: string | null; subfamilyName: string | null; fullName: string | null; postscriptName: string | null; unitsPerEm: number; glyphCount: number };
+    representativeProofs: { content: string; geometrySha256: string; widthMm: number; heightMm: number }[];
+    executabilitySha256: string;
+    confirmedAt: string;
+    confirmedBy: { userId: string; name: string };
+  };
 }
 
 export interface SportpaleisProductionLine {
@@ -614,6 +631,16 @@ export interface SportpaleisProductionElement {
   physicalTransfer?: { supplier: string | null; location: string | null; stock: number | null; reserved: number | null };
   contexts?: { type: "ASSOCIATION" | "SPONSOR" | "ORGANIZATION" | "TEAM" | "ARTICLE" | "ORDER" | "GENERIC"; id: string; label: string }[];
   applications?: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[];
+  admission?: {
+    lifecycle: "AUTHORITATIVE";
+    sourceType: "SVG_VECTOR_NUMBERSET" | "LOGO_ARTWORK";
+    stages: ("STORED" | "IDENTIFIED" | "VALIDATED" | "APPLICATION_COMPATIBLE" | "PRODUCTION_EXECUTABLE" | "PREVIEWED" | "HUMAN_CONFIRMED" | "AUTHORITATIVE")[];
+    applicationBindings: { kind: "LOGO" | "SPONSOR" | "NUMBER_SET" | "ARTWORK"; placement: string | null }[];
+    sourceSha256: string;
+    geometrySha256: string;
+    confirmedAt: string;
+    confirmedBy: { userId: string; name: string };
+  };
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
   controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
   numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;

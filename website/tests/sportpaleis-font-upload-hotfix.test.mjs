@@ -42,15 +42,28 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
 
   const sourceBytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
   const bytes = Buffer.concat([sourceBytes, Buffer.from([0])]);
+  const seeded = await store.read();
+  const dcg = seeded.associations.find(({ name }) => name === "DCG");
   const payload = {
     name: "Schluber",
     filename: "LiberationSans-Regular.ttf",
     dataBase64: bytes.toString("base64"),
     provenance: "Repository testasset met vastgelegde open-bronprovenance",
     allowedInStore: false,
+    humanAcceptance: true,
+    productionProfileId: "profile-source-dcg-initials",
+    applicationField: "initials",
+    associationId: dcg.id,
   };
   await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, payload), (error) => error.code === "FORBIDDEN");
   await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, filename: "font.otf" }), (error) => error.code === "FONT_SIGNATURE_INVALID");
+  await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, humanAcceptance: false }), (error) => error.code === "PRODUCTION_FONT_HUMAN_CONFIRMATION_REQUIRED");
+  const fontCountBeforeInspection = (await store.read()).productionFonts.length;
+  const inspection = await service.inspectProductionFont(admin.token, admin.csrfToken, payload);
+  assert.equal(inspection.authoritative, false);
+  assert.equal(inspection.metadata.familyName, "Liberation Sans");
+  assert.equal((await store.read()).productionFonts.length, fontCountBeforeInspection, "inspectie maakt een upload nog niet authoritative of persistent");
+  await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, inspectionSha256: "A".repeat(64) }), (error) => error.code === "PRODUCTION_FONT_INSPECTION_MISMATCH");
 
   const beforeFont = (await service.createOrder(admin.token, admin.csrfToken, {
     orderKind: "INDIVIDUAL",
@@ -63,7 +76,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.equal(beforeFont.productionLines[0].source.kind, "PROFILE");
   assert.equal(beforeFont.productionLines[0].validation.status, "BLOCKED");
 
-  const added = await service.addProductionFont(admin.token, admin.csrfToken, payload);
+  const added = await service.addProductionFont(admin.token, admin.csrfToken, { ...payload, inspectionSha256: inspection.inspectionSha256 });
   assert.equal(added.sha256, createHash("sha256").update(bytes).digest("hex").toUpperCase());
   assert.equal(added.status, "TECHNICALLY_VALID");
   assert.equal(added.allowedInStore, false);
@@ -136,7 +149,10 @@ test("Fontbibliotheek toont de uploadflow alleen bij de server-side admincapabil
   assert.match(source, /state\.capabilities\.fontUploadsEnabled/);
   assert.match(source, /Alleen een bevoegde beheerder kan een productie-font toevoegen/);
   assert.match(source, /Fontbestand/);
-  assert.match(source, /Valideren en toevoegen/);
+  assert.match(source, /Valideren en previewen/);
+  assert.match(source, /Bevestigen en toevoegen/);
+  assert.match(source, /name="humanAcceptance" required/);
+  assert.match(source, /new FontFace\(previewFamily, await file\.arrayBuffer\(\)\)/, "de lokale preview gebruikt de gekozen fontbytes direct en is niet afhankelijk van een blob-URL/CSP");
   const fontForm = source.slice(source.indexOf("data-production-font-form"), source.indexOf("data-production-font-form") + 1_500);
   assert.doesNotMatch(fontForm, /name="provenance"[^>]*required/);
 });
@@ -149,7 +165,9 @@ test("beheerder hoeft geen technische provenance in te voeren; audit vult veilig
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const sourceBytes = await readFile(new URL("../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf", import.meta.url));
-  const added = await service.addProductionFont(admin.token, admin.csrfToken, { name: "Minimale invoer", filename: "LiberationSans-Italic.ttf", dataBase64: sourceBytes.toString("base64"), provenance: "", allowedInStore: true });
+  const payload = { name: "Minimale invoer", filename: "LiberationSans-Italic.ttf", dataBase64: sourceBytes.toString("base64"), provenance: "", allowedInStore: true, humanAcceptance: true };
+  const inspection = await service.inspectProductionFont(admin.token, admin.csrfToken, payload);
+  const added = await service.addProductionFont(admin.token, admin.csrfToken, { ...payload, inspectionSha256: inspection.inspectionSha256 });
   const stored = (await store.read()).productionFonts.find(({ id }) => id === added.id);
   assert.match(stored.provenance, /via Beheer/u);
   assert.equal(stored.uploadedBy.userId, admin.user.id);

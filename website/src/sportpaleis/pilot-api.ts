@@ -604,7 +604,11 @@ export class SportpaleisPilotApi {
     }));
   }
 
-  async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean; productionProfileId?: string; applicationField?: keyof OrderPersonalization; associationId?: string }): Promise<SportpaleisProductionFont> {
+  async inspectProductionFont(input: { name: string; filename: string; dataBase64: string; productionProfileId?: string; applicationField?: keyof OrderPersonalization; associationId?: string }): Promise<{ inspectionSha256: string; sourceSha256: string; filename: string; metadata: { familyName: string | null; subfamilyName: string | null; fullName: string | null; postscriptName: string | null; unitsPerEm: number; glyphCount: number }; representativeProofs: { content: string; geometrySha256: string; widthMm: number; heightMm: number }[]; executabilitySha256: string; authoritative: false }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-fonts/inspect`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
+  async addProductionFont(input: { name: string; filename: string; dataBase64: string; provenance: string; allowedInStore: boolean; humanAcceptance: boolean; inspectionSha256: string; productionProfileId?: string; applicationField?: keyof OrderPersonalization; associationId?: string }): Promise<SportpaleisProductionFont> {
     return responseBody(await this.#mutatingFetch(`${API}/production-fonts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
   }
 

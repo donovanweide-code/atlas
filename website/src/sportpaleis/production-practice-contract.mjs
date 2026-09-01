@@ -40,6 +40,29 @@ export function canonicalArticlePersonalizationFields({ article, association, pr
 }
 
 const exactGeometryHash = (value) => /^[a-f0-9]{64}$/iu.test(String(value ?? ""));
+const REQUIRED_FONT_ADMISSION_STAGES = ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "HUMAN_CONFIRMED", "AUTHORITATIVE"];
+const REQUIRED_VECTOR_ADMISSION_STAGES = ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "PREVIEWED", "HUMAN_CONFIRMED", "AUTHORITATIVE"];
+
+export function productionFontExecutableDecision(font, application = "FREE_PRINT") {
+  if (!font || font.status !== "TECHNICALLY_VALID" || !font.authoritativeIdentity || font.authoritativeIdentity !== font.id || !exactGeometryHash(font.sha256) || !font.provenance) {
+    return { allowed: false, code: "PRODUCTION_FONT_NOT_AUTHORITATIVE", reason: "De fontbron mist exacte authoritative identity, hash of provenance." };
+  }
+  // Release-packaged canonical fonts predate the upload admission ledger. Their
+  // immutable registry identity remains the equivalent authority proof.
+  if (!font.admission) return ["OPEN_FONT_SOURCE", "HUMAN_PRODUCT_TRUTH"].includes(font.authority)
+    ? { allowed: true, code: "PRODUCTION_FONT_REGISTERED_AUTHORITY", reason: null }
+    : { allowed: false, code: "PRODUCTION_FONT_ADMISSION_MISSING", reason: "Een niet-geregistreerde fontupload mist de volledige toelatingsketen." };
+  if (font.admission.lifecycle !== "AUTHORITATIVE" || font.admission.sourceType !== "FONT" || REQUIRED_FONT_ADMISSION_STAGES.some((stage) => !font.admission.stages?.includes(stage))) {
+    return { allowed: false, code: "PRODUCTION_FONT_ADMISSION_INCOMPLETE", reason: "De fontbron heeft de toelatingsketen niet volledig doorlopen." };
+  }
+  if (!font.admission.applicationBindings?.includes(application)) {
+    return { allowed: false, code: "PRODUCTION_FONT_APPLICATION_MISMATCH", reason: "De fontbron is niet voor deze exacte toepassing bevestigd." };
+  }
+  if (!exactGeometryHash(font.admission.executabilitySha256) || !font.admission.representativeProofs?.length || font.admission.representativeProofs.some(({ geometrySha256 }) => !exactGeometryHash(geometrySha256))) {
+    return { allowed: false, code: "PRODUCTION_FONT_EXECUTABILITY_UNPROVEN", reason: "De fontbron mist deterministisch outlinebewijs." };
+  }
+  return { allowed: true, code: "PRODUCTION_FONT_EXECUTABLE", reason: null };
+}
 
 /**
  * A lifecycle label is not execution proof. This decision is deliberately
@@ -66,7 +89,51 @@ export function executableProductionAssetDecision(asset) {
     });
     if (!completeGlyphs) return { allowed: false, code: "PRODUCTION_ASSET_GLYPHS_UNPROVEN", reason: "De nummerbron mist één of meer gecontroleerde cijfers." };
   }
+  const sourceSha256 = asset.sourceLayers?.vectorSource?.sha256;
+  if (!exactGeometryHash(sourceSha256) || asset.sourceLayers?.validatedCutContour?.sha256 !== geometryHash || asset.sourceLayers?.validatedCutContour?.sourceId !== asset.sourceId) {
+    return { allowed: false, code: "PRODUCTION_ASSET_SOURCE_PROOF_INVALID", reason: "De vectorbron mist een exacte bron-, contour- en hashbinding." };
+  }
+  if (asset.admission) {
+    if (asset.admission.lifecycle !== "AUTHORITATIVE" || REQUIRED_VECTOR_ADMISSION_STAGES.some((stage) => !asset.admission.stages?.includes(stage)) || asset.admission.sourceSha256 !== sourceSha256 || asset.admission.geometrySha256 !== geometryHash) {
+      return { allowed: false, code: "PRODUCTION_ASSET_ADMISSION_INCOMPLETE", reason: "De vector-/artworkbron heeft de toelatingsketen niet volledig doorlopen." };
+    }
+    const applications = asset.applications ?? [];
+    if (applications.some((application) => !asset.admission.applicationBindings?.some((binding) => binding.kind === application.kind && binding.placement === application.placement))) {
+      return { allowed: false, code: "PRODUCTION_ASSET_APPLICATION_MISMATCH", reason: "De productieasset is niet voor deze exacte toepassing bevestigd." };
+    }
+  } else if (!asset.verifiedSourceKey && !asset.registrationId) {
+    return { allowed: false, code: "PRODUCTION_ASSET_HUMAN_CONFIRMATION_MISSING", reason: "De bron mist een herleidbare menselijke of historische registratie." };
+  }
   return { allowed: true, code: "PRODUCTION_ASSET_EXECUTABLE", reason: null };
+}
+
+const numberApplicationField = (placement) => {
+  const value = String(placement ?? "").toLocaleLowerCase("nl-NL");
+  if (/rug|back/u.test(value)) return "backNumber";
+  if (/borst|chest/u.test(value)) return "chestNumber";
+  if (/short|rok/u.test(value)) return "shortsNumber";
+  return null;
+};
+
+/**
+ * Existing immutable bytes can only resolve another missing-source task when
+ * their already-confirmed association and exact number application match. A
+ * source filename, sport family or technically valid geometry never grants a
+ * new association/application by itself.
+ */
+export function productionAssetReuseDecision({ asset, targetAssociationIdentities = [], applicationField }) {
+  const executable = executableProductionAssetDecision(asset);
+  if (!executable.allowed) return executable;
+  const targetIdentities = new Set(targetAssociationIdentities.map(String).filter(Boolean));
+  const associationContexts = (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION");
+  if (!targetIdentities.size || !associationContexts.some((context) => contextIdentityMatches(context, targetIdentities))) {
+    return { allowed: false, code: "PRODUCTION_ASSET_REUSE_ASSOCIATION_MISMATCH", reason: "De bestaande bron is niet voor deze exacte vereniging bevestigd." };
+  }
+  const confirmedFields = new Set((asset.applications ?? []).filter(({ kind }) => kind === "NUMBER_SET").map(({ placement }) => numberApplicationField(placement)).filter(Boolean));
+  if (!applicationField || !confirmedFields.has(applicationField)) {
+    return { allowed: false, code: "PRODUCTION_ASSET_REUSE_APPLICATION_MISMATCH", reason: "De bestaande bron is niet voor deze exacte nummer-toepassing bevestigd." };
+  }
+  return { allowed: true, code: "PRODUCTION_ASSET_REUSE_EXACT", reason: null };
 }
 
 export function productionObjectFitsTrack({ widthMm, heightMm, maximumTrackWidthMm, allowedRotations = [0] }) {

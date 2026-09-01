@@ -22,6 +22,7 @@ import {
 } from "../src/sportpaleis/production-sources.ts";
 import {
   createManagedFontProductionPiece,
+  inspectManagedFontAdmission,
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
 import {
@@ -35,7 +36,7 @@ import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-pro
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
-import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, productionAssetContextDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
+import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, executableProductionAssetDecision, productionAssetContextDecision, productionAssetReuseDecision, productionFontExecutableDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -141,12 +142,12 @@ function canonicalManagedFont(assetId) {
   if (!asset || asset.kind !== "MANAGED_FONT") throw new Error(`Authoritative managed-font Product Truth ontbreekt: ${assetId}`);
   const {
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
-    provenance, status, allowedInStore, artifactPath, familyName, subfamilyName, fullName,
+    provenance, authority, status, allowedInStore, artifactPath, familyName, subfamilyName, fullName,
     postscriptName, authoritativeIdentity,
   } = asset;
   return Object.freeze({
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
-    provenance, status, allowedInStore, sourceUrl: `/${artifactPath}`,
+    provenance, authority, status, allowedInStore, sourceUrl: `/${artifactPath}`,
     ...(familyName ? { familyName } : {}),
     ...(subfamilyName ? { subfamilyName } : {}),
     ...(fullName ? { fullName } : {}),
@@ -1052,6 +1053,10 @@ export function validateSportpaleisPilotState(input) {
   for (const source of state.webshopIntake.sources ?? []) if (!source.immutable || source.mimeType !== "application/pdf" || sha256(Buffer.from(source.dataBase64, "base64")) !== String(source.sha256).toLowerCase()) throw new Error("Immutable webshop-PDF ontbreekt of is gewijzigd.");
   if (new Set(state.orders.map(({ id }) => id)).size !== state.orders.length) throw new Error("Dubbel ordernummer.");
   if (new Set(state.productionFonts.map(({ id }) => id)).size !== state.productionFonts.length || new Set(state.productionFonts.map(({ sha256: hash }) => hash)).size !== state.productionFonts.length) throw new Error("Dubbele productiefontbron.");
+  for (const font of state.productionFonts.filter(({ status, authority }) => status === "TECHNICALLY_VALID" && authority === "ADMIN_VERIFIED_UPLOAD")) {
+    const admission = productionFontExecutableDecision(font, font.admission?.applicationBindings?.[0] ?? "FREE_PRINT");
+    if (!admission.allowed) throw new Error(`Geüploade productiefont is niet werkelijk uitvoerbaar: ${admission.code}.`);
+  }
   if (new Set((state.productionAssetSources ?? []).map(({ id }) => id)).size !== (state.productionAssetSources ?? []).length || new Set((state.productionAssetSources ?? []).map(({ original }) => original.sha256)).size !== (state.productionAssetSources ?? []).length) throw new Error("Dubbele productieassetbron.");
   for (const source of state.productionAssetSources ?? []) {
     if (!source.original?.immutable || sha256(Buffer.from(source.original.dataBase64, "base64")).toUpperCase() !== source.original.sha256) throw new Error("Immutable productieassetbron ontbreekt of is gewijzigd.");
@@ -1069,7 +1074,13 @@ export function validateSportpaleisPilotState(input) {
     }
   }
   for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) {
+    // A physically supplied transfer is executable by its transfer contract,
+    // not by the self-produced vector/plot contract below. It must never be
+    // admitted to the plot route merely because its lifecycle is ready.
+    if (asset.productionMethod === "PHYSICAL_TRANSFER") continue;
     if (!asset.sourceId || !state.productionAssetSources.some(({ id }) => id === asset.sourceId) || asset.controlledVector?.geometryHash !== asset.sourceSelection?.geometryHash) throw new Error("Productierijpe asset mist immutable bron- of geometrie-identiteit.");
+    const admission = executableProductionAssetDecision(asset);
+    if (!admission.allowed) throw new Error(`Productierijpe asset is niet werkelijk uitvoerbaar: ${admission.code}.`);
   }
   if (new Set(state.productionElements.map(({ id }) => id)).size !== state.productionElements.length) throw new Error("Dubbele productie-element-ID.");
   const registrationIds = state.productionElements.map(({ registrationId }) => registrationId).filter(Boolean);
@@ -2199,6 +2210,37 @@ function reviewModeAllowed(user, principalIds, reviewCandidates) {
     && principalIds.has(user.id);
 }
 
+function inspectProductionFontRequest(state, payload) {
+  const guidedProfileId = optional(payload.productionProfileId, 180) || null;
+  const guidedField = optional(payload.applicationField, 40) || null;
+  const guidedAssociationId = optional(payload.associationId, 180) || null;
+  let guidedProfile = null;
+  if (guidedProfileId || guidedField || guidedAssociationId) {
+    if (!guidedProfileId || !guidedField || !guidedAssociationId) throw Object.assign(new Error("De bedoelde lettertoepassing is onvolledig. Open de bron opnieuw vanuit Ontbrekende productiebronnen."), { statusCode: 400, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_INCOMPLETE" });
+    guidedProfile = state.productionProfiles.find(({ id }) => id === guidedProfileId);
+    const guidedAssociation = state.associations.find(({ id }) => id === guidedAssociationId);
+    const profileBelongsToAssociation = guidedProfile && guidedAssociation && state.articles.some(({ association, profileId, active }) => active !== false && association === guidedAssociation.name && profileId === guidedProfile.id);
+    if (!guidedProfile || !guidedAssociation || !profileBelongsToAssociation || !guidedProfile.supports?.includes(guidedField)) throw Object.assign(new Error("De bedoelde lettertoepassing hoort niet bij dit productieprofiel en deze vereniging."), { statusCode: 409, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_MISMATCH" });
+    const requirement = canonicalLineSourceRequirement(state, guidedAssociation, guidedProfile, guidedField);
+    if (requirement.kind !== "MANAGED_FONT") throw Object.assign(new Error("Voor deze toepassing verwacht Workspace een SVG/vector-nummerset. Een fontbestand kan die bron niet vervangen."), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_TYPE_MISMATCH", expectedSourceType: requirement.kind, applicationField: guidedField });
+    if (requirement.canonicalName && normalizedProductionIdentity(payload.name) !== normalizedProductionIdentity(requirement.canonicalName)) throw Object.assign(new Error(`Voor deze toepassing is ${requirement.canonicalName} de bevestigde letterbron. Een andere fontnaam wordt niet stil gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_NAME_MISMATCH" });
+  }
+  const name = requiredText(payload.name, "Fontnaam", 120);
+  const filename = requiredText(payload.filename, "Bestandsnaam", 180);
+  const dataBase64 = requiredText(payload.dataBase64, "Fontbron", 7_500_000);
+  let bytes; try { bytes = Buffer.from(dataBase64, "base64"); } catch { bytes = Buffer.alloc(0); }
+  if (bytes.length < 12 || bytes.length > 5 * 1024 * 1024) throw Object.assign(new Error("Een fontbestand moet technisch leesbaar en maximaal 5 MB zijn."), { statusCode: 400, code: "FONT_FILE_INVALID" });
+  const signature = bytes.subarray(0, 4).toString("hex"); const format = FONT_SIGNATURES.get(signature);
+  if (!format || !filename.toLowerCase().endsWith(format.extension)) throw Object.assign(new Error("Gebruik een geldig TTF-, OTF-, WOFF- of WOFF2-bestand met overeenkomende bestandsextensie."), { statusCode: 400, code: "FONT_SIGNATURE_INVALID" });
+  const representativeValues = guidedField === "initials" ? ["MW", "SP"] : guidedField === "name" ? ["VAN DER MEER", "SPORTPALEIS"] : ["MW", "SPORTPALEIS", "34"];
+  let admissionProof;
+  try { admissionProof = inspectManagedFontAdmission(bytes, { representativeValues }); }
+  catch (error) { throw Object.assign(new Error(error?.message ?? "De fontbron is niet production-executable."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
+  const hash = sha256(bytes).toUpperCase();
+  const inspectionSha256 = sha256(JSON.stringify({ schemaVersion: 1, name, filename, sourceSha256: hash, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, productionProfileId: guidedProfileId, applicationField: guidedField, associationId: guidedAssociationId })).toUpperCase();
+  return { name, filename, bytes, format, hash, guidedProfile, guidedProfileId, guidedField, guidedAssociationId, admissionProof, inspectionSha256 };
+}
+
 export class SportpaleisPilotService {
   constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
@@ -3131,32 +3173,35 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
+  async inspectProductionFont(token, csrfToken, payload) {
+    const { state, user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
+    if (!this.fontUploadsEnabled) throw Object.assign(new Error("Fontuploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    const inspection = inspectProductionFontRequest(state, payload);
+    return {
+      inspectionSha256: inspection.inspectionSha256,
+      sourceSha256: inspection.hash,
+      filename: inspection.filename,
+      metadata: inspection.admissionProof.metadata,
+      representativeProofs: inspection.admissionProof.representativeProofs,
+      executabilitySha256: inspection.admissionProof.executabilitySha256,
+      applicationField: inspection.guidedField,
+      productionProfileId: inspection.guidedProfileId,
+      associationId: inspection.guidedAssociationId,
+      authoritative: false,
+    };
+  }
+
   async addProductionFont(token, csrfToken, payload) {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin"]);
     if (!this.fontUploadsEnabled) throw Object.assign(new Error("Fontuploads zijn in deze omgeving uitgeschakeld."), { statusCode: 403, code: "UPLOADS_DISABLED" });
+    if (payload.humanAcceptance !== true) throw Object.assign(new Error("Controleer de getoonde fontidentity en productiepreview en bevestig daarna de bron."), { statusCode: 409, code: "PRODUCTION_FONT_HUMAN_CONFIRMATION_REQUIRED" });
     const result = await this.store.mutate(async (state) => {
-      const guidedProfileId = optional(payload.productionProfileId, 180) || null;
-      const guidedField = optional(payload.applicationField, 40) || null;
-      const guidedAssociationId = optional(payload.associationId, 180) || null;
-      let guidedProfile = null;
-      if (guidedProfileId || guidedField || guidedAssociationId) {
-        if (!guidedProfileId || !guidedField || !guidedAssociationId) throw Object.assign(new Error("De bedoelde lettertoepassing is onvolledig. Open de bron opnieuw vanuit Ontbrekende productiebronnen."), { statusCode: 400, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_INCOMPLETE" });
-        guidedProfile = state.productionProfiles.find(({ id }) => id === guidedProfileId);
-        const guidedAssociation = state.associations.find(({ id }) => id === guidedAssociationId);
-        const profileBelongsToAssociation = guidedProfile && guidedAssociation && state.articles.some(({ association, profileId, active }) => active !== false && association === guidedAssociation.name && profileId === guidedProfile.id);
-        if (!guidedProfile || !guidedAssociation || !profileBelongsToAssociation || !guidedProfile.supports?.includes(guidedField)) throw Object.assign(new Error("De bedoelde lettertoepassing hoort niet bij dit productieprofiel en deze vereniging."), { statusCode: 409, code: "PRODUCTION_FONT_APPLICATION_CONTEXT_MISMATCH" });
-        const requirement = canonicalLineSourceRequirement(state, guidedAssociation, guidedProfile, guidedField);
-        if (requirement.kind !== "MANAGED_FONT") throw Object.assign(new Error("Voor deze toepassing verwacht Workspace een SVG/vector-nummerset. Een fontbestand kan die bron niet vervangen."), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_TYPE_MISMATCH", expectedSourceType: requirement.kind, applicationField: guidedField });
-        if (requirement.canonicalName && normalizedProductionIdentity(payload.name) !== normalizedProductionIdentity(requirement.canonicalName)) throw Object.assign(new Error(`Voor deze toepassing is ${requirement.canonicalName} de bevestigde letterbron. Een andere fontnaam wordt niet stil gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_NAME_MISMATCH" });
-      }
-      const filename = requiredText(payload.filename, "Bestandsnaam", 180);
-      const dataBase64 = requiredText(payload.dataBase64, "Fontbron", 7_500_000);
-      let bytes; try { bytes = Buffer.from(dataBase64, "base64"); } catch { bytes = Buffer.alloc(0); }
-      if (bytes.length < 12 || bytes.length > 5 * 1024 * 1024) throw Object.assign(new Error("Een fontbestand moet technisch leesbaar en maximaal 5 MB zijn."), { statusCode: 400, code: "FONT_FILE_INVALID" });
-      const signature = bytes.subarray(0, 4).toString("hex"); const format = FONT_SIGNATURES.get(signature);
-      if (!format || !filename.toLowerCase().endsWith(format.extension)) throw Object.assign(new Error("Gebruik een geldig TTF-, OTF-, WOFF- of WOFF2-bestand met overeenkomende bestandsextensie."), { statusCode: 400, code: "FONT_SIGNATURE_INVALID" });
-      const hash = sha256(bytes).toUpperCase(); const existing = state.productionFonts.find(({ sha256: candidate }) => candidate === hash);
+      const { name, filename, bytes, format, hash, guidedProfile, guidedField, guidedAssociationId, admissionProof, inspectionSha256 } = inspectProductionFontRequest(state, payload);
+      if (!payload.inspectionSha256 || String(payload.inspectionSha256).toUpperCase() !== inspectionSha256) throw Object.assign(new Error("De bevestiging hoort niet bij de huidige fontbytes, identity en toepassing. Valideer de bron opnieuw."), { statusCode: 409, code: "PRODUCTION_FONT_INSPECTION_MISMATCH" });
+      const existing = state.productionFonts.find(({ sha256: candidate }) => candidate === hash);
       if (existing) {
+        const admissionDecision = productionFontExecutableDecision(existing, guidedField || "FREE_PRINT");
+        if (!admissionDecision.allowed) throw Object.assign(new Error(admissionDecision.reason), { statusCode: 409, code: admissionDecision.code });
         if (guidedProfile) {
           if (guidedProfile.canonicalFontSourceId && guidedProfile.canonicalFontSourceId !== existing.id) throw Object.assign(new Error(`Letterprofiel ${guidedProfile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: guidedProfile.id, currentSourceId: guidedProfile.canonicalFontSourceId, requestedSourceId: existing.id });
           guidedProfile.canonicalFontSourceId = existing.id;
@@ -3168,16 +3213,17 @@ export class SportpaleisPilotService {
       catch (error) { throw Object.assign(new Error("De fontbron is geen technisch leesbaar outline-font."), { statusCode: 400, code: error?.code ?? "FONT_FILE_INVALID" }); }
       const addedAt = iso(); const id = `font-${hash.slice(0, 16).toLowerCase()}`;
       const provenance = optional(payload.provenance, 500) || `Door ${user.name} toegevoegd via Beheer op ${addedAt}`;
-      const font = { id, name: requiredText(payload.name, "Fontnaam", 120), originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, authority: "ADMIN_VERIFIED_UPLOAD", status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, authoritativeIdentity: id, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64") };
+      const applicationBindings = [...new Set([...(guidedField ? [guidedField] : []), ...(payload.allowedInStore !== false ? ["FREE_PRINT"] : [])])];
+      if (!applicationBindings.length) throw Object.assign(new Error("Koppel de fontbron aan een concrete lettertoepassing of Vrije opdruk."), { statusCode: 409, code: "PRODUCTION_FONT_APPLICATION_REQUIRED" });
+      const font = { id, name, originalFilename: filename, version: hash.slice(0, 12), sha256: hash, mimeType: format.mimeType, sizeBytes: bytes.length, addedAt, uploadedBy: { userId: user.id, name: user.name }, provenance, authority: "ADMIN_VERIFIED_UPLOAD", status: "TECHNICALLY_VALID", allowedInStore: payload.allowedInStore !== false, authoritativeIdentity: id, sourceUrl: `/api/sportpaleis/v1/production-fonts/${id}/source`, sourceDataBase64: bytes.toString("base64"), ...admissionProof.metadata, admission: { lifecycle: "AUTHORITATIVE", sourceType: "FONT", stages: ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "HUMAN_CONFIRMED", "AUTHORITATIVE"], applicationBindings, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, confirmedAt: addedAt, confirmedBy: { userId: user.id, name: user.name } } };
       state.productionFonts.push(font);
-      const normalizedFontName = normalizedProductionIdentity(font.name);
       const boundProfileIds = [];
-      for (const profile of state.productionProfiles.filter(({ id, fontProfile }) => normalizedProductionIdentity(fontProfile) === normalizedFontName && (!guidedProfile || id === guidedProfile.id))) {
+      for (const profile of guidedProfile ? [guidedProfile] : []) {
         if (profile.canonicalFontSourceId && profile.canonicalFontSourceId !== id) throw Object.assign(new Error(`Letterprofiel ${profile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: profile.id, currentSourceId: profile.canonicalFontSourceId, requestedSourceId: id });
         profile.canonicalFontSourceId = id;
         boundProfileIds.push(profile.id);
       }
-      audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds, applicationField: guidedField, associationId: guidedAssociationId });
+      audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds, applicationField: guidedField, associationId: guidedAssociationId, admissionLifecycle: font.admission.lifecycle, executabilitySha256: font.admission.executabilitySha256, metadata: font.admission.metadata });
       const { sourceDataBase64: _sourceDataBase64, ...publicFont } = font;
       return { state, value: structuredClone(publicFont) };
     });
@@ -4703,6 +4749,11 @@ export class SportpaleisPilotService {
         linkedProfileField = placementFields.find((field) => linkedProfile.supports?.includes(field)) ?? null;
         if (!linkedProfileField) throw Object.assign(new Error("De gekozen toepassing hoort niet bij dit productieprofiel. Kies het profiel voor Rug, Borst of Short/rok dat deze bedrukking ondersteunt."), { statusCode: 400, code: "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH" });
         if (!["backNumber", "chestNumber", "shortsNumber"].includes(linkedProfileField)) throw Object.assign(new Error("Een SVG-nummerset kan uitsluitend aan een expliciete nummer-toepassing worden gekoppeld."), { statusCode: 409, code: "PRODUCTION_ASSET_SOURCE_TYPE_MISMATCH", expectedSourceType: "MANAGED_FONT", applicationField: linkedProfileField });
+        const existingSourceRegistrations = state.productionElements.filter(({ sourceId }) => sourceId === source.id);
+        const targetAssociationIdentities = associationContext ? [associationContext.id, associationContext.label] : [];
+        if (existingSourceRegistrations.length && !existingSourceRegistrations.some((asset) => productionAssetReuseDecision({ asset, targetAssociationIdentities, applicationField: linkedProfileField }).allowed)) {
+          throw Object.assign(new Error("Deze bestaande immutable bron is niet voor deze exacte vereniging en nummer-toepassing bevestigd."), { statusCode: 409, code: "PRODUCTION_ASSET_SOURCE_REUSE_MISMATCH", applicationField: linkedProfileField });
+        }
       }
       const registrationBody = {
         sourceSha256: source.original.sha256,
@@ -4748,6 +4799,16 @@ export class SportpaleisPilotService {
         productionMethod,
         contexts,
         applications,
+        admission: {
+          lifecycle: "AUTHORITATIVE",
+          sourceType: isNumberSet ? "SVG_VECTOR_NUMBERSET" : "LOGO_ARTWORK",
+          stages: ["STORED", "IDENTIFIED", "VALIDATED", "APPLICATION_COMPATIBLE", "PRODUCTION_EXECUTABLE", "PREVIEWED", "HUMAN_CONFIRMED", "AUTHORITATIVE"],
+          applicationBindings: structuredClone(applications),
+          sourceSha256: source.original.sha256,
+          geometrySha256: geometryHash,
+          confirmedAt: iso(),
+          confirmedBy: { userId: user.id, name: user.name },
+        },
         sourceSelection: { candidateIds, selectionRef: candidates.flatMap(({ equivalentSelectionRefs, selectionRef }) => equivalentSelectionRefs?.length ? equivalentSelectionRefs : [selectionRef]).join("+"), geometryHash },
         controlledVector: { format: "WBD_CONTOURS_V1", geometryHash, contourCount: contours.length, pointCount: contours.reduce((sum, contour) => sum + contour.points.length, 0), contours },
         ...(hasProductionSize ? { sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm } } : {}),
@@ -4783,7 +4844,7 @@ export class SportpaleisPilotService {
           source.reviewDraft.updatedBy = { userId: user.id, name: user.name };
         } else delete source.reviewDraft;
       }
-      audit(state, user.id, hasProductionSize ? "Productieasset vrijgegeven" : "Productieasset veilig bewaard", element.id, { registrationId, sourceId: source.id, sourceVersion: source.version, sourceSha256: source.original.sha256, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, productionProfileId, rawToken: undefined });
+      audit(state, user.id, hasProductionSize ? "Productieasset vrijgegeven" : "Productieasset veilig bewaard", element.id, { registrationId, sourceId: source.id, sourceVersion: source.version, sourceSha256: source.original.sha256, candidateIds, geometryHash, lifecycleStatus: element.lifecycleStatus, productionMethod: element.productionMethod, sizePolicy: requestedSizePolicy, productionProfileId, admissionLifecycle: element.admission.lifecycle, applicationBindings: element.admission.applicationBindings, rawToken: undefined });
       return { state, value: publicProductionElement(element) };
     });
     return result.value;
@@ -5686,7 +5747,8 @@ export class SportpaleisPilotService {
           return Math.round(result * 1000) / 1000;
         };
         const defaultFontId = requiredText(input.defaultFontId, "Standaard productiefont", 160);
-        if (!state.productionFonts.some(({ id, status }) => id === defaultFontId && status === "TECHNICALLY_VALID")) throw Object.assign(new Error("Kies een technisch geldige standaardfontbron."), { statusCode: 400, code: "PRODUCTION_FONT_INVALID" });
+        const defaultFont = state.productionFonts.find(({ id }) => id === defaultFontId);
+        if (!productionFontExecutableDecision(defaultFont, "FREE_PRINT").allowed) throw Object.assign(new Error("Kies een werkelijk uitvoerbare, authoritative standaardfontbron."), { statusCode: 400, code: "PRODUCTION_FONT_INVALID" });
         state.settings.productionDefaults = {
           workingWidthMm: number("workingWidthMm", 50, SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm),
           maxSafeTrackWidthMm: number("maxSafeTrackWidthMm", 50, SPORTPALEIS_MACHINE_CONSTRAINTS.maximumSafeTrackWidthMm),
@@ -6346,7 +6408,7 @@ function assertPioneersNumberSource(state, order, line) {
   }
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
-    if (font && normalizedProductionIdentity(font.name) === normalizedProductionIdentity(canonicalName)) return;
+    if (font && productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT").allowed && normalizedProductionIdentity(font.name) === normalizedProductionIdentity(canonicalName)) return;
   }
   throw Object.assign(new Error(`${line.preview?.label ?? line.content}: gekoppelde bron wijkt af van de gecontroleerde Pioneers-bron “${canonicalName}”; productie blijft op REVIEW.`), { statusCode: 409, code: "PIONEERS_NUMBER_SOURCE_MISMATCH" });
 }
@@ -6531,7 +6593,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
     if ((!initialsInfix && (!(widthMm >= 1 && widthMm <= 1000) || !(heightMm >= 1 && heightMm <= 1000))) || (initialsInfix && (!(widthMm >= 0 && widthMm <= 1000) || !(heightMm >= 0 && heightMm <= 1000))) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Afmetingen moeten geldig zijn en aantal 1â€“999."), { statusCode: 400, code: "PRODUCTION_LINE_DIMENSIONS_INVALID" });
     let source; let proofStatus = "CONFIGURED"; let validation = { status: "VALID", reason: null };
     if (["TEXT", "INITIALS", "NUMBER"].includes(type)) {
-      const numberAsset = type === "NUMBER" ? state.productionElements.find(({ id, lifecycleStatus, productionMethod, applications }) => id === line.sourceId && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED" && applications?.some(({ kind }) => kind === "NUMBER_SET")) : null;
+      const numberAsset = type === "NUMBER" ? state.productionElements.find((asset) => asset.id === line.sourceId && executableProductionAssetDecision(asset).allowed && asset.applications?.some(({ kind }) => kind === "NUMBER_SET")) : null;
       if (numberAsset) {
         const variant = numberAsset.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
         if (!variant || Array.from(content).some((digit) => !numberAsset.numberGlyphs?.[digit])) throw Object.assign(new Error("De nummerbron bevat niet alle gevraagde cijfers."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MISSING" });
@@ -6541,7 +6603,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       const font = state.productionFonts.find(({ id }) => id === line.sourceId);
       const profile = state.productionProfiles.find(({ id }) => id === line.sourceId);
       if (source) { /* Nummerbron is al exact resolveerbaar. */ }
-      else if (font?.status === "TECHNICALLY_VALID" && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
+      else if (productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT").allowed && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
       else if (user.role !== "store" && profile) {
         const configuredFont = configuredManagedFont(state, profile);
         source = configuredFont ? { kind: "FONT", id: configuredFont.id, version: configuredFont.version, sha256: configuredFont.sha256 } : { kind: "PROFILE", id: profile.id, version: String(profile.revision ?? 1) };
@@ -6550,7 +6612,10 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
     } else {
       const element = state.productionElements.find(({ id }) => id === line.sourceId || line.elementId === id);
       if (!element) throw Object.assign(new Error("Kies een bestaand productie-element."), { statusCode: 400, code: "PRODUCTION_ELEMENT_NOT_FOUND" });
-      if (element.sourceId && element.lifecycleStatus !== "PRODUCTION_READY") throw Object.assign(new Error("Deze productiebron is nog niet menselijk goedgekeurd voor productie."), { statusCode: 409, code: "PRODUCTION_ELEMENT_NOT_READY" });
+      if (element.productionMethod === "SELF_PRODUCED") {
+        const admission = executableProductionAssetDecision(element);
+        if (!admission.allowed) throw Object.assign(new Error(admission.reason), { statusCode: 409, code: admission.code });
+      } else if (element.sourceId && element.lifecycleStatus !== "PRODUCTION_READY") throw Object.assign(new Error("Deze fysieke transferbron is nog niet menselijk goedgekeurd voor gebruik."), { statusCode: 409, code: "PRODUCTION_ELEMENT_NOT_READY" });
       const dimensionalVariant = element.variants.find(({ widthMm: variantWidth, heightMm: variantHeight }) => Number(variantWidth) > 0 && Number(variantHeight) > 0);
       if (dimensionalVariant && !element.applications?.some(({ kind }) => kind === "NUMBER_SET") && Math.abs((widthMm / heightMm) - (dimensionalVariant.widthMm / dimensionalVariant.heightMm)) > 0.002) throw Object.assign(new Error("De verhouding van een logo-/beeldmerkbron blijft vergrendeld."), { statusCode: 400, code: "LOGO_ASPECT_RATIO_INVALID" });
       const sizePolicy = element.sizePolicy;
@@ -7450,7 +7515,8 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
 function productionLineWriterIdentity(state, line) {
   if (line.source?.kind === "FONT") {
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
-    if (!font) throw Object.assign(new Error(`Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_FONT_IDENTITY_MISMATCH" });
+    const admission = productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT");
+    if (!font || !admission.allowed) throw Object.assign(new Error(admission.reason ?? `Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: admission.code ?? "PRODUCTION_FONT_IDENTITY_MISMATCH" });
     return { id: CUTJOB_SVG_WRITER.id, version: CUTJOB_SVG_WRITER.version };
   }
   if (line.source?.kind === "PRODUCTION_SOURCE") {
@@ -7461,7 +7527,8 @@ function productionLineWriterIdentity(state, line) {
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
     const asset = state.productionElements.find(({ id, version, revision, lifecycleStatus, productionMethod }) => id === line.source.id && (version ?? String(revision)) === line.source.version && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED");
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
-    if (!asset || !variant || !["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} en variant ${line.source.variantId ?? "ontbreekt"} zijn niet meer exact uitvoerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
+    const admission = executableProductionAssetDecision(asset);
+    if (!asset || !variant || !admission.allowed || !["GEOMETRY_VALIDATED", "PHYSICALLY_VALIDATED"].includes(productionElementProof(asset))) throw Object.assign(new Error(admission.reason ?? `Productieasset ${line.source.id}@${line.source.version} en variant ${line.source.variantId ?? "ontbreekt"} zijn niet meer exact uitvoerbaar.`), { statusCode: 409, code: admission.code ?? "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
     return { id: CUTJOB_SVG_WRITER.id, version: CUTJOB_SVG_WRITER.version };
   }
   throw Object.assign(new Error("Een productieregel heeft nog geen exact uitvoerbare bron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
@@ -7562,6 +7629,7 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     if (profileResolution && profileResolution.status !== "RESOLVED") return false;
     const requiredFont = profileResolution?.font ?? selectedFont;
     if (!requiredFont || requiredFont.status !== "TECHNICALLY_VALID" || !requiredFont.provenance || !/^[A-F0-9]{64}$/u.test(String(requiredFont.sha256 ?? "").toUpperCase())) return false;
+    if (!productionFontExecutableDecision(requiredFont, semantics.field || "FREE_PRINT").allowed) return false;
     const exactIdentity = line.source.id === requiredFont.id
       && line.source.version === requiredFont.version
       && String(line.source.sha256 ?? "").toUpperCase() === String(requiredFont.sha256).toUpperCase();
@@ -7589,6 +7657,7 @@ function productionSourceRoleMatchesLine(state, order, line, semantics) {
     const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
     const variant = asset?.variants?.find(({ id }) => id === line.source.variantId);
     if (!asset || !variant) return false;
+    if (!executableProductionAssetDecision(asset).allowed) return false;
     if (semantics.sourceRequirement?.kind === "VECTOR_GLYPH_SET") {
       const sourceRecord = state.productionAssetSources?.find(({ id }) => id === asset.sourceId);
       const exactReferencedSource = String(sourceRecord?.original?.sha256 ?? "").toUpperCase() === String(semantics.sourceRequirement.sha256).toUpperCase();
@@ -8009,7 +8078,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     if (line.source.kind === "PRODUCTION_ELEMENT") {
       const asset = state.productionElements.find(({ id, version, revision }) => id === line.source.id && (version ?? String(revision)) === line.source.version);
       const variant = asset?.variants.find(({ id }) => id === line.source.variantId);
-      if (!asset || !variant) throw Object.assign(new Error(`Productieasset ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
+      const admission = executableProductionAssetDecision(asset);
+      if (!asset || !variant || !admission.allowed) throw Object.assign(new Error(admission.reason ?? `Productieasset ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: admission.code ?? "PRODUCTION_ASSET_IDENTITY_MISMATCH" });
       const source = { id: asset.id, version: asset.version, sourceProofStatus: productionElementProof(asset), outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
       return {
         line,
@@ -8027,7 +8097,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
       };
     }
     const font = state.productionFonts.find(({ id, version, sha256: hash, status }) => id === line.source.id && version === line.source.version && hash === line.source.sha256 && status === "TECHNICALLY_VALID");
-    if (!font) throw Object.assign(new Error(`Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: "PRODUCTION_FONT_IDENTITY_MISMATCH" });
+    const admission = productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT");
+    if (!font || !admission.allowed) throw Object.assign(new Error(admission.reason ?? `Fontbron ${line.source.id}@${line.source.version} is niet meer identiek resolveerbaar.`), { statusCode: 409, code: admission.code ?? "PRODUCTION_FONT_IDENTITY_MISMATCH" });
     const bytes = managedFontBytes(font, artifactRoot, options.installedProductionAssetRoot);
     if (!bytes) throw Object.assign(new Error(`De exacte bytes van fontbron ${font.id}@${font.version} ontbreken.`), { statusCode: 409, code: "PRODUCTION_FONT_SOURCE_MISSING" });
     const source = { id: font.id, version: font.version, sourceProofStatus: "CONFIGURED", outputWriterId: CUTJOB_SVG_WRITER.id, outputWriterVersion: CUTJOB_SVG_WRITER.version };
@@ -8825,6 +8896,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const productionAssetLifecycleMatch = route.match(/^\/api\/sportpaleis\/v1\/production-assets\/([^/]+)\/lifecycle$/);
       if (productionAssetLifecycleMatch && method === "POST") {
         json(response, 200, await service.setProductionAssetLifecycle(token, csrf, decodeURIComponent(productionAssetLifecycleMatch[1]), await readJson(request)));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/production-fonts/inspect" && method === "POST") {
+        json(response, 200, await service.inspectProductionFont(token, csrf, await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/production-fonts" && method === "POST") {

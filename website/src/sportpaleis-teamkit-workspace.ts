@@ -1,6 +1,7 @@
 import type { PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 import type { TeamkitProposal, TeamkitProposalItem, TeamkitProposalPlacement } from "./sportpaleis/workspace-data.ts";
 import { buildTeamwearRelationships, rankTeamwearRelationships } from "./sportpaleis-teamwear-foundations.ts";
+import { executableProductionAssetDecision } from "./sportpaleis/production-practice-contract.mjs";
 
 function esc(value: unknown): string { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 function clientEditorId(prefix: string): string { const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`; return `${prefix}-${id}`; }
@@ -55,7 +56,7 @@ export function legacyTeamkitProposalCreate(state: PilotBootstrap, base: string)
 }
 
 function sourceOptions(proposal: TeamkitProposal, selected: string | null): string { return `<option value="">Geen voorstelbron</option>${proposal.sources.map((source) => `<option value="${esc(source.id)}" ${source.id === selected ? "selected" : ""}>${esc(source.filename)} · ${esc(qualityLabel[source.quality.status] ?? "controleren")}</option>`).join("")}`; }
-function assetOptions(state: PilotBootstrap, proposal: TeamkitProposal, selected: string | null): string { const name = proposal.association.name?.toLocaleLowerCase("nl-NL"); const assets = state.productionElements.filter(({ lifecycleStatus, contexts }) => lifecycleStatus === "PRODUCTION_READY" && (!name || contexts?.some(({ type, label }) => type === "GENERIC" || (type === "ASSOCIATION" && label.toLocaleLowerCase("nl-NL") === name)))); return `<option value="">Geen bestaand asset</option>${assets.map((asset) => `<option value="${esc(asset.id)}" ${asset.id === selected ? "selected" : ""}>${esc(asset.name)} · ${esc(asset.version)}</option>`).join("")}`; }
+function assetOptions(state: PilotBootstrap, proposal: TeamkitProposal, selected: string | null): string { const name = proposal.association.name?.toLocaleLowerCase("nl-NL"); const assets = state.productionElements.filter((asset) => executableProductionAssetDecision(asset).allowed && (!name || asset.contexts?.some(({ type, label }) => type === "GENERIC" || (type === "ASSOCIATION" && label.toLocaleLowerCase("nl-NL") === name)))); return `<option value="">Geen bestaand asset</option>${assets.map((asset) => `<option value="${esc(asset.id)}" ${asset.id === selected ? "selected" : ""}>${esc(asset.name)} · ${esc(asset.version)}</option>`).join("")}`; }
 
 function placementEditor(state: PilotBootstrap, proposal: TeamkitProposal, placement: Partial<TeamkitProposalPlacement> = {}): string {
   const id = placement.id ?? clientEditorId("placement"); const kind = placement.kind ?? "CLUB_LOGO"; const route = placement.route ?? "NOG_TE_BEPALEN";

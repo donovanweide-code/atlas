@@ -19,9 +19,15 @@ import { parseTeamProductionLines } from "../src/sportpaleis/team-production-lin
 const profile = (association, field) => ({ id: `profile-source-${association}-${field}`, supports: [field] });
 const article = (association, supports = [], personalizationPolicy = undefined) => ({ association, supports, personalizationPolicy, profileId: `profile-${association.toLowerCase().replaceAll(" ", "-")}` });
 const geometryHash = "a".repeat(64);
+const sourceHash = "b".repeat(64);
 const executableVisual = (name, association, kind = "SPONSOR") => ({
   id: name.toLowerCase(), name, lifecycleStatus: "PRODUCTION_READY", productionMethod: "SELF_PRODUCED", sourceId: `source-${name}`,
   sourceSelection: { geometryHash }, controlledVector: { geometryHash, contours: [[[0, 0], [10, 0], [10, 5], [0, 5]]] },
+  sourceLayers: {
+    vectorSource: { sha256: sourceHash },
+    validatedCutContour: { sha256: geometryHash, sourceId: `source-${name}` },
+  },
+  registrationId: `registration-${name}`,
   variants: [{ id: `${name}-100mm`, widthMm: 100, heightMm: 50 }], sizePolicy: { defaultWidthMm: 100, defaultHeightMm: 50 },
   ownerType: "ASSOCIATION", contexts: [{ type: "ASSOCIATION", id: association.toLowerCase(), label: association }], applications: [{ kind }],
 });
@@ -81,7 +87,7 @@ test("Vrije opdruk projecteert alle visuele productierijpe bronnen; context rang
 });
 
 test("één broncontextcontract staat expliciete Vrije opdruk toe en houdt vereniging/artikel/order strikt", () => {
-  const visual = { ...executableVisual("Toekomst Sponsor", "Club A"), id: "asset-visual", sourceId: "source-visual", contexts: [{ type: "ASSOCIATION", id: "club-a", label: "Club A" }] };
+  const visual = { ...executableVisual("Toekomst Sponsor", "Club A"), id: "asset-visual", contexts: [{ type: "ASSOCIATION", id: "club-a", label: "Club A" }] };
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "CUSTOM", associationIdentities: ["Vrije bedrukking"] }).allowed, true);
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "TEAM", associationIdentities: ["club-b", "Club B"] }).code, "PRODUCTION_ASSET_CONTEXT_MISMATCH");
   assert.equal(productionAssetContextDecision({ asset: visual, orderKind: "TEAM", associationIdentities: ["club-a", "Club A"] }).allowed, true);
@@ -164,7 +170,7 @@ test("Vrije opdruk implementeert één generieke snelle productieflow en duideli
 });
 
 test("bronprojectie en bulkerkenning blijven interactief bij toekomstige catalogusomvang", () => {
-  const elements = Array.from({ length: 5_000 }, (_, index) => ({ ...executableVisual(`Asset ${index}`, `Club ${index % 100}`, index % 2 ? "SPONSOR" : "LOGO"), id: `asset-${index}`, sourceId: `source-${index}` }));
+  const elements = Array.from({ length: 5_000 }, (_, index) => ({ ...executableVisual(`Asset ${index}`, `Club ${index % 100}`, index % 2 ? "SPONSOR" : "LOGO"), id: `asset-${index}` }));
   const rows = Array.from({ length: 50 }, (_, index) => `${index + 1} x 2`).join("\n");
   const start = performance.now();
   assert.equal(projectProductionReadyVisualAssets(elements, "Club 37").length, 5_000);

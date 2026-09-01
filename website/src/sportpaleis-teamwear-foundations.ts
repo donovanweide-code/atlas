@@ -1,6 +1,7 @@
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog, type SportpaleisCatalogAudience, type SportpaleisCatalogProduct } from "./sportpaleis-product-catalog.ts";
 import type { PilotBootstrap } from "./sportpaleis/pilot-api.ts";
 import type { CatalogArticle, SportpaleisProductionElement, TeamkitProposal, TeamkitProposalItem, TeamkitProposalPlacement, TeamkitProposalRevision } from "./sportpaleis/workspace-data.ts";
+import { executableProductionAssetDecision } from "./sportpaleis/production-practice-contract.mjs";
 
 export type TeamwearUse = "WEDSTRIJD" | "TRAINING" | "PRESENTATIE" | "ACCESSOIRES";
 
@@ -36,7 +37,7 @@ export function teamwearContextProductionAssets(state: PilotBootstrap, proposal:
   const associationName = proposal.association.name?.toLocaleLowerCase("nl-NL");
   if (!associationName) return [];
   const association = state.associations.find(({ id, name }) => id === proposal.association.id || name.toLocaleLowerCase("nl-NL") === associationName);
-  return state.productionElements.filter(({ lifecycleStatus, ownerName, contexts }) => lifecycleStatus === "PRODUCTION_READY" && (contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === association?.id) || ownerName.toLocaleLowerCase("nl-NL") === associationName));
+  return state.productionElements.filter((asset) => executableProductionAssetDecision(asset).allowed && (asset.contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === association?.id) || asset.ownerName.toLocaleLowerCase("nl-NL") === associationName));
 }
 
 export interface TeamwearRelationshipContext {
@@ -275,7 +276,7 @@ export function rankTeamwearRelationships(contexts: readonly TeamwearRelationshi
 export function buildTeamwearAssetLibrary(state: PilotBootstrap, proposal?: TeamkitProposal): TeamwearAssetLibraryEntry[] {
   const entries = new Map<string, TeamwearAssetLibraryEntry>();
   for (const association of state.associations) if (association.workspaceLogo) entries.set(`sha:${association.workspaceLogo.sha256}`, { id: `association-logo:${association.id}`, name: `${association.name} clublogo`, kind: "CLUB_LOGO", masterRef: association.workspaceLogo.sha256, version: String(association.revision ?? 1), previewKind: "ASSOCIATION_LOGO", contextIds: [`association:${association.id}`], internalOnly: true, customerContextIds: [`association:${association.id}`], sourceProposalId: null, sourceId: null, productionAssetId: null });
-  for (const asset of state.productionElements.filter(({ lifecycleStatus }) => lifecycleStatus === "PRODUCTION_READY")) { const masterRef = asset.sourceLayers?.visualSource?.sha256 ?? asset.sourceId ?? asset.id; const kind = asset.applications?.some(({ kind }) => kind === "SPONSOR") ? "SPONSOR" : asset.applications?.some(({ kind }) => kind === "LOGO") ? "CLUB_LOGO" : "PRODUCTION_ASSET"; entries.set(`master:${masterRef}`, { id: asset.id, name: asset.name, kind, masterRef, version: asset.version ?? String(asset.revision), previewKind: "PRODUCTION_ELEMENT", contextIds: (asset.contexts ?? []).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), internalOnly: true, customerContextIds: (asset.contexts ?? []).filter(({ type }) => ["ASSOCIATION", "TEAM", "ORGANIZATION"].includes(type)).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), sourceProposalId: null, sourceId: asset.sourceId ?? null, productionAssetId: asset.id }); }
+  for (const asset of state.productionElements.filter((candidate) => executableProductionAssetDecision(candidate).allowed)) { const masterRef = asset.sourceLayers?.visualSource?.sha256 ?? asset.sourceId ?? asset.id; const kind = asset.applications?.some(({ kind }) => kind === "SPONSOR") ? "SPONSOR" : asset.applications?.some(({ kind }) => kind === "LOGO") ? "CLUB_LOGO" : "PRODUCTION_ASSET"; entries.set(`master:${masterRef}`, { id: asset.id, name: asset.name, kind, masterRef, version: asset.version ?? String(asset.revision), previewKind: "PRODUCTION_ELEMENT", contextIds: (asset.contexts ?? []).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), internalOnly: true, customerContextIds: (asset.contexts ?? []).filter(({ type }) => ["ASSOCIATION", "TEAM", "ORGANIZATION"].includes(type)).map(({ type, id }) => `${type.toLocaleLowerCase()}:${id}`), sourceProposalId: null, sourceId: asset.sourceId ?? null, productionAssetId: asset.id }); }
   if (proposal) {
     const contextId = teamwearProposalContextId(proposal);
     const contextProposals = (state.teamkitProposals ?? []).filter((candidate) => candidate.id === proposal.id || (contextId && teamwearProposalContextId(candidate) === contextId));

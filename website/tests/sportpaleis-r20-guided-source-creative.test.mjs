@@ -67,6 +67,17 @@ test("Guided Source Setup registreert één immutable SVG-bron retry-safe en kop
     service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { ...input, applications: [{ kind: "NUMBER_SET", placement: "Rug" }] }),
     (error) => error?.code === "PRODUCTION_ASSET_PROFILE_PLACEMENT_MISMATCH",
   );
+  const otherAssociation = before.associations.find(({ name }) => name === "Almere Pioneers");
+  await assert.rejects(
+    service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, {
+      ...input,
+      ownerName: otherAssociation.name,
+      contexts: [{ type: "ASSOCIATION", id: otherAssociation.id, label: otherAssociation.name }],
+      productionProfileId: "profile-pioneers-shorts",
+    }),
+    (error) => error?.code === "PRODUCTION_ASSET_SOURCE_REUSE_MISMATCH",
+    "dezelfde immutable bytes mogen niet op basis van sport/maat als bron voor een andere vereniging worden gepromoveerd",
+  );
 
   const persisted = await store.read();
   assert.equal(persisted.productionAssetSources.find(({ id }) => id === source.id).original.dataBase64, bytes.toString("base64"));
@@ -109,6 +120,8 @@ test("Guided Setup en Studio exposen de concrete bronactie en touch-safe canvasc
   assert.match(workspace, /productionProfileId/u);
   assert.match(workspace, /applicationPlacement/u);
   assert.match(workspace, /Bestaande bron aan dit profiel koppelen/u);
+  assert.match(workspace, /Niet toepasbaar op deze ontbrekende bron/u);
+  assert.match(workspace, /productionAssetReuseDecision/u);
   assert.match(workspace, /numberSourceRequirements/u);
   assert.match(workspace, /fontSourceRows/u);
   assert.match(workspace, /guidedProfile \|\| pendingSourceCount/u);

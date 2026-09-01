@@ -59,8 +59,10 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     const bytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
     await assert.rejects(service.addProductionFont(storeUser.token, storeUser.csrfToken, { name: "Niet toegestaan", filename: "font.ttf", dataBase64: bytes.toString("base64"), provenance: "test" }), (error) => error.code === "FORBIDDEN");
     await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, { name: "Niet toegestaan", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "test" }), (error) => error.code === "FORBIDDEN");
-    await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { name: "Alleen een naam", filename: "fake.ttf", dataBase64: Buffer.from("geen font").toString("base64"), provenance: "test" }), (error) => error.code === "FONT_FILE_INVALID" || error.code === "FONT_SIGNATURE_INVALID");
-    const duplicate = await service.addProductionFont(admin.token, admin.csrfToken, { name: "Zelfde bron", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "Open bron", allowedInStore: true });
+    await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { name: "Alleen een naam", filename: "fake.ttf", dataBase64: Buffer.from("geen font").toString("base64"), provenance: "test", humanAcceptance: true }), (error) => error.code === "FONT_FILE_INVALID" || error.code === "FONT_SIGNATURE_INVALID");
+    const duplicatePayload = { name: "Zelfde bron", filename: "LiberationSans-Regular.ttf", dataBase64: bytes.toString("base64"), provenance: "Open bron", allowedInStore: true, humanAcceptance: true };
+    const duplicateInspection = await service.inspectProductionFont(admin.token, admin.csrfToken, duplicatePayload);
+    const duplicate = await service.addProductionFont(admin.token, admin.csrfToken, { ...duplicatePayload, inspectionSha256: duplicateInspection.inspectionSha256 });
     assert.equal(duplicate.id, font.id);
     assert.equal((await store.read()).productionFonts.length, 2);
   });
