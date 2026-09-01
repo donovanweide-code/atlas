@@ -19,6 +19,7 @@ import {
   productionPieceFromSource,
   productionSourceByIdentity,
   resolveProductionSource,
+  availableProductionSourceIdentities,
 } from "../src/sportpaleis/production-sources.ts";
 import {
   createManagedFontProductionPiece,
@@ -36,7 +37,7 @@ import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-pro
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
-import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, executableProductionAssetDecision, productionAssetContextDecision, productionAssetReuseDecision, productionFontExecutableDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
+import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, executableProductionAssetDecision, productionAssetContextDecision, productionAssetReuseDecision, productionFontAssociationDecision, productionFontExecutableDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
 import {
   createWorkspacePasswordRecord,
   verifyWorkspacePassword,
@@ -143,15 +144,17 @@ function canonicalManagedFont(assetId) {
   const {
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
     provenance, authority, status, allowedInStore, artifactPath, familyName, subfamilyName, fullName,
-    postscriptName, authoritativeIdentity,
+    postscriptName, aliases, authoritativeIdentity,
   } = asset;
   return Object.freeze({
     id, name, originalFilename, version, sha256: hash, mimeType, sizeBytes, addedAt, uploadedBy,
     provenance, authority, status, allowedInStore, sourceUrl: `/${artifactPath}`,
+    registryProjection: "SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET",
     ...(familyName ? { familyName } : {}),
     ...(subfamilyName ? { subfamilyName } : {}),
     ...(fullName ? { fullName } : {}),
     ...(postscriptName ? { postscriptName } : {}),
+    ...(aliases ? { aliases: [...aliases] } : {}),
     ...(authoritativeIdentity ? { authoritativeIdentity } : {}),
   });
 }
@@ -166,6 +169,41 @@ function reconcileCanonicalProductionFonts(state) {
     if (matches.length > 1) throw new Error(`Dubbele canonieke productiefontbron: ${source.id}`);
     if (matches.length === 1 && (matches[0].id !== source.id || String(matches[0].sha256 ?? "").toUpperCase() !== source.sha256)) throw new Error(`Conflicterende canonieke productiefontidentity: ${source.id}`);
     if (!matches.length) state.productionFonts.push(structuredClone(source));
+    else {
+      // An exact immutable registry identity owns these technical fields. A
+      // legacy display projection (for example "Spain") must not erase the
+      // authority that the same exact bytes already have in Product Truth.
+      const existing = matches[0];
+      const allowedInStore = existing.allowedInStore;
+      Object.assign(existing, structuredClone(source));
+      if (typeof allowedInStore === "boolean") existing.allowedInStore = allowedInStore;
+    }
+  }
+}
+
+const normalizedSourceIdentity = (value) => String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
+
+function registeredManagedFontForProfile(profile) {
+  const configured = normalizedSourceIdentity(profile?.fontProfile);
+  if (!configured) return null;
+  const matches = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter((asset) => asset.kind === "MANAGED_FONT"
+    && [asset.name, asset.familyName, asset.postscriptName, ...(asset.aliases ?? [])].some((identity) => normalizedSourceIdentity(identity) === configured));
+  if (matches.length > 1) throw new Error(`Conflicterende authoritative fontregistraties voor profiel ${profile.id}.`);
+  return matches[0] ?? null;
+}
+
+function reconcileCanonicalProductionProfileSources(state) {
+  for (const profile of state.productionProfiles ?? []) {
+    const registered = registeredManagedFontForProfile(profile);
+    if (profile.canonicalFontSourceId && registered && profile.canonicalFontSourceId !== registered.id) {
+      if (profile.canonicalFontSourceAuthority !== "AUTHORITATIVE_REGISTRY_PROJECTION") {
+        throw new Error(`Productieprofiel ${profile.id} conflicteert met de authoritative fontregistry.`);
+      }
+    }
+    if (registered) {
+      profile.canonicalFontSourceId = registered.id;
+      profile.canonicalFontSourceAuthority = "AUTHORITATIVE_REGISTRY_PROJECTION";
+    }
   }
 }
 
@@ -827,6 +865,7 @@ export function migrateSportpaleisPilotState(input) {
       : { status: "REFERENCE_REQUIRED", comparisonMethod: "HUMAN_SIDE_BY_SIDE", referenceSha256: source.original.sha256, checkedAt: null, checkedBy: null, note: null };
   }
   reconcileCanonicalProductionFonts(state);
+  reconcileCanonicalProductionProfileSources(state);
   state.productionElementRequirements ??= [];
   state.productionJobs ??= [];
   state.productionProposals ??= [];
@@ -1025,9 +1064,11 @@ export function validateSportpaleisPilotState(input) {
       if (profile.outputWriterId) existing.outputWriterId = profile.outputWriterId;
     }
   }
+  reconcileCanonicalProductionProfileSources(state);
   reconcileVerifiedProductionNumberSources(state);
   applyPioneersProductionAuthority(state);
   applyScBuitenboysShortAuthority(state);
+  reconcileCanonicalProductionProfileSources(state);
   state.settings ??= structuredClone(PILOT_SETTINGS);
   state.settings.deliveryFeeEur ??= PILOT_SETTINGS.deliveryFeeEur;
   state.settings.productionDefaults = { ...structuredClone(PILOT_SETTINGS.productionDefaults), ...(state.settings.productionDefaults ?? {}) };
@@ -3205,6 +3246,7 @@ export class SportpaleisPilotService {
         if (guidedProfile) {
           if (guidedProfile.canonicalFontSourceId && guidedProfile.canonicalFontSourceId !== existing.id) throw Object.assign(new Error(`Letterprofiel ${guidedProfile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: guidedProfile.id, currentSourceId: guidedProfile.canonicalFontSourceId, requestedSourceId: existing.id });
           guidedProfile.canonicalFontSourceId = existing.id;
+          guidedProfile.canonicalFontSourceAuthority = "HUMAN_CONFIRMED_APPLICATION_BINDING";
           audit(state, user.id, "Bestaande productiefont aan toepassing gekoppeld", existing.id, { sha256: hash, profileId: guidedProfile.id, applicationField: guidedField, associationId: guidedAssociationId });
         }
         const { sourceDataBase64: _sourceDataBase64, ...publicFont } = existing; return { state, value: structuredClone(publicFont) };
@@ -3221,6 +3263,7 @@ export class SportpaleisPilotService {
       for (const profile of guidedProfile ? [guidedProfile] : []) {
         if (profile.canonicalFontSourceId && profile.canonicalFontSourceId !== id) throw Object.assign(new Error(`Letterprofiel ${profile.name} is al aan een andere canonieke fontmaster gekoppeld.`), { statusCode: 409, code: "PRODUCTION_CANONICAL_FONT_CONFLICT", profileId: profile.id, currentSourceId: profile.canonicalFontSourceId, requestedSourceId: id });
         profile.canonicalFontSourceId = id;
+        profile.canonicalFontSourceAuthority = "HUMAN_CONFIRMED_APPLICATION_BINDING";
         boundProfileIds.push(profile.id);
       }
       audit(state, user.id, "Productiefont toegevoegd", id, { sha256: hash, filename, allowedInStore: font.allowedInStore, authoritativeIdentity: id, boundProfileIds, applicationField: guidedField, associationId: guidedAssociationId, admissionLifecycle: font.admission.lifecycle, executabilitySha256: font.admission.executabilitySha256, metadata: font.admission.metadata });
@@ -6148,12 +6191,9 @@ function canonicalManagedFontResolution(state, profile) {
   if (!configuredName) return { status: "MISSING", font: null, matches: [], provenance };
   const normalized = (value) => String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
   const configuredIdentity = normalized(configuredName);
-  const spainIdentity = normalized(OWNER_SUPPLIED_FONT_EVIDENCE.spain.canonicalProfileName);
   const declaredSourceId = String(profile?.canonicalFontSourceId ?? "").trim();
-  const registeredCandidates = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter((asset) => asset.kind === "MANAGED_FONT" && [asset.name, asset.familyName, asset.postscriptName].some((identity) => normalized(identity) === configuredIdentity));
-  const registeredSourceId = configuredIdentity === spainIdentity
-    ? "font-5d083befacdf98ae"
-    : registeredCandidates.length === 1 ? registeredCandidates[0].id : null;
+  const registeredCandidates = SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS.filter((asset) => asset.kind === "MANAGED_FONT" && [asset.name, asset.familyName, asset.postscriptName, ...(asset.aliases ?? [])].some((identity) => normalized(identity) === configuredIdentity));
+  const registeredSourceId = registeredCandidates.length === 1 ? registeredCandidates[0].id : null;
   const requiredSourceId = declaredSourceId || registeredSourceId;
   if (!requiredSourceId) return { status: "UNRESOLVED", font: null, matches: [], provenance: { ...provenance, configuredIdentity, reason: "CANONICAL_SOURCE_ID_UNBOUND" } };
   const registeredAsset = authoritativeProductionAssetById(requiredSourceId);
@@ -6602,8 +6642,12 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
       }
       const font = state.productionFonts.find(({ id }) => id === line.sourceId);
       const profile = state.productionProfiles.find(({ id }) => id === line.sourceId);
+      const boundProfile = state.productionProfiles.find(({ id }) => id === line.decorationIdentity?.productionProfileId);
+      const fontDecision = boundProfile
+        ? productionFontAssociationDecision({ fonts: state.productionFonts, profile: boundProfile, application: line.personalizationField || "FREE_PRINT", selectedSourceId: font?.id ?? line.sourceId })
+        : productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT");
       if (source) { /* Nummerbron is al exact resolveerbaar. */ }
-      else if (productionFontExecutableDecision(font, line.personalizationField || "FREE_PRINT").allowed && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
+      else if (fontDecision.allowed && font && (user.role !== "store" || font.allowedInStore)) source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 };
       else if (user.role !== "store" && profile) {
         const configuredFont = configuredManagedFont(state, profile);
         source = configuredFont ? { kind: "FONT", id: configuredFont.id, version: configuredFont.version, sha256: configuredFont.sha256 } : { kind: "PROFILE", id: profile.id, version: String(profile.revision ?? 1) };
@@ -7561,6 +7605,95 @@ function canonicalLineSourceRequirement(state, association, profile, field, expe
     return { kind: "VECTOR_GLYPH_SET", field, placement: field, filename: vectorReference.filename, sha256: vectorReference.sha256, provenance: association.fontEvidence.provenance };
   }
   return { kind: "MANAGED_FONT", field, placement: field, canonicalName: profile?.fontProfile ?? association?.fontEvidence?.canonicalName ?? null, provenance: association?.fontEvidence?.provenance ?? null };
+}
+
+function associationProfileApplications(state) {
+  const rows = [];
+  const seen = new Set();
+  const add = (association, profile, field) => {
+    const key = `${association.id}|${profile.id}|${field}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({ key, association, profile, field });
+  };
+  for (const association of (state.associations ?? []).filter(({ active }) => active !== false)) {
+    const prefix = `profile-source-${profileSlug(association.name)}-`;
+    for (const profile of (state.productionProfiles ?? []).filter(({ id }) => id.startsWith(prefix))) {
+      for (const field of profile.supports ?? []) add(association, profile, field);
+    }
+  }
+  for (const article of (state.articles ?? []).filter(({ active }) => active !== false)) {
+    const association = state.associations.find(({ id, name }) => id === article.association || name === article.association);
+    if (!association || association.active === false) continue;
+    for (const declaredField of article.supports ?? []) {
+      const field = String(article.articleNumber) === "140298" && declaredField === "chestNumber" ? "initials" : declaredField;
+      const profile = state.productionProfiles.find(({ id, supports }) => id === article.profileId && supports?.includes(field))
+        ?? state.productionProfiles.find(({ id, supports }) => id === `profile-source-${profileSlug(association.name)}-${field}` && supports?.includes(field));
+      if (!profile) continue;
+      add(association, profile, field);
+    }
+  }
+  return rows.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+/**
+ * Evaluate one real association/application binding. Candidate overrides are
+ * used by the generated negative matrix; production callers normally omit it
+ * and receive the exact canonical source selected by Product Truth.
+ */
+export function productionSourceAssociationDecision(state, { associationId, profileId, applicationField, candidate = null }) {
+  const row = associationProfileApplications(state).find(({ association, profile, field }) => association.id === associationId && profile.id === profileId && field === applicationField);
+  if (!row) return { allowed: false, code: "PRODUCTION_ASSOCIATION_CONTEXT_MISMATCH", reason: "Deze vereniging, toepassing en dit productieprofiel vormen geen bestaande authoritative association." };
+  const { association, profile, field } = row;
+  const requirement = canonicalLineSourceRequirement(state, association, profile, field);
+  if (requirement.kind === "MANAGED_FONT") {
+    if (candidate && candidate.kind !== "FONT") return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_TYPE_MISMATCH", reason: "Voor deze toepassing is een fontbron vereist." };
+    const resolution = canonicalManagedFontResolution(state, profile);
+    if (resolution.status !== "RESOLVED") return { allowed: false, code: `PRODUCTION_FONT_${resolution.status}`, reason: "De canonieke fontmaster is niet exact resolveerbaar.", requirement };
+    const decision = productionFontAssociationDecision({ fonts: state.productionFonts, profile, application: field, selectedSourceId: candidate?.id ?? resolution.font.id });
+    if (!decision.allowed) return { ...decision, requirement };
+    if (candidate?.sha256 && String(candidate.sha256).toUpperCase() !== String(resolution.font.sha256).toUpperCase()) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_HASH_MISMATCH", reason: "De gekozen bronbytes horen niet bij de canonieke association.", requirement };
+    return { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "FONT", id: resolution.font.id, version: resolution.font.version, sha256: resolution.font.sha256 } };
+  }
+  if (requirement.kind === "VERIFIED_PRODUCTION_SOURCE_SET") {
+    if (candidate && candidate.kind !== "VERIFIED_PRODUCTION_SOURCE_SET") return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_TYPE_MISMATCH", reason: "Voor deze toepassing is de geverifieerde production source set vereist.", requirement };
+    if (candidate?.id && candidate.id !== requirement.sourceSetId) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_ID_MISMATCH", reason: "De gekozen production source set hoort niet bij deze association.", requirement };
+    const sources = availableProductionSourceIdentities().filter(({ sourceSetId, outputWriterId }) => sourceSetId === requirement.sourceSetId && (!profile.outputWriterId || outputWriterId === profile.outputWriterId));
+    return sources.length
+      ? { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "VERIFIED_PRODUCTION_SOURCE_SET", id: requirement.sourceSetId, versions: [...new Set(sources.map(({ version }) => version))] } }
+      : { allowed: false, code: "PRODUCTION_SOURCE_SET_UNRESOLVED", reason: "De geverifieerde production source set is niet uitvoerbaar aanwezig.", requirement };
+  }
+  if (candidate && candidate.kind !== "PRODUCTION_ELEMENT") return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_TYPE_MISMATCH", reason: "Voor deze toepassing is een SVG/vector-nummerset vereist.", requirement };
+  const linked = associationNumberSet(state, association.name, { field, profileId: profile.id });
+  const asset = candidate?.id ? state.productionElements.find(({ id }) => id === candidate.id) : linked.asset;
+  if (!asset) return { allowed: false, code: linked.ambiguous ? "PRODUCTION_VECTOR_SOURCE_CONFLICT" : "PRODUCTION_VECTOR_SOURCE_MISSING", reason: "De authoritative SVG/vector-nummerset is niet exact beschikbaar.", requirement };
+  const reuse = productionAssetReuseDecision({ asset, targetAssociationIdentities: [association.id, association.name], applicationField: field });
+  if (!reuse.allowed) return { ...reuse, requirement };
+  if (requirement.assignedAssetId && asset.id !== requirement.assignedAssetId) return { allowed: false, code: "PRODUCTION_ASSOCIATION_SOURCE_ID_MISMATCH", reason: "De SVG/vectorbron hoort niet bij dit productieprofiel.", requirement };
+  return { allowed: true, code: "PRODUCTION_ASSOCIATION_VALID", reason: null, requirement, source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision) } };
+}
+
+/** Generate the complete current article/profile/application compatibility set. */
+export function productionSourceCompatibilityMatrix(state) {
+  const applicationRows = associationProfileApplications(state).map(({ key, association, profile, field }) => {
+    const decision = productionSourceAssociationDecision(state, { associationId: association.id, profileId: profile.id, applicationField: field });
+    return { key, associationId: association.id, association: association.name, profileId: profile.id, application: field, expectedSourceType: decision.requirement?.kind ?? null, source: decision.source ?? null, readiness: decision.allowed ? "VALID" : "BLOCKED", code: decision.code, reason: decision.reason };
+  });
+  const assetRows = [];
+  for (const asset of state.productionElements ?? []) {
+    for (const application of asset.applications ?? []) {
+      for (const context of (asset.contexts ?? []).filter(({ type }) => type === "ASSOCIATION")) {
+        const association = state.associations.find(({ id, name }) => id === context.id || name === context.label);
+        const executable = executableProductionAssetDecision(asset);
+        const contextual = executable.allowed && association
+          ? productionAssetContextDecision({ asset, orderKind: "ASSOCIATION", associationIdentities: [association.id, association.name] })
+          : executable;
+        const key = `${association?.id ?? context.id}|asset:${asset.id}|${application.kind}:${application.placement}`;
+        assetRows.push({ key, associationId: association?.id ?? context.id, association: association?.name ?? context.label, profileId: null, application: `${application.kind}:${application.placement}`, expectedSourceType: application.kind === "NUMBER_SET" ? "VECTOR_GLYPH_SET" : "LOGO_ARTWORK", source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision) }, readiness: contextual.allowed ? "VALID" : "BLOCKED", code: contextual.code, reason: contextual.reason });
+      }
+    }
+  }
+  return [...applicationRows, ...assetRows].sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function canonicalLineSemantics(state, order, item, line, snapshot = null) {

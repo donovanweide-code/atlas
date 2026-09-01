@@ -49,6 +49,11 @@ export function productionFontExecutableDecision(font, application = "FREE_PRINT
   }
   // Release-packaged canonical fonts predate the upload admission ledger. Their
   // immutable registry identity remains the equivalent authority proof.
+  if (font.registryProjection === "SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET") {
+    return ["OPEN_FONT_SOURCE", "HUMAN_PRODUCT_TRUTH"].includes(font.authority)
+      ? { allowed: true, code: "PRODUCTION_FONT_REGISTERED_AUTHORITY", reason: null }
+      : { allowed: false, code: "PRODUCTION_FONT_AUTHORITY_INVALID", reason: "De geregistreerde productiefont mist geldige authoritative registry authority." };
+  }
   if (!font.admission) return ["OPEN_FONT_SOURCE", "HUMAN_PRODUCT_TRUTH"].includes(font.authority)
     ? { allowed: true, code: "PRODUCTION_FONT_REGISTERED_AUTHORITY", reason: null }
     : { allowed: false, code: "PRODUCTION_FONT_ADMISSION_MISSING", reason: "Een niet-geregistreerde fontupload mist de volledige toelatingsketen." };
@@ -62,6 +67,30 @@ export function productionFontExecutableDecision(font, application = "FREE_PRINT
     return { allowed: false, code: "PRODUCTION_FONT_EXECUTABILITY_UNPROVEN", reason: "De fontbron mist deterministisch outlinebewijs." };
   }
   return { allowed: true, code: "PRODUCTION_FONT_EXECUTABLE", reason: null };
+}
+
+/**
+ * A production profile binds an application to one canonical managed-font
+ * identity. Source executability alone never proves that association. This
+ * decision is intentionally browser-safe so UI projections and server-side
+ * materialization use the same boundary.
+ */
+export function productionFontAssociationDecision({ fonts = [], profile, application, selectedSourceId = null }) {
+  const requiredSourceId = String(profile?.canonicalFontSourceId ?? "").trim();
+  if (!requiredSourceId) {
+    return { allowed: false, code: "PRODUCTION_FONT_CANONICAL_SOURCE_UNRESOLVED", reason: "Het productieprofiel mist een canonieke fontbronidentity." };
+  }
+  const matches = fonts.filter(({ id }) => id === requiredSourceId);
+  if (matches.length !== 1) {
+    return { allowed: false, code: matches.length ? "PRODUCTION_FONT_CANONICAL_SOURCE_CONFLICT" : "PRODUCTION_FONT_CANONICAL_SOURCE_MISSING", reason: "De canonieke fontbron is niet exact één keer beschikbaar." };
+  }
+  if (selectedSourceId && selectedSourceId !== requiredSourceId) {
+    return { allowed: false, code: "PRODUCTION_FONT_ASSOCIATION_SOURCE_MISMATCH", reason: "De gekozen fontbron hoort niet bij dit productieprofiel en deze toepassing." };
+  }
+  const font = matches[0];
+  const executable = productionFontExecutableDecision(font, application);
+  if (!executable.allowed) return executable;
+  return { allowed: true, code: "PRODUCTION_FONT_ASSOCIATION_VALID", reason: null, font };
 }
 
 /**
@@ -107,12 +136,13 @@ export function executableProductionAssetDecision(asset) {
   return { allowed: true, code: "PRODUCTION_ASSET_EXECUTABLE", reason: null };
 }
 
-const numberApplicationField = (placement) => {
+const numberApplicationFields = (placement) => {
   const value = String(placement ?? "").toLocaleLowerCase("nl-NL");
-  if (/rug|back/u.test(value)) return "backNumber";
-  if (/borst|chest/u.test(value)) return "chestNumber";
-  if (/short|rok/u.test(value)) return "shortsNumber";
-  return null;
+  return [
+    /rug|back/u.test(value) ? "backNumber" : null,
+    /borst|chest/u.test(value) ? "chestNumber" : null,
+    /short|rok/u.test(value) ? "shortsNumber" : null,
+  ].filter(Boolean);
 };
 
 /**
@@ -129,7 +159,7 @@ export function productionAssetReuseDecision({ asset, targetAssociationIdentitie
   if (!targetIdentities.size || !associationContexts.some((context) => contextIdentityMatches(context, targetIdentities))) {
     return { allowed: false, code: "PRODUCTION_ASSET_REUSE_ASSOCIATION_MISMATCH", reason: "De bestaande bron is niet voor deze exacte vereniging bevestigd." };
   }
-  const confirmedFields = new Set((asset.applications ?? []).filter(({ kind }) => kind === "NUMBER_SET").map(({ placement }) => numberApplicationField(placement)).filter(Boolean));
+  const confirmedFields = new Set((asset.applications ?? []).filter(({ kind }) => kind === "NUMBER_SET").flatMap(({ placement }) => numberApplicationFields(placement)));
   if (!applicationField || !confirmedFields.has(applicationField)) {
     return { allowed: false, code: "PRODUCTION_ASSET_REUSE_APPLICATION_MISMATCH", reason: "De bestaande bron is niet voor deze exacte nummer-toepassing bevestigd." };
   }

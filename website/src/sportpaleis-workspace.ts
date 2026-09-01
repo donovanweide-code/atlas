@@ -17,9 +17,9 @@ import { appendProposalItem, appendProposalPlacement, proposalItemsFromEditor, t
 import { activateTeamkitExperience, catalogProductCard, teamkitCatalogSelectionIdentity, teamkitProposalExperience } from "./sportpaleis-teamkit-experience.ts";
 import { buildTeamwearRelationships } from "./sportpaleis-teamwear-foundations.ts";
 import { bindMobileNavigationBackdrop, setMobileNavigation, syncMobileNavigationForViewport, toggleMobileNavigation, type MobileNavigationElements } from "./sportpaleis-mobile-navigation.ts";
-import { FRONT_NAME_ARTICLE_TRUTH, FRONT_NAME_DECORATION, OWNER_SUPPLIED_FONT_EVIDENCE, UDA_FRONT_NAME_TRUTH } from "./sportpaleis/front-name-production-truth.mjs";
+import { FRONT_NAME_ARTICLE_TRUTH, FRONT_NAME_DECORATION, UDA_FRONT_NAME_TRUTH } from "./sportpaleis/front-name-production-truth.mjs";
 import { canonicalTeamkitArticleSurfaceTruth, inferCanonicalTeamkitProductType } from "./sportpaleis/teamkit-product-surfaces.mjs";
-import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, canonicalProductionLineFoilColor, executableProductionAssetDecision, productionAssetReuseDecision, productionFontExecutableDecision, projectProductionReadyVisualAssets, proportionalProductionAssetSize } from "./sportpaleis/production-practice-contract.mjs";
+import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, canonicalProductionLineFoilColor, executableProductionAssetDecision, productionAssetReuseDecision, productionFontAssociationDecision, productionFontExecutableDecision, projectProductionReadyVisualAssets, proportionalProductionAssetSize } from "./sportpaleis/production-practice-contract.mjs";
 
 const BUILD_ID = "SPW-MINI-PRODUCTION-CORRECTION-006-20260814";
 const PREVIOUS_RELEASE_ID = "SPW-PILOT-PRODUCTION-UX-CLEAN-START-005-20260814";
@@ -1194,7 +1194,6 @@ function requestedAssociationContext(state: PilotBootstrap): string {
 }
 
 function guidedSetupOverview(state: PilotBootstrap): string {
-  const canonicalFontKey = (value: string): string => value.toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/gu, "");
   const productionProfileSlug = (value: string): string => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const numberPlacementMatchesField = (field: PrintField, placement: string | null | undefined): boolean => {
     const normalized = String(placement ?? "").toLocaleLowerCase("nl-NL");
@@ -1213,12 +1212,7 @@ function guidedSetupOverview(state: PilotBootstrap): string {
         && asset.contexts?.some(({ type, id: contextId, label }) => type === "ASSOCIATION" && (contextId === association.id || label === association.name))
         && asset.applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && numberPlacementMatchesField(field, placement)))));
     }
-    const profileFont = canonicalFontKey(profile.fontProfile);
-    return Boolean(profileFont && state.productionFonts.some((font) => productionFontExecutableDecision(font, field).allowed && (
-      canonicalFontKey(font.name) === profileFont
-      || profileFont === canonicalFontKey(OWNER_SUPPLIED_FONT_EVIDENCE.spain.canonicalProfileName)
-        && font.sha256 === OWNER_SUPPLIED_FONT_EVIDENCE.spain.sha256
-    )));
+    return productionFontAssociationDecision({ fonts: state.productionFonts, profile, application: field }).allowed;
   };
   const rows = state.associations.filter(({ active }) => active !== false).flatMap((association) => {
     const articles = state.articles.filter(({ association: name, active }) => name === association.name && active !== false);

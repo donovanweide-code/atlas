@@ -9,6 +9,7 @@ export function projectProductionReadyVisualAssets<T>(elements: T[], contextLabe
 export function executableProductionAssetDecision(asset: any): { allowed: boolean; code: string; reason: string | null };
 export function productionAssetReuseDecision(input: { asset: any; targetAssociationIdentities?: string[]; applicationField?: string | null }): { allowed: boolean; code: string; reason: string | null };
 export function productionFontExecutableDecision(font: any, application?: string): { allowed: boolean; code: string; reason: string | null };
+export function productionFontAssociationDecision(input: { fonts?: any[]; profile: any; application: string; selectedSourceId?: string | null }): { allowed: boolean; code: string; reason: string | null; font?: any };
 
 export function productionAssetContextDecision(input: {
   asset: any;

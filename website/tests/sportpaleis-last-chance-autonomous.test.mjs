@@ -165,8 +165,8 @@ test("Guided Setup scheidt nog inrichten van echte actie en verzint geen generie
   assert.doesNotMatch(source, /Logo of productieasset ontbreekt voor/u);
   assert.doesNotMatch(source, /Foliekleur ontbreekt voor/u);
   assert.match(source, /gekoppeld productieprofiel .* bestaat niet/u);
-  assert.match(source, /profileFont === canonicalFontKey\(OWNER_SUPPLIED_FONT_EVIDENCE\.spain\.canonicalProfileName\)/u);
-  assert.match(source, /font\.sha256 === OWNER_SUPPLIED_FONT_EVIDENCE\.spain\.sha256/u);
+  assert.match(source, /productionFontAssociationDecision\(\{ fonts: state\.productionFonts, profile, application: field \}\)\.allowed/u);
+  assert.doesNotMatch(source, /profileFont === canonicalFontKey/u);
 });
 
 test("Bedrukken maakt gelijknamige artikelen herkenbaar zonder extra invoer", async () => {

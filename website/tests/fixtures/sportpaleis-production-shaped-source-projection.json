@@ -1,0 +1,42 @@
+{
+  "evidence": {
+    "source": "outputs/r220-repro/extracted-proof-state/state.json",
+    "sha256": "15D8CDBD0812A1C2B13DB2861ADA8D7ABDA0273FA84898B9BCDFAA455188EA9A",
+    "note": "Geschoonde productiebronprojectie uit eerder vastgelegde production-shaped evidence; dit is geen directe LIVE-export en klant- en orderdata zijn niet gekopieerd."
+  },
+  "productionFont": {
+    "id": "font-5d083befacdf98ae",
+    "name": "Spain Euro 2016",
+    "originalFilename": "Spain Euro 2016.ttf",
+    "version": "5D083BEFACDF",
+    "sha256": "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585",
+    "mimeType": "font/ttf",
+    "sizeBytes": 15232,
+    "addedAt": "2026-08-30T00:00:00.000Z",
+    "uploadedBy": {
+      "userId": "system:human-product-truth",
+      "name": "Donovan"
+    },
+    "provenance": "Originele authoritative Spain Euro 2016-bron opnieuw aangeleverd door Donovan op 2026-08-30; bytes, SHA-256 en interne SpainEuro-Regular-identiteit exact gereconcilieerd met historische Human Product Truth.",
+    "status": "TECHNICALLY_VALID",
+    "allowedInStore": true,
+    "sourceUrl": "/assets/organizations/sportpaleis/fonts/Spain Euro 2016.ttf",
+    "familyName": "Spain Euro 2016",
+    "subfamilyName": "Regular",
+    "fullName": "Spain Euro 2016 Regular",
+    "postscriptName": "SpainEuro-Regular",
+    "authoritativeIdentity": "font-5d083befacdf98ae"
+  },
+  "profile": {
+    "id": "profile-source-sc-buitenboys-shortsNumber",
+    "fontProfile": "Spain",
+    "supports": ["shortsNumber"],
+    "revision": 2,
+    "validation": {
+      "status": "PARTIAL",
+      "size": "SOURCE_CONFIGURED",
+      "font": "SOURCE_CONFIGURED",
+      "foilColor": "SOURCE_CONFIGURED"
+    }
+  }
+}

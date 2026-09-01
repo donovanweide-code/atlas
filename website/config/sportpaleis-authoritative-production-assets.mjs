@@ -39,6 +39,7 @@ export const SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS = Object.freeze([
     subfamilyName: "Regular",
     fullName: "Spain Euro 2016 Regular",
     postscriptName: "SpainEuro-Regular",
+    aliases: Object.freeze(["Spain"]),
     authoritativeIdentity: "font-5d083befacdf98ae",
   }),
 ]);
