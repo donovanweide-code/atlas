@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { mkdir, open, readFile, rename, stat, unlink, writeFile, readdir } from "node:fs/promises";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -8399,6 +8399,53 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
   return { expectedInstances: expected, actualInstances: actual };
 }
 
+export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist = true }) {
+  if (!/^PLOT-\d{4}-\d{4,}$/u.test(String(jobNumber ?? ""))) throw Object.assign(new Error("Ongeldig productiebestandnummer."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_INVALID" });
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw Object.assign(new Error("Lege productiebestandbytes kunnen niet immutable worden gereserveerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_BYTES_INVALID" });
+  const artifactHash = sha256(bytes).toUpperCase();
+  const artifactIdentity = `${jobNumber}:${artifactHash}`;
+  const hashDirectory = artifactHash.toLocaleLowerCase("en-US");
+  const filename = `${jobNumber}-production.svg`;
+  const relativeDirectory = path.join("outputs", "sportpaleis-plotjobs", jobNumber, hashDirectory);
+  const relativePath = path.join(relativeDirectory, filename).replaceAll(path.sep, "/");
+  const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
+  const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
+  if (!absolutePath.startsWith(`${absoluteDirectory}${path.sep}`)) throw Object.assign(new Error("Ongeldige productiebestandlocatie."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+  if (!persist) return { artifactHash, artifactIdentity, filename, relativePath, reused: false };
+
+  mkdirSync(absoluteDirectory, { recursive: true });
+  const verifyExisting = () => {
+    const existing = readFileSync(absolutePath);
+    const existingHash = sha256(existing).toUpperCase();
+    if (existingHash !== artifactHash || existing.length !== bytes.length) {
+      throw Object.assign(new Error("Bestaande immutable artifactidentiteit bevat andere bytes en blijft onaangeroerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_COLLISION", artifactIdentity, expectedSha256: artifactHash, actualSha256: existingHash });
+    }
+    return { artifactHash, artifactIdentity, filename, relativePath, reused: true };
+  };
+  try { return verifyExisting(); }
+  catch (error) { if (error?.code !== "ENOENT") throw error; }
+
+  const pendingPath = path.join(absoluteDirectory, `.${filename}.pending-${process.pid}-${randomBytes(10).toString("hex")}`);
+  let pendingHandle;
+  try {
+    pendingHandle = openSync(pendingPath, "wx", 0o640);
+    writeFileSync(pendingHandle, bytes);
+    fsyncSync(pendingHandle);
+    closeSync(pendingHandle);
+    pendingHandle = undefined;
+    try {
+      linkSync(pendingPath, absolutePath);
+      return { artifactHash, artifactIdentity, filename, relativePath, reused: false };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      return verifyExisting();
+    }
+  } finally {
+    if (pendingHandle !== undefined) try { closeSync(pendingHandle); } catch {}
+    rmSync(pendingPath, { force: true });
+  }
+}
+
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, options = {}) {
   const generationStartedAt = performance.now();
   const millisecondsSince = (startedAt) => Math.round((performance.now() - startedAt) * 10) / 10;
@@ -8500,19 +8547,8 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const bytes = Buffer.from(svg, "utf8");
   const artifactHash = sha256(bytes).toUpperCase();
   const svgAndIntegrityMs = millisecondsSince(svgStartedAt);
-  const relativeDirectory = path.join("outputs", "sportpaleis-plotjobs", jobNumber);
-  const relativePath = path.join(relativeDirectory, `${jobNumber}-production.svg`).replaceAll(path.sep, "/");
-  const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
-  const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
   const persistenceStartedAt = performance.now();
-  if (options.persist !== false) {
-    mkdirSync(absoluteDirectory, { recursive: true });
-    if (path.resolve(absolutePath).startsWith(`${absoluteDirectory}${path.sep}`) === false) throw new Error("Ongeldige productiebestandlocatie.");
-    try { writeFileSync(absolutePath, bytes, { flag: "wx" }); }
-    catch (error) {
-      if (error?.code !== "EEXIST" || sha256(readFileSync(absolutePath)).toUpperCase() !== artifactHash) throw error;
-    }
-  }
+  const reservation = reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist: options.persist !== false });
   const persistenceMs = options.persist === false ? 0 : millisecondsSince(persistenceStartedAt);
   return {
     cutJob,
@@ -8521,7 +8557,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     sources: resolved.map(({ source }) => source),
     outputWriter: { ...CUTJOB_SVG_WRITER },
     generationMetrics: { sourceResolutionMs, geometryMs, semanticGroupingMs, nestingMs, svgAndIntegrityMs, persistenceMs, totalMs: millisecondsSince(generationStartedAt), inputLineCount: productionLines.length, physicalPieceCount: rawPieces.length, nestedObjectCount: pieces.length },
-    artifact: { filename: `${jobNumber}-production.svg`, format: "SVG", version: `${CUTJOB_SVG_WRITER.id}@${CUTJOB_SVG_WRITER.version}`, sha256: artifactHash, path: relativePath, productionDataHash },
+    artifact: { filename: reservation.filename, format: "SVG", version: `${CUTJOB_SVG_WRITER.id}@${CUTJOB_SVG_WRITER.version}`, sha256: artifactHash, path: reservation.relativePath, identity: reservation.artifactIdentity, reservation: { strategy: "JOB_NUMBER_PLUS_CONTENT_SHA256_CREATE_ONLY_V1", reused: reservation.reused }, productionDataHash },
   };
 }
 
