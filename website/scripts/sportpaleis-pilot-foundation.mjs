@@ -107,7 +107,7 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 15;
+const PILOT_SCHEMA_VERSION = 16;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
@@ -648,7 +648,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
@@ -1019,7 +1019,7 @@ export function migrateSportpaleisPilotState(input) {
       }
     }
   }
-  if (previousSchemaVersion < 15) {
+  if (previousSchemaVersion < 16) {
     for (const profile of state.productionProfiles ?? []) {
       const canonical = PRODUCTION_PROFILES.find(({ id, supports }) => id === profile.id && supports?.includes("backNumber"));
       if (!canonical?.backNumberSizeClasses) continue;
@@ -1043,6 +1043,22 @@ export function migrateSportpaleisPilotState(input) {
     ]);
     for (const order of state.orders ?? []) {
       if (order.orderKind !== "INDIVIDUAL" || !["ORDER", "CONTROL"].includes(order.stage) || consequentialOrderIds.has(order.id) || !order.productionLines?.length) continue;
+      for (const item of order.items ?? []) {
+        const reconcileBackNumberOccurrence = (occurrence) => {
+          const backNumber = String(occurrence?.personalizationValues?.backNumber ?? "").trim();
+          const sizeClass = occurrence?.backNumberProduction?.sizeClass ?? occurrence?.personalizationValues?.backNumberSizeClass;
+          if (!backNumber || !BACK_NUMBER_SIZE_CLASSES.has(sizeClass)) return;
+          occurrence.backNumberProduction = {
+            ...(occurrence.backNumberProduction ?? {}),
+            sizeClass,
+            physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM,
+            status: "SOURCE_CONFIGURED",
+            source: SPORTPALEIS_JUNIOR_RULE_SOURCE,
+          };
+        };
+        for (const variant of item.variants ?? []) reconcileBackNumberOccurrence(variant);
+        if (item.backNumberProduction) reconcileBackNumberOccurrence(item);
+      }
       const hasBlockedComposite = order.productionLines.some((line) => line.placementRule?.compositionId && line.validation?.status === "BLOCKED");
       const hasStaleCanonicalHeight = order.productionLines.some((line) => {
         if (!line.personalizationField || !line.itemId) return false;
@@ -1060,7 +1076,7 @@ export function migrateSportpaleisPilotState(input) {
       const migratedAt = "2026-09-02T00:00:00.000Z";
       order.updatedAt = migratedAt;
       order.eventHistory ??= [];
-      order.eventHistory.push({ id: `event-canonical-line-projection-v15-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v15", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
+      order.eventHistory.push({ id: `event-canonical-line-projection-v16-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v16", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
     }
   }
   const highestTeamkitSequence = (state.orders ?? []).reduce((highest, order) => Math.max(highest, Number(String(order.id).match(/^TK-\d{4}-(\d+)$/u)?.[1] ?? 0)), 0);
