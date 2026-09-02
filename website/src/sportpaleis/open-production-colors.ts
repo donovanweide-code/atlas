@@ -44,6 +44,12 @@ function lineColor(order: WorkspaceOrder, lineId: string): string {
   return String(item?.foilColor ?? "Onbekend").trim() || "Onbekend";
 }
 
+function isCurrentlyProductionReadyLine(order: WorkspaceOrder, lineId: string): boolean {
+  if (Array.isArray(order.productionReadyLineIds)) return order.productionReadyLineIds.includes(lineId);
+  if (Array.isArray(order.productionBlockedLineIds)) return !order.productionBlockedLineIds.includes(lineId);
+  return true;
+}
+
 export interface OpenProductionColorContext {
   foilColor: string;
   orderIds: string[];
@@ -89,7 +95,7 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
     if (!['READY', 'IN_PRODUCTION'].includes(String(order.productionStatus ?? ""))) continue;
     for (const line of order.productionLines ?? []) {
       const key = `${order.id}|${line.id}`;
-      if (referenced.has(key) || printed.get(order.id)?.has(key)) continue;
+      if (referenced.has(key) || printed.get(order.id)?.has(key) || !isCurrentlyProductionReadyLine(order, line.id)) continue;
       add(lineColor(order, line.id), order.id, line.id);
     }
   }

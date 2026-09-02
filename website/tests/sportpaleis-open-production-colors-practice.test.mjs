@@ -68,6 +68,22 @@ test("nieuwe ZWARTE order voegt zich vóór Bedrukt bij dezelfde open kleurconte
   ]);
 });
 
+test("gedeeltelijk maakbare order telt alleen server-side eligible regels in de open kleurcontext", () => {
+  const partial = order("SP-PARTIAL-1", "WIT", "READY");
+  partial.productionLines.push(line("line-SP-PARTIAL-1-blocked", "WIT"));
+  partial.productionReadyLineIds = ["line-SP-PARTIAL-1"];
+  partial.productionBlockedLineIds = ["line-SP-PARTIAL-1-blocked"];
+  const state = { orders: [partial], productionProposals: [], productionJobs: [] };
+
+  assert.deepEqual(openProductionColorContexts(state), [{
+    foilColor: "WIT",
+    orderIds: ["SP-PARTIAL-1"],
+    productionLineRefs: [{ orderId: "SP-PARTIAL-1", lineId: "line-SP-PARTIAL-1" }],
+    proposalGroupIds: [],
+    activeProductionJobIds: [],
+  }]);
+});
+
 test("alleen het exact als Bedrukt vastgelegde werk verdwijnt uit de open context", () => {
   const blackPrinted = order("SP-ZWART-1", "ZWART");
   blackPrinted.eventHistory.push({
