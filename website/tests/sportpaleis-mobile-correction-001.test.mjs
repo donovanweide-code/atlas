@@ -48,22 +48,29 @@ test("human review correction — kledingmaat is optioneel, ook per exemplaar", 
   const { service, storeUser } = await fixture(context);
   const withoutSize = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "optional-size-single")).value;
   assert.equal(withoutSize.items[0].size, "Niet opgegeven");
-  assert.equal(withoutSize.items[0].productionReadiness.status, "ATTENTION");
-  assert.doesNotMatch(withoutSize.items[0].productionReadiness.reason, /snijlijnen|fysieke snijoutput/iu);
+  assert.equal(withoutSize.items[0].productionReadiness.status, "CONFIGURED", "een ontbrekende kledingmaat blokkeert de exact toegelaten rugnummerbron niet");
+  assert.equal(withoutSize.items[0].productionReadiness.reason, null);
+  assert.equal(withoutSize.productionLines[0].source.id, "font-985b2931e85cec60");
+  assert.equal(withoutSize.productionLines[0].validation.status, "VALID");
 
   const mixed = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", quantity: 3, variants: [{ size: "", quantity: 1, deviation: false, overrides: empty }, { size: "152", quantity: 1, deviation: false, overrides: empty }, { size: "", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "12", backNumberSizeClass: "SENIOR" } }] }] }), "optional-size-mixed")).value;
   assert.deepEqual(mixed.items[0].variants.map(({ size }) => size), ["Niet opgegeven", "152", "Niet opgegeven"]);
   assert.ok(mixed.items[0].variants.every(({ backNumberProduction }) => backNumberProduction?.sizeClass === "SENIOR"));
 });
 
-test("human review correction — productievoorstel weigert een globale preview zonder vectorbron", async (context) => {
-  const { service, admin, storeUser } = await fixture(context);
+test("human review correction — productievoorstel gebruikt de exact toegelaten vectorfontbron", async (context) => {
+  const { service, store, admin, storeUser } = await fixture(context);
   const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, orderPayload({ items: [{ articleId: "sp-live-137294", size: "", quantity: 1, deviation: false, overrides: empty }] }), "proposal-order")).value;
-  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: created.id, expectedRevision: created.revision }] }, "proposal-not-ready"), (error) => error.code === "ORDER_NOT_READY" && error.message.includes(created.id));
   const acknowledged = await captureReceipt(service, admin, created, "test-capture-receipt");
   const ready = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, acknowledged.revision, "proposal-ready")).value;
-  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-missing"), (error) => error.code === "ORDER_NOT_READY" && /contour\/fontbestand|canonieke fontmaster/iu.test(error.message));
-  assert.equal((await service.bootstrap(admin.token)).productionProposals.length, 0);
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: ready.id, expectedRevision: ready.revision }] }, "proposal-vector-admitted")).value;
+  assert.equal(proposal.status, "OPEN");
+  const frozenOrder = (await store.read()).orders.find(({ id }) => id === ready.id);
+  assert.equal(frozenOrder.productionExecutionSnapshot.productionLines[0].source.kind, "FONT");
+  assert.equal(frozenOrder.productionExecutionSnapshot.productionLines[0].source.id, "font-985b2931e85cec60");
+  const bootstrap = await service.bootstrap(admin.token);
+  assert.equal(bootstrap.productionProposals.length, 1);
+  assert.equal(bootstrap.productionJobs.length, 4, "een voorstel veroorzaakt geen fysieke output of PlotJob");
 });
 
 test("human review correction — admin beheert feitelijke artikel- en bedrukkingsprijzen", async (context) => {

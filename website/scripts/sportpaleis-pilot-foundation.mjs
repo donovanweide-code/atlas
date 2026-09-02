@@ -6259,7 +6259,7 @@ function associationProfileSizeLabel(association, profile) {
 function resolveBackNumberProductionContext(association, profile, sizeClass, garmentSize) {
   if (!sizeClass) return null;
   const configured = profile.backNumberSizeClasses?.[sizeClass];
-  if (sizeClass === "JUNIOR" && profile.productionNumberAssetIds?.length && Number(configured?.physicalHeightMm) > 0 && ["SOURCE_CONFIGURED", "VALIDATED"].includes(configured.status)) {
+  if (Number(configured?.physicalHeightMm) > 0 && ["SOURCE_CONFIGURED", "VALIDATED"].includes(configured.status)) {
     return { sizeClass, physicalHeightMm: Number(configured.physicalHeightMm), status: configured.status, source: configured.source };
   }
   if (sizeClass === "JUNIOR" && association?.juniorValidationStatus === "VALIDATED") {
