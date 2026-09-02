@@ -97,6 +97,19 @@ export function productionFontAssociationDecision({ fonts = [], profile, applica
  * a source as productierijp that the output boundary must reject later.
  */
 export function executableProductionAssetDecision(asset) {
+  const projection = asset?.executability;
+  if (projection?.contract === "SERVER_PROJECTED_PRODUCTION_ASSET_EXECUTABILITY_V1" && !asset?.controlledVector?.contours) {
+    const projectedIdentityMatches = projection.assetId === asset.id
+      && projection.assetVersion === (asset.version ?? String(asset.revision))
+      && projection.sourceId === asset.sourceId
+      && projection.sourceSha256 === asset.sourceLayers?.vectorSource?.sha256
+      && projection.geometrySha256 === asset.sourceSelection?.geometryHash
+      && projection.geometrySha256 === asset.controlledVector?.geometryHash;
+    if (!projectedIdentityMatches) return { allowed: false, code: "PRODUCTION_ASSET_EXECUTABILITY_PROJECTION_MISMATCH", reason: "De serverprojectie hoort niet bij deze exacte assetversie en bronhash." };
+    return projection.allowed
+      ? { allowed: true, code: projection.code, reason: null }
+      : { allowed: false, code: projection.code, reason: projection.reason };
+  }
   if (!asset || asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED" || !asset.sourceId) {
     return { allowed: false, code: "PRODUCTION_ASSET_NOT_READY", reason: "De productiebron is niet exact productierijp en brongebonden." };
   }

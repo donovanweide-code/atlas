@@ -2829,7 +2829,13 @@ export class SportpaleisPilotService {
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
       webshopIntake: productionWorkspace ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
-      productionElements: productionWorkspace ? structuredClone(state.productionElements.map((element) => ({ ...element, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined }))) : [],
+      productionElements: productionWorkspace ? structuredClone(state.productionElements.map((element) => {
+        const decision = executableProductionAssetDecision(element);
+        const executability = element.sourceId && element.controlledVector?.geometryHash && element.sourceLayers?.vectorSource?.sha256
+          ? { contract: "SERVER_PROJECTED_PRODUCTION_ASSET_EXECUTABILITY_V1", allowed: decision.allowed, code: decision.code, reason: decision.reason, assetId: element.id, assetVersion: element.version ?? String(element.revision), sourceId: element.sourceId, sourceSha256: element.sourceLayers.vectorSource.sha256, geometrySha256: element.controlledVector.geometryHash }
+          : undefined;
+        return { ...element, executability, controlledVector: element.controlledVector ? (({ contours: _contours, ...metadata }) => metadata)(element.controlledVector) : undefined, numberGlyphs: element.numberGlyphs ? Object.fromEntries(Object.entries(element.numberGlyphs).map(([glyph, value]) => [glyph, (({ contours: _contours, ...metadata }) => metadata)(value)])) : undefined, sourceLayers: element.sourceLayers ? Object.fromEntries(Object.entries(element.sourceLayers).map(([key, value]) => [key, value ? (({ dataBase64: _dataBase64, ...metadata }) => metadata)(value) : null])) : undefined };
+      })) : [],
       productionAssetSources: admin ? structuredClone((state.productionAssetSources ?? []).map((source) => ({ ...(({ documentPreviewSvg: _documentPreviewSvg, ...metadata }) => metadata)(source), original: (({ dataBase64: _dataBase64, ...metadata }) => metadata)(source.original), candidates: source.candidates.map((candidate) => (({ previewSvg: _previewSvg, controlledVector: _controlledVector, ...metadata }) => metadata)(candidate)) }))) : [],
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: productionWorkspace ? structuredClone(state.productionElementRequirements) : [],
@@ -4844,7 +4850,12 @@ export class SportpaleisPilotService {
     const digits = String(value ?? "");
     if (!asset || !/^\d{1,4}$/u.test(digits)) throw Object.assign(new Error("Nummervoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
     const variant = asset.variants.find(({ heightMm }) => Number(heightMm) > 0);
-    const piece = productionAssetPiece({ asset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
+    // Archivering blocks new selection and physical production, but must not
+    // erase the immutable historical preview. Reuse the exact stored geometry
+    // under a preview-only readiness projection; no persisted lifecycle state
+    // or production eligibility is changed.
+    const previewAsset = asset.lifecycleStatus === "ARCHIVED" ? { ...asset, lifecycleStatus: "PRODUCTION_READY" } : asset;
+    const piece = productionAssetPiece({ asset: previewAsset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
     const svg = productionAssetPreviewSvg({ controlledVector: { contours: piece.contours } });
     return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}-${digits}.svg`, sha256: sha256(svg).toUpperCase(), cacheControl: "private, max-age=300" };
   }
