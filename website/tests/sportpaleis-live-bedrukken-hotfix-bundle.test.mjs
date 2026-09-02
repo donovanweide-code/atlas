@@ -42,6 +42,7 @@ test("FREE_PRINT bronpicker volgt iedere centraal admitted uitvoerbare fontbron"
   const workspace = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(workspace, /productionFontExecutableDecision\(font, "FREE_PRINT"\)\.allowed/u);
   assert.doesNotMatch(workspace, /FREE_PRINT_FONT_ALLOWLIST/u);
+  assert.match(workspace, /itemProductionSizeLabel\(order, item\.id\)/u);
 });
 
 test("Vrije opdruk 1 t/m 20 blijft compact, uniek en bulk-aanpasbaar met één uitzondering", async () => {
