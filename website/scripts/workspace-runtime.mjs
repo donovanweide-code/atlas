@@ -134,6 +134,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/activeren`,
   `${sportpaleisBoundary}/orders`,
   `${sportpaleisBoundary}/orders/nieuw`,
+  `${sportpaleisBoundary}/webshop`,
   `${sportpaleisBoundary}/voorstellen`,
   `${sportpaleisBoundary}/voorstellen/nieuw`,
   `${sportpaleisBoundary}/studio`,
@@ -145,6 +146,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/voorkeuren`,
   `${sportpaleisBoundary}/beheer`,
   `${sportpaleisBoundary}/beheer/rollen`,
+  `${sportpaleisBoundary}/beheer/webshop`,
   `${sportpaleisBoundary}/beheer/synchronisatie`,
 ]);
 

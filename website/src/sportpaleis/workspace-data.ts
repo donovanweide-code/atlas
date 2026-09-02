@@ -173,9 +173,9 @@ export interface SportpaleisWebshopIntakeState {
     sizeBytes: number; sha256: string; dataBase64?: string; immutable: true; importedAt: string; importedBy: string;
   }[];
   matches: {
-    id: string; sourceId: string; externalReference: string; orderDate: string | null; customer: string | null; association: string | null;
+    id: string; sourceId: string; externalReference: string; orderDate: string | null; customer: string | null; customerEmail?: string | null; customerPhone?: string | null; association: string | null;
     contentHash: string; status: "HUMAN_CHECK" | "ACCEPTED"; orderId: string | null; reviewReasons: string[];
-    articles: { articleNumber: string; description: string; size: string; color: string; quantity: number; personalization: { kind: "INITIALS" | "BACK_NAME" | "BACK_NUMBER" | "CHEST_NUMBER" | "SHORTS_NUMBER" | "STOCK_LOGO"; value: string; sourceLabel: string; sourceValue: string }[]; articlePersonalizationRule?: { kind: string; source: string; overridesGeneralChoice: true } }[];
+    articles: { sourceLineId?: string; articleNumber: string; description: string; size: string; color: string; quantity: number; personalization: { kind: "INITIALS" | "NAME_PRINT" | "BACK_NAME" | "BACK_NUMBER" | "NUMBER" | "CHEST_NUMBER" | "SHORTS_NUMBER" | "STOCK_LOGO"; value: string; sourceLabel: string; sourceValue: string; sourceLineId?: string; decorationIdentity?: string; status?: "EXPLICIT" | "ATTENTION_REQUIRED"; attentionReason?: string }[]; articlePersonalizationRule?: { kind: string; source: string; overridesGeneralChoice: true } }[];
     source: { pageNumbers: number[]; segmentHash: string; originalEvidence: string };
     acceptedAt: string | null; acceptedBy: string | null;
   }[];
@@ -477,7 +477,7 @@ export interface WorkspaceOrder {
   owner: string;
   acceptedBy?: OrderAcceptedBy;
   salesAttribution?: { employeeId?: string | null; salesNumber: string | null; label: string; accountType: "HUMAN" | "FUNCTION" | "SYSTEM" | "UNASSIGNED"; selectedByUserId: string; selectedAt: string };
-  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string }; webshopDocument?: { sourceId: string; sourceMessageId: string; filename: string; sha256: string; contentHash: string } };
+  sourceContext?: { source: SportpaleisOrderSource; label: string; externalReference: string | null; provenance: string; transactionalAuthority: "WORKSPACE" | "ACA_XPRT" | "EXTERNAL"; quickIntake?: { id: string; sourceKind: "PHOTO" | "PDF" | "DOCUMENT" | "EMAIL"; filename: string; sha256: string; version: string }; webshopDocument?: { sourceId: string; sourceMessageId: string; filename: string; sha256: string; contentHash: string; sourceLineage?: { sourceLineId?: string; decorationIdentity?: string; articleNumber: string; quantity: number; kind: string; sourceValue: string }[] } };
   referenceSeries?: "SP" | "TK";
   teamkitContext?: {
     kind: "TEAMKIT_APPROVAL";

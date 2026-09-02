@@ -29,10 +29,11 @@ test("PRE-PILOT MASTER — organisatie, sessies, operatie en intake", async (con
     const view = await service.bootstrap(admin.token);
     assert.deepEqual(view.currentUser.workContexts, ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"]);
     assert.equal(view.currentUser.defaultContext, "ORGANISATION");
-    const updated = await service.updateUser(admin.token, admin.csrfToken, "patrick", { workContexts: ["PRODUCTION", "STORE", "ALL"], defaultContext: "PRODUCTION" });
+    const updated = await service.updateUser(admin.token, admin.csrfToken, "patrick", { workContexts: ["PRODUCTION", "WEBSHOP", "STORE", "ALL"], defaultContext: "PRODUCTION" });
     assert.equal(updated.role, "operator");
     assert.equal(updated.defaultContext, "PRODUCTION");
-    await assert.rejects(service.updateUser(admin.token, admin.csrfToken, "patrick", { workContexts: ["WEBSHOP"] }), (error) => error.code === "WORK_CONTEXT_FORBIDDEN");
+    assert.equal(updated.workContexts.includes("WEBSHOP"), true);
+    await assert.rejects(service.updateUser(admin.token, admin.csrfToken, "patrick", { workContexts: ["ORGANISATION"] }), (error) => error.code === "WORK_CONTEXT_FORBIDDEN");
   });
 
   await context.test("persoonlijk en gedeeld apparaat krijgen verschillende sessiegrenzen", async () => {

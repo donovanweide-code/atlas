@@ -1,0 +1,19 @@
+{
+  "sourceSha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+  "pdfPages": 138,
+  "uniqueOrders": 137,
+  "ordersWithExplicitDecoration": 9,
+  "decoratedArticleLines": 18,
+  "decorationItems": 18,
+  "customersPresent": 137,
+  "customerPhonesPresent": 137,
+  "customerEmailsPresent": 137,
+  "attentionRequired": 1,
+  "readyDecoratedOrders": 8,
+  "goldenOrders": {
+    "2635358543": [["141709", "INITIALS", "AB"], ["141705", "NUMBER", "2"], ["141710", "INITIALS", "AB"], ["140306", "INITIALS", "AB"]],
+    "2635358614": [["131240", "INITIALS", "D.T"], ["131285", "INITIALS", "D.T"], ["131949", "INITIALS", "D.T"]],
+    "2635358648": [["131252", "INITIALS", "RB"], ["131247", "BACK_NAME", "Roan"], ["131245", "BACK_NAME", "Roan"]],
+    "2635358683": [["116597", "BACK_NUMBER", "88"], ["141521", "NUMBER", "88"]]
+  }
+}

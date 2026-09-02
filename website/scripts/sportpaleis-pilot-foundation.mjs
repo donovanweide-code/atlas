@@ -107,7 +107,7 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 16;
+const PILOT_SCHEMA_VERSION = 17;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
@@ -219,7 +219,7 @@ for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) =>
   article.priceConfiguration.personalizationUnitPricesEur ??= {};
   article.priceConfiguration.personalizationUnitPricesEur.chestNumber ??= article.priceConfiguration.personalizationUnitPricesEur.backNumber ?? 0;
 }
-for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "FC Huizen" && ["131247", "131246"].includes(String(articleNumber)))) {
+for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "FC Huizen" && ["131245", "131246", "131247"].includes(String(articleNumber)))) {
   article.supports = [...new Set([...(article.supports ?? []), "name"])];
   article.personalizationPolicy = { mode: "combination", fields: { ...(article.personalizationPolicy?.fields ?? {}), name: "optional" } };
 }
@@ -574,8 +574,8 @@ function publicAdminUser(user, state, now = new Date()) {
 
 function workContextsForRole(role) {
   if (role === "admin") return ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"];
-  if (role === "operator") return ["PRODUCTION", "STORE", "ALL"];
-  if (role === "store") return ["STORE", "ALL"];
+  if (role === "operator") return ["PRODUCTION", "WEBSHOP", "STORE", "ALL"];
+  if (role === "store") return ["STORE", "WEBSHOP", "ALL"];
   return ["ORGANISATION", "ALL"];
 }
 
@@ -1077,6 +1077,17 @@ export function migrateSportpaleisPilotState(input) {
       order.updatedAt = migratedAt;
       order.eventHistory ??= [];
       order.eventHistory.push({ id: `event-canonical-line-projection-v16-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v16", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
+    }
+  }
+  if (previousSchemaVersion < 17) {
+    for (const user of state.users ?? []) {
+      if (!["operator", "store"].includes(user.role)) continue;
+      user.workContexts ??= workContextsForRole(user.role);
+      if (!user.workContexts.includes("WEBSHOP")) {
+        const allIndex = user.workContexts.indexOf("ALL");
+        if (allIndex >= 0) user.workContexts.splice(allIndex, 0, "WEBSHOP");
+        else user.workContexts.push("WEBSHOP");
+      }
     }
   }
   const highestTeamkitSequence = (state.orders ?? []).reduce((highest, order) => Math.max(highest, Number(String(order.id).match(/^TK-\d{4}-(\d+)$/u)?.[1] ?? 0)), 0);
@@ -2382,6 +2393,43 @@ function inspectProductionFontRequest(state, payload) {
   const hash = sha256(bytes).toUpperCase();
   const inspectionSha256 = sha256(JSON.stringify({ schemaVersion: 1, name, filename, sourceSha256: hash, metadata: admissionProof.metadata, representativeProofs: admissionProof.representativeProofs, executabilitySha256: admissionProof.executabilitySha256, productionProfileId: guidedProfileId, applicationField: guidedField, associationId: guidedAssociationId })).toUpperCase();
   return { name, filename, bytes, format, hash, guidedProfile, guidedProfileId, guidedField, guidedAssociationId, admissionProof, inspectionSha256 };
+}
+
+function assessWebshopProductionArticle(state, association, sourceArticle) {
+  const articleMatches = state.articles.filter(({ active, association: owner, articleNumber }) => active !== false && owner === association && String(articleNumber) === String(sourceArticle.articleNumber));
+  if (articleMatches.length !== 1) return { article: null, resolutions: [], issues: [{ code: "WEBSHOP_ARTICLE_MATCH_REVIEW_REQUIRED", reason: `${sourceArticle.articleNumber}: artikelmatch is niet exact; controle blijft vereist.` }] };
+  const article = articleMatches[0];
+  const supported = new Set(article.supports ?? []);
+  const resolutions = [];
+  const issues = [];
+  const usedFields = new Set();
+  for (const personalization of sourceArticle.personalization) {
+    if (personalization.kind === "STOCK_LOGO") { resolutions.push({ personalization, field: null }); continue; }
+    if (personalization.status === "ATTENTION_REQUIRED") {
+      issues.push({ code: "WEBSHOP_DECORATION_VALUE_REVIEW_REQUIRED", reason: personalization.attentionReason || `${sourceArticle.articleNumber}: opdrukwaarde vraagt controle` });
+      continue;
+    }
+    let field = ({ INITIALS: "initials", NAME_PRINT: "name", BACK_NAME: "name", BACK_NUMBER: "backNumber", CHEST_NUMBER: "chestNumber", SHORTS_NUMBER: "shortsNumber" })[personalization.kind];
+    if (personalization.kind === "NUMBER") {
+      const placements = ["backNumber", "chestNumber", "shortsNumber"].filter((candidate) => supported.has(candidate));
+      if (placements.length !== 1) {
+        issues.push({ code: "WEBSHOP_DECORATION_PLACEMENT_REVIEW_REQUIRED", reason: `${sourceArticle.articleNumber}: ‘${personalization.sourceLabel}’ heeft geen eenduidige artikelplaatsing; controle blijft vereist.` });
+        continue;
+      }
+      [field] = placements;
+    }
+    if (!field || !supported.has(field)) {
+      issues.push({ code: "WEBSHOP_DECORATION_PROFILE_REVIEW_REQUIRED", reason: `${sourceArticle.articleNumber}: ${personalization.sourceLabel} past niet aantoonbaar bij de productie-inrichting van dit artikel.` });
+      continue;
+    }
+    if (usedFields.has(field)) {
+      issues.push({ code: "WEBSHOP_DECORATION_CARDINALITY_REVIEW_REQUIRED", reason: `${sourceArticle.articleNumber}: meerdere bronopdrukken zouden op hetzelfde productieveld terechtkomen.` });
+      continue;
+    }
+    usedFields.add(field);
+    resolutions.push({ personalization, field });
+  }
+  return { article, resolutions, issues };
 }
 
 export class SportpaleisPilotService {
@@ -3896,7 +3944,7 @@ export class SportpaleisPilotService {
     const receivedAt = validDate(payload.receivedAt);
     const inspected = await inspectQuickProductionSource({ filename: payload.filename, mimeType: payload.mimeType, dataBase64: payload.dataBase64 });
     if (inspected.source.sourceKind !== "PDF") throw Object.assign(new Error("De gecontroleerde Webshopadapter accepteert uitsluitend de relevante PDF-bijlage uit het mailbericht."), { statusCode: 400, code: "WEBSHOP_PDF_REQUIRED" });
-    const parsed = parseSportpaleisDividePdfText({ pages: [inspected.extraction.extractedText], sourceDocumentId: inspected.source.sha256, sourceHash: inspected.source.sha256, detectedAt: receivedAt });
+    const parsed = parseSportpaleisDividePdfText({ pages: inspected.extraction.textPages?.length ? inspected.extraction.textPages : [inspected.extraction.extractedText], layoutPages: inspected.extraction.layoutPages, sourceDocumentId: inspected.source.sha256, sourceHash: inspected.source.sha256, detectedAt: receivedAt });
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, `INGEST_WEBSHOP_MAIL_DOCUMENT:${sourceMessageId}`, () => {
         const sameMessage = state.webshopIntake.sources.find((source) => source.sourceMessageId === sourceMessageId);
@@ -3907,20 +3955,30 @@ export class SportpaleisPilotService {
         const importedAt = iso();
         const source = { id: `webshop-source-${randomBytes(8).toString("hex")}`, sourceMessageId, receivedAt, filename: inspected.source.filename, mimeType: "application/pdf", sizeBytes: inspected.source.sizeBytes, sha256: inspected.source.sha256, dataBase64: inspected.source.dataBase64, immutable: true, importedAt, importedBy: user.id };
         state.webshopIntake.sources.unshift(source);
-        const matches = parsed.orders.map((parsedOrder) => {
+        const productionOrders = parsed.orders.filter(({ productionLines }) => productionLines.length > 0);
+        const matches = productionOrders.map((parsedOrder) => {
+          const catalogAssociationSets = parsedOrder.articles
+            .map(({ articleNumber }) => new Set(state.articles.filter(({ active, articleNumber: candidate }) => active !== false && String(candidate) === String(articleNumber)).map(({ association }) => association)))
+            .filter((candidates) => candidates.size > 0);
+          const inferredAssociations = catalogAssociationSets.length
+            ? [...catalogAssociationSets[0]].filter((association) => catalogAssociationSets.every((candidates) => candidates.has(association)))
+            : [];
+          const association = parsedOrder.association || (inferredAssociations.length === 1 ? inferredAssociations[0] : null);
           const existingRevisions = state.webshopIntake.matches.filter(({ externalReference }) => externalReference === parsedOrder.externalReference).map(({ contentHash }, index) => ({ revision: index + 1, contentHash }));
           const revision = reconcileSportpaleisDivideRevision(existingRevisions, parsedOrder);
           if (revision.action === "NO_OP") return state.webshopIntake.matches.find(({ externalReference, contentHash }) => externalReference === parsedOrder.externalReference && contentHash === parsedOrder.contentHash);
-          const reviewReasons = [
+          const reviewReasons = [...new Set([
+            ...parsedOrder.attention.map(({ reason }) => reason),
             ...(!parsedOrder.customer ? ["Klantnaam ontbreekt"] : []),
-            ...(!parsedOrder.association ? ["Vereniging ontbreekt"] : []),
+            ...(!association ? ["Vereniging is niet eenduidig uit bron of catalogus af te leiden"] : []),
             ...parsedOrder.articles.flatMap((article) => [
               ...(!article.description ? [`${article.articleNumber}: omschrijving ontbreekt`] : []),
               ...(!article.size ? [`${article.articleNumber}: maat ontbreekt`] : []),
               ...(!article.color ? [`${article.articleNumber}: artikelkleur ontbreekt`] : []),
             ]),
-          ];
-          const match = { id: `webshop-match-${randomBytes(8).toString("hex")}`, sourceId: source.id, externalReference: parsedOrder.externalReference, orderDate: parsedOrder.orderDate, customer: parsedOrder.customer, association: parsedOrder.association, contentHash: parsedOrder.contentHash, status: "HUMAN_CHECK", orderId: null, reviewReasons, articles: parsedOrder.articles.map(({ articleNumber, description, size, color, quantity, personalization, articlePersonalizationRule }) => ({ articleNumber, description, size, color, quantity, personalization, ...(articlePersonalizationRule ? { articlePersonalizationRule } : {}) })), source: { pageNumbers: parsedOrder.pageNumbers, segmentHash: parsedOrder.source.segmentHash, originalEvidence: parsedOrder.source.originalEvidence }, acceptedAt: null, acceptedBy: null };
+            ...(association ? parsedOrder.articles.filter(({ personalization }) => personalization.length > 0).flatMap((article) => assessWebshopProductionArticle(state, association, article).issues.map(({ reason }) => reason)) : []),
+          ])];
+          const match = { id: `webshop-match-${randomBytes(8).toString("hex")}`, sourceId: source.id, externalReference: parsedOrder.externalReference, orderDate: parsedOrder.orderDate, customer: parsedOrder.customer, customerEmail: parsedOrder.customerEmail, customerPhone: parsedOrder.customerPhone, association, contentHash: parsedOrder.contentHash, status: "HUMAN_CHECK", orderId: null, reviewReasons, articles: parsedOrder.articles.map(({ sourceLineId, articleNumber, description, size, color, quantity, personalization, articlePersonalizationRule }) => ({ sourceLineId, articleNumber, description, size, color, quantity, personalization, ...(articlePersonalizationRule ? { articlePersonalizationRule } : {}) })), source: { pageNumbers: parsedOrder.pageNumbers, segmentHash: parsedOrder.source.segmentHash, originalEvidence: parsedOrder.source.originalEvidence }, acceptedAt: null, acceptedBy: null };
           state.webshopIntake.matches.unshift(match);
           state.webshopIntake.processedOrderRevisionIdentifiers.push(`${parsedOrder.externalReference}:${parsedOrder.contentHash}`);
           return match;
@@ -3929,7 +3987,7 @@ export class SportpaleisPilotService {
         state.webshopIntake.lastSuccessfulRetrievalAt = importedAt;
         state.webshopIntake.highWaterMark = receivedAt;
         state.webshopIntake.status = matches.some(({ reviewReasons }) => reviewReasons.length) ? "ATTENTION" : "READY";
-        audit(state, user.id, "Webshopmail-PDF immutable ingelezen", source.id, { sourceMessageId, filename: source.filename, sha256: source.sha256, matches: matches.length, automaticOrderCreation: false });
+        audit(state, user.id, "Webshopmail-PDF immutable ingelezen", source.id, { sourceMessageId, filename: source.filename, sha256: source.sha256, parsedOrders: parsed.orders.length, productionIntakes: matches.length, ordersWithoutDecoration: parsed.orders.length - productionOrders.length, automaticOrderCreation: false });
         return { source, matches };
       });
       return { state, value: outcome };
@@ -3958,30 +4016,33 @@ export class SportpaleisPilotService {
       return { duplicate: true, value: order };
     }
     if (payload.explicitAgreement !== true) throw Object.assign(new Error("Expliciet medewerkerakkoord is vereist."), { statusCode: 409, code: "WEBSHOP_AGREEMENT_REQUIRED" });
+    const source = state.webshopIntake.sources.find(({ id }) => id === match.sourceId);
+    if (!source) throw Object.assign(new Error("De immutable webshopbron ontbreekt."), { statusCode: 409, code: "WEBSHOP_SOURCE_NOT_FOUND" });
     const existing = state.orders.find(({ sourceContext }) => sourceContext?.source === "WEBSHOP_XPRT" && sourceContext.externalReference === match.externalReference);
-    if (existing) throw Object.assign(new Error("Dit webshopordernummer bestaat al; dubbele materialisatie is geblokkeerd."), { statusCode: 409, code: "WEBSHOP_ORDER_DUPLICATE" });
+    if (existing && existing.sourceContext?.webshopDocument?.contentHash !== match.contentHash && !String(existing.sourceContext?.provenance ?? "").includes(source.sha256)) throw Object.assign(new Error("Dit webshopordernummer bestaat al uit een andere bron/revisie; dubbele materialisatie is geblokkeerd."), { statusCode: 409, code: "WEBSHOP_ORDER_DUPLICATE" });
     const association = requiredText(payload.association || match.association, "Vereniging", 160);
     const customer = requiredText(payload.customer || match.customer, "Klant", 120);
     const backNumberSizeClass = payload.backNumberSizeClass
       ? allowedValue(payload.backNumberSizeClass, ["JUNIOR", "SENIOR"], "Rugnummermaat")
       : "";
-    const items = match.articles.map((sourceArticle) => {
-      const articleMatches = state.articles.filter(({ active, association: owner, articleNumber }) => active !== false && owner === association && String(articleNumber) === String(sourceArticle.articleNumber));
-      if (articleMatches.length !== 1) throw Object.assign(new Error(`${sourceArticle.articleNumber}: artikelmatch is niet exact; controle blijft vereist.`), { statusCode: 409, code: "WEBSHOP_ARTICLE_MATCH_REVIEW_REQUIRED" });
-      const article = articleMatches[0];
-      const supported = new Set(article.supports ?? []);
+    const productionArticles = match.articles.filter(({ personalization }) => personalization.length > 0);
+    if (!productionArticles.length) throw Object.assign(new Error("Deze webshopbestelling bevat geen expliciete bedrukking voor productie."), { statusCode: 409, code: "WEBSHOP_PRODUCTION_INTAKE_EMPTY" });
+    const items = productionArticles.map((sourceArticle) => {
+      const assessment = assessWebshopProductionArticle(state, association, sourceArticle);
+      if (assessment.issues.length) throw Object.assign(new Error(assessment.issues[0].reason), { statusCode: 409, code: assessment.issues[0].code });
+      const article = assessment.article;
       const overrides = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", shortsNumber: "", backNumberSizeClass: "" };
-      for (const personalization of sourceArticle.personalization) {
-        const field = ({ INITIALS: "initials", BACK_NAME: "name", BACK_NUMBER: "backNumber", CHEST_NUMBER: "chestNumber", SHORTS_NUMBER: "shortsNumber" })[personalization.kind];
-        if (field && supported.has(field)) overrides[field] = personalization.value;
-      }
+      for (const { personalization, field } of assessment.resolutions) if (field) overrides[field] = personalization.value;
+      const expectedDecorations = sourceArticle.personalization.filter(({ kind }) => kind !== "STOCK_LOGO").length;
+      const mappedDecorations = assessment.resolutions.filter(({ field }) => field).length;
+      if (mappedDecorations !== expectedDecorations) throw Object.assign(new Error(`${sourceArticle.articleNumber}: niet alle bronopdrukken zijn exact aan een productieveld gekoppeld.`), { statusCode: 409, code: "WEBSHOP_DECORATION_CARDINALITY_REVIEW_REQUIRED" });
       if (overrides.backNumber && !backNumberSizeClass) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 409, code: "WEBSHOP_BACK_NUMBER_SIZE_CLASS_REVIEW_REQUIRED" });
       if (overrides.backNumber) overrides.backNumberSizeClass = backNumberSizeClass;
       return { articleId: article.id, size: requiredText(sourceArticle.size, `${sourceArticle.articleNumber} maat`, 40), quantity: sourceArticle.quantity, deviation: true, overrides };
     });
-    const source = state.webshopIntake.sources.find(({ id }) => id === match.sourceId);
-    if (!source) throw Object.assign(new Error("De immutable webshopbron ontbreekt."), { statusCode: 409, code: "WEBSHOP_SOURCE_NOT_FOUND" });
-    const created = await this.createOrder(token, csrfToken, { orderKind: "INDIVIDUAL", customer, customerEmail: optional(payload.customerEmail, 160), customerPhone: optional(payload.customerPhone, 40), association, standardPersonalization: {}, items, source: "WEBSHOP_XPRT", externalReference: match.externalReference, provenance: `Mail ${source.sourceMessageId} · ${source.filename} · SHA-256 ${source.sha256}` }, `webshop-match:${match.id}`);
+    const created = existing
+      ? { duplicate: true, value: existing }
+      : await this.createOrder(token, csrfToken, { orderKind: "INDIVIDUAL", customer, customerEmail: optional(payload.customerEmail || match.customerEmail, 160), customerPhone: optional(payload.customerPhone || match.customerPhone, 40), association, standardPersonalization: {}, items, source: "WEBSHOP_XPRT", externalReference: match.externalReference, provenance: `Mail ${source.sourceMessageId} · ${source.filename} · SHA-256 ${source.sha256}` }, `webshop-match:${match.id}`);
     const linked = await this.store.mutate(async (next) => {
       const current = next.webshopIntake.matches.find(({ id }) => id === match.id);
       const order = next.orders.find(({ id }) => id === created.value.id);
@@ -3994,7 +4055,7 @@ export class SportpaleisPilotService {
           if (normalizedSourceValue(association).replaceAll(" ", "") !== "vva/spartaan") throw Object.assign(new Error("Voorraadlogo-automatisering is uitsluitend toegestaan voor VVA / Spartaan Webshoporders."), { statusCode: 409, code: "WEBSHOP_STOCK_LOGO_SCOPE_MISMATCH" });
           order.stockApplications = [{ id: `stock-application-${randomBytes(8).toString("hex")}`, kind: "STOCK_LOGO", association: "VVA / Spartaan", quantity: stockLogoQuantity, status: "PENDING", appliedAt: null, appliedBy: null, source: "WEBSHOP_XPRT" }];
         }
-        order.sourceContext.webshopDocument = { sourceId: storedSource.id, sourceMessageId: storedSource.sourceMessageId, filename: storedSource.filename, sha256: storedSource.sha256, contentHash: current.contentHash };
+        order.sourceContext.webshopDocument = { sourceId: storedSource.id, sourceMessageId: storedSource.sourceMessageId, filename: storedSource.filename, sha256: storedSource.sha256, contentHash: current.contentHash, sourceLineage: current.articles.flatMap(({ sourceLineId, articleNumber, quantity, personalization }) => personalization.map(({ decorationIdentity, kind, sourceValue }) => ({ sourceLineId, decorationIdentity, articleNumber, quantity, kind, sourceValue }))) };
         order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "WEBSHOP_DOCUMENT_ACCEPTED", at: current.acceptedAt, userId: user.id, userName: user.name, source: "explicit-human-agreement", details: { matchId: current.id, sourceId: storedSource.id, sourceSha256: storedSource.sha256, externalReference: current.externalReference } });
         order.revision += 1; order.updatedAt = current.acceptedAt;
         audit(next, user.id, "Webshop-PDF gecontroleerd en als canonieke order geaccepteerd", current.id, { orderId: order.id, externalReference: current.externalReference, sourceSha256: storedSource.sha256 });

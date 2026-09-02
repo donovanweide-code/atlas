@@ -263,3 +263,37 @@ test("expliciet bulk Afronden maakt alleen complete afhaalorders direct Klaar om
   assert.equal(result.value.completed[0].fulfillment.status, "READY_FOR_PICKUP");
   assert.equal(result.value.completed[0].eventHistory.at(-1).details.explicitHumanAction, "AFRONDEN");
 });
+
+test("Webshop generiek Nummer bindt via exact één artikelsupport en bewaart bronlineage", async (context) => {
+  const { service, operator } = await fixture(context);
+  const bytes = textPdf(["260000201", "Klantnaam: Webshop Test", "Vereniging: DCG", "Artikelnummer: 141705", "Omschrijving: DCG Wedstrijd/Training short", "Maat: M", "Kleur: Zwart", "Aantal: 1", "Nummer: 12"]);
+  const ingested = await service.ingestWebshopMailDocument(operator.token, operator.csrfToken, { sourceMessageId: "divide-message-260000201", receivedAt: "2026-09-03T08:30:00.000Z", filename: "webshop-260000201.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64") }, "ingest-webshop-260000201");
+  assert.equal(ingested.value.matches.length, 1);
+  assert.deepEqual(ingested.value.matches[0].reviewReasons, []);
+  const accepted = await service.acceptWebshopMatch(operator.token, operator.csrfToken, ingested.value.matches[0].id, { explicitAgreement: true, customer: "Webshop Test", association: "DCG", customerEmail: "", customerPhone: "" });
+  assert.equal(accepted.value.productionLines.length, 1);
+  assert.equal(accepted.value.productionLines[0].personalizationField, "shortsNumber");
+  assert.equal(accepted.value.productionLines[0].content, "12");
+  assert.equal(accepted.value.sourceContext.webshopDocument.sourceLineage.length, 1);
+  assert.equal(accepted.value.sourceContext.webshopDocument.sourceLineage[0].sourceValue, "12");
+  const duplicate = await service.acceptWebshopMatch(operator.token, operator.csrfToken, ingested.value.matches[0].id, { explicitAgreement: true });
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.value.id, accepted.value.id);
+});
+
+test("Webshop intake negeert onbedrukte orders en toont onbekende of semantisch ongeldige productiebron fail-closed", async (context) => {
+  const { service, operator } = await fixture(context);
+  const bytes = textPdf([
+    "260000202", "Klantnaam: Geen bedrukking", "Vereniging: DCG", "Artikelnummer: 141753", "Omschrijving: DCG Wedstrijd kous", "Maat: 41-44", "Kleur: Zwart", "Aantal: 1",
+    "260000203", "Klantnaam: Catalogusgat", "Vereniging: FC Huizen", "Artikelnummer: 131251", "Omschrijving: SV Huizen Backpack", "Maat: One size", "Kleur: Marine", "Aantal: 1", "Initialen: XX",
+    "260000204", "Klantnaam: Verkeerde semantiek", "Vereniging: SC Buitenboys", "Artikelnummer: 140295", "Omschrijving: SC Buitenboys reserve short", "Maat: M", "Kleur: Zwart", "Aantal: 1", "Shortnummer: MW",
+  ]);
+  const ingested = await service.ingestWebshopMailDocument(operator.token, operator.csrfToken, { sourceMessageId: "divide-message-260000202-204", receivedAt: "2026-09-03T08:35:00.000Z", filename: "webshop-260000202-204.pdf", mimeType: "application/pdf", dataBase64: bytes.toString("base64") }, "ingest-webshop-260000202-204");
+  assert.equal(ingested.value.matches.length, 2);
+  const catalogGap = ingested.value.matches.find(({ externalReference }) => externalReference === "260000203");
+  const semanticGap = ingested.value.matches.find(({ externalReference }) => externalReference === "260000204");
+  assert.ok(catalogGap.reviewReasons.some((reason) => reason.includes("artikelmatch is niet exact")));
+  assert.ok(semanticGap.reviewReasons.some((reason) => reason.includes("geen numerieke waarde")));
+  await assert.rejects(service.acceptWebshopMatch(operator.token, operator.csrfToken, catalogGap.id, { explicitAgreement: true, customer: catalogGap.customer, association: catalogGap.association }), (error) => error.code === "WEBSHOP_ARTICLE_MATCH_REVIEW_REQUIRED");
+  await assert.rejects(service.acceptWebshopMatch(operator.token, operator.csrfToken, semanticGap.id, { explicitAgreement: true, customer: semanticGap.customer, association: semanticGap.association }), (error) => error.code === "WEBSHOP_DECORATION_VALUE_REVIEW_REQUIRED");
+});

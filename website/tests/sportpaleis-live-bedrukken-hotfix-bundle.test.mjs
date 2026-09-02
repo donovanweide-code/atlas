@@ -108,7 +108,8 @@ test("SP-2026-0116-klasse projecteert Rug 10 en Short 10 exact één keer terwij
   const migrated = migrateSportpaleisPilotState(legacyState);
   const migratedOrder = migrated.orders.find(({ id }) => id === created.id);
   const migratedProfile = migrated.productionProfiles.find(({ id }) => id === legacyProfile.id);
-  assert.equal(migrated.schemaVersion, 16);
+  assert.equal(migrated.schemaVersion, 17);
+  assert.equal(migrated.users.find(({ id }) => id === "patrick").workContexts.includes("WEBSHOP"), true);
   assert.equal(migratedProfile.backNumberSizeClasses.SENIOR.physicalHeightMm, 200);
   assert.doesNotMatch(migratedProfile.sizeLabel, /22\s*cm/iu);
   assert.equal(migratedOrder.productionLines.find(({ personalizationField }) => personalizationField === "backNumber").heightMm, 200);

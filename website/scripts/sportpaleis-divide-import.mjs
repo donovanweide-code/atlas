@@ -39,6 +39,8 @@ export function normalizeDividePersonalization(label, sourceValue) {
     ? { kind: "BACK_NUMBER", value, sourceLabel: label, sourceValue }
     : { kind: "BACK_NAME", value, sourceLabel: label, sourceValue };
   if (normalizedLabel === "initialen") return { kind: "INITIALS", value, sourceLabel: label, sourceValue };
+  if (normalizedLabel === "naam opdruk") return { kind: "NAME_PRINT", value, sourceLabel: label, sourceValue };
+  if (normalizedLabel === "nummer") return { kind: "NUMBER", value, sourceLabel: label, sourceValue };
   if (["borstnummer", "nummer borst"].includes(normalizedLabel)) return { kind: "CHEST_NUMBER", value, sourceLabel: label, sourceValue };
   if (["shortnummer", "broeknummer", "nummer short"].includes(normalizedLabel)) return { kind: "SHORTS_NUMBER", value, sourceLabel: label, sourceValue };
   if (["voorraadlogo", "clublogo", "logo"].includes(normalizedLabel)) return { kind: "STOCK_LOGO", value, sourceLabel: label, sourceValue };
@@ -109,7 +111,7 @@ function parseArticleBlocks(rawText, association = "") {
         normalizeDividePersonalization("Shortnummer", combinedNumber[1]),
       );
       else {
-        const personalization = line.match(/^(Rugnummer|Borstnummer|Shortnummer|Broeknummer|Naam\s*\(Rug\)|Rugnaam|Initialen|Voorraadlogo|Clublogo|Logo)\s*:\s*(.+)$/iu);
+        const personalization = line.match(/^(Rugnummer|Borstnummer|Shortnummer|Broeknummer|Naam\s*\(Rug\)|Naam\s*opdruk|Rugnaam|Initialen|Nummer|Voorraadlogo|Clublogo|Logo)\s*:\s*(.+)$/iu);
         if (personalization) current.personalization.push(normalizeDividePersonalization(personalization[1].replace(/^Rugnaam$/iu, "Naam (Rug)"), personalization[2]));
       }
     }
@@ -131,25 +133,147 @@ function parseArticleBlocks(rawText, association = "") {
   }; });
 }
 
-export function parseSportpaleisDividePdfText({ pages, sourceDocumentId, sourceHash, detectedAt = new Date().toISOString() }) {
+const POSITIONAL_PERSONALIZATION = /^(Rugnummer|Borstnummer|Shortnummer|Broeknummer|Naam\s*\(Rug\)|Naam\s*opdruk|Rugnaam|Initialen|Nummer|Voorraadlogo|Clublogo|Logo)\s*:\s*(.+)$/iu;
+
+function positionedOrderMetadata(layoutPages, pageNumbers) {
+  for (const pageNumber of pageNumbers) {
+    const rows = Array.isArray(layoutPages?.[pageNumber - 1]) ? layoutPages[pageNumber - 1] : [];
+    const header = rows.find(({ cells }) => cells.some(({ text }) => clean(text) === "Gegevens") && cells.some(({ text }) => clean(text) === "Factuuradres"));
+    if (!header) continue;
+    const leftCells = rows
+      .filter(({ y }) => y < header.y && y > header.y - 80)
+      .flatMap(({ y, cells }) => cells.filter(({ x }) => x < 180).map((cell) => ({ ...cell, y, text: clean(cell.text) })))
+      .filter(({ text }) => text);
+    const customer = leftCells.find(({ text }) => !/^(?:Telefoon|E-mail)\s*:/iu.test(text))?.text ?? null;
+    const customerPhone = leftCells.map(({ text }) => text.match(/^Telefoon\s*:\s*(.+)$/iu)?.[1]).find(Boolean) ?? null;
+    const customerEmail = leftCells.map(({ text }) => text.match(/^E-mail\s*:\s*(.+)$/iu)?.[1]).find(Boolean) ?? null;
+    return { customer, customerPhone: clean(customerPhone) || null, customerEmail: clean(customerEmail) || null };
+  }
+  return { customer: null, customerPhone: null, customerEmail: null };
+}
+
+function positionedArticleBlocks(layoutPages, pageNumbers) {
+  const articles = [];
+  for (const pageNumber of pageNumbers) {
+    const rows = Array.isArray(layoutPages?.[pageNumber - 1]) ? layoutPages[pageNumber - 1] : [];
+    const requiredHeaders = ["Productafbeelding", "Artikelnummer", "Omschrijving", "Maat", "Kleur", "Aantal", "Totaal"];
+    const header = rows.find(({ cells }) => requiredHeaders.every((label) => cells.some(({ text }) => clean(text) === label)));
+    if (!header) continue;
+    const headerX = Object.fromEntries(requiredHeaders.map((label) => [label, header.cells.find(({ text }) => clean(text) === label)?.x ?? null]));
+    if (Object.values(headerX).some((value) => !Number.isFinite(value))) continue;
+    const midpoint = (first, second) => (first + second) / 2;
+    const ranges = {
+      article: [midpoint(headerX.Productafbeelding, headerX.Artikelnummer), midpoint(headerX.Artikelnummer, headerX.Omschrijving)],
+      description: [midpoint(headerX.Artikelnummer, headerX.Omschrijving), midpoint(headerX.Omschrijving, headerX.Maat)],
+      size: [midpoint(headerX.Omschrijving, headerX.Maat), midpoint(headerX.Maat, headerX.Kleur)],
+      color: [midpoint(headerX.Maat, headerX.Kleur), midpoint(headerX.Kleur, headerX.Aantal)],
+      quantity: [midpoint(headerX.Kleur, headerX.Aantal), midpoint(headerX.Aantal, headerX.Totaal)],
+    };
+    const inRange = (x, range) => x >= range[0] && x < range[1];
+    const subtotalY = rows.find(({ cells }) => cells.some(({ text }) => clean(text) === "Subtotaal"))?.y ?? -Infinity;
+    const starts = rows.map((row) => ({ row, articleCell: row.cells.find(({ x }) => inRange(x, ranges.article)) }))
+      .filter(({ row, articleCell }) => row.y < header.y - 1 && row.y > subtotalY && /^[\p{L}\p{N}][\p{L}\p{N}._/-]{2,39}$/u.test(clean(articleCell?.text)))
+      .sort((first, second) => second.row.y - first.row.y);
+    for (let index = 0; index < starts.length; index += 1) {
+      const { row: start, articleCell } = starts[index];
+      const lowerY = starts[index + 1]?.row.y ?? subtotalY;
+      const block = rows.filter(({ y }) => y <= start.y + 0.5 && y > lowerY + 0.5);
+      const cells = block.flatMap((row) => row.cells.map((cell) => ({ ...cell, y: row.y })));
+      const sameRow = (range) => cells.filter(({ x, y }) => inRange(x, range) && Math.abs(y - start.y) < 1.5).map(({ text }) => clean(text));
+      const personalization = cells.map(({ text, x, y }) => ({ match: clean(text).match(POSITIONAL_PERSONALIZATION), x, y }))
+        .filter(({ match }) => match)
+        .map(({ match, x, y }) => ({ ...normalizeDividePersonalization(match[1].replace(/^Rugnaam$/iu, "Naam (Rug)"), match[2]), sourcePosition: { pageNumber, x, y } }));
+      const descriptionContinuations = cells
+        .filter(({ x, y, text }) => inRange(x, ranges.description) && Math.abs(y - start.y) >= 1.5 && !POSITIONAL_PERSONALIZATION.test(clean(text)) && clean(text) !== "Meerprijs:")
+        .sort((first, second) => second.y - first.y)
+        .map(({ text }) => clean(text));
+      const parts = (range) => cells.filter(({ x }) => inRange(x, range)).sort((first, second) => second.y - first.y).map(({ text }) => clean(text));
+      const quantity = Number(sameRow(ranges.quantity)[0] ?? "");
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error(`Ongeldig aantal bij artikel ${clean(articleCell.text)}.`), { code: "DIVIDE_ARTICLE_QUANTITY_INVALID" });
+      articles.push({
+        articleNumber: clean(articleCell.text),
+        description: clean([...sameRow(ranges.description), ...descriptionContinuations].join(" ")),
+        size: clean(parts(ranges.size).join(" ")),
+        color: clean(parts(ranges.color).join(" ")),
+        quantity,
+        personalization,
+        sourceLines: block.map(({ cells: rowCells }) => rowCells.map(({ text }) => clean(text)).join("\t")),
+      });
+    }
+  }
+  return articles;
+}
+
+function finalizeArticles(articles, association = "") {
+  if (!articles.length) throw Object.assign(new Error("Bestelling bevat geen herkenbare artikelregels."), { code: "DIVIDE_ARTICLES_EMPTY" });
+  return articles.map((article) => {
+    const product = article.description.toLocaleLowerCase("nl-NL");
+    const huizenArticleRule = /(?:sv|fc)\s*huizen/iu.test(association)
+      ? (/trainingsbroek|backpack/u.test(product) ? "INITIALS" : /training\s*(?:shirt|top)/u.test(product) ? "BACK_NAME" : null)
+      : null;
+    const personalization = huizenArticleRule ? article.personalization.filter(({ kind }) => kind === huizenArticleRule) : article.personalization;
+    return {
+      ...article,
+      personalization,
+      originalEvidence: article.sourceLines.join("\n"),
+      productionRelevant: personalization.length > 0,
+      ...(huizenArticleRule ? { articlePersonalizationRule: { kind: huizenArticleRule, source: "SV_HUIZEN_ARTICLE_PRODUCT_RULE", overridesGeneralChoice: true } } : {}),
+    };
+  });
+}
+
+export function parseSportpaleisDividePdfText({ pages, layoutPages = [], sourceDocumentId, sourceHash, detectedAt = new Date().toISOString() }) {
   if (!Array.isArray(pages) || pages.length < 1 || pages.length > 500) throw Object.assign(new Error("PDF-tekst moet uit 1 tot 500 pagina's bestaan."), { code: "DIVIDE_PAGES_INVALID" });
   if (!String(sourceDocumentId ?? "").trim() || !/^[a-f0-9]{64}$/iu.test(String(sourceHash ?? ""))) throw Object.assign(new Error("Brondocument-ID en SHA-256 zijn verplicht."), { code: "DIVIDE_SOURCE_PROVENANCE_INVALID" });
   const segments = splitOrderSegments(pages);
   const orders = segments.map((segment) => {
     const orderDate = segment.rawText.match(/(?:Besteldatum|Orderdatum)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
-    const customer = segment.rawText.match(/(?:Klant(?:naam)?|Naam klant)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
+    const positionalMetadata = positionedOrderMetadata(layoutPages, segment.pageNumbers);
+    const customer = segment.rawText.match(/(?:Klant(?:naam)?|Naam klant)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customer;
+    const customerPhone = segment.rawText.match(/Telefoon\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customerPhone;
+    const customerEmail = segment.rawText.match(/E-mail\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customerEmail;
     const association = segment.rawText.match(/(?:Vereniging|Club|Team)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
-    const articles = parseArticleBlocks(segment.rawText, association ?? "");
-    const normalized = { reference: segment.reference, orderDate, customer, association, articles };
+    let articles;
+    try { articles = parseArticleBlocks(segment.rawText, association ?? ""); }
+    catch (error) {
+      if (error.code !== "DIVIDE_ARTICLES_EMPTY") throw error;
+      try { articles = finalizeArticles(positionedArticleBlocks(layoutPages, segment.pageNumbers), association ?? ""); }
+      catch (positionedError) {
+        positionedError.message = `Bestelling ${segment.reference} (pagina ${segment.pageNumbers.join(", ")}): ${positionedError.message}`;
+        throw positionedError;
+      }
+    }
+    articles = articles.map((article, lineIndex) => {
+      const sourceLineId = `${segment.reference}:line:${lineIndex + 1}`;
+      return {
+        ...article,
+        sourceLineId,
+        personalization: article.personalization.map((personalization, decorationIndex) => ({
+          ...personalization,
+          sourceLineId,
+          decorationIdentity: `${sourceLineId}:${personalization.kind}:${decorationIndex + 1}:${personalization.value}`,
+          ...(["BACK_NUMBER", "CHEST_NUMBER", "SHORTS_NUMBER", "NUMBER"].includes(personalization.kind) && !/^\d+$/u.test(personalization.value)
+            ? { status: "ATTENTION_REQUIRED", attentionReason: `${personalization.sourceLabel} bevat geen numerieke waarde.` }
+            : { status: "EXPLICIT" }),
+        })),
+      };
+    });
+    const attention = articles.flatMap((article) => article.personalization.filter(({ status }) => status === "ATTENTION_REQUIRED").map(({ decorationIdentity, attentionReason }) => ({ code: "DECORATION_VALUE_CHECK_REQUIRED", sourceLineId: article.sourceLineId, decorationIdentity, reason: attentionReason })));
+    const normalized = { reference: segment.reference, orderDate, customer, customerPhone, customerEmail, association, articles };
     return {
       externalReference: segment.reference,
       channel: "WEBSHOP_XPRT",
       orderDate,
       customer,
+      customerPhone,
+      customerEmail,
       association,
       pageNumbers: segment.pageNumbers,
       articles,
-      productionLines: articles.filter(({ productionRelevant }) => productionRelevant).map(({ articleNumber, description, size, color, quantity, personalization }) => ({ articleNumber, description, size, color, quantity, personalization })),
+      productionLines: articles.filter(({ productionRelevant }) => productionRelevant).map(({ sourceLineId, articleNumber, description, size, color, quantity, personalization }) => ({ sourceLineId, articleNumber, description, size, color, quantity, personalization })),
+      sourceChannel: "WEBSHOP",
+      attention,
+      status: attention.length ? "ATTENTION_REQUIRED" : "READY",
       source: { documentId: String(sourceDocumentId), sha256: String(sourceHash).toLowerCase(), detectedAt, segmentHash: sha256(segment.rawText), originalEvidence: segment.rawText },
       contentHash: sha256(JSON.stringify(normalized)),
     };

@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
+const MAX_PDF_PAGES = 500;
+const MAX_EXTRACTED_TEXT_CHARS = 1_000_000;
 const SUPPORTED = new Map([
   ["application/pdf", "PDF"],
   ["image/jpeg", "PHOTO"],
@@ -46,19 +48,42 @@ function validateSource(input) {
   return { filename, mimeType, bytes, sourceKind: SUPPORTED.get(mimeType) };
 }
 
+function positionedPage(items) {
+  const rows = [];
+  for (const item of items) {
+    if (!("str" in item) || !String(item.str).trim()) continue;
+    const x = Number(item.transform?.[4] ?? 0);
+    const y = Number(item.transform?.[5] ?? 0);
+    let row = rows.find((candidate) => Math.abs(candidate.y - y) < 1.5);
+    if (!row) { row = { y, cells: [] }; rows.push(row); }
+    row.cells.push({ x, text: clean(item.str, 2_000) });
+  }
+  return rows
+    .sort((first, second) => second.y - first.y)
+    .map((row) => ({ y: row.y, cells: row.cells.sort((first, second) => first.x - second.x) }));
+}
+
 async function embeddedText(bytes, mimeType) {
-  if (["text/plain", "message/rfc822"].includes(mimeType)) return clean(bytes.toString("utf8"), 100_000);
-  if (mimeType !== "application/pdf") return "";
+  if (["text/plain", "message/rfc822"].includes(mimeType)) {
+    const text = clean(bytes.toString("utf8"), MAX_EXTRACTED_TEXT_CHARS);
+    return { text, textPages: [text], layoutPages: [], pageCount: 1 };
+  }
+  if (mimeType !== "application/pdf") return { text: "", textPages: [], layoutPages: [], pageCount: 0 };
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const standardFontDataUrl = fileURLToPath(new URL(".", import.meta.resolve("pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"))).replaceAll("\\", "/").replace(/\/?$/u, "/");
   const document = await pdfjs.getDocument({ data: new Uint8Array(bytes), disableWorker: true, disableFontFace: true, useSystemFonts: false, isEvalSupported: false, standardFontDataUrl }).promise;
-  const pages = [];
-  for (let pageNumber = 1; pageNumber <= Math.min(document.numPages, 40); pageNumber += 1) {
+  if (document.numPages > MAX_PDF_PAGES) throw intakeError(`PDF bevat meer dan ${MAX_PDF_PAGES} pagina's.`, "QUICK_INTAKE_PDF_PAGE_LIMIT");
+  const textPages = [];
+  const layoutPages = [];
+  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
     const page = await document.getPage(pageNumber);
     const content = await page.getTextContent();
-    pages.push(content.items.map((item) => "str" in item ? `${item.str}${item.hasEOL ? "\n" : " "}` : "").join(""));
+    textPages.push(content.items.map((item) => "str" in item ? `${item.str}${item.hasEOL ? "\n" : " "}` : "").join(""));
+    layoutPages.push(positionedPage(content.items));
   }
-  return clean(pages.join("\n"), 100_000);
+  const joined = textPages.join("\n").replace(/\0/gu, "").trim();
+  if (joined.length > MAX_EXTRACTED_TEXT_CHARS) throw intakeError("De uitgelezen PDF-tekst is te groot voor veilige verwerking.", "QUICK_INTAKE_PDF_TEXT_LIMIT");
+  return { text: joined, textPages, layoutPages, pageCount: document.numPages };
 }
 
 function extractExactFields(text) {
@@ -82,7 +107,8 @@ function extractExactFields(text) {
 
 export async function inspectQuickProductionSource(input) {
   const source = validateSource(input);
-  const text = await embeddedText(source.bytes, source.mimeType);
+  const embedded = await embeddedText(source.bytes, source.mimeType);
+  const text = embedded.text;
   const fields = extractExactFields(text);
   const missing = Object.entries(fields).filter(([, value]) => value.status === "MISSING").map(([field]) => field);
   return {
@@ -98,6 +124,9 @@ export async function inspectQuickProductionSource(input) {
     extraction: {
       engine: source.sourceKind === "PHOTO" ? "NO_OCR_HUMAN_CHECK_V1" : "EMBEDDED_TEXT_EXACT_LABELS_V1",
       extractedText: text,
+      textPages: embedded.textPages,
+      layoutPages: embedded.layoutPages,
+      pageCount: embedded.pageCount,
       fields,
       confidencePolicy: "NO_SILENT_GUESSING",
       status: source.sourceKind === "PHOTO" ? "HUMAN_CHECK_REQUIRED" : missing.length ? "HUMAN_CHECK_REQUIRED" : "REVIEW_REQUIRED",
@@ -126,7 +155,7 @@ export function createQuickProductionIntakeRecord(inspected, user, now = new Dat
 
 export function publicQuickProductionIntake(record) {
   const { dataBase64: _dataBase64, ...source } = record.source;
-  const { extractedText: _extractedText, ...extraction } = record.extraction;
+  const { extractedText: _extractedText, textPages: _textPages, layoutPages: _layoutPages, ...extraction } = record.extraction;
   return structuredClone({ ...record, source, extraction });
 }
 
