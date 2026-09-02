@@ -117,10 +117,10 @@ export const SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS = Object.freeze([
       confirmedBy: { userId: "system:human-product-truth", name: "Donovan" },
     }),
   }),
-  managedSuppliedFont({ filename: "Schluber.otf", name: "Schluber", aliases: ["schluber"], applicationBindings: ["initials", "name", "backNumber", "chestNumber", "shortsNumber"] }),
-  managedSuppliedFont({ filename: "MyriadPro-It.otf", name: "Myriad Pro Italic", aliases: ["Myriad Pro - Italic", "MyriadPro-It"], applicationBindings: ["initials", "name"] }),
-  managedSuppliedFont({ filename: "MyriadPro-Bold.otf", name: "Myriad Pro Bold", aliases: ["MyriadPro-Bold", "Myrad pro - Bold"], applicationBindings: ["initials", "name"] }),
-  managedSuppliedFont({ filename: "Premier League Font 2018.ttf", name: "FFF English Premier League", aliases: ["FFF englisch", "FFFEnglishPremierLeague"], applicationBindings: ["name", "chestNumber", "shortsNumber"] }),
+  managedSuppliedFont({ filename: "Schluber.otf", name: "Schluber", aliases: ["schluber"], applicationBindings: ["FREE_PRINT", "initials", "name", "backNumber", "chestNumber", "shortsNumber"] }),
+  managedSuppliedFont({ filename: "MyriadPro-It.otf", name: "Myriad Pro Italic", aliases: ["Myriad Pro - Italic", "MyriadPro-It"], applicationBindings: ["FREE_PRINT", "initials", "name"] }),
+  managedSuppliedFont({ filename: "MyriadPro-Bold.otf", name: "Myriad Pro Bold", aliases: ["MyriadPro-Bold", "Myrad pro - Bold"], applicationBindings: ["FREE_PRINT", "initials", "name"] }),
+  managedSuppliedFont({ filename: "Premier League Font 2018.ttf", name: "FFF English Premier League", aliases: ["FFF englisch", "FFFEnglishPremierLeague"], applicationBindings: ["FREE_PRINT", "name", "chestNumber", "shortsNumber"] }),
 ]);
 
 export const SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSET_MANIFEST_PATH = "assets/organizations/sportpaleis/authoritative-production-assets.json";

@@ -185,7 +185,7 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(server, /PRODUCTION_LINES_PENDING/u);
   assert.match(server, /ORDER_DELETED/u);
   assert.match(server, /PRODUCTION_FOIL_COLOR_UNMANAGED/u);
-  assert.match(source, /proposalGroupSequenceState\(state, groups, id\) === "CURRENT"/u);
+  assert.match(source, /proposalGroupSequenceState\(state, groups, id, physicalState, projection\) === "CURRENT"/u);
   assert.match(source, /managedFoilColors\.has/u);
   assert.match(source, /actieve beheerde foliekleur ontbreekt/u);
 });

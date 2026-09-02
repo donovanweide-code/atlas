@@ -469,6 +469,8 @@ export interface WorkspaceOrder {
   /** Server-derived operational status. Never use the stage alone as production readiness. */
   productionStatus?: "ATTENTION" | "READY" | "IN_PRODUCTION" | "PARTIALLY_PRODUCED" | "FULLY_PRODUCED" | "DONE";
   productionStatusReason?: string | null;
+  productionReadyLineIds?: readonly string[];
+  productionBlockedLineIds?: readonly string[];
   productionClosure?: { status: "NOT_ELIGIBLE" | "ELIGIBLE" | "CONFIRMED" | "REVIEW_REQUIRED"; reason: string | null };
   orderKind?: "INDIVIDUAL" | "TEAM" | "CUSTOM" | "LEGACY";
   teamContext?: string | null;

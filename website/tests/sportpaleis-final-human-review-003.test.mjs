@@ -23,9 +23,9 @@ async function fixture(context) {
   return { service, admin: await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin }), storeUser: await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega }) };
 }
 
-test("alle 20 verenigingen behouden iedere beschikbare bronwaarde afzonderlijk", async (context) => {
+test("alle 22 actuele verenigingen behouden iedere beschikbare bronwaarde afzonderlijk", async (context) => {
   const { service, admin } = await fixture(context); const state = await service.bootstrap(admin.token);
-  assert.equal(state.associations.length, 20); assert.equal(SPORTPALEIS_ASSOCIATIONS.length, 20);
+  assert.equal(state.associations.length, 22); assert.equal(SPORTPALEIS_ASSOCIATIONS.length, 22);
   for (const source of SPORTPALEIS_ASSOCIATIONS) {
     const actual = state.associations.find(({ name }) => name === source.name); assert.ok(actual, source.name);
     assert.equal(actual.fontProfile, source.fontProfile); assert.deepEqual(actual.foilColors, source.foilColors); assert.deepEqual(actual.dimensionsCm, source.dimensionsCm);
@@ -125,7 +125,10 @@ test("tussenvoegsel blijft een apart handmatig initialenelement met overname en 
 
   const current = await captureReceipt(service, admin, created, "human-review-infix-receipt");
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, created.id, current.revision, "review-infix-to-control")).value;
-  await assert.rejects(service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "review-infix-fail-closed"), (error) => error.code === "ORDER_NOT_READY");
+  const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "review-infix-decoration-scoped")).value;
+  const groupedLineIds = proposal.groups.flatMap(({ productionLineRefs }) => productionLineRefs.map(({ lineId }) => lineId));
+  assert.deepEqual(groupedLineIds, [created.productionLines.find(({ content, placementRole }) => content === "PK" && !placementRole).id]);
+  assert.ok(created.productionLines.filter(({ placementRule }) => placementRule?.compositionId).every(({ id }) => !groupedLineIds.includes(id)));
 });
 
 test("teamorder bewaart tussenvoegsel afzonderlijk en blokkeert onbekende fysieke opmaak", async (context) => {

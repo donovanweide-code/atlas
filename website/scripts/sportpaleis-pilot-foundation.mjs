@@ -107,7 +107,7 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 13;
+const PILOT_SCHEMA_VERSION = 14;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
@@ -648,7 +648,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
@@ -1017,6 +1017,33 @@ export function migrateSportpaleisPilotState(input) {
       if (itemLines.length && itemLines.every(({ validation }) => validation?.status === "VALID") && /fontbestand|fontbron/iu.test(String(item.productionReadiness?.reason ?? ""))) {
         item.productionReadiness = { status: "CONFIGURED", reason: null };
       }
+    }
+  }
+  if (previousSchemaVersion < 14) {
+    const consequentialOrderIds = new Set([
+      ...(state.productionJobs ?? []).flatMap((job) => job.snapshot?.orderIds ?? []),
+      ...(state.productionProposals ?? []).flatMap((proposal) => (proposal.orders ?? []).map(({ id }) => id)),
+    ]);
+    for (const order of state.orders ?? []) {
+      if (order.orderKind !== "INDIVIDUAL" || !["ORDER", "CONTROL"].includes(order.stage) || consequentialOrderIds.has(order.id) || !order.productionLines?.length) continue;
+      const hasBlockedComposite = order.productionLines.some((line) => line.placementRule?.compositionId && line.validation?.status === "BLOCKED");
+      const hasStaleCanonicalHeight = order.productionLines.some((line) => {
+        if (!line.personalizationField || !line.itemId) return false;
+        const item = order.items?.find(({ id }) => id === line.itemId);
+        const semantics = item ? canonicalLineSemantics(state, order, item, line) : null;
+        return Number(semantics?.expectedHeightMm) > 0 && Math.abs(Number(line.heightMm) - Number(semantics.expectedHeightMm)) > .001;
+      });
+      if (!hasBlockedComposite && !hasStaleCanonicalHeight) continue;
+      const previousLineHash = sha256(JSON.stringify(order.productionLines));
+      const projected = stableExistingOrderProductionLines(resolveCanonicalProductionLines(state, order.id, order.items ?? []));
+      if (!projected.length) continue;
+      order.productionLines = projected;
+      applyProductionReadiness(order.items ?? [], projected);
+      order.revision = Number(order.revision ?? 1) + 1;
+      const migratedAt = "2026-09-02T00:00:00.000Z";
+      order.updatedAt = migratedAt;
+      order.eventHistory ??= [];
+      order.eventHistory.push({ id: `event-canonical-line-projection-v14-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v14", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
     }
   }
   const highestTeamkitSequence = (state.orders ?? []).reduce((highest, order) => Math.max(highest, Number(String(order.id).match(/^TK-\d{4}-(\d+)$/u)?.[1] ?? 0)), 0);
@@ -3362,8 +3389,9 @@ export class SportpaleisPilotService {
         const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
         if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
         const highest = state.productionProposals.reduce((value, proposal) => Math.max(value, Number(String(proposal.proposalNumber).match(/(\d+)$/u)?.[1] ?? 0)), 0);
-        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_PROPOSAL_CREATE" });
         const groups = buildProductionProposalGroups(state, orders);
+        const eligibleLineRefs = groups.flatMap(({ productionLineRefs }) => productionLineRefs);
+        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_PROPOSAL_CREATE", eligibleLineRefs });
         const proposal = {
           id: `production-proposal-${randomBytes(10).toString("hex")}`,
           proposalNumber: `PV-${new Date(createdAt).getUTCFullYear()}-${String(highest + 1).padStart(4, "0")}`,
@@ -3422,8 +3450,9 @@ export class SportpaleisPilotService {
         });
         const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
         if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
-        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE" });
         const groups = buildProductionProposalGroups(state, orders);
+        const eligibleLineRefs = groups.flatMap(({ productionLineRefs }) => productionLineRefs);
+        for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE", eligibleLineRefs });
         const requestedNewGroups = groups.filter(({ foilColor }) => normalizedProductionFoilColor(foilColor) === normalizedProductionFoilColor(requestedFoilColor));
         const mergeTarget = requestedNewGroups.length === 1 ? (state.productionProposals ?? []).flatMap((candidate) => candidate.status === "OPEN"
           ? (candidate.groups ?? []).filter((group) => group.status === "OPEN"
@@ -3475,7 +3504,9 @@ export class SportpaleisPilotService {
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           if (!["ORDER", "CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
-          if (productionLinesForOrder(state, order).some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
+          const selectedLineIds = new Set(currentGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id).map(({ lineId }) => lineId));
+          const selectedLines = productionLinesForOrder(state, order).filter(({ id }) => selectedLineIds.has(id));
+          if (!selectedLines.length || selectedLines.length !== selectedLineIds.size || selectedLines.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een geselecteerde productieregel is nog geblokkeerd of niet meer exact aanwezig."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
           return order;
         });
         const sequence = state.nextProductionJobSequence;
@@ -3541,7 +3572,9 @@ export class SportpaleisPilotService {
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           const allowedStages = proposalGroup ? ["ORDER", "CONTROL", "PRINT"] : ["CONTROL", "PRINT"];
           if (!allowedStages.includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
-          if (productionLinesForOrder(state, order).some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een productieregel is nog geblokkeerd."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
+          const selectedLineIds = proposalGroup ? new Set(proposalGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id).map(({ lineId }) => lineId)) : null;
+          const selectedLines = selectedLineIds ? productionLinesForOrder(state, order).filter(({ id }) => selectedLineIds.has(id)) : productionLinesForOrder(state, order);
+          if (!selectedLines.length || selectedLineIds && selectedLines.length !== selectedLineIds.size || selectedLines.some(({ validation }) => validation.status !== "VALID")) throw Object.assign(new Error("Een geselecteerde productieregel is nog geblokkeerd of niet meer exact aanwezig."), { statusCode: 409, code: "PRODUCTION_LINE_BLOCKED" });
           return order;
         });
         if (!proposalGroup) {
@@ -8176,6 +8209,23 @@ export function validateFinalProductionTruth(state, order, lines = productionLin
   return { ...validationBody, status: normalized.length ? "BLOCKED" : "VALID", validationHash: sha256(JSON.stringify(validationBody)) };
 }
 
+function productionEligibilityForOrder(state, order) {
+  const productionLines = productionLinesForOrder(state, order);
+  if (!productionLines.length) return { productionLines, eligibleLines: [], blockedLines: [], findings: [finalProductionFinding("PRODUCTION_LINES", "Er zijn geen canonieke productieregels om uit te voeren.", { code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" })] };
+  const validation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines, { allowHistoricalSourceSnapshot: Boolean(order.productionExecutionSnapshot) });
+  const globalFindings = validation.findings.filter(({ lineId }) => !lineId);
+  const blockedLineIds = new Set(validation.findings.map(({ lineId }) => lineId).filter(Boolean));
+  const eligibleLines = globalFindings.length ? [] : productionLines.filter((line) => line.validation?.status === "VALID" && !blockedLineIds.has(line.id));
+  const eligibleLineIds = new Set(eligibleLines.map(({ id }) => id));
+  return {
+    productionLines,
+    eligibleLines,
+    blockedLines: productionLines.filter(({ id }) => !eligibleLineIds.has(id)),
+    findings: validation.findings,
+    validation,
+  };
+}
+
 function productionExecutionSnapshotBody(state, order, productionLines, validation, actor, at) {
   const profileIds = [...new Set(productionLines.map(({ decorationIdentity }) => decorationIdentity?.productionProfileId).filter(Boolean))];
   return {
@@ -8196,7 +8246,7 @@ function productionExecutionSnapshotBody(state, order, productionLines, validati
   };
 }
 
-function materializeProductionExecutionSnapshot(state, order, actor, { reason = "CONSEQUENTIAL_PRODUCTION_GATE" } = {}) {
+function materializeProductionExecutionSnapshot(state, order, actor, { reason = "CONSEQUENTIAL_PRODUCTION_GATE", eligibleLineRefs = null } = {}) {
   if (order.productionExecutionSnapshot?.executionHash) {
     const integrity = verifyProductionExecutionSnapshot(order);
     if (!integrity.valid) throw Object.assign(new Error(integrity.reason), { statusCode: 409, code: "PRODUCTION_EXECUTION_SNAPSHOT_INVALID", integrity });
@@ -8204,7 +8254,13 @@ function materializeProductionExecutionSnapshot(state, order, actor, { reason = 
   }
   const productionLines = structuredClone(order.productionLines?.length ? order.productionLines : reconcileExistingOrderProductionTruth(state, order).productionLines);
   const validation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines);
-  if (validation.status !== "VALID") throw Object.assign(new Error(validation.findings[0]?.reason ?? "De finale productiewaarheid is niet valide."), { statusCode: 409, code: validation.findings[0]?.code ?? "FINAL_PRODUCTION_VALIDATION_FAILED", findings: validation.findings });
+  if (validation.status !== "VALID") {
+    const selectedIds = eligibleLineRefs ? new Set(eligibleLineRefs.filter(({ orderId }) => orderId === order.id).map(({ lineId }) => lineId)) : null;
+    const eligibility = productionEligibilityForOrder(state, { ...order, productionLines });
+    const eligibleIds = new Set(eligibility.eligibleLines.map(({ id }) => id));
+    const exactEligibleSubset = selectedIds?.size && [...selectedIds].every((id) => eligibleIds.has(id));
+    if (!exactEligibleSubset) throw Object.assign(new Error(validation.findings[0]?.reason ?? "De finale productiewaarheid is niet valide."), { statusCode: 409, code: validation.findings[0]?.code ?? "FINAL_PRODUCTION_VALIDATION_FAILED", findings: validation.findings });
+  }
   const at = iso();
   const body = { ...productionExecutionSnapshotBody(state, order, productionLines, validation, actor, at), reason };
   order.productionExecutionSnapshot = { ...body, executionHash: sha256(JSON.stringify(body)) };
@@ -8265,10 +8321,10 @@ function openProductionProposalOverlap(state, orderIds) {
 function buildProductionProposalGroups(state, orders) {
   const grouped = new Map();
   for (const order of orders) {
-    const productionLines = productionLinesForOrder(state, order);
-    const effectiveOrder = { ...order, productionLines };
-    assertOrderProductionDecorationCardinality(state, effectiveOrder);
-    if (!productionLines.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
+    const eligibility = productionEligibilityForOrder(state, order);
+    const productionLines = eligibility.eligibleLines;
+    const effectiveOrder = { ...order, productionLines: eligibility.productionLines };
+    if (!productionLines.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE", findings: eligibility.findings });
     for (const line of productionLines) {
       assertPioneersNumberSource(state, effectiveOrder, line);
       assertScBuitenboysShortSource(state, effectiveOrder, line);
@@ -8625,8 +8681,9 @@ function productionProposalBlockReason(order, state = undefined) {
     return finding ? `${finding.decoration}: ${finding.reason}` : "geen gevalideerde productieregels beschikbaar";
   }
   if (state) {
-    const finalValidation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines, { allowHistoricalSourceSnapshot: Boolean(order.productionExecutionSnapshot) });
-    if (finalValidation.status !== "VALID") return finalValidation.findings[0]?.reason ?? "finale productiewaarheid is geblokkeerd";
+    const eligibility = productionEligibilityForOrder(state, { ...order, productionLines });
+    if (eligibility.eligibleLines.length) return null;
+    if (eligibility.findings.length) return eligibility.findings[0]?.reason ?? "finale productiewaarheid is geblokkeerd";
   }
   if (state && productionLines.some((line) => !managedFoilColor(state, productionLineFoilColor(state, order, line)))) return "een actieve beheerde foliekleur ontbreekt";
   const blockedLine = productionLines.find(({ validation }) => validation.status !== "VALID");
@@ -8649,13 +8706,16 @@ function productionStatusForOrder(state, order) {
   }
   if (order.stage === "ORDER") {
     const contentBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
-    return contentBlocker
-      ? { productionStatus: "ATTENTION", productionStatusReason: contentBlocker, productionClosure: productionClosureForOrder(state, order) }
-      : { productionStatus: "READY", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
+    if (contentBlocker) return { productionStatus: "ATTENTION", productionStatusReason: contentBlocker, productionClosure: productionClosureForOrder(state, order), productionReadyLineIds: [], productionBlockedLineIds: productionLinesForOrder(state, order).map(({ id }) => id) };
+    const eligibility = productionEligibilityForOrder(state, { ...order, stage: "CONTROL" });
+    const partial = eligibility.blockedLines.length > 0;
+    return { productionStatus: "READY", productionStatusReason: partial ? eligibility.findings[0]?.reason ?? "Een afzonderlijke bedrukking vraagt nog productiecontrole." : null, productionClosure: productionClosureForOrder(state, order), productionReadyLineIds: eligibility.eligibleLines.map(({ id }) => id), productionBlockedLineIds: eligibility.blockedLines.map(({ id }) => id) };
   }
   const blocker = productionProposalBlockReason(order, state);
-  if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker, productionClosure: productionClosureForOrder(state, order) };
-  return { productionStatus: "READY", productionStatusReason: null, productionClosure: productionClosureForOrder(state, order) };
+  if (blocker) return { productionStatus: "ATTENTION", productionStatusReason: blocker, productionClosure: productionClosureForOrder(state, order), productionReadyLineIds: [], productionBlockedLineIds: productionLinesForOrder(state, order).map(({ id }) => id) };
+  const eligibility = productionEligibilityForOrder(state, order);
+  const partial = eligibility.blockedLines.length > 0;
+  return { productionStatus: "READY", productionStatusReason: partial ? eligibility.findings[0]?.reason ?? "Een afzonderlijke bedrukking vraagt nog productiecontrole." : null, productionClosure: productionClosureForOrder(state, order), productionReadyLineIds: eligibility.eligibleLines.map(({ id }) => id), productionBlockedLineIds: eligibility.blockedLines.map(({ id }) => id) };
 }
 
 function applyProductionReadiness(items, productionLines) {
