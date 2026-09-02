@@ -19,6 +19,9 @@ const defaultMigrationFile = path.resolve(
 );
 const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
 const REQUIRED_MIGRATION_VERSION = 1;
+const DIRECT_STATE_WRITE_MAX_BYTES = 8 * 1024 * 1024;
+const STATE_WRITE_CHUNK_CODE_UNITS = 512 * 1024;
+const LARGE_STATE_SESSION_VARIABLE = "@wbd_sportpaleis_runtime_state_json";
 
 export class SportpaleisMariaDbStoreError extends Error {
   constructor(message, code = "MARIADB_STORE_ERROR", cause) {
@@ -93,6 +96,41 @@ function immutableSnapshot(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const nested of Object.values(value)) immutableSnapshot(nested);
   return Object.freeze(value);
+}
+
+function safeStringChunks(value, maximumCodeUnits = STATE_WRITE_CHUNK_CODE_UNITS) {
+  const chunks = [];
+  for (let start = 0; start < value.length;) {
+    let end = Math.min(value.length, start + maximumCodeUnits);
+    if (end < value.length && value.charCodeAt(end - 1) >= 0xD800 && value.charCodeAt(end - 1) <= 0xDBFF
+      && value.charCodeAt(end) >= 0xDC00 && value.charCodeAt(end) <= 0xDFFF) end -= 1;
+    chunks.push(value.slice(start, end));
+    start = end;
+  }
+  return chunks;
+}
+
+export async function updateSportpaleisRuntimeState(connection, state, previousRevision) {
+  const serialized = JSON.stringify(state);
+  if (Buffer.byteLength(serialized, "utf8") <= DIRECT_STATE_WRITE_MAX_BYTES) {
+    return connection.query(
+      "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
+      [state.schemaVersion, state.revision, serialized, state.organizationId, previousRevision],
+    );
+  }
+
+  await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = ?`, [""]);
+  try {
+    for (const chunk of safeStringChunks(serialized)) {
+      await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = CONCAT(${LARGE_STATE_SESSION_VARIABLE}, ?)`, [chunk]);
+    }
+    return await connection.query(
+      `UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ${LARGE_STATE_SESSION_VARIABLE}, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?`,
+      [state.schemaVersion, state.revision, state.organizationId, previousRevision],
+    );
+  } finally {
+    await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = NULL`).catch(() => undefined);
+  }
 }
 
 function databaseOptions(config) {
@@ -183,10 +221,7 @@ export class SportpaleisMariaDbStore {
         if (addedImmutableEvidence.length > 0) {
           const previousRevision = state.revision;
           state.revision = previousRevision + 1;
-          const update = await connection.query(
-            "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
-            [state.schemaVersion, state.revision, JSON.stringify(state), state.organizationId, previousRevision],
-          );
+          const update = await updateSportpaleisRuntimeState(connection, state, previousRevision);
           if (Number(update.affectedRows) !== 1) {
             throw new SportpaleisMariaDbStoreError(
               "Immutable productie-evidence kon niet duurzaam worden geregistreerd.",
@@ -259,10 +294,7 @@ export class SportpaleisMariaDbStore {
       const next = validateSportpaleisPilotState(result.state);
       next.revision = current.revision + 1;
       phase = "write";
-      const update = await connection.query(
-        "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
-        [next.schemaVersion, next.revision, JSON.stringify(next), next.organizationId, current.revision],
-      );
+      const update = await updateSportpaleisRuntimeState(connection, next, current.revision);
       if (Number(update.affectedRows) !== 1) {
         throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
       }
