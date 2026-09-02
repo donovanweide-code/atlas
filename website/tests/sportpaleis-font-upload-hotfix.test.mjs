@@ -30,7 +30,7 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
     fontUploadsEnabled: true,
   });
   await service.initialize();
-  await store.mutate((state) => ({ state: { ...state, productionFonts: [] }, value: null }));
+  const initialFontCount = (await store.read()).productionFonts.length;
 
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const operator = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
@@ -40,53 +40,45 @@ test("fontupload is afzonderlijk ingeschakeld, admin-only en technisch fail-clos
   assert.equal(adminBootstrap.capabilities.fontUploadsEnabled, true);
   assert.equal(operatorBootstrap.capabilities.fontUploadsEnabled, false);
 
-  const sourceBytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/LiberationSans-Regular.ttf", import.meta.url));
+  const sourceBytes = await readFile(new URL("../public/assets/organizations/sportpaleis/fonts/Schluber.otf", import.meta.url));
   const bytes = Buffer.concat([sourceBytes, Buffer.from([0])]);
-  const seeded = await store.read();
-  const dcg = seeded.associations.find(({ name }) => name === "DCG");
   const payload = {
     name: "Schluber",
-    filename: "LiberationSans-Regular.ttf",
+    filename: "Schluber.otf",
     dataBase64: bytes.toString("base64"),
     provenance: "Repository testasset met vastgelegde open-bronprovenance",
-    allowedInStore: false,
+    allowedInStore: true,
     humanAcceptance: true,
-    productionProfileId: "profile-source-dcg-initials",
-    applicationField: "initials",
-    associationId: dcg.id,
   };
   await assert.rejects(service.addProductionFont(operator.token, operator.csrfToken, payload), (error) => error.code === "FORBIDDEN");
-  await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, filename: "font.otf" }), (error) => error.code === "FONT_SIGNATURE_INVALID");
+  await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, filename: "font.ttf" }), (error) => error.code === "FONT_SIGNATURE_INVALID");
   await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, humanAcceptance: false }), (error) => error.code === "PRODUCTION_FONT_HUMAN_CONFIRMATION_REQUIRED");
   const fontCountBeforeInspection = (await store.read()).productionFonts.length;
   const inspection = await service.inspectProductionFont(admin.token, admin.csrfToken, payload);
   assert.equal(inspection.authoritative, false);
-  assert.equal(inspection.metadata.familyName, "Liberation Sans");
+  assert.equal(inspection.metadata.familyName, "Schluber");
   assert.equal((await store.read()).productionFonts.length, fontCountBeforeInspection, "inspectie maakt een upload nog niet authoritative of persistent");
   await assert.rejects(service.addProductionFont(admin.token, admin.csrfToken, { ...payload, inspectionSha256: "A".repeat(64) }), (error) => error.code === "PRODUCTION_FONT_INSPECTION_MISMATCH");
-
-  const beforeFont = (await service.createOrder(admin.token, admin.csrfToken, {
-    orderKind: "INDIVIDUAL",
-    customer: "Regressie Bedrukken met nieuwe fontbron",
-    customerEmail: "",
-    customerPhone: "0612345678",
-    standardPersonalization: { initials: "SP", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
-    items: [{ articleId: "sp-live-141709", size: "M", quantity: 1, deviation: false, overrides: {} }],
-  }, "font-regression-order")).value;
-  assert.equal(beforeFont.productionLines[0].source.kind, "PROFILE");
-  assert.equal(beforeFont.productionLines[0].validation.status, "BLOCKED");
 
   const added = await service.addProductionFont(admin.token, admin.csrfToken, { ...payload, inspectionSha256: inspection.inspectionSha256 });
   assert.equal(added.sha256, createHash("sha256").update(bytes).digest("hex").toUpperCase());
   assert.equal(added.status, "TECHNICALLY_VALID");
-  assert.equal(added.allowedInStore, false);
+  assert.equal(added.allowedInStore, true);
   const state = await store.read();
-  assert.equal(state.productionFonts.length, 3);
+  assert.equal(state.productionFonts.length, initialFontCount + 1);
   const stored = state.productionFonts.find(({ id }) => id === added.id);
   assert.equal(stored.sourceDataBase64, bytes.toString("base64"));
   assert.equal(stored.uploadedBy.userId, admin.user.id);
   assert.ok(state.audit.some(({ action, subject }) => action === "Productiefont toegevoegd" && subject === added.id));
-  const order = state.orders.find(({ id }) => id === beforeFont.id);
+  const order = (await service.createOrder(admin.token, admin.csrfToken, {
+    orderKind: "CUSTOM",
+    customer: "Regressie Bedrukken met nieuwe fontbron",
+    customerEmail: "",
+    customerPhone: "",
+    standardPersonalization: { initials: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" },
+    items: [{ product: "Vrije initialen", size: "", quantity: 1, personalization: "Initialen SP", foilColor: "Wit", deviation: true, overrides: {} }],
+    productionLines: [{ id: "font-regression-line", type: "INITIALS", content: "SP", sourceId: added.id, widthMm: 55, heightMm: 30, foilColor: "Wit", quantity: 1, provenance: "Production Source Admission-regressie" }],
+  }, "font-regression-order")).value;
   assert.deepEqual(order.productionLines[0].source, { kind: "FONT", id: added.id, version: added.version, sha256: added.sha256 });
   const afterReceipt = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === order.id);
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, order.id, afterReceipt.revision, "font-regression-control")).value;

@@ -645,6 +645,18 @@ export interface SportpaleisProductionElement {
   };
   sourceSelection?: { candidateIds: string[]; selectionRef: string; geometryHash: string };
   controlledVector?: { format: "WBD_CONTOURS_V1"; geometryHash: string; contourCount: number; pointCount: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] };
+  /** Server-computed UI projection used only when heavy contour arrays are omitted from bootstrap. */
+  executability?: {
+    contract: "SERVER_PROJECTED_PRODUCTION_ASSET_EXECUTABILITY_V1";
+    allowed: boolean;
+    code: string;
+    reason: string | null;
+    assetId: string;
+    assetVersion: string;
+    sourceId: string;
+    sourceSha256: string;
+    geometrySha256: string;
+  };
   numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;
   numberComposition?: { freeContourSpacingMm: 5; measurement: "CONTOUR_TO_CONTOUR"; glyphHeightMm?: number; widthMode?: "DERIVED_FROM_GLYPH_CONTOURS" };
   sourceLayers?: {

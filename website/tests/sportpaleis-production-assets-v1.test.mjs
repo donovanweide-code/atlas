@@ -8,6 +8,7 @@ import { inspectProductionAssetSource, NUMBER_GLYPH_SPACING_MM, productionAssetP
 import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { executableProductionAssetDecision, projectProductionReadyVisualAssets } from "../src/sportpaleis/production-practice-contract.mjs";
 
 const passwords = { kevin: "Assets-Kevin-2026!", patrick: "Assets-Patrick-2026!", collega: "Assets-Store-2026!", "donovan-support": "Assets-Support-2026!" };
 
@@ -511,4 +512,101 @@ test("Human Review bewaart iedere cijferkeuze als resumable serverconcept en val
   assert.equal(next.reviewDraft.revision, 2);
   assert.equal(next.reviewDraft.selectedCandidateIds.length, 9);
   await assert.rejects(service.saveProductionAssetReviewDraft(admin.token, admin.csrfToken, source.id, { ...draft.reviewDraft, revision: 1 }), (error) => error.code === "REVISION_CONFLICT");
+});
+
+test("identieke bronbytes canonicaliseren zonder verenigingsassociaties samen te voegen", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const bytes = vectorSvg([{ x: 20, y: 30, width: 120, height: 60 }]);
+  const payload = { filename: "club-logo.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), intakeKind: "ARTWORK", conversionMethod: "HUMAN_VERIFIED_SVG" };
+  const firstSource = await service.createProductionAssetSource(operator.token, operator.csrfToken, payload);
+  const auditCount = (await store.read()).audit.length;
+  const duplicateSource = await service.createProductionAssetSource(operator.token, operator.csrfToken, { ...payload, filename: "dezelfde-bytes-andere-naam.svg" });
+  const duplicateState = await store.read();
+  assert.equal(duplicateSource.id, firstSource.id);
+  assert.equal(duplicateSource.original.sha256, firstSource.original.sha256);
+  assert.equal(duplicateState.productionAssetSources.filter(({ original }) => original.sha256 === firstSource.original.sha256).length, 1);
+  assert.equal(duplicateState.audit.length, auditCount, "een byte-identieke retry schrijft geen nieuwe bron of misleidende auditregel");
+
+  const [leftAssociation, rightAssociation] = duplicateState.associations.filter(({ active }) => active !== false).slice(0, 2);
+  const candidate = firstSource.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK") ?? firstSource.candidates[0];
+  const promote = (association) => service.promoteProductionAsset(admin.token, admin.csrfToken, firstSource.id, {
+    candidateIds: [candidate.id], name: `${association.name} logo`, ownerType: "ASSOCIATION", ownerName: association.name,
+    productionMethod: "SELF_PRODUCED", widthMm: 120, heightMm: 60,
+    contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "LOGO", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE",
+  });
+  const left = await promote(leftAssociation);
+  const right = await promote(rightAssociation);
+  assert.notEqual(left.id, right.id);
+  assert.equal(left.sourceId, right.sourceId, "één canonical bytebron mag veilig worden hergebruikt");
+  assert.deepEqual(left.contexts.map(({ id }) => id), [leftAssociation.id]);
+  assert.deepEqual(right.contexts.map(({ id }) => id), [rightAssociation.id]);
+});
+
+test("nieuwe bytes vormen een nieuwe immutable versie en archivering laat historie intact", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const association = (await store.read()).associations.find(({ active }) => active !== false);
+  const createVersion = async (bytes, widthMm, heightMm) => {
+    const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "logo-actueel.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), intakeKind: "ARTWORK", conversionMethod: "HUMAN_VERIFIED_SVG" });
+    const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK") ?? source.candidates[0];
+    const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Versieerbaar clublogo", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm, heightMm, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "LOGO", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+    return { source, asset };
+  };
+  const firstBytes = vectorSvg([{ x: 20, y: 30, width: 100, height: 50 }]);
+  const secondBytes = vectorSvg([{ x: 20, y: 30, width: 120, height: 50 }]);
+  const first = await createVersion(firstBytes, 100, 50);
+  const second = await createVersion(secondBytes, 120, 50);
+  assert.notEqual(first.source.id, second.source.id);
+  assert.notEqual(first.source.original.sha256, second.source.original.sha256);
+  assert.notEqual(first.asset.version, second.asset.version);
+
+  const order = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "TEAM", teamContext: "Historische assetreferentie", customer: "Historiecontrole", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, items: [{ product: "Teamshirt", association: association.name, size: "M", quantity: 1, personalization: "Logo", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }], productionLines: [{ id: "historical-logo", type: "LOGO", content: first.asset.name, sourceId: first.asset.id, widthMm: 100, heightMm: 50, foilColor: "Wit", quantity: 1, provenance: "Beheer/Bibliotheek assurance" }] }, "asset-history-order")).value;
+  const historicalIdentity = structuredClone(order.productionLines[0].source);
+  await store.mutate((state) => { const storedOrder = state.orders.find(({ id }) => id === order.id); storedOrder.stage = "DONE"; return { state, value: null }; });
+  const archived = await service.setProductionAssetLifecycle(admin.token, admin.csrfToken, first.asset.id, { lifecycleStatus: "ARCHIVED", expectedRevision: first.asset.revision });
+  assert.equal(archived.lifecycleStatus, "ARCHIVED");
+  const after = await store.read();
+  assert.deepEqual(after.orders.find(({ id }) => id === order.id).productionLines[0].source, historicalIdentity);
+  assert.equal(after.productionAssetSources.find(({ id }) => id === first.source.id).original.dataBase64, firstBytes.toString("base64"));
+  assert.equal(after.productionElements.find(({ id }) => id === second.asset.id).lifecycleStatus, "PRODUCTION_READY");
+});
+
+test("directe bronroutes respecteren admin-, operator- en winkelrolgrenzen", async (context) => {
+  const { service, admin, operator } = await fixture(context);
+  const storeUser = await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega });
+  const bytes = vectorSvg([{ x: 10, y: 10, width: 60, height: 30 }]);
+  const payload = { filename: "role-boundary.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), intakeKind: "ARTWORK", conversionMethod: "HUMAN_VERIFIED_SVG" };
+  await assert.rejects(service.createProductionAssetSource(storeUser.token, storeUser.csrfToken, payload), (error) => error.code === "FORBIDDEN");
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, payload);
+  assert.deepEqual((await service.bootstrap(operator.token)).productionAssetSources, []);
+  assert.deepEqual((await service.bootstrap(storeUser.token)).productionAssetSources, []);
+  await assert.rejects(service.productionAssetOriginal(storeUser.token, source.id), (error) => error.code === "FORBIDDEN");
+  await assert.rejects(service.promoteProductionAsset(operator.token, operator.csrfToken, source.id, { proofAuthority: "HUMAN_ACCEPTANCE" }), (error) => error.code === "FORBIDDEN");
+  assert.equal((await service.productionAssetOriginal(admin.token, source.id)).sha256, source.original.sha256);
+});
+
+test("gearchiveerde nummerset blijft historisch previewbaar maar niet productieselecteerbaar", async (context) => {
+  const { service, operator, store } = await fixture(context);
+  const { value: archivedId } = await store.mutate((state) => {
+    const asset = state.productionElements.find(({ applications, numberGlyphs }) => applications?.some(({ kind }) => kind === "NUMBER_SET") && Object.keys(numberGlyphs ?? {}).length === 10);
+    assert.ok(asset, "seed bevat een bewezen nummerset");
+    asset.lifecycleStatus = "ARCHIVED";
+    return { state, value: asset.id };
+  });
+  const preview = await service.productionAssetNumberPreview(operator.token, archivedId, "34");
+  assert.match(preview.bytes.toString("utf8"), /^<svg/u);
+  assert.equal((await store.read()).productionElements.find(({ id }) => id === archivedId).lifecycleStatus, "ARCHIVED");
+});
+
+test("bootstrap projecteert uitvoerbaarheid identity-gebonden zonder zware contourpayload", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const association = (await store.read()).associations.find(({ active }) => active !== false);
+  const bytes = vectorSvg([{ x: 20, y: 30, width: 100, height: 50 }]);
+  const source = await service.createProductionAssetSource(operator.token, operator.csrfToken, { filename: "selector-logo.svg", mimeType: "image/svg+xml", dataBase64: bytes.toString("base64"), intakeKind: "ARTWORK", conversionMethod: "HUMAN_VERIFIED_SVG" });
+  const candidate = source.candidates.find(({ selectionMode }) => selectionMode === "FULL_ARTWORK") ?? source.candidates[0];
+  const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Selectorlogo", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", widthMm: 100, heightMm: 50, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "LOGO", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
+  const projected = (await service.bootstrap(operator.token)).productionElements.find(({ id }) => id === asset.id);
+  assert.equal(projected.controlledVector.contours, undefined);
+  assert.equal(projected.executability.allowed, true);
+  assert.ok(projectProductionReadyVisualAssets([projected]).some(({ id }) => id === asset.id));
+  assert.equal(executableProductionAssetDecision({ ...projected, sourceId: "tampered-source" }).code, "PRODUCTION_ASSET_EXECUTABILITY_PROJECTION_MISMATCH");
 });
