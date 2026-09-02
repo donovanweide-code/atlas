@@ -95,12 +95,19 @@ test("SP-2026-0116-klasse projecteert Rug 10 en Short 10 exact één keer terwij
   assert.ok(blockedLines.every(({ placementRule, validation }) => placementRule?.compositeText === "PvV" && validation.status === "BLOCKED"));
 
   const legacyState = structuredClone(await store.read());
-  legacyState.schemaVersion = 13;
+  legacyState.schemaVersion = 14;
   const legacyOrder = legacyState.orders.find(({ id }) => id === created.id);
+  const legacyProfile = legacyState.productionProfiles.find(({ id }) => id === legacyOrder.items.find(({ articleNumber }) => articleNumber === "116597").productionProfileId);
+  legacyProfile.sizeLabel = "Junior bronwaarde 20 cm · Senior 22 cm";
+  legacyProfile.backNumberSizeClasses.SENIOR.physicalHeightMm = 220;
   const legacyBackNumber = legacyOrder.productionLines.find(({ personalizationField }) => personalizationField === "backNumber");
   legacyBackNumber.heightMm = 220;
   const migrated = migrateSportpaleisPilotState(legacyState);
   const migratedOrder = migrated.orders.find(({ id }) => id === created.id);
+  const migratedProfile = migrated.productionProfiles.find(({ id }) => id === legacyProfile.id);
+  assert.equal(migrated.schemaVersion, 15);
+  assert.equal(migratedProfile.backNumberSizeClasses.SENIOR.physicalHeightMm, 200);
+  assert.doesNotMatch(migratedProfile.sizeLabel, /22\s*cm/iu);
   assert.equal(migratedOrder.productionLines.find(({ personalizationField }) => personalizationField === "backNumber").heightMm, 200);
   assert.equal(migratedOrder.eventHistory.at(-1).type, "PRODUCTION_TRUTH_REPROJECTED");
   assert.equal(migratedOrder.revision, legacyOrder.revision + 1);

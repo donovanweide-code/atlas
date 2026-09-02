@@ -107,7 +107,7 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 14;
+const PILOT_SCHEMA_VERSION = 15;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
@@ -648,7 +648,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
@@ -1019,7 +1019,24 @@ export function migrateSportpaleisPilotState(input) {
       }
     }
   }
-  if (previousSchemaVersion < 14) {
+  if (previousSchemaVersion < 15) {
+    for (const profile of state.productionProfiles ?? []) {
+      const canonical = PRODUCTION_PROFILES.find(({ id, supports }) => id === profile.id && supports?.includes("backNumber"));
+      if (!canonical?.backNumberSizeClasses) continue;
+      const previous = { sizeLabel: profile.sizeLabel, backNumberSizeClasses: structuredClone(profile.backNumberSizeClasses ?? {}) };
+      if (JSON.stringify(previous.backNumberSizeClasses) === JSON.stringify(canonical.backNumberSizeClasses) && profile.sizeLabel === canonical.sizeLabel) continue;
+      profile.sizeLabel = canonical.sizeLabel;
+      profile.backNumberSizeClasses = structuredClone(canonical.backNumberSizeClasses);
+      profile.revision = Number(profile.revision ?? 1) + 1;
+      profile.validationHistory ??= [];
+      profile.validationHistory.push({
+        at: "2026-09-02T00:00:00.000Z",
+        userId: "system:back-number-height-v15",
+        previous,
+        next: { sizeLabel: profile.sizeLabel, backNumberSizeClasses: structuredClone(profile.backNumberSizeClasses) },
+        source: SPORTPALEIS_JUNIOR_RULE_SOURCE,
+      });
+    }
     const consequentialOrderIds = new Set([
       ...(state.productionJobs ?? []).flatMap((job) => job.snapshot?.orderIds ?? []),
       ...(state.productionProposals ?? []).flatMap((proposal) => (proposal.orders ?? []).map(({ id }) => id)),
@@ -1043,7 +1060,7 @@ export function migrateSportpaleisPilotState(input) {
       const migratedAt = "2026-09-02T00:00:00.000Z";
       order.updatedAt = migratedAt;
       order.eventHistory ??= [];
-      order.eventHistory.push({ id: `event-canonical-line-projection-v14-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v14", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
+      order.eventHistory.push({ id: `event-canonical-line-projection-v15-${order.id}`, type: "PRODUCTION_TRUTH_REPROJECTED", at: migratedAt, userId: "system:canonical-projection-v15", userName: "Workspace", source: "schema-migration", details: { previousLineHash, productionLineHash: sha256(JSON.stringify(projected)), reason: "Open, nog niet uitgevoerde productie naar actuele maat- en compositiewaarheid geprojecteerd" } });
     }
   }
   const highestTeamkitSequence = (state.orders ?? []).reduce((highest, order) => Math.max(highest, Number(String(order.id).match(/^TK-\d{4}-(\d+)$/u)?.[1] ?? 0)), 0);
