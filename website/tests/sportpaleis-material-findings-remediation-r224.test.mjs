@@ -238,7 +238,9 @@ test("Human-GO, grant en session evidence blijven na meer dan 2000 acties append
     candidateId: "r224",
     scopes: ["candidate.review.read"],
     humanGoReference: "GO-R224-AUDIT-RETENTION",
-    ttlMs: 4 * 60 * 60 * 1_000,
+    ttlMs: 2 * 60 * 60 * 1_000,
+    runId: "codex-run-r224-audit",
+    role: "operator",
   }, start);
   const activated = policy.activateGrant(state, { activationToken: issued.activationToken, tenantId: "sportpaleis", candidateId: "r224" }, new Date(start.getTime() + 1_000));
   for (let index = 0; index < 2_005; index += 1) {

@@ -29,6 +29,8 @@ function grantInput(overrides = {}) {
     scopes: ["candidate.review.read"],
     humanGoReference: "GO-R225-DENIAL-AUDIT",
     ttlMs: 5 * 60 * 1_000,
+    runId: "codex-run-r225-audit",
+    role: "operator",
     ...overrides,
   };
 }
@@ -119,6 +121,8 @@ test("service bewaart replay, expiry en cross-boundary denial evidence na restar
     scopes: ["candidate.review.read"],
     humanGoReference: "GO-R225-SERVICE-PERSISTENCE",
     ttlMs: 5 * 60 * 1_000,
+    runId: "codex-run-r225-service",
+    role: "operator",
   }, start);
   const activationUrl = new URL(issued.activationPath, "https://workspace.sportpaleis.nl");
   const params = new URLSearchParams(activationUrl.hash.slice(1));
