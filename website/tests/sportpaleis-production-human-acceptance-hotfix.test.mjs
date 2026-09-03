@@ -77,13 +77,14 @@ test("dagelijkse productie houdt proposal-only werk vindbaar en toont feedback i
   assert.match(directHandler, /performance\.now\(\)/u);
   assert.match(directHandler, /Productievoorstel maken… Workspace blijft bezig/u);
   assert.match(source, /productionSearchOrders = operationalOrders\.filter\(\(\{ stage, productionStatus \}\) => \["CONTROL", "PRINT", "DONE"\]/u);
-  assert.match(source, /productionStatus === "READY" \|\| isActiveProductionStatus\(productionStatus\)/u);
+  assert.match(source, /isReadyProductionStatus\(productionStatus\) \|\| isActiveProductionStatus\(productionStatus\)/u);
   assert.match(source, /sp-production-order-refs/u);
   assert.match(source, /data-production-action-feedback/u);
   assert.match(source, /role="status" aria-live="polite"/u);
   assert.match(source, /aria-busy="true"/u);
   assert.match(source, /productionProposalBusyKey === busyKey/u);
-  assert.match(source, /selectedBusy \? `[^`]*Productievoorstel maken…` : waiting \? `[^`]*Wacht op huidige fysieke stap`/u);
+  assert.match(source, /selectedBusy \? `[^`]*Productievoorstel maken…` : waiting \? `[^`]*verzoek wordt verwerkt`/u);
+  assert.match(source, /Wacht op huidige fysieke stap/u);
   assert.match(source, /disabled\$\{selectedBusy \? ' aria-busy="true"' : ""\}/u);
   assert.match(styles, /\.sp-button\[aria-busy="true"\]::before/u);
   assert.match(styles, /@keyframes sp-busy-spin/u);

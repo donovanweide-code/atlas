@@ -591,6 +591,16 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async retryRejectedProductionJob(productionJobId: string, reason: string): Promise<{ duplicate: boolean; value: { rejectedJob: ProductionJob; job: ProductionJob } }> {
+    const normalizedReason = reason.trim();
+    const operationKey = await deterministicIdempotencyKey(`production-rejected-retry-${productionJobId}`, { reason: normalizedReason });
+    return responseBody(await this.#mutatingFetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}/retry-after-rejection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": operationKey },
+      body: JSON.stringify({ reason: normalizedReason }),
+    }));
+  }
+
   async orderHistory(input: { query?: string; cursor?: string; limit?: number } = {}): Promise<OrderHistoryPage> {
     const parameters = new URLSearchParams();
     if (input.query) parameters.set("q", input.query);

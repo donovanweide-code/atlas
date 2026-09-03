@@ -125,7 +125,7 @@ test("de algemene 200-mm-regel en no-print eligibility verwijderen kunstmatige m
   assert.equal(matrix.some(({ association }) => association === "HBSA"), false);
 });
 
-test("alle vier actuele SVG-nummersetbronnen blijven exact software-uitvoerbaar; superseded 160 mm blijft alleen evidence", async (context) => {
+test("drie actuele SVG-glyphmasters blijven exact software-uitvoerbaar; superseded Pioneers-bronnen blijven alleen evidence", async (context) => {
   const state = createSportpaleisProductionBootstrap(new Date(now));
   const matrix = productionSourceCompatibilityMatrix(state);
   const proofs = [];
@@ -146,8 +146,9 @@ test("alle vier actuele SVG-nummersetbronnen blijven exact software-uitvoerbaar;
     const factory = () => productionAssetPiece({ asset, variant, line, order: { id: "ASSURANCE-SOURCE", association: asset.contexts.find(({ type }) => type === "ASSOCIATION")?.label ?? "Generic", items: [] }, foilColor: "Wit" });
     proofs.push({ id: asset.id, originalSha256: source.original.sha256, productionSha256: productionSource.sha256, geometrySha256: asset.controlledVector.geometryHash, output: deterministic(factory, row) });
   }
-  assert.equal(proofs.length, 4);
+  assert.equal(proofs.length, 3);
   assert.equal(state.productionElements.find(({ verifiedSourceKey }) => verifiedSourceKey === "pioneers-rug-junior-160")?.lifecycleStatus, "SUPERSEDED_BY_PRODUCT_TRUTH_200MM");
+  assert.equal(state.productionElements.find(({ verifiedSourceKey }) => verifiedSourceKey === "pioneers-short-80")?.lifecycleStatus, "ARCHIVED");
   const nonCanonical = matrix.filter(({ code }) => code === "PRODUCTION_ASSET_NOT_CANONICAL_ASSOCIATION_SOURCE");
   assert.equal(nonCanonical.length, 0);
   assert.ok(nonCanonical.every(({ readiness, softwareReadiness }) => readiness === "BLOCKED" && softwareReadiness === "EXECUTABLE"));

@@ -3909,6 +3909,79 @@ export class SportpaleisPilotService {
     };
   }
 
+  async retryRejectedProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}`, () => {
+        const rejectedJob = state.productionJobs.find(({ id }) => id === productionJobId);
+        if (!rejectedJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+        if (rejectedJob.kind !== "ORIGINAL" || rejectedJob.status !== "AWAITING_HUMAN_CHECK" || rejectedJob.humanAcceptance?.status !== "PENDING") throw Object.assign(new Error("Alleen een nog niet als Bedrukt vastgelegde oorspronkelijke job kan na menselijke afkeuring veilig opnieuw worden opgebouwd."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_ALLOWED" });
+        if (!rejectedJob.snapshotHash || sha256(JSON.stringify(rejectedJob.snapshot)) !== rejectedJob.snapshotHash) throw Object.assign(new Error("Het immutable snapshot van de afgekeurde job wijkt af; retry blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECTION_SNAPSHOT_INTEGRITY_FAILED" });
+        const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === rejectedJob.id));
+        const group = proposal?.groups?.find(({ productionJobId: id }) => id === rejectedJob.id);
+        if (!proposal || !group) throw Object.assign(new Error("De afgekeurde job mist de exacte productiegroepkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
+        const orders = group.orders.map(({ id }) => state.orders.find((order) => order.id === id));
+        if (orders.some((order) => !order)) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
+        if (orders.some((order) => (order.eventHistory ?? []).some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details?.productionJobId === rejectedJob.id))) throw Object.assign(new Error("Deze job is al als fysiek Bedrukt vastgelegd en kan niet via broncorrectie worden herschreven."), { statusCode: 409, code: "PRODUCTION_REJECTION_AFTER_PRINT_FORBIDDEN" });
+        const corrections = orders.map((order) => ({ order, ...reprojectRejectedProductionExecution(state, order, user, rejectedJob, reason) }));
+        const correctedLines = corrections.flatMap(({ productionLines }) => productionLines).filter(({ id, orderId }) => group.productionLineRefs.some((ref) => ref.orderId === orderId && ref.lineId === id));
+        if (correctedLines.length !== group.productionLineRefs.length) throw Object.assign(new Error("Niet iedere afgekeurde productieregel is exact in de gecorrigeerde uitvoering teruggevonden."), { statusCode: 409, code: "PRODUCTION_REJECTION_REPROJECTION_MISMATCH" });
+        const rejectedLinesById = new Map((rejectedJob.snapshot?.productionLines ?? []).map((line) => [`${line.orderId}:${line.id}`, line]));
+        const sourceCorrections = correctedLines.map((line) => {
+          const rejectedLine = rejectedLinesById.get(`${line.orderId}:${line.id}`);
+          return {
+            orderId: line.orderId,
+            lineId: line.id,
+            previousSource: rejectedLine?.source ?? null,
+            correctedSource: line.source ?? null,
+            changed: Boolean(rejectedLine) && sha256(JSON.stringify(rejectedLine.source ?? null)) !== sha256(JSON.stringify(line.source ?? null)),
+          };
+        });
+        if (sourceCorrections.some(({ previousSource }) => !previousSource) || !sourceCorrections.some(({ changed }) => changed)) throw Object.assign(new Error("De actuele Product Truth bewijst geen gewijzigde bronidentiteit voor de afgekeurde uitvoering; een nieuwe job wordt niet gemaakt."), { statusCode: 409, code: "PRODUCTION_REJECTION_SOURCE_UNCHANGED", sourceCorrections });
+        for (const line of correctedLines) {
+          const order = orders.find(({ id }) => id === line.orderId);
+          assertPioneersNumberSource(state, order, line);
+          assertScBuitenboysShortSource(state, order, line);
+          productionLineWriterIdentity(state, line);
+        }
+        const createdAt = iso();
+        const sequence = state.nextProductionJobSequence;
+        state.nextProductionJobSequence += 1;
+        const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
+        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label });
+        if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("De veilige retry leverde geen aantoonbaar nieuw gecorrigeerd vectorartifact op."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_CORRECTED" });
+        const retryJob = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", sourceProofStatus: rejectedJob.proofStatus, note: `Nieuwe immutable broncorrectie na menselijke afkeuring van ${rejectedJob.jobNumber}; opnieuw fysieke Human Acceptance vereist.` } });
+        const rejectedAt = createdAt;
+        rejectedJob.status = "FAILED";
+        rejectedJob.humanAcceptance = { status: "FAIL", acceptedSourceDate: rejectedAt.slice(0, 10), sourceProofStatus: rejectedJob.proofStatus, note: `${reason} Afgekeurd door ${user.name}; immutable snapshot en artifacthash blijven behouden.` };
+        state.productionJobs.unshift(retryJob);
+        group.productionJobId = retryJob.id;
+        group.status = "CONVERTED";
+        proposal.productionJobIds ??= [];
+        if (!proposal.productionJobIds.includes(retryJob.id)) proposal.productionJobIds.push(retryJob.id);
+        proposal.status = proposal.groups.every(({ status }) => status === "CONVERTED") ? "CONVERTED" : "OPEN";
+        proposal.productionJobId = proposal.status === "CONVERTED" && proposal.productionJobIds.length === 1 ? retryJob.id : null;
+        for (const { order, previousExecutionHash, executionHash } of corrections) {
+          order.stage = "PRINT";
+          order.revision += 1;
+          order.updatedAt = createdAt;
+          order.eventHistory ??= [];
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_REJECTED", at: rejectedAt, userId: user.id, userName: user.name, source: "human-acceptance", details: { productionJobId: rejectedJob.id, jobNumber: rejectedJob.jobNumber, immutableArtifactSha256: rejectedJob.snapshot.artifact.sha256, reason, previousExecutionHash } });
+          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-rejected-source-retry", details: { productionJobId: retryJob.id, jobNumber, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: group.productionLineRefs.filter(({ orderId }) => orderId === order.id), correctedExecutionHash: executionHash, rejectedProductionJobId: rejectedJob.id } });
+          syncOpenProposalOrderRevisions(state, order);
+        }
+        audit(state, user.id, "Productiejob menselijk afgekeurd", rejectedJob.jobNumber, { productionJobId: rejectedJob.id, immutableArtifactSha256: rejectedJob.snapshot.artifact.sha256, reason, replacementJobId: retryJob.id, replacementJobNumber: retryJob.jobNumber, sourceCorrections });
+        audit(state, user.id, "Gecorrigeerde immutable productiejob vastgelegd", retryJob.jobNumber, { productionJobId: retryJob.id, rejectedProductionJobId: rejectedJob.id, orderIds: orders.map(({ id }) => id), productionGroupId: group.id, foilColor: group.foilColor, snapshotHash: retryJob.snapshotHash, artifactSha256: retryJob.snapshot.artifact.sha256, sourceCorrections, hardwareSendPerformed: false });
+        return { rejectedJob: structuredClone(rejectedJob), job: structuredClone(retryJob) };
+      }, { productionJobId, reason });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
   async replotProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
@@ -6682,6 +6755,7 @@ function configuredManagedFont(state, profile) {
 
 const PIONEERS_ASSOCIATION = "Almere Pioneers";
 const PIONEERS_PROFILE_AUTHORITY_EVENT = "SPW-PIONEERS-NUMBER-AUTHORITY-20260825";
+const PIONEERS_UNIFIED_NUMBER_GLYPH_EVENT = "SPW-PIONEERS-UNIFIED-NUMBER-GLYPHS-20260903";
 const VERIFIED_NUMBER_SOURCE_EVENT = "SPW-VERIFIED-SVG-NUMBER-SOURCES-20260825";
 
 function reconcileVerifiedProductionNumberSources(state) {
@@ -6706,11 +6780,30 @@ function reconcileVerifiedProductionNumberSources(state) {
     }
   }
   const assetsByKey = new Map(state.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).map((element) => [element.verifiedSourceKey, element.id]));
+  const pioneersMasterKey = "pioneers-rug-senior-200";
+  const pioneersMaster = state.productionElements.find(({ id }) => id === assetsByKey.get(pioneersMasterKey));
+  if (pioneersMaster) {
+    pioneersMaster.applications ??= [];
+    for (const application of [
+      { kind: "NUMBER_SET", placement: "Rug Senior", targetHeightMm: 200, sourceHeightMm: 200 },
+      { kind: "NUMBER_SET", placement: "Rug Junior", targetHeightMm: 200, sourceHeightMm: 200 },
+      { kind: "NUMBER_SET", placement: "Borst", targetHeightMm: 80, sourceHeightMm: 200 },
+      { kind: "NUMBER_SET", placement: "Short", targetHeightMm: 80, sourceHeightMm: 200 },
+    ]) {
+      const existing = pioneersMaster.applications.find(({ kind, placement }) => kind === application.kind && placement === application.placement);
+      if (existing) Object.assign(existing, application);
+      else pioneersMaster.applications.push(application);
+    }
+  }
   const links = new Map([
-    ["profile-pioneers-shirt", ["pioneers-rug-senior-200"]],
-    ["profile-source-almere-pioneers-backNumber", ["pioneers-rug-senior-200"]],
-    ["profile-pioneers-shorts", ["pioneers-short-80"]],
-    ["profile-source-almere-pioneers-shortsNumber", ["pioneers-short-80"]],
+    ["profile-pioneers-shirt", [{ key: pioneersMasterKey, field: "backNumber", targetHeightMm: 200, sourceHeightMm: 200 }]],
+    ["profile-source-almere-pioneers-backNumber", [{ key: pioneersMasterKey, field: "backNumber", targetHeightMm: 200, sourceHeightMm: 200 }]],
+    ["profile-source-almerer-pioneers-backNumber", [{ key: pioneersMasterKey, field: "backNumber", targetHeightMm: 200, sourceHeightMm: 200 }]],
+    ["profile-source-almere-pioneers-chestNumber", [{ key: pioneersMasterKey, field: "chestNumber", targetHeightMm: 80, sourceHeightMm: 200 }]],
+    ["profile-source-almerer-pioneers-chestNumber", [{ key: pioneersMasterKey, field: "chestNumber", targetHeightMm: 80, sourceHeightMm: 200 }]],
+    ["profile-pioneers-shorts", [{ key: pioneersMasterKey, field: "shortsNumber", targetHeightMm: 80, sourceHeightMm: 200 }]],
+    ["profile-source-almere-pioneers-shortsNumber", [{ key: pioneersMasterKey, field: "shortsNumber", targetHeightMm: 80, sourceHeightMm: 200 }]],
+    ["profile-source-almerer-pioneers-shortsNumber", [{ key: pioneersMasterKey, field: "shortsNumber", targetHeightMm: 80, sourceHeightMm: 200 }]],
   ]);
   const hockeySourceRules = [
     { field: "backNumber", dimensionKey: "backNumberSenior", expectedCm: 20, sourceKey: "hockey-rug-200" },
@@ -6728,26 +6821,36 @@ function reconcileVerifiedProductionNumberSources(state) {
         element.contexts.push({ type: "ASSOCIATION", id: association.id, label: association.name });
       }
       for (const profile of state.productionProfiles?.filter(({ id, supports }) => supports?.includes(rule.field) && (id.startsWith(associationProfilePrefix) || association.name === "MHC Lelystad" && ["profile-mhc-shirt-home", "profile-mhc-shirt-away"].includes(id))) ?? []) {
-        links.set(profile.id, [rule.sourceKey]);
+        links.set(profile.id, [{ key: rule.sourceKey, field: rule.field, targetHeightMm: rule.expectedCm * 10, sourceHeightMm: rule.expectedCm * 10 }]);
       }
     }
   }
-  for (const [profileId, keys] of links) {
+  for (const [profileId, bindings] of links) {
     const profile = state.productionProfiles?.find(({ id }) => id === profileId);
     if (!profile) continue;
+    const keys = [...new Set(bindings.map(({ key }) => key))];
     profile.productionNumberAssetIds = keys.map((key) => assetsByKey.get(key)).filter(Boolean);
-    for (const key of keys) {
-      const asset = state.productionElements.find(({ id }) => id === assetsByKey.get(key));
-      const binding = key.includes("rug") ? { field: "backNumber", heightMm: 200 } : key.includes("short") ? { field: "shortsNumber", heightMm: key.startsWith("hockey-") ? 75 : 80 } : null;
-      if (asset && binding) assignProductionNumberAsset(profile, binding.field, binding.heightMm, asset);
+    for (const binding of bindings) {
+      const asset = state.productionElements.find(({ id }) => id === assetsByKey.get(binding.key));
+      if (asset) assignProductionNumberAsset(profile, binding.field, binding.targetHeightMm, asset, binding.sourceHeightMm);
     }
     if (keys.includes("pioneers-rug-senior-200")) {
       profile.backNumberSizeClasses ??= {};
       profile.backNumberSizeClasses.SENIOR = { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "rug nummers Pioneers senior 20cm.svg · immutable SHA-256 FD6716E5911EB5AB239D291808DC490ECF305FD3F30C49E183AB063097C67143 · normalized SHA-256 5CC303321ADCB7BF9F0722E6BDFE8CCAD6BBABA28139AF77DB08CA3C478BD709" };
       profile.backNumberSizeClasses.JUNIOR = { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE };
     }
-    if (keys.includes("pioneers-short-80")) profile.sizeLabel = "Shortnummer 8 cm · gecontroleerde SVG-contourset";
+    if (bindings.some(({ key, field }) => key === pioneersMasterKey && field === "shortsNumber")) profile.sizeLabel = "Shortnummer 8 cm · proportioneel uit dezelfde authoritative Pioneers-glyphmaster als Rug en Borst";
   }
+  const supersededShort = state.productionElements.find(({ verifiedSourceKey }) => verifiedSourceKey === "pioneers-short-80");
+  if (supersededShort?.lifecycleStatus === "PRODUCTION_READY") supersededShort.lifecycleStatus = "ARCHIVED";
+  if (pioneersMaster && !state.audit.some(({ id }) => id === `audit-${PIONEERS_UNIFIED_NUMBER_GLYPH_EVENT.toLocaleLowerCase("en-US")}`)) state.audit.unshift({
+    id: `audit-${PIONEERS_UNIFIED_NUMBER_GLYPH_EVENT.toLocaleLowerCase("en-US")}`,
+    at: "2026-09-03T00:00:00.000Z",
+    userId: "system:pioneers-source-authority",
+    action: "Pioneers nummerglyphs voor Rug, Borst en Short verenigd",
+    subject: pioneersMaster.id,
+    details: { sourceAssetId: pioneersMaster.id, sourceVersion: pioneersMaster.version, placements: ["backNumber", "chestNumber", "shortsNumber"], targetHeightsMm: { backNumber: 200, chestNumber: 80, shortsNumber: 80 }, supersededAssetId: supersededShort?.id ?? null, productTruth: "Donovan 2026-09-03: Rug, Borst en Short gebruiken dezelfde authoritative glyphs." },
+  });
 }
 
 function normalizedProductionIdentity(value) {
@@ -6911,7 +7014,7 @@ function assertPioneersNumberSource(state, order, line) {
     if (source && seniorBackNumber && source.sourceSetId === PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID) return;
   }
   if (line.source?.kind === "PRODUCTION_ELEMENT") {
-    const linked = associationNumberSet(state, PIONEERS_ASSOCIATION, { field: line.personalizationField, profileId: item.productionProfileId, requestedHeightMm: line.heightMm });
+    const linked = associationNumberSet(state, PIONEERS_ASSOCIATION, { field: line.personalizationField, profileId: line.decorationIdentity?.productionProfileId ?? item.productionProfileId, requestedHeightMm: line.heightMm });
     if (!linked.ambiguous && linked.asset?.id === line.source.id && linked.variant?.id === line.source.variantId && (linked.asset.version ?? String(linked.asset.revision)) === line.source.version) return;
   }
   if (line.source?.kind === "FONT") {
@@ -7003,7 +7106,10 @@ function associationNumberSet(state, associationName, { field = null, profileId 
     : linkedMatches.length === 1 ? linkedMatches : [];
   const asset = preferred.length === 1 ? preferred[0] : null;
   const variant = asset?.variants?.find(({ heightMm }) => Number(requestedHeightMm) > 0 && Math.abs(Number(heightMm) - Number(requestedHeightMm)) <= 0.01)
-    ?? (assignedHasExplicitTargetAuthority || !(Number(requestedHeightMm) > 0) ? asset?.variants?.find(({ widthMm, heightMm }) => Number(widthMm) > 0 && Number(heightMm) > 0) : null)
+    // A NUMBER_SET intentionally derives its width from the selected glyphs.
+    // Therefore widthMm=0 is valid source truth when one explicitly accepted
+    // glyphmaster is proportionally assigned to another physical height.
+    ?? (assignedHasExplicitTargetAuthority || !(Number(requestedHeightMm) > 0) ? asset?.variants?.find(({ heightMm }) => Number(heightMm) > 0) : null)
     ?? null;
   return { association, asset, variant, ambiguous: preferred.length > 1 || (!exactHeightMatches.length && linkedMatches.length > 1) || Boolean(asset && !variant) };
 }
@@ -8305,13 +8411,14 @@ export function productionSourceCompatibilityMatrix(state) {
           : /short|rok/iu.test(application.placement) ? "shortsNumber"
             : /borst|chest/iu.test(application.placement) ? "chestNumber"
               : "backNumber";
+        const physicalHeightMm = Number(application.targetHeightMm ?? variant?.heightMm ?? asset.sizePolicy?.defaultHeightMm) || null;
         const canonicalAssociationSource = !applicationField || applicationRows.some((row) => row.associationId === association?.id
           && row.application === applicationField
           && row.readiness === "VALID"
           && row.source?.id === asset.id
-          && Number(row.physicalHeightMm) === Number(variant?.heightMm ?? asset.sizePolicy?.defaultHeightMm));
+          && Number(row.physicalHeightMm) === physicalHeightMm);
         const associationReady = contextual.allowed && canonicalAssociationSource;
-        assetRows.push({ key, associationId: association?.id ?? context.id, association: association?.name ?? context.label, profileId: null, application: `${application.kind}:${application.placement}`, representativeValue: application.kind === "NUMBER_SET" ? "34" : asset.name, physicalHeightMm: Number(variant?.heightMm ?? asset.sizePolicy?.defaultHeightMm) || null, expectedSourceType: application.kind === "NUMBER_SET" ? "VECTOR_GLYPH_SET" : "LOGO_ARTWORK", source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision), sha256: asset.sourceLayers?.vectorSource?.sha256 ?? null, geometrySha256: asset.controlledVector?.geometryHash ?? null }, softwareReadiness: executable.allowed ? "EXECUTABLE" : "BLOCKED", readiness: associationReady ? "VALID" : "BLOCKED", code: contextual.allowed && !canonicalAssociationSource ? "PRODUCTION_ASSET_NOT_CANONICAL_ASSOCIATION_SOURCE" : contextual.code, reason: contextual.allowed && !canonicalAssociationSource ? "De bronfile is technisch uitvoerbaar, maar is niet de actuele canonieke bron en fysieke variant van dit verenigingsprofiel." : contextual.reason });
+        assetRows.push({ key, associationId: association?.id ?? context.id, association: association?.name ?? context.label, profileId: null, application: `${application.kind}:${application.placement}`, representativeValue: application.kind === "NUMBER_SET" ? "34" : asset.name, physicalHeightMm, expectedSourceType: application.kind === "NUMBER_SET" ? "VECTOR_GLYPH_SET" : "LOGO_ARTWORK", source: { kind: "PRODUCTION_ELEMENT", id: asset.id, version: asset.version ?? String(asset.revision), sha256: asset.sourceLayers?.vectorSource?.sha256 ?? null, geometrySha256: asset.controlledVector?.geometryHash ?? null }, softwareReadiness: executable.allowed ? "EXECUTABLE" : "BLOCKED", readiness: associationReady ? "VALID" : "BLOCKED", code: contextual.allowed && !canonicalAssociationSource ? "PRODUCTION_ASSET_NOT_CANONICAL_ASSOCIATION_SOURCE" : contextual.code, reason: contextual.allowed && !canonicalAssociationSource ? "De bronfile is technisch uitvoerbaar, maar is niet de actuele canonieke bron en fysieke variant van dit verenigingsprofiel." : contextual.reason });
       }
     }
   }
@@ -8672,6 +8779,50 @@ function verifyProductionExecutionSnapshot(order) {
   const currentSourceTruthHash = existingOrderHistoricalSourceHash(order);
   if (snapshot.sourceTruthHash && snapshot.sourceTruthHash !== currentSourceTruthHash) return { valid: false, reason: "De orderbron is gewijzigd nadat de productie-uitvoering werd vastgelegd.", code: "PRODUCTION_EXECUTION_SNAPSHOT_STALE", expected: snapshot.sourceTruthHash, actual: currentSourceTruthHash, executionHash };
   return { valid: true, executionHash, sourceTruthHash: snapshot.sourceTruthHash ?? null };
+}
+
+function correctionLineIdentity(line) {
+  return JSON.stringify([
+    line.itemId ?? null,
+    line.variantId ?? line.decorationIdentity?.occurrenceId ?? null,
+    line.personalizationField ?? null,
+    line.placementRole ?? null,
+    line.decorationIdentity?.placement ?? null,
+    line.content,
+    Number(line.quantity),
+    Number(line.heightMm),
+  ]);
+}
+
+function reprojectRejectedProductionExecution(state, order, actor, rejectedJob, reason) {
+  const integrity = verifyProductionExecutionSnapshot(order);
+  if (!integrity.valid) throw Object.assign(new Error(integrity.reason), { statusCode: 409, code: integrity.code ?? "PRODUCTION_EXECUTION_SNAPSHOT_INVALID", integrity });
+  const previous = structuredClone(order.productionExecutionSnapshot);
+  const priorByIdentity = new Map();
+  for (const line of previous.productionLines) {
+    const key = correctionLineIdentity(line);
+    const matches = priorByIdentity.get(key) ?? [];
+    matches.push(line);
+    priorByIdentity.set(key, matches);
+  }
+  const projected = resolveCanonicalProductionLines(state, order.id, order.items ?? []);
+  const nextLines = projected.map((line) => {
+    const key = correctionLineIdentity(line);
+    const matches = priorByIdentity.get(key) ?? [];
+    if (matches.length !== 1) throw Object.assign(new Error("De afgekeurde uitvoering kan niet één-op-één naar actuele Product Truth worden geprojecteerd."), { statusCode: 409, code: "PRODUCTION_REJECTION_REPROJECTION_MISMATCH", orderId: order.id, identity: JSON.parse(key), matchCount: matches.length });
+    priorByIdentity.delete(key);
+    return { ...line, id: matches[0].id };
+  });
+  if (priorByIdentity.size || nextLines.length !== previous.productionLines.length) throw Object.assign(new Error("De actuele Product Truth wijzigt meer dan alleen de afgekeurde productiebron."), { statusCode: 409, code: "PRODUCTION_REJECTION_REPROJECTION_SCOPE_MISMATCH", orderId: order.id });
+  const validation = validateFinalProductionTruth(state, { ...order, productionLines: nextLines }, nextLines);
+  if (validation.status !== "VALID") throw Object.assign(new Error(validation.findings[0]?.reason ?? "De gecorrigeerde productiewaarheid is niet uitvoerbaar."), { statusCode: 409, code: validation.findings[0]?.code ?? "FINAL_PRODUCTION_VALIDATION_FAILED", findings: validation.findings });
+  const at = iso();
+  order.productionExecutionHistory ??= [];
+  order.productionExecutionHistory.push({ ...previous, invalidatedAt: at, invalidatedBy: actor.id, invalidationReason: reason, rejectedProductionJobId: rejectedJob.id, rejectedProductionJobNumber: rejectedJob.jobNumber, immutableArtifactSha256: rejectedJob.snapshot.artifact.sha256 });
+  const body = { ...productionExecutionSnapshotBody(state, order, nextLines, validation, actor, at), reason: "HUMAN_REJECTED_SOURCE_CORRECTION" };
+  order.productionExecutionSnapshot = { ...body, executionHash: sha256(JSON.stringify(body)) };
+  order.productionLines = structuredClone(nextLines);
+  return { previousExecutionHash: previous.executionHash, executionHash: order.productionExecutionSnapshot.executionHash, productionLines: nextLines };
 }
 
 function invalidateOpenProductionTruth(state, order, actor, reason) {
@@ -9783,6 +9934,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const productionJobReplotMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/replot$/);
       if (productionJobReplotMatch && method === "POST") {
         json(response, 201, await service.replotProductionJob(token, csrf, decodeURIComponent(productionJobReplotMatch[1]), await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const productionJobRejectedRetryMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/retry-after-rejection$/);
+      if (productionJobRejectedRetryMatch && method === "POST") {
+        json(response, 201, await service.retryRejectedProductionJob(token, csrf, decodeURIComponent(productionJobRejectedRetryMatch[1]), await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const productionJobCompleteMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/complete$/);

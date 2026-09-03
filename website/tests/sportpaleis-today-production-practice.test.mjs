@@ -8,6 +8,7 @@ import test from "node:test";
 import { parseSportpaleisDividePdfText } from "../scripts/sportpaleis-divide-import.mjs";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
+import { productionAssetPieces } from "../src/sportpaleis/production-assets.mjs";
 
 const passwords = { kevin: "Practice-Kevin-2026!", patrick: "Practice-Patrick-2026!", collega: "Practice-Store-2026!", "donovan-support": "Practice-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -135,29 +136,35 @@ test("VVA / Spartaan voorraadlogo is uitsluitend Webshop, verlaagt 74 eenmaal en
   await assert.rejects(service.applyWebshopStockLogo(operator.token, operator.csrfToken, accepted.value.id, { expectedRevision: applied.value.revision }, "apply-stock-260000103-new"), (error) => error.code === "WEBSHOP_STOCK_LOGO_NOT_PENDING");
 });
 
-test("Pioneers 45 houdt rug, borst en short aan hun afzonderlijke authoritative bronnen", async (context) => {
+test("Pioneers 37 gebruikt voor rug, borst en short exact dezelfde authoritative glyphmaster", async (context) => {
   const { service, store, operator } = await fixture(context);
   const created = (await service.createOrder(operator.token, operator.csrfToken, {
-    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104", provenance: "Gecontroleerde webshop-PDF fixture", association: "Almere Pioneers", customer: "Pioneers 45", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    orderKind: "INDIVIDUAL", source: "WEBSHOP_XPRT", externalReference: "260000104", provenance: "Gecontroleerde webshop-PDF fixture", association: "Almere Pioneers", customer: "Pioneers 37", customerEmail: "", customerPhone: "", standardPersonalization: empty,
     items: [
-      { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "45", chestNumber: "45", backNumberSizeClass: "SENIOR" } },
-      { articleId: "sp-live-116387", size: "L", quantity: 1, deviation: true, overrides: { ...empty, shortsNumber: "45" } },
+      { articleId: "sp-live-116386", size: "L", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "37", chestNumber: "37", backNumberSizeClass: "SENIOR" } },
+      { articleId: "sp-live-116387", size: "L", quantity: 1, deviation: true, overrides: { ...empty, shortsNumber: "37" } },
     ],
   }, "pioneers-45-webshop-order")).value;
   assert.deepEqual(created.productionLines.map(({ content, heightMm, preview }) => [content, heightMm, preview.label]), [
-    ["45", 200, "Rugnummer 45"],
-    ["45", 80, "Borstnummer 45"],
-    ["45", 80, "Shortnummer 45"],
+    ["37", 200, "Rugnummer 37"],
+    ["37", 80, "Borstnummer 37"],
+    ["37", 80, "Shortnummer 37"],
   ]);
   const [back, chest, shorts] = created.productionLines;
   assert.equal(back.source.id, "production-asset-verified-pioneers-rug-senior-200");
   assert.equal(back.validation.status, "VALID");
-  assert.equal(shorts.source.id, "production-asset-verified-pioneers-short-80");
-  assert.equal(shorts.validation.status, "VALID");
-  assert.equal(chest.source.id, "font-0f330cf7aa7dd6c6");
+  assert.equal(shorts.source.id, back.source.id);
+  assert.equal(shorts.validation.status, "VALID", JSON.stringify(shorts));
+  assert.equal(chest.source.id, back.source.id);
   assert.equal(chest.validation.status, "VALID");
-  assert.notEqual(back.source.id, chest.source.id);
-  assert.notEqual(shorts.source.id, chest.source.id);
+  assert.equal(back.source.variantId, chest.source.variantId);
+  assert.equal(back.source.variantId, shorts.source.variantId);
+  const master = (await store.read()).productionElements.find(({ id }) => id === back.source.id);
+  const variant = master.variants.find(({ id }) => id === back.source.variantId);
+  const glyphHashes = [back, chest, shorts].map((line) => productionAssetPieces({ asset: master, variant, line, order: created, foilColor: "Wit" }).map(({ assetIdentity }) => assetIdentity.geometryHash));
+  assert.deepEqual(glyphHashes[1], glyphHashes[0]);
+  assert.deepEqual(glyphHashes[2], glyphHashes[0]);
+  assert.deepEqual(glyphHashes[0], [master.numberGlyphs["3"].geometryHash, master.numberGlyphs["7"].geometryHash]);
   const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, "pioneers-45-control")).value;
   const proposal = (await service.createProductionProposal(operator.token, operator.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "pioneers-45-proposal")).value;
   assert.ok(proposal.groups.length > 0);
