@@ -19,6 +19,7 @@ const releaseIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
  *   activeReviewCandidateIds: readonly string[],
  *   reviewAccessEnabled: boolean,
  *   reviewAccessIssuerPrincipalIds: readonly string[],
+ *   reviewAccessIssuerSecret: string,
  *   creativeStudioEnabled: boolean,
  *   distDir: string,
  *   logLevel: LogLevel,
@@ -65,6 +66,7 @@ export const workspaceRuntimeEnvironmentSchema = Object.freeze({
   SPORTPALEIS_REVIEW_PRINCIPAL_IDS: { phase: "Sportpaleis Review Mode V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ENABLED: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
   WBD_REVIEW_ACCESS_ISSUER_IDS: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: false },
+  WBD_REVIEW_ACCESS_ISSUER_SECRET: { phase: "WBD Review Developer Access V1", requiredInProduction: false, secret: true },
   SPORTPALEIS_CREATIVE_STUDIO_ENABLED: { phase: "Sportpaleis controlled pilot exposure", requiredInProduction: false, secret: false },
   WORKSPACE_DIST_DIR: { phase: "WS.1", requiredInProduction: false, secret: false },
   LOG_LEVEL: { phase: "WS.1", requiredInProduction: false, secret: false },
@@ -236,8 +238,12 @@ export function parseWorkspaceRuntimeConfig(env) {
   if (reviewAccessIssuerPrincipalIds.some((entry) => !/^user-[a-f0-9]{16}$/u.test(entry))) {
     throw new WorkspaceRuntimeConfigError("WBD_REVIEW_ACCESS_ISSUER_IDS bevat een ongeldige canonical principal ID.");
   }
-  if (reviewAccessEnabled && (!reviewAccessIssuerPrincipalIds.length || !activeReviewCandidateIds.length)) {
-    throw new WorkspaceRuntimeConfigError("Tijdelijke reviewtoegang vereist een Human GO-issuer en een actieve immutable candidate.");
+  const reviewAccessIssuerSecret = value(env, "WBD_REVIEW_ACCESS_ISSUER_SECRET");
+  if (reviewAccessIssuerSecret && reviewAccessIssuerSecret.length < 43) {
+    throw new WorkspaceRuntimeConfigError("WBD_REVIEW_ACCESS_ISSUER_SECRET moet minimaal 256 bits willekeurige entropie bevatten.");
+  }
+  if (reviewAccessEnabled && (!reviewAccessIssuerPrincipalIds.length || !activeReviewCandidateIds.length || !reviewAccessIssuerSecret)) {
+    throw new WorkspaceRuntimeConfigError("Tijdelijke reviewtoegang vereist een Human GO-issuer, een actieve immutable candidate en een server-side issuersecret.");
   }
   const creativeStudioEnabled = booleanValue(env, "SPORTPALEIS_CREATIVE_STUDIO_ENABLED", {
     requiredInProduction: false,
@@ -284,6 +290,7 @@ export function parseWorkspaceRuntimeConfig(env) {
     activeReviewCandidateIds,
     reviewAccessEnabled,
     reviewAccessIssuerPrincipalIds,
+    reviewAccessIssuerSecret,
     creativeStudioEnabled,
     distDir: value(env, "WORKSPACE_DIST_DIR") || "dist-workspace",
     logLevel,

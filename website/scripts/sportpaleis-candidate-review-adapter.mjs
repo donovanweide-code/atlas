@@ -35,12 +35,15 @@ export async function createSportpaleisCandidateReviewAdapter({
     mailMode: "capture",
   });
   await service.initialize();
+  const runId = `candidate-${randomBytes(8).toString("hex")}`;
   const issuer = await service.login({ email: "kevin@sportpaleis.nl", password: fixturePassword });
   const issued = await service.issueReviewDeveloperGrant(issuer.token, issuer.csrfToken, {
     candidateId,
     scopes: ["candidate.review.read", "candidate.ui.safe-interact", "candidate.debug.read", "candidate.test-state.isolated"],
     humanGoReference,
     ttlMs,
+    runId,
+    role: "operator",
   });
   const handoff = new URL(issued.activationPath, "http://review.invalid");
   const values = new URLSearchParams(handoff.hash.replace(/^#/, ""));
@@ -60,7 +63,8 @@ export async function createSportpaleisCandidateReviewAdapter({
       return {
         tenantId: "sportpaleis",
         candidateId,
-        principalId: "wbd-review-codex",
+        principalId: issued.grant.principalId,
+        runId,
         grantState: grant?.revokedAt ? "REVOKED" : grant?.completedAt ? "COMPLETED" : grant?.activatedAt ? "ACTIVE" : "AWAITING_ACTIVATION",
         scopes: [...issued.grant.scopes],
         stateBoundary: "DISPOSABLE_CANDIDATE_ONLY",
@@ -68,7 +72,7 @@ export async function createSportpaleisCandidateReviewAdapter({
         hardwareAuthority: false,
         deploymentAuthority: false,
         productionMutationAuthority: false,
-        auditCount: state.audit.filter(({ userId }) => userId === "wbd-review-codex").length,
+        auditCount: state.audit.filter(({ userId }) => userId === issued.grant.principalId).length,
       };
     },
     async close() {

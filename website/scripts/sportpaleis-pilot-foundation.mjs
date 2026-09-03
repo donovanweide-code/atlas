@@ -534,7 +534,7 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     initials: user.initials,
-    role: reviewDeveloper ? "admin" : user.role,
+    role: user.role,
     email: user.email,
     status: user.status,
     seatType: user.seatType,
@@ -543,7 +543,7 @@ function publicUser(user) {
     workContexts,
     defaultContext: workContexts.includes(user.defaultContext) ? user.defaultContext : workContexts[0],
     quickAuth: user.quickPin?.hash ? { mode: "PIN", pinEnrolled: true } : { mode: "PASSWORD", pinEnrolled: false },
-    ...(reviewDeveloper ? { principalType: user.principalType, candidateId: user.candidateId } : {}),
+    ...(reviewDeveloper ? { principalType: user.principalType, candidateId: user.candidateId, runId: user.runId, mutationDisabled: true } : {}),
   };
 }
 
@@ -2575,7 +2575,7 @@ function ingestWebshopDocumentIntoState(state, { sourceMessageId, receivedAt, in
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessIssuerSecret = "", reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -2606,6 +2606,7 @@ export class SportpaleisPilotService {
     this.reviewDeveloperAccessPolicy = reviewAccessEnabled === true
       ? new WbdReviewDeveloperAccessPolicy({ issuerPrincipalIds: reviewAccessIssuerPrincipalIds, allowedCandidateIds: activeReviewCandidateIds, tenantId: "sportpaleis" })
       : null;
+    this.reviewAccessIssuerSecretHash = reviewAccessEnabled === true && reviewAccessIssuerSecret ? sha256(reviewAccessIssuerSecret) : null;
     this.reviewAccessIsolatedState = reviewAccessIsolatedState === true;
   }
 
@@ -2639,6 +2640,8 @@ export class SportpaleisPilotService {
         scopes: payload.scopes,
         humanGoReference: payload.humanGoReference,
         ttlMs: payload.ttlMs,
+        runId: payload.runId,
+        role: payload.role,
       }, now));
     return {
       grant: issued.grant,
@@ -2869,10 +2872,10 @@ export class SportpaleisPilotService {
           const context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
           const user = {
             ...context.principal,
-            email: "codex-review@internal.invalid",
+            email: `${context.principal.id}@internal.invalid`,
             status: "Actief",
-            workContexts: ["ORGANISATION", "STORE", "WEBSHOP", "PRODUCTION", "ALL"],
-            defaultContext: "ALL",
+            workContexts: workContextsForRole(context.principal.role),
+            defaultContext: "PRODUCTION",
             featureExposure: { teamwearExperiencePilot: true },
             candidateStateIsolated: this.reviewAccessIsolatedState,
           };
@@ -2984,7 +2987,7 @@ export class SportpaleisPilotService {
     const { state, user, session } = await this.authenticate(token);
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
     const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
-    const admin = user.role === "admin" || reviewDeveloper;
+    const admin = user.role === "admin";
     const productionWorkspace = admin || user.role === "operator";
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
@@ -3908,6 +3911,44 @@ export class SportpaleisPilotService {
         productionProposals: result.state.productionProposals.filter(({ groups }) => (groups ?? []).some(({ productionJobId }) => productionJobId === completedJob.id)).map((proposal) => structuredClone(proposal)),
       },
     };
+  }
+
+  async issueAutomatedReviewGrant(payload, providedSecret, remoteAddress, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy || !this.reviewAccessIssuerSecretHash) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
+    const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]).has(String(remoteAddress ?? ""));
+    if (!loopback) throw Object.assign(new Error("Reviewbootstrap is uitsluitend lokaal op de server beschikbaar."), { statusCode: 404, code: "REVIEW_BOOTSTRAP_LOCAL_ONLY" });
+    if (!safeEqualHex(sha256(String(providedSecret ?? "")), this.reviewAccessIssuerSecretHash)) throw Object.assign(new Error("Reviewbootstrap-authorisatie geweigerd."), { statusCode: 403, code: "REVIEW_BOOTSTRAP_FORBIDDEN" });
+    const issued = await this.#mutateReviewDeveloperAccess((state) => {
+      const issuer = state.users.find(({ id, role, status }) => this.reviewDeveloperAccessPolicy.issuerPrincipalIds.has(id) && role === "admin" && status === "Actief");
+      if (!issuer) throw Object.assign(new Error("De geconfigureerde reviewissuer is niet actief."), { statusCode: 503, code: "REVIEW_BOOTSTRAP_ISSUER_UNAVAILABLE" });
+      return this.reviewDeveloperAccessPolicy.issueGrant(state, {
+        issuer,
+        tenantId: "sportpaleis",
+        candidateId: payload.candidateId,
+        scopes: payload.scopes,
+        humanGoReference: payload.humanGoReference,
+        ttlMs: payload.ttlMs,
+        runId: payload.runId,
+        role: payload.role,
+      }, now);
+    });
+    return {
+      grant: issued.grant,
+      activationPath: `/workspace/sportpaleis/review-toegang#token=${issued.activationToken}&candidate=${encodeURIComponent(issued.grant.candidateId)}`,
+      delivery: "LOCAL_ONE_TIME_BOOTSTRAP_ONLY",
+    };
+  }
+
+  async revokeAutomatedReviewGrant(payload, providedSecret, remoteAddress, now = new Date()) {
+    if (!this.reviewDeveloperAccessPolicy || !this.reviewAccessIssuerSecretHash) throw Object.assign(new Error("Tijdelijke reviewtoegang is niet geconfigureerd."), { statusCode: 404, code: "REVIEW_ACCESS_DISABLED" });
+    const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]).has(String(remoteAddress ?? ""));
+    if (!loopback) throw Object.assign(new Error("Reviewbootstrap is uitsluitend lokaal op de server beschikbaar."), { statusCode: 404, code: "REVIEW_BOOTSTRAP_LOCAL_ONLY" });
+    if (!safeEqualHex(sha256(String(providedSecret ?? "")), this.reviewAccessIssuerSecretHash)) throw Object.assign(new Error("Reviewbootstrap-authorisatie geweigerd."), { statusCode: 403, code: "REVIEW_BOOTSTRAP_FORBIDDEN" });
+    return this.#mutateReviewDeveloperAccess((state) => {
+      const issuer = state.users.find(({ id, role, status }) => this.reviewDeveloperAccessPolicy.issuerPrincipalIds.has(id) && role === "admin" && status === "Actief");
+      if (!issuer) throw Object.assign(new Error("De geconfigureerde reviewissuer is niet actief."), { statusCode: 503, code: "REVIEW_BOOTSTRAP_ISSUER_UNAVAILABLE" });
+      return this.reviewDeveloperAccessPolicy.revokeGrant(state, { issuer, grantId: payload.grantId }, now);
+    });
   }
 
   async retryRejectedProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
@@ -9577,6 +9618,22 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/auth/recovery/complete" && method === "POST") {
         json(response, 200, await service.completePasswordReset(await readJson(request)));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/internal/review-access/issue" && method === "POST") {
+        json(response, 201, await service.issueAutomatedReviewGrant(
+          await readJson(request),
+          request.headers["x-wbd-review-issuer-secret"],
+          request.socket.remoteAddress,
+        ));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/internal/review-access/revoke" && method === "POST") {
+        json(response, 200, await service.revokeAutomatedReviewGrant(
+          await readJson(request),
+          request.headers["x-wbd-review-issuer-secret"],
+          request.socket.remoteAddress,
+        ));
         return true;
       }
       if (route === "/api/sportpaleis/v1/auth/review-access/activate" && method === "POST") {

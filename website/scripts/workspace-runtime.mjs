@@ -361,6 +361,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           activeReviewCandidateIds: config.activeReviewCandidateIds,
           reviewAccessEnabled: config.reviewAccessEnabled,
           reviewAccessIssuerPrincipalIds: config.reviewAccessIssuerPrincipalIds,
+          reviewAccessIssuerSecret: config.reviewAccessIssuerSecret,
         });
         await service.initialize();
         if (!sportpaleisMailboxConnectorScheduler && mailboxConfiguration.configured) {

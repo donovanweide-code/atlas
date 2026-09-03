@@ -4,7 +4,7 @@ export const WBD_REVIEW_DEVELOPER_PRINCIPAL = Object.freeze({
   id: "wbd-review-codex",
   name: "Codex Review & Development",
   principalType: "REVIEW_DEVELOPER",
-  role: "reviewer",
+  role: "operator",
   seatType: "system",
 });
 
@@ -31,7 +31,7 @@ export const WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES = Object.freeze([
 
 const DEFAULT_TTL_MS = 60 * 60 * 1_000;
 const MIN_TTL_MS = 5 * 60 * 1_000;
-const MAX_TTL_MS = 4 * 60 * 60 * 1_000;
+const MAX_TTL_MS = 2 * 60 * 60 * 1_000;
 export const WBD_REVIEW_AUDIT_RETENTION_POLICY = Object.freeze({ version: "WBD_REVIEW_AUDIT_RETENTION_V1", mode: "APPEND_ONLY", pruningAllowed: false });
 export const WBD_REVIEW_DENIAL_AUDIT_PROVENANCE = "WBD_REVIEW_DEVELOPER_ACCESS_POLICY_V2";
 const DENIAL_AUDIT_RECORD = Symbol("wbd-review-denial-audit-record");
@@ -64,6 +64,31 @@ function normalizeScopes(values) {
   const allowed = new Set(WBD_REVIEW_DEVELOPER_SCOPES);
   if (requested.some((scope) => !allowed.has(scope))) throw error("De gevraagde reviewcapability is niet toegestaan.", "REVIEW_GRANT_SCOPE_FORBIDDEN");
   return requested.sort();
+}
+
+function normalizeRunId(value) {
+  const runId = String(value ?? "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{7,95}$/u.test(runId)) throw error("Een unieke canonical run-ID is verplicht.", "REVIEW_GRANT_RUN_ID_INVALID", 400);
+  return runId;
+}
+
+function normalizeReviewRole(value) {
+  const role = String(value ?? "").trim().toLowerCase();
+  if (role !== "operator") throw error("Tijdelijke Sportpaleis-reviewtoegang is uitsluitend beschikbaar als productiemedewerker.", "REVIEW_GRANT_ROLE_FORBIDDEN");
+  return role;
+}
+
+function principalForGrant(grant) {
+  return {
+    ...WBD_REVIEW_DEVELOPER_PRINCIPAL,
+    id: grant.principalId,
+    name: `Codex productie-review · ${grant.runId}`,
+    role: grant.role,
+    runId: grant.runId,
+    candidateId: grant.candidateId,
+    scopes: [...grant.scopes],
+    mutationDisabled: true,
+  };
 }
 
 function appendAudit(state, { id = `audit-review-access-${randomBytes(8).toString("hex")}`, actorId, action, subject, details = {}, at }) {
@@ -139,6 +164,9 @@ function publicGrant(grant) {
     principalId: grant.principalId,
     tenantId: grant.tenantId,
     candidateId: grant.candidateId,
+    runId: grant.runId,
+    role: grant.role,
+    mutationDisabled: true,
     scopes: [...grant.scopes],
     humanGoReference: grant.humanGoReference,
     authorizedBy: grant.authorizedBy,
@@ -171,13 +199,21 @@ export class WbdReviewDeveloperAccessPolicy {
       if (!this.tenantId || tenantId !== this.tenantId) throw error("Tenant komt niet overeen met de reviewtoegang.", "REVIEW_GRANT_TENANT_MISMATCH");
       if (!candidateId || !this.allowedCandidateIds.has(candidateId)) throw error("Candidate is niet actief voor gecontroleerde review.", "REVIEW_GRANT_CANDIDATE_FORBIDDEN");
       if (!/^GO-[A-Z0-9][A-Z0-9._:-]{5,159}$/u.test(humanGoReference)) throw error("Een concrete Human GO-referentie is verplicht.", "REVIEW_GRANT_HUMAN_GO_REQUIRED", 400);
+      const runId = normalizeRunId(input?.runId);
+      const role = normalizeReviewRole(input?.role);
+      if (access.grants.some((grant) => grant.runId === runId && !grant.revokedAt && !grant.completedAt && new Date(grant.expiresAt).getTime() > now.getTime())) {
+        throw error("Deze Codex-run heeft al een actieve tijdelijke reviewtoegang.", "REVIEW_GRANT_RUN_ID_ACTIVE", 409);
+      }
       const scopes = normalizeScopes(input?.scopes);
       const requestedTtlMs = Number(input?.ttlMs) || DEFAULT_TTL_MS;
       if (requestedTtlMs < MIN_TTL_MS || requestedTtlMs > this.maximumTtlMs) throw error("De tijdelijke reviewduur valt buiten de toegestane grens.", "REVIEW_GRANT_TTL_INVALID", 400);
       const rawActivationToken = randomBytes(32).toString("base64url");
+      const principalId = `wbd-review-${sha256(`${runId}:${rawActivationToken}`).slice(0, 20)}`;
       const grant = {
         id: `review-grant-${randomBytes(10).toString("hex")}`,
-        principalId: WBD_REVIEW_DEVELOPER_PRINCIPAL.id,
+        principalId,
+        runId,
+        role,
         tenantId,
         candidateId,
         scopes,
@@ -195,7 +231,7 @@ export class WbdReviewDeveloperAccessPolicy {
         sessions: [],
       };
       access.grants.push(grant);
-      appendAudit(state, { actorId: issuer.id, action: "Tijdelijke Codex-reviewtoegang geautoriseerd", subject: grant.id, at: nowIso(now), details: { principalId: grant.principalId, tenantId, candidateId, scopes, humanGoReference, expiresAt: grant.expiresAt } });
+      appendAudit(state, { actorId: issuer.id, action: "Tijdelijke Codex-reviewtoegang geautoriseerd", subject: grant.id, at: nowIso(now), details: { principalId: grant.principalId, runId, role, mutationDisabled: true, tenantId, candidateId, scopes, humanGoReference, expiresAt: grant.expiresAt } });
       return { grant: publicGrant(grant), activationToken: rawActivationToken };
     } catch (cause) {
       denyWithAudit(state, cause, denialAuditContext({ operation: "ISSUE_GRANT", input, issuer }), now);
@@ -223,7 +259,7 @@ export class WbdReviewDeveloperAccessPolicy {
         endedAt: null,
       });
       appendAudit(state, { actorId: grant.principalId, action: "Tijdelijke Codex-reviewsessie gestart", subject: grant.id, at: nowIso(now), details: { tenantId: grant.tenantId, candidateId: grant.candidateId, humanGoReference: grant.humanGoReference, expiresAt: grant.expiresAt } });
-      return { grant: publicGrant(grant), principal: { ...WBD_REVIEW_DEVELOPER_PRINCIPAL }, sessionToken, csrfToken, expiresAt: grant.expiresAt };
+      return { grant: publicGrant(grant), principal: principalForGrant(grant), sessionToken, csrfToken, expiresAt: grant.expiresAt };
     } catch (cause) {
       denyWithAudit(state, cause, denialAuditContext({ operation: "ACTIVATE_GRANT", input, grant, credentialKind: "ACTIVATION_TOKEN", credentialValue: input?.activationToken }), now);
     }
@@ -238,7 +274,7 @@ export class WbdReviewDeveloperAccessPolicy {
       this.#assertGrantActive(grant, input, now);
       const session = grant.sessions.find(({ idHash }) => safeHashEqual(idHash, sessionHash));
       if (!session || session.endedAt || new Date(session.expiresAt).getTime() <= now.getTime()) throw error("Tijdelijke reviewsessie is verlopen.", "REVIEW_SESSION_EXPIRED", 401);
-      return { grant, session, principal: { ...WBD_REVIEW_DEVELOPER_PRINCIPAL, candidateId: grant.candidateId, scopes: [...grant.scopes] } };
+      return { grant, session, principal: principalForGrant(grant) };
     } catch (cause) {
       denyWithAudit(state, cause, denialAuditContext({ operation: "AUTHENTICATE_SESSION", input, grant, credentialKind: "SESSION_TOKEN", credentialValue: input?.sessionToken }), now);
     }

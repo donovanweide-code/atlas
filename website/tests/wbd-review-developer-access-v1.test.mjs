@@ -32,6 +32,8 @@ async function fixture(context, options = {}) {
     reviewAccessEnabled: options.reviewAccessEnabled ?? true,
     reviewAccessIsolatedState: options.reviewAccessIsolatedState ?? false,
     reviewAccessIssuerPrincipalIds: options.reviewAccessIssuerPrincipalIds ?? ["kevin"],
+    reviewAccessIssuerSecret: options.reviewAccessIssuerSecret ?? "review-issuer-secret-with-at-least-256-bits-of-entropy",
+    secureCookies: options.secureCookies ?? false,
   });
   await service.initialize();
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
@@ -44,6 +46,8 @@ const grantInput = (overrides = {}) => ({
   scopes: ["candidate.review.read", "candidate.ui.safe-interact", "candidate.debug.read"],
   humanGoReference: "GO-R22-CODEX-REVIEW-20260828",
   ttlMs: 30 * 60 * 1_000,
+  runId: "codex-run-20260903-001",
+  role: "operator",
   ...overrides,
 });
 
@@ -83,23 +87,105 @@ test("only configured Donovan/Human-GO authority can issue an exact scoped, expi
     () => service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ scopes: ["release.deploy"] })),
     (error) => error?.code === "REVIEW_GRANT_SCOPE_FORBIDDEN",
   );
+  await assert.rejects(
+    () => service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ role: "admin" })),
+    (error) => error?.code === "REVIEW_GRANT_ROLE_FORBIDDEN",
+  );
+  await assert.rejects(
+    () => service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ role: undefined })),
+    (error) => error?.code === "REVIEW_GRANT_ROLE_FORBIDDEN",
+  );
+  await assert.rejects(
+    () => service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ ttlMs: 2 * 60 * 60 * 1_000 + 1 })),
+    (error) => error?.code === "REVIEW_GRANT_TTL_INVALID",
+  );
+});
+
+test("server-side issuer is loopback-only, secret-bound, revocable and never returns credentials in a URL query", async (context) => {
+  const issuerSecret = "review-issuer-secret-with-at-least-256-bits-of-entropy";
+  const { service, statePath } = await fixture(context, { reviewAccessIssuerSecret: issuerSecret });
+  await assert.rejects(
+    () => service.issueAutomatedReviewGrant(grantInput(), "incorrect-secret", "127.0.0.1"),
+    (error) => error?.code === "REVIEW_BOOTSTRAP_FORBIDDEN",
+  );
+  await assert.rejects(
+    () => service.issueAutomatedReviewGrant(grantInput(), issuerSecret, "203.0.113.9"),
+    (error) => error?.code === "REVIEW_BOOTSTRAP_LOCAL_ONLY",
+  );
+  const issued = await service.issueAutomatedReviewGrant(grantInput(), issuerSecret, "::ffff:127.0.0.1");
+  assert.equal(new URL(issued.activationPath, "https://workspace.sportpaleis.nl").search, "");
+  assert.match(issued.activationPath, /#token=/u);
+  assert.equal((await readFile(statePath, "utf8")).includes(issuerSecret), false, "issuersecret is never persisted in state or audit");
+  await assert.rejects(
+    () => service.issueAutomatedReviewGrant(grantInput(), issuerSecret, "127.0.0.1"),
+    (error) => error?.code === "REVIEW_GRANT_RUN_ID_ACTIVE",
+  );
+  const active = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
+  const revoked = await service.revokeAutomatedReviewGrant({ grantId: issued.grant.id }, issuerSecret, "127.0.0.1");
+  assert.equal(revoked.state, "REVOKED");
+  await assert.rejects(() => service.authenticate(active.sessionToken), (error) => error?.code === "REVIEW_GRANT_INACTIVE");
+});
+
+test("tampered, tenant-switched and replayed bootstrap credentials fail closed", async () => {
+  const policy = new WbdReviewDeveloperAccessPolicy({ issuerPrincipalIds: ["user-25812f676558376d"], allowedCandidateIds: [candidateId], tenantId: "sportpaleis" });
+  const state = {};
+  const issuer = { id: "user-25812f676558376d", role: "admin", status: "Actief" };
+  const issued = policy.issueGrant(state, { issuer, tenantId: "sportpaleis", ...grantInput() });
+  assert.throws(
+    () => policy.activateGrant(state, { activationToken: `${issued.activationToken}x`, tenantId: "sportpaleis", candidateId }),
+    (error) => error?.code === "REVIEW_GRANT_UNKNOWN",
+  );
+  assert.throws(
+    () => policy.activateGrant(state, { activationToken: issued.activationToken, tenantId: "andere-tenant", candidateId }),
+    (error) => error?.code === "REVIEW_GRANT_TENANT_MISMATCH",
+  );
+  policy.activateGrant(state, { activationToken: issued.activationToken, tenantId: "sportpaleis", candidateId });
+  assert.throws(
+    () => policy.activateGrant(state, { activationToken: issued.activationToken, tenantId: "sportpaleis", candidateId }),
+    (error) => error?.code === "REVIEW_GRANT_ACTIVATION_REPLAY",
+  );
+});
+
+test("concurrent Codex runs receive distinct isolated principals and sessions", async (context) => {
+  const { service, admin } = await fixture(context);
+  const first = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-20260903-alpha" }));
+  const second = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-20260903-bravo" }));
+  assert.notEqual(first.grant.principalId, second.grant.principalId);
+  const [firstActive, secondActive] = await Promise.all([
+    service.activateReviewDeveloperGrant(activationPayload(first.activationPath)),
+    service.activateReviewDeveloperGrant(activationPayload(second.activationPath)),
+  ]);
+  const [firstBootstrap, secondBootstrap] = await Promise.all([
+    service.bootstrap(firstActive.sessionToken),
+    service.bootstrap(secondActive.sessionToken),
+  ]);
+  assert.equal(firstBootstrap.currentUser.id, first.grant.principalId);
+  assert.equal(secondBootstrap.currentUser.id, second.grant.principalId);
+  assert.deepEqual(firstBootstrap.users.map(({ id }) => id), [first.grant.principalId]);
+  assert.deepEqual(secondBootstrap.users.map(({ id }) => id), [second.grant.principalId]);
+  assert.notEqual(firstActive.sessionToken, secondActive.sessionToken);
 });
 
 test("Codex logs in independently with one-time handoff and receives read-only Candidate view", async (context) => {
   const { service, admin, statePath } = await fixture(context);
   const beforeAdmin = await service.issueSessionView(admin.token);
   const issued = await service.issueReviewDeveloperGrant(admin.token, beforeAdmin.csrfToken, grantInput());
-  assert.equal(issued.grant.principalId, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
+  assert.match(issued.grant.principalId, /^wbd-review-[a-f0-9]{20}$/u);
+  assert.equal(issued.grant.runId, "codex-run-20260903-001");
+  assert.equal(issued.grant.role, "operator");
+  assert.equal(issued.grant.mutationDisabled, true);
   assert.equal(issued.grant.state, "AWAITING_ACTIVATION");
   assert.match(issued.activationPath, /^\/workspace\/sportpaleis\/review-toegang#token=/u);
 
   const payload = activationPayload(issued.activationPath);
   assert.equal(payload.candidateId, candidateId);
   const activated = await service.activateReviewDeveloperGrant(payload);
-  assert.equal(activated.principal.id, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
+  assert.equal(activated.principal.id, issued.grant.principalId);
   const bootstrap = await service.bootstrap(activated.sessionToken);
-  assert.equal(bootstrap.currentUser.id, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
-  assert.deepEqual(bootstrap.users.map(({ id }) => id), [WBD_REVIEW_DEVELOPER_PRINCIPAL.id], "ephemeral principal exists only in its own bootstrap projection");
+  assert.equal(bootstrap.currentUser.id, issued.grant.principalId);
+  assert.equal(bootstrap.currentUser.role, "operator");
+  assert.equal(bootstrap.currentUser.mutationDisabled, true);
+  assert.deepEqual(bootstrap.users.map(({ id }) => id), [issued.grant.principalId], "ephemeral principal exists only in its own bootstrap projection");
   assert.deepEqual(bootstrap.switchableUsers, [], "review principal cannot see or switch to customer identities");
   assert.equal(bootstrap.currentUser.principalType, "REVIEW_DEVELOPER");
   assert.equal(bootstrap.capabilities.reviewDeveloper, true);
@@ -132,10 +218,12 @@ test("central request guard fails closed outside exact read-only scope and audit
 
   const allowed = await service.assertTemporaryReviewRequest(activated.sessionToken, { method: "GET", route: "/api/sportpaleis/v1/bootstrap" });
   assert.equal(allowed.capability, "candidate.review.read");
-  await assert.rejects(
-    () => service.assertTemporaryReviewRequest(activated.sessionToken, { method: "POST", route: "/api/sportpaleis/v1/orders" }),
-    (error) => error?.code === "REVIEW_SIDE_EFFECT_FORBIDDEN",
-  );
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    await assert.rejects(
+      () => service.assertTemporaryReviewRequest(activated.sessionToken, { method, route: "/api/sportpaleis/v1/orders/SP-TEST" }),
+      (error) => error?.code === "REVIEW_SIDE_EFFECT_FORBIDDEN",
+    );
+  }
   await assert.rejects(
     () => service.issueReviewDeveloperGrant(activated.sessionToken, activated.csrfToken, grantInput()),
     (error) => error?.code === "REVIEW_GRANT_CHAIN_FORBIDDEN",
@@ -146,7 +234,7 @@ test("central request guard fails closed outside exact read-only scope and audit
   );
 
   const state = await store.read();
-  assert.ok(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === WBD_REVIEW_DEVELOPER_PRINCIPAL.id));
+  assert.ok(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === issued.grant.principalId));
   assert.ok(state.audit.some(({ action }) => action === "Tijdelijke Codex-reviewsessie gestart"));
   assert.deepEqual(WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES.includes("release.deploy"), true);
 });
@@ -189,13 +277,13 @@ test("TTL, explicit revocation and logout invalidate all temporary access", asyn
     (error) => error?.code === "REVIEW_GRANT_EXPIRED",
   );
 
-  const second = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput(), new Date(start.getTime() + 10_000));
+  const second = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-20260903-002" }), new Date(start.getTime() + 10_000));
   const secondActive = await service.activateReviewDeveloperGrant(activationPayload(second.activationPath), new Date(start.getTime() + 11_000));
   const revoked = await service.revokeReviewDeveloperGrant(admin.token, admin.csrfToken, second.grant.id, new Date(start.getTime() + 12_000));
   assert.equal(revoked.state, "REVOKED");
   await assert.rejects(() => service.authenticate(secondActive.sessionToken, new Date(start.getTime() + 13_000)), (error) => error?.code === "REVIEW_GRANT_INACTIVE");
 
-  const third = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput(), new Date(start.getTime() + 20_000));
+  const third = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-20260903-003" }), new Date(start.getTime() + 20_000));
   const thirdActive = await service.activateReviewDeveloperGrant(activationPayload(third.activationPath), new Date(start.getTime() + 21_000));
   await service.logout(thirdActive.sessionToken, thirdActive.principal, thirdActive.csrfToken, new Date(start.getTime() + 22_000));
   await assert.rejects(() => service.authenticate(thirdActive.sessionToken, new Date(start.getTime() + 23_000)), (error) => error?.code === "REVIEW_GRANT_INACTIVE");
@@ -213,6 +301,7 @@ test("runtime contract is explicit, canonical and fail-closed", () => {
     WBD_REVIEW_ACCESS_ENABLED: "true",
     WBD_REVIEW_ACCESS_ISSUER_IDS: "user-25812f676558376d",
     SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS: candidateId,
+    WBD_REVIEW_ACCESS_ISSUER_SECRET: "review-issuer-secret-with-at-least-256-bits-of-entropy",
   });
   assert.equal(configured.reviewAccessEnabled, true);
   assert.deepEqual(configured.reviewAccessIssuerPrincipalIds, ["user-25812f676558376d"]);
@@ -235,8 +324,8 @@ test("browser handoff is fragment-only and server routes preserve the single rea
   assert.match(server, /typeof service\.assertTemporaryReviewRequest === "function"\) await service\.assertTemporaryReviewRequest\(token, \{ method, route \}\)/u);
 });
 
-test("real HTTP activation creates an independent cookie session and rejects a write before routing", async (context) => {
-  const { service, admin } = await fixture(context);
+test("real HTTP activation creates an independent secure cookie session and rejects a write before routing", async (context) => {
+  const { service, admin } = await fixture(context, { secureCookies: true });
   const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput());
   const payload = activationPayload(issued.activationPath);
   const server = createServer(createSportpaleisPilotRequestHandler(service));
@@ -255,8 +344,12 @@ test("real HTTP activation creates an independent cookie session and rejects a w
   });
   assert.equal(activationResponse.status, 200);
   const activated = await activationResponse.json();
-  const cookie = activationResponse.headers.get("set-cookie").split(";", 1)[0];
-  assert.equal(activated.user.id, WBD_REVIEW_DEVELOPER_PRINCIPAL.id);
+  const setCookie = activationResponse.headers.get("set-cookie");
+  assert.match(setCookie, /HttpOnly/u);
+  assert.match(setCookie, /Secure/u);
+  assert.match(setCookie, /SameSite=Strict/u);
+  const cookie = setCookie.split(";", 1)[0];
+  assert.equal(activated.user.id, issued.grant.principalId);
 
   const bootstrapResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/bootstrap`, { headers: { cookie } });
   assert.equal(bootstrapResponse.status, 200);
@@ -269,6 +362,13 @@ test("real HTTP activation creates an independent cookie session and rejects a w
   });
   assert.equal(forbiddenResponse.status, 403);
   assert.equal((await forbiddenResponse.json()).error, "REVIEW_SIDE_EFFECT_FORBIDDEN");
+
+  const csrfResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/auth/logout`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", origin: baseUrl },
+    body: "{}",
+  });
+  assert.equal(csrfResponse.status, 403);
 });
 
 test("real HTTP safe-interact mutates only disposable Candidate state and preserves the ephemeral principal boundary", async (context) => {
@@ -327,7 +427,7 @@ test("real HTTP safe-interact mutates only disposable Candidate state and preser
 
   const state = await store.read();
   assert.equal(state.orders.find(({ id }) => id === order.id).customer, customer);
-  assert.equal(state.users.some(({ id }) => id === WBD_REVIEW_DEVELOPER_PRINCIPAL.id), false, "temporary principal is never persisted as a customer user");
-  assert.ok(state.audit.some(({ action, userId }) => action === "Order gewijzigd" && userId === WBD_REVIEW_DEVELOPER_PRINCIPAL.id));
+  assert.equal(state.users.some(({ id }) => id === issued.grant.principalId), false, "temporary principal is never persisted as a customer user");
+  assert.ok(state.audit.some(({ action, userId }) => action === "Order gewijzigd" && userId === issued.grant.principalId));
   assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie geweigerd" && details.route.endsWith("/mail/capture")));
 });
