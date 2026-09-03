@@ -648,7 +648,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;

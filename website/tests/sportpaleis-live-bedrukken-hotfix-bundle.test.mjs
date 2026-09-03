@@ -132,3 +132,15 @@ test("SP-2026-0116-klasse projecteert Rug 10 en Short 10 exact één keer terwij
   assert.deepEqual(first.value.snapshot.productionLines.map(({ personalizationField, content }) => [personalizationField, content]).sort(), [["backNumber", "10"], ["shortsNumber", "10"]]);
   assert.equal(first.value.snapshot.artifact.format, "SVG");
 });
+
+test("actuele LIVE-state migreert expliciet van schema 16 naar 17", async (context) => {
+  const { store } = await fixture(context);
+  const liveState = structuredClone(await store.read());
+  liveState.schemaVersion = 16;
+  for (const user of liveState.users.filter(({ role }) => ["operator", "store"].includes(role))) {
+    user.workContexts = user.workContexts.filter((workContext) => workContext !== "WEBSHOP");
+  }
+  const migrated = migrateSportpaleisPilotState(liveState);
+  assert.equal(migrated.schemaVersion, 17);
+  assert.ok(migrated.users.filter(({ role }) => ["operator", "store"].includes(role)).every(({ workContexts }) => workContexts.includes("WEBSHOP")));
+});
