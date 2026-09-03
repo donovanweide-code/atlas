@@ -358,6 +358,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/mail-document`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-source-${input.sourceMessageId}`) }, body: JSON.stringify(input) }));
   }
 
+  async manuallyClassifyMailboxMessage(messageId: string, input: { route: "WEBSHOP_ORDER_PDF" | "CUSTOMER_REPLY" | "UNKNOWN"; reason: string; orderId?: string }): Promise<{ duplicate: boolean; value: unknown }> {
+    return responseBody(await this.#mutatingFetch(`${API}/mailbox/messages/${encodeURIComponent(messageId)}/classify`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`mailbox-classification-${messageId}-${input.route}`) }, body: JSON.stringify(input) }));
+  }
+
   async acceptWebshopMatch(matchId: string, input: { explicitAgreement: true; customer: string; customerEmail?: string; customerPhone?: string; association: string; backNumberSizeClass: "JUNIOR" | "SENIOR" }): Promise<{ duplicate: boolean; value: WorkspaceOrder }> {
     return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/matches/${encodeURIComponent(matchId)}/accept`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-match-${matchId}`) }, body: JSON.stringify(input) }));
   }

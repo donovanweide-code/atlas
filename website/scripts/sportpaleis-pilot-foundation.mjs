@@ -66,6 +66,13 @@ import {
   reconcileSportpaleisDivideRevision,
 } from "./sportpaleis-divide-import.mjs";
 import {
+  SPORTPALEIS_MAILBOX_ID,
+  classifySportpaleisMailboxMessage,
+  createSportpaleisMailboxRoutingState,
+  prepareSportpaleisMailboxMessage,
+  publicSportpaleisMailboxRouting,
+} from "./sportpaleis-mailbox-routing.mjs";
+import {
   createQuickProductionIntakeRecord,
   inspectQuickProductionSource,
   publicQuickProductionIntake,
@@ -107,7 +114,7 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const ROLE = new Set(["admin", "operator", "store", "support"]);
 const STAGE_ORDER = ["ORDER", "CONTROL", "PRINT", "DONE"];
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
-const PILOT_SCHEMA_VERSION = 17;
+const PILOT_SCHEMA_VERSION = 18;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
@@ -623,6 +630,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
     mailbatches: [],
     websiteSync: createSportpaleisWebsiteSyncState(),
     webshopIntake: createSportpaleisWebshopIntakeState(),
+    mailboxRouting: createSportpaleisMailboxRoutingState(),
     productionElements: [],
     productionFonts: CANONICAL_PRODUCTION_FONTS.map((font) => structuredClone(font)),
     productionElementRequirements: [],
@@ -648,7 +656,7 @@ export function createSportpaleisProductionBootstrap(now = new Date()) {
 
 export function migrateSportpaleisPilotState(input) {
   const state = structuredClone(input);
-  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
+  if (!state || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, PILOT_SCHEMA_VERSION].includes(state.schemaVersion) || state.organizationId !== "sport-2000-sportpaleis-bv") return state;
   const previousSchemaVersion = state.schemaVersion;
   const previousConfigurationVersion = state.configurationVersion;
   const previousFontConfirmationVersion = state.fontConfirmationVersion;
@@ -872,6 +880,12 @@ export function migrateSportpaleisPilotState(input) {
   state.webshopIntake.matches ??= [];
   state.webshopIntake.printEvents ??= [];
   state.webshopIntake.stockLogo ??= { association: "VVA / Spartaan", currentStock: 74, unconfirmedValue20: 20, mutations: [] };
+  const mailboxRouting = createSportpaleisMailboxRoutingState();
+  state.mailboxRouting = { ...mailboxRouting, ...(state.mailboxRouting ?? {}) };
+  state.mailboxRouting.mailbox = { ...mailboxRouting.mailbox, ...(state.mailboxRouting?.mailbox ?? {}) };
+  state.mailboxRouting.messages ??= [];
+  state.mailboxRouting.attentions ??= [];
+  state.mailboxRouting.classificationHistory ??= [];
   state.productionElements ??= [];
   for (const element of state.productionElements) {
     element.ownerName = canonicalAssociationName(element.ownerName);
@@ -1187,6 +1201,14 @@ export function validateSportpaleisPilotState(input) {
   if (state.websiteSync.mode !== "STAGE_ONLY") throw new Error("Website-sync mag alleen bronwijzigingen klaarzetten.");
   if (state.webshopIntake.enabled !== true || state.webshopIntake.retrievalMode !== "CONTROLLED_MAIL_DOCUMENT_ADAPTER") throw new Error("Webshop document-intake moet uitsluitend via de gecontroleerde Mail/Document-adapter lopen.");
   for (const source of state.webshopIntake.sources ?? []) if (!source.immutable || source.mimeType !== "application/pdf" || sha256(Buffer.from(source.dataBase64, "base64")) !== String(source.sha256).toLowerCase()) throw new Error("Immutable webshop-PDF ontbreekt of is gewijzigd.");
+  if (state.mailboxRouting?.mailbox?.id !== SPORTPALEIS_MAILBOX_ID || state.mailboxRouting.mailbox.organizationId !== state.organizationId || state.mailboxRouting.mailbox.destructiveMailboxActions !== false) throw new Error("Ongeldige of te ruime Sportpaleis-mailboxboundary.");
+  if (new Set(state.mailboxRouting.messages.map(({ id }) => id)).size !== state.mailboxRouting.messages.length) throw new Error("Dubbele mailboxberichtidentiteit.");
+  for (const message of state.mailboxRouting.messages) {
+    if (message.organizationId !== state.organizationId || !["WEBSHOP_ORDER_PDF", "CUSTOMER_REPLY", "UNKNOWN"].includes(message.classification?.route)) throw new Error("Ongeldige mailboxrouting.");
+    if (!message.rawEvidence?.immutable || !/^[a-f0-9]{64}$/u.test(String(message.rawEvidence.sha256)) || !message.rawEvidence.storageReference) throw new Error("Immutable mail-evidence ontbreekt.");
+    if (message.rawDataBase64 || message.attachments.some(({ dataBase64 }) => Boolean(dataBase64))) throw new Error("Mailboxbytes mogen niet in de centrale state worden gedupliceerd.");
+    if (message.classification.route === "CUSTOMER_REPLY" && message.classification.productionImpact?.detected && !message.attentionId) throw new Error("Productie-impact uit klantmail moet fail-closed Attention zijn.");
+  }
   if (new Set(state.orders.map(({ id }) => id)).size !== state.orders.length) throw new Error("Dubbel ordernummer.");
   if (new Set(state.productionFonts.map(({ id }) => id)).size !== state.productionFonts.length || new Set(state.productionFonts.map(({ sha256: hash }) => hash)).size !== state.productionFonts.length) throw new Error("Dubbele productiefontbron.");
   for (const font of state.productionFonts.filter(({ status, authority }) => status === "TECHNICALLY_VALID" && authority === "ADMIN_VERIFIED_UPLOAD")) {
@@ -2432,8 +2454,118 @@ function assessWebshopProductionArticle(state, association, sourceArticle) {
   return { article, resolutions, issues };
 }
 
+function mailboxEvidencePath(runtimeArtifactRoot, kind, hash, extension) {
+  const root = path.resolve(runtimeArtifactRoot);
+  const relative = path.join("sportpaleis-mailbox-evidence", kind, `${hash}.${extension}`);
+  const absolute = path.resolve(root, relative);
+  if (path.relative(root, absolute).startsWith("..") || path.isAbsolute(path.relative(root, absolute))) throw Object.assign(new Error("Mailbox-evidencepad valt buiten de runtimeboundary."), { code: "SPORTPALEIS_MAIL_EVIDENCE_PATH_INVALID" });
+  return { absolute, relative: relative.replaceAll(path.sep, "/") };
+}
+
+async function persistImmutableMailboxBytes(runtimeArtifactRoot, kind, bytes, extension) {
+  const hash = sha256(bytes);
+  const target = mailboxEvidencePath(runtimeArtifactRoot, kind, hash, extension);
+  await mkdir(path.dirname(target.absolute), { recursive: true, mode: 0o700 });
+  let handle;
+  try {
+    handle = await open(target.absolute, "wx", 0o600);
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } catch (cause) {
+    if (cause?.code !== "EEXIST") throw cause;
+    const existing = await readFile(target.absolute);
+    if (sha256(existing) !== hash) throw Object.assign(new Error("Bestaande mailbox-evidence wijkt af van de content hash."), { code: "SPORTPALEIS_MAIL_EVIDENCE_COLLISION" });
+  } finally {
+    await handle?.close();
+  }
+  return { sha256: hash, sizeBytes: bytes.length, storageReference: target.relative, immutable: true };
+}
+
+async function persistMailboxMessageEvidence(runtimeArtifactRoot, message) {
+  if (!message.rawDataBase64) throw Object.assign(new Error("De immutable ruwe mailbron ontbreekt."), { code: "SPORTPALEIS_RAW_MAIL_REQUIRED" });
+  const rawBytes = Buffer.from(message.rawDataBase64, "base64");
+  const rawEvidence = await persistImmutableMailboxBytes(runtimeArtifactRoot, "raw", rawBytes, "eml");
+  if (message.rawEvidence.sha256 && message.rawEvidence.sha256 !== rawEvidence.sha256) throw Object.assign(new Error("De ruwe mailbron wijkt af van de connectorhash."), { code: "SPORTPALEIS_MAIL_HASH_MISMATCH" });
+  const attachments = [];
+  for (const attachment of message.attachments) {
+    if (!attachment.dataBase64) { attachments.push(attachment); continue; }
+    const bytes = Buffer.from(attachment.dataBase64, "base64");
+    const evidence = await persistImmutableMailboxBytes(runtimeArtifactRoot, "attachments", bytes, "bin");
+    if (attachment.contentHash && attachment.contentHash !== evidence.sha256) throw Object.assign(new Error("Attachmentbytes wijken af van de connectorhash."), { code: "SPORTPALEIS_ATTACHMENT_HASH_MISMATCH" });
+    attachments.push({ ...attachment, contentHash: evidence.sha256, size: evidence.sizeBytes, storageReference: evidence.storageReference, immutable: true });
+  }
+  const { rawDataBase64: _rawDataBase64, ...metadata } = message;
+  return { ...metadata, rawEvidence, attachments: attachments.map(({ dataBase64: _dataBase64, ...attachment }) => attachment) };
+}
+
+async function readMailboxAttachment(runtimeArtifactRoot, attachment) {
+  if (!attachment?.storageReference || !attachment?.contentHash) throw Object.assign(new Error("Immutable attachment-evidence ontbreekt."), { code: "SPORTPALEIS_ATTACHMENT_EVIDENCE_MISSING" });
+  const root = path.resolve(runtimeArtifactRoot);
+  const absolute = path.resolve(root, ...String(attachment.storageReference).split("/"));
+  const relative = path.relative(root, absolute);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw Object.assign(new Error("Attachment-evidence valt buiten de runtimeboundary."), { code: "SPORTPALEIS_ATTACHMENT_EVIDENCE_PATH_INVALID" });
+  const bytes = await readFile(absolute);
+  if (sha256(bytes) !== attachment.contentHash) throw Object.assign(new Error("Immutable attachment-evidence is gewijzigd."), { code: "SPORTPALEIS_ATTACHMENT_EVIDENCE_CHANGED" });
+  return bytes;
+}
+
+async function assessMailboxPdfAttachments(message, attachmentBytes = new Map()) {
+  const assessments = [];
+  for (const attachment of message.attachments.filter(({ contentType, filename }) => contentType === "application/pdf" || /\.pdf$/iu.test(filename))) {
+    try {
+      const bytes = attachment.dataBase64 ? Buffer.from(attachment.dataBase64, "base64") : attachmentBytes.get(attachment.id);
+      if (!bytes) throw Object.assign(new Error("PDF-bytes ontbreken."), { code: "SPORTPALEIS_MAIL_PDF_BYTES_MISSING" });
+      const inspected = await inspectQuickProductionSource({ filename: attachment.filename, mimeType: "application/pdf", dataBase64: bytes.toString("base64") });
+      const parsed = parseSportpaleisDividePdfText({ pages: inspected.extraction.textPages?.length ? inspected.extraction.textPages : [inspected.extraction.extractedText], layoutPages: inspected.extraction.layoutPages, sourceDocumentId: inspected.source.sha256, sourceHash: inspected.source.sha256, detectedAt: message.receivedAt });
+      assessments.push({ attachmentId: attachment.id, valid: parsed.orders.length > 0, productionOrderCount: parsed.orders.filter(({ productionLines }) => productionLines.length > 0).length, inspected, parsed });
+    } catch (cause) {
+      assessments.push({ attachmentId: attachment.id, valid: false, productionOrderCount: 0, failureCode: String(cause?.code ?? "SPORTPALEIS_MAIL_PDF_UNRECOGNIZED") });
+    }
+  }
+  return assessments;
+}
+
+function ingestWebshopDocumentIntoState(state, { sourceMessageId, receivedAt, inspected, parsed, actorId }) {
+  const sameMessage = state.webshopIntake.sources.find((source) => source.sourceMessageId === sourceMessageId);
+  if (sameMessage && sameMessage.sha256 !== inspected.source.sha256) throw Object.assign(new Error("Dit mailbericht-ID is al met een andere immutable PDF vastgelegd."), { statusCode: 409, code: "WEBSHOP_SOURCE_ID_CONFLICT" });
+  if (sameMessage) return { source: sameMessage, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === sameMessage.id) };
+  const duplicateHash = state.webshopIntake.sources.find(({ sha256: hash }) => hash === inspected.source.sha256);
+  if (duplicateHash) return { source: duplicateHash, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === duplicateHash.id) };
+  const importedAt = iso();
+  const source = { id: `webshop-source-${randomBytes(8).toString("hex")}`, sourceMessageId, receivedAt, filename: inspected.source.filename, mimeType: "application/pdf", sizeBytes: inspected.source.sizeBytes, sha256: inspected.source.sha256, dataBase64: inspected.source.dataBase64, immutable: true, importedAt, importedBy: actorId };
+  state.webshopIntake.sources.unshift(source);
+  const productionOrders = parsed.orders.filter(({ productionLines }) => productionLines.length > 0);
+  const matches = productionOrders.map((parsedOrder) => {
+    const catalogAssociationSets = parsedOrder.articles
+      .map(({ articleNumber }) => new Set(state.articles.filter(({ active, articleNumber: candidate }) => active !== false && String(candidate) === String(articleNumber)).map(({ association }) => association)))
+      .filter((candidates) => candidates.size > 0);
+    const inferredAssociations = catalogAssociationSets.length ? [...catalogAssociationSets[0]].filter((association) => catalogAssociationSets.every((candidates) => candidates.has(association))) : [];
+    const association = parsedOrder.association || (inferredAssociations.length === 1 ? inferredAssociations[0] : null);
+    const existingRevisions = state.webshopIntake.matches.filter(({ externalReference }) => externalReference === parsedOrder.externalReference).map(({ contentHash }, index) => ({ revision: index + 1, contentHash }));
+    const revision = reconcileSportpaleisDivideRevision(existingRevisions, parsedOrder);
+    if (revision.action === "NO_OP") return state.webshopIntake.matches.find(({ externalReference, contentHash }) => externalReference === parsedOrder.externalReference && contentHash === parsedOrder.contentHash);
+    const reviewReasons = [...new Set([
+      ...parsedOrder.attention.map(({ reason }) => reason),
+      ...(!parsedOrder.customer ? ["Klantnaam ontbreekt"] : []),
+      ...(!association ? ["Vereniging is niet eenduidig uit bron of catalogus af te leiden"] : []),
+      ...parsedOrder.articles.flatMap((article) => [...(!article.description ? [`${article.articleNumber}: omschrijving ontbreekt`] : []), ...(!article.size ? [`${article.articleNumber}: maat ontbreekt`] : []), ...(!article.color ? [`${article.articleNumber}: artikelkleur ontbreekt`] : [])]),
+      ...(association ? parsedOrder.articles.filter(({ personalization }) => personalization.length > 0).flatMap((article) => assessWebshopProductionArticle(state, association, article).issues.map(({ reason }) => reason)) : []),
+    ])];
+    const match = { id: `webshop-match-${randomBytes(8).toString("hex")}`, sourceId: source.id, externalReference: parsedOrder.externalReference, orderDate: parsedOrder.orderDate, customer: parsedOrder.customer, customerEmail: parsedOrder.customerEmail, customerPhone: parsedOrder.customerPhone, association, contentHash: parsedOrder.contentHash, status: "HUMAN_CHECK", orderId: null, reviewReasons, articles: parsedOrder.articles.map(({ sourceLineId, articleNumber, description, size, color, quantity, personalization, articlePersonalizationRule }) => ({ sourceLineId, articleNumber, description, size, color, quantity, personalization, ...(articlePersonalizationRule ? { articlePersonalizationRule } : {}) })), source: { pageNumbers: parsedOrder.pageNumbers, segmentHash: parsedOrder.source.segmentHash, originalEvidence: parsedOrder.source.originalEvidence }, acceptedAt: null, acceptedBy: null };
+    state.webshopIntake.matches.unshift(match);
+    state.webshopIntake.processedOrderRevisionIdentifiers.push(`${parsedOrder.externalReference}:${parsedOrder.contentHash}`);
+    return match;
+  }).filter(Boolean);
+  state.webshopIntake.processedSourceIdentifiers.push(`${sourceMessageId}:${source.sha256}`);
+  state.webshopIntake.lastSuccessfulRetrievalAt = importedAt;
+  state.webshopIntake.highWaterMark = receivedAt;
+  state.webshopIntake.status = matches.some(({ reviewReasons }) => reviewReasons.length) ? "ATTENTION" : "READY";
+  audit(state, actorId, "Webshopmail-PDF immutable ingelezen", source.id, { sourceMessageId, filename: source.filename, sha256: source.sha256, parsedOrders: parsed.orders.length, productionIntakes: matches.length, ordersWithoutDecoration: parsed.orders.length - productionOrders.length, automaticOrderCreation: false });
+  return { source, matches };
+}
+
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -2446,6 +2578,7 @@ export class SportpaleisPilotService {
     this.productionAssetUploadsEnabled = productionAssetUploadsEnabled === true;
     this.fontUploadsEnabled = fontUploadsEnabled === true;
     this.mailMode = mailMode;
+    this.mailboxConfiguration = { configured: mailboxConfiguration?.configured === true };
     this.creativeStudioEnabled = creativeStudioEnabled === true;
     this.artifactRoot = path.resolve(artifactRoot);
     this.runtimeArtifactRoot = path.resolve(runtimeArtifactRoot);
@@ -2876,6 +3009,7 @@ export class SportpaleisPilotService {
       mailbatches: structuredClone(state.mailbatches),
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
       webshopIntake: productionWorkspace ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
+      mailboxRouting: productionWorkspace && !reviewDeveloper ? publicSportpaleisMailboxRouting(state.mailboxRouting, this.mailboxConfiguration) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
       productionElements: productionWorkspace ? structuredClone(state.productionElements.map((element) => {
         const decision = executableProductionAssetDecision(element);
@@ -3942,6 +4076,141 @@ export class SportpaleisPilotService {
     return { mimeType: "image/svg+xml", bytes: Buffer.from(draft.derivative.svg), filename: `${path.parse(draft.source.filename).name}-voorstel.svg`, sha256: draft.derivative.sha256, cacheControl: "private, no-store", allowSameOriginFrame: true };
   }
 
+  async mailboxRoutingConnectorView() {
+    const state = await this.store.read();
+    return { mailboxes: [{ ...state.mailboxRouting.mailbox, checkpoint: state.mailboxRouting.mailbox.checkpoint ? structuredClone(state.mailboxRouting.mailbox.checkpoint) : null }] };
+  }
+
+  async ingestSportpaleisMailboxSnapshot(snapshot) {
+    const attemptedAt = iso();
+    if (snapshot.mailboxId !== SPORTPALEIS_MAILBOX_ID) throw Object.assign(new Error("Mailboxsnapshot valt buiten de Sportpaleis-boundary."), { code: "SPORTPALEIS_MAILBOX_BOUNDARY" });
+    if (snapshot.status === "FAILED") return this.store.mutate(async (state) => {
+      const mailbox = state.mailboxRouting.mailbox;
+      mailbox.lastAttemptAt = attemptedAt;
+      mailbox.connectionState = mailbox.credentialStatus === "PROVISIONED" ? "UNAVAILABLE" : "NOT_CONNECTED";
+      mailbox.inboundStatus = "ATTENTION";
+      mailbox.lastFailureCode = String(snapshot.failureCode ?? "IMAP_FETCH_FAILED");
+      audit(state, "system:sportpaleis-mailbox", "Sportpaleis mailbox ophalen mislukt", mailbox.id, { failureCode: mailbox.lastFailureCode });
+      return { state, value: { mailbox: structuredClone(mailbox), ingested: 0, duplicates: 0, malformed: 0, routes: [] } };
+    }).then(({ value }) => value);
+
+    const current = await this.store.read();
+    const workingMessages = [...current.mailboxRouting.messages];
+    const prepared = [];
+    let malformed = 0;
+    for (const source of snapshot.messages ?? []) {
+      try {
+        const messageWithBytes = prepareSportpaleisMailboxMessage({ ...source, mailboxId: snapshot.mailboxId }, { existingMessages: workingMessages, orders: current.orders, fetchedAt: new Date() });
+        const assessments = await assessMailboxPdfAttachments(messageWithBytes);
+        const classification = classifySportpaleisMailboxMessage(messageWithBytes, { existingMessages: workingMessages, pdfAssessments: assessments.map(({ inspected: _inspected, parsed: _parsed, ...assessment }) => assessment) });
+        const persisted = await persistMailboxMessageEvidence(this.runtimeArtifactRoot, messageWithBytes);
+        const message = { ...persisted, classification, status: classification.route === "UNKNOWN" ? "ATTENTION" : "ROUTED", attentionId: null, routeResult: null, storedAt: iso() };
+        prepared.push({ message, assessments });
+        workingMessages.push(message);
+      } catch {
+        malformed += 1;
+      }
+    }
+
+    const result = await this.store.mutate(async (state) => {
+      const mailbox = state.mailboxRouting.mailbox;
+      mailbox.lastAttemptAt = attemptedAt;
+      let ingested = 0;
+      let duplicates = 0;
+      const routes = [];
+      for (const record of prepared) {
+        const message = record.message;
+        const duplicate = state.mailboxRouting.messages.find((candidate) => candidate.sourceKey === message.sourceKey || candidate.id === message.id || (message.messageId && candidate.messageId && String(candidate.messageId).toLocaleLowerCase("en-US") === String(message.messageId).toLocaleLowerCase("en-US")));
+        if (duplicate) {
+          if (duplicate.rawEvidence.sha256 !== message.rawEvidence.sha256 || duplicate.contentHash !== message.contentHash) throw Object.assign(new Error("Mailboxberichtidentiteit verwijst naar afwijkende immutable bytes."), { code: "SPORTPALEIS_MAIL_IDENTITY_CONFLICT" });
+          duplicates += 1; routes.push({ messageId: duplicate.id, route: duplicate.classification.route, duplicate: true }); continue;
+        }
+        if (message.classification.route === "WEBSHOP_ORDER_PDF") {
+          const assessment = record.assessments.find(({ attachmentId }) => message.classification.pdfAttachmentIds.includes(attachmentId) && record.assessments.length >= 1);
+          if (!assessment?.valid) throw Object.assign(new Error("Geclassificeerde Webshopmail mist een gevalideerde PDF."), { code: "SPORTPALEIS_MAIL_PDF_ROUTE_INVALID" });
+          const routed = ingestWebshopDocumentIntoState(state, { sourceMessageId: message.messageId ?? message.sourceKey, receivedAt: message.receivedAt, inspected: assessment.inspected, parsed: assessment.parsed, actorId: "system:sportpaleis-mailbox" });
+          message.routeResult = { sourceId: routed.source.id, matchIds: routed.matches.map(({ id }) => id), externalReferences: routed.matches.map(({ externalReference }) => externalReference), automaticOrderMutation: false, automaticProductionMutation: false, externalMailSent: false };
+        } else {
+          const attentionId = `mail-attention-${randomBytes(8).toString("hex")}`;
+          const reason = message.classification.route === "CUSTOMER_REPLY" && message.classification.productionImpact.detected
+            ? `Klantreactie kan productie beïnvloeden: ${message.classification.productionImpact.signals.join(", ")}`
+            : message.classification.route === "UNKNOWN" ? `Menselijke classificatie nodig: ${message.classification.reasons.join(", ")}` : null;
+          if (reason) {
+            message.attentionId = attentionId;
+            state.mailboxRouting.attentions.unshift({ id: attentionId, messageId: message.id, threadId: message.threadId, orderIds: message.classification.orderIds, reason, status: "OPEN", createdAt: iso(), resolvedAt: null, resolvedBy: null, automaticOrderMutation: false });
+          }
+          message.routeResult = { threadId: message.threadId, orderIds: message.classification.orderIds, automaticOrderMutation: false, automaticProductionMutation: false, externalMailSent: false };
+        }
+        state.mailboxRouting.messages.unshift(message);
+        state.mailboxRouting.classificationHistory.unshift({ id: `mail-classification-${randomBytes(8).toString("hex")}`, messageId: message.id, route: message.classification.route, confidence: message.classification.confidence, reasons: message.classification.reasons, at: iso(), byUserId: "system:sportpaleis-mailbox", source: "DETERMINISTIC" });
+        audit(state, "system:sportpaleis-mailbox", "Inbound mail geclassificeerd", message.id, { route: message.classification.route, confidence: message.classification.confidence, productionImpact: message.classification.productionImpact.detected, automaticOrderMutation: false, externalMailSent: false });
+        ingested += 1;
+        routes.push({ messageId: message.id, route: message.classification.route, duplicate: false });
+      }
+      mailbox.credentialStatus = "PROVISIONED";
+      mailbox.connectionState = "HEALTHY";
+      mailbox.inboundStatus = malformed > 0 || state.mailboxRouting.attentions.some(({ status }) => status === "OPEN") ? "ATTENTION" : "READY";
+      mailbox.lastSuccessfulSyncAt = attemptedAt;
+      mailbox.lastFailureCode = malformed > 0 ? "MALFORMED_MESSAGES_FAIL_CLOSED" : null;
+      mailbox.checkpoint = { uidValidity: requiredText(snapshot.uidValidity, "UIDVALIDITY", 64), highestUid: Math.max(Number(snapshot.highestUid ?? 0), ...prepared.map(({ message }) => message.uid), 0), syncedAt: attemptedAt };
+      audit(state, "system:sportpaleis-mailbox", "Sportpaleis mailbox veilig ververst", mailbox.id, { ingested, duplicates, malformed, checkpoint: mailbox.checkpoint, destructiveMailboxActions: false });
+      return { state, value: { mailbox: structuredClone(mailbox), ingested, duplicates, malformed, routes } };
+    });
+    return result.value;
+  }
+
+  async manuallyClassifySportpaleisMailboxMessage(token, csrfToken, messageId, payload, idempotencyKey) {
+    const { state: initialState, user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const route = requiredText(payload.route, "Route", 40);
+    if (!["WEBSHOP_ORDER_PDF", "CUSTOMER_REPLY", "UNKNOWN"].includes(route)) throw Object.assign(new Error("Ongeldige mailboxroute."), { statusCode: 400, code: "SPORTPALEIS_MAIL_ROUTE_INVALID" });
+    const initial = initialState.mailboxRouting.messages.find(({ id }) => id === messageId);
+    if (!initial) throw Object.assign(new Error("Mailboxbericht niet gevonden."), { statusCode: 404, code: "SPORTPALEIS_MAIL_MESSAGE_NOT_FOUND" });
+    let assessments = [];
+    if (route === "WEBSHOP_ORDER_PDF") {
+      const attachmentBytes = new Map();
+      for (const attachment of initial.attachments.filter(({ contentType, filename }) => contentType === "application/pdf" || /\.pdf$/iu.test(filename))) attachmentBytes.set(attachment.id, await readMailboxAttachment(this.runtimeArtifactRoot, attachment));
+      assessments = await assessMailboxPdfAttachments(initial, attachmentBytes);
+      if (assessments.filter(({ valid, productionOrderCount }) => valid && productionOrderCount > 0).length !== 1) throw Object.assign(new Error("Menselijke Webshopclassificatie vereist exact één gevalideerde order-PDF."), { statusCode: 409, code: "SPORTPALEIS_MAIL_WEBSHOP_PDF_NOT_EXACT" });
+    }
+    const result = await this.store.mutate(async (state) => {
+      const outcome = idempotent(state, idempotencyKey, user.id, `CLASSIFY_MAILBOX_MESSAGE:${messageId}`, () => {
+        const message = state.mailboxRouting.messages.find(({ id }) => id === messageId);
+        if (!message) throw Object.assign(new Error("Mailboxbericht niet gevonden."), { statusCode: 404, code: "SPORTPALEIS_MAIL_MESSAGE_NOT_FOUND" });
+        const previousRoute = message.classification.route;
+        const selectedOrderId = String(payload.orderId ?? "").trim();
+        if (selectedOrderId && !state.orders.some(({ id }) => id === selectedOrderId)) throw Object.assign(new Error("De gekozen ordercontext bestaat niet."), { statusCode: 409, code: "SPORTPALEIS_MAIL_ORDER_CONTEXT_INVALID" });
+        if (message.attentionId) {
+          const previousAttention = state.mailboxRouting.attentions.find(({ id }) => id === message.attentionId);
+          if (previousAttention?.status === "OPEN") { previousAttention.status = "RESOLVED"; previousAttention.resolvedAt = iso(); previousAttention.resolvedBy = user.id; }
+          message.attentionId = null;
+        }
+        const productionImpact = message.classification.productionImpact;
+        message.classification = { ...message.classification, route, confidence: "HUMAN_CONFIRMED", reasons: [requiredText(payload.reason, "Reden", 500)], orderIds: selectedOrderId ? [selectedOrderId] : message.classification.orderIds };
+        message.status = route === "UNKNOWN" ? "ATTENTION" : "ROUTED";
+        if (route === "WEBSHOP_ORDER_PDF") {
+          const assessment = assessments.find(({ valid, productionOrderCount }) => valid && productionOrderCount > 0);
+          const routed = ingestWebshopDocumentIntoState(state, { sourceMessageId: message.messageId ?? message.sourceKey, receivedAt: message.receivedAt, inspected: assessment.inspected, parsed: assessment.parsed, actorId: user.id });
+          message.routeResult = { sourceId: routed.source.id, matchIds: routed.matches.map(({ id }) => id), externalReferences: routed.matches.map(({ externalReference }) => externalReference), automaticOrderMutation: false, automaticProductionMutation: false, externalMailSent: false };
+        } else {
+          message.routeResult = { threadId: message.threadId, orderIds: message.classification.orderIds, automaticOrderMutation: false, automaticProductionMutation: false, externalMailSent: false };
+          if (route === "UNKNOWN" || route === "CUSTOMER_REPLY" && productionImpact.detected) {
+            const attentionId = `mail-attention-${randomBytes(8).toString("hex")}`;
+            message.attentionId = attentionId;
+            state.mailboxRouting.attentions.unshift({ id: attentionId, messageId: message.id, threadId: message.threadId, orderIds: message.classification.orderIds, reason: route === "UNKNOWN" ? "Menselijke classificatie nodig." : `Klantreactie kan productie beïnvloeden: ${productionImpact.signals.join(", ")}`, status: "OPEN", createdAt: iso(), resolvedAt: null, resolvedBy: null, automaticOrderMutation: false });
+          }
+        }
+        state.mailboxRouting.classificationHistory.unshift({ id: `mail-classification-${randomBytes(8).toString("hex")}`, messageId: message.id, route, confidence: "HUMAN_CONFIRMED", reasons: message.classification.reasons, at: iso(), byUserId: user.id, source: "HUMAN_REVIEW", previousRoute });
+        state.mailboxRouting.mailbox.inboundStatus = state.mailboxRouting.attentions.some(({ status }) => status === "OPEN") ? "ATTENTION" : "READY";
+        audit(state, user.id, "Mailboxbericht handmatig geclassificeerd", message.id, { previousRoute, route, evidencePreserved: true, automaticOrderMutation: false, externalMailSent: false });
+        return structuredClone(message);
+      });
+      return { state, value: outcome };
+    });
+    return result.value;
+  }
+
   async ingestWebshopMailDocument(token, csrfToken, payload, idempotencyKey) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
@@ -3952,50 +4221,7 @@ export class SportpaleisPilotService {
     if (inspected.source.sourceKind !== "PDF") throw Object.assign(new Error("De gecontroleerde Webshopadapter accepteert uitsluitend de relevante PDF-bijlage uit het mailbericht."), { statusCode: 400, code: "WEBSHOP_PDF_REQUIRED" });
     const parsed = parseSportpaleisDividePdfText({ pages: inspected.extraction.textPages?.length ? inspected.extraction.textPages : [inspected.extraction.extractedText], layoutPages: inspected.extraction.layoutPages, sourceDocumentId: inspected.source.sha256, sourceHash: inspected.source.sha256, detectedAt: receivedAt });
     const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, `INGEST_WEBSHOP_MAIL_DOCUMENT:${sourceMessageId}`, () => {
-        const sameMessage = state.webshopIntake.sources.find((source) => source.sourceMessageId === sourceMessageId);
-        if (sameMessage && sameMessage.sha256 !== inspected.source.sha256) throw Object.assign(new Error("Dit mailbericht-ID is al met een andere immutable PDF vastgelegd."), { statusCode: 409, code: "WEBSHOP_SOURCE_ID_CONFLICT" });
-        if (sameMessage) return { source: sameMessage, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === sameMessage.id) };
-        const duplicateHash = state.webshopIntake.sources.find(({ sha256: hash }) => hash === inspected.source.sha256);
-        if (duplicateHash) return { source: duplicateHash, matches: state.webshopIntake.matches.filter(({ sourceId }) => sourceId === duplicateHash.id) };
-        const importedAt = iso();
-        const source = { id: `webshop-source-${randomBytes(8).toString("hex")}`, sourceMessageId, receivedAt, filename: inspected.source.filename, mimeType: "application/pdf", sizeBytes: inspected.source.sizeBytes, sha256: inspected.source.sha256, dataBase64: inspected.source.dataBase64, immutable: true, importedAt, importedBy: user.id };
-        state.webshopIntake.sources.unshift(source);
-        const productionOrders = parsed.orders.filter(({ productionLines }) => productionLines.length > 0);
-        const matches = productionOrders.map((parsedOrder) => {
-          const catalogAssociationSets = parsedOrder.articles
-            .map(({ articleNumber }) => new Set(state.articles.filter(({ active, articleNumber: candidate }) => active !== false && String(candidate) === String(articleNumber)).map(({ association }) => association)))
-            .filter((candidates) => candidates.size > 0);
-          const inferredAssociations = catalogAssociationSets.length
-            ? [...catalogAssociationSets[0]].filter((association) => catalogAssociationSets.every((candidates) => candidates.has(association)))
-            : [];
-          const association = parsedOrder.association || (inferredAssociations.length === 1 ? inferredAssociations[0] : null);
-          const existingRevisions = state.webshopIntake.matches.filter(({ externalReference }) => externalReference === parsedOrder.externalReference).map(({ contentHash }, index) => ({ revision: index + 1, contentHash }));
-          const revision = reconcileSportpaleisDivideRevision(existingRevisions, parsedOrder);
-          if (revision.action === "NO_OP") return state.webshopIntake.matches.find(({ externalReference, contentHash }) => externalReference === parsedOrder.externalReference && contentHash === parsedOrder.contentHash);
-          const reviewReasons = [...new Set([
-            ...parsedOrder.attention.map(({ reason }) => reason),
-            ...(!parsedOrder.customer ? ["Klantnaam ontbreekt"] : []),
-            ...(!association ? ["Vereniging is niet eenduidig uit bron of catalogus af te leiden"] : []),
-            ...parsedOrder.articles.flatMap((article) => [
-              ...(!article.description ? [`${article.articleNumber}: omschrijving ontbreekt`] : []),
-              ...(!article.size ? [`${article.articleNumber}: maat ontbreekt`] : []),
-              ...(!article.color ? [`${article.articleNumber}: artikelkleur ontbreekt`] : []),
-            ]),
-            ...(association ? parsedOrder.articles.filter(({ personalization }) => personalization.length > 0).flatMap((article) => assessWebshopProductionArticle(state, association, article).issues.map(({ reason }) => reason)) : []),
-          ])];
-          const match = { id: `webshop-match-${randomBytes(8).toString("hex")}`, sourceId: source.id, externalReference: parsedOrder.externalReference, orderDate: parsedOrder.orderDate, customer: parsedOrder.customer, customerEmail: parsedOrder.customerEmail, customerPhone: parsedOrder.customerPhone, association, contentHash: parsedOrder.contentHash, status: "HUMAN_CHECK", orderId: null, reviewReasons, articles: parsedOrder.articles.map(({ sourceLineId, articleNumber, description, size, color, quantity, personalization, articlePersonalizationRule }) => ({ sourceLineId, articleNumber, description, size, color, quantity, personalization, ...(articlePersonalizationRule ? { articlePersonalizationRule } : {}) })), source: { pageNumbers: parsedOrder.pageNumbers, segmentHash: parsedOrder.source.segmentHash, originalEvidence: parsedOrder.source.originalEvidence }, acceptedAt: null, acceptedBy: null };
-          state.webshopIntake.matches.unshift(match);
-          state.webshopIntake.processedOrderRevisionIdentifiers.push(`${parsedOrder.externalReference}:${parsedOrder.contentHash}`);
-          return match;
-        }).filter(Boolean);
-        state.webshopIntake.processedSourceIdentifiers.push(`${sourceMessageId}:${source.sha256}`);
-        state.webshopIntake.lastSuccessfulRetrievalAt = importedAt;
-        state.webshopIntake.highWaterMark = receivedAt;
-        state.webshopIntake.status = matches.some(({ reviewReasons }) => reviewReasons.length) ? "ATTENTION" : "READY";
-        audit(state, user.id, "Webshopmail-PDF immutable ingelezen", source.id, { sourceMessageId, filename: source.filename, sha256: source.sha256, parsedOrders: parsed.orders.length, productionIntakes: matches.length, ordersWithoutDecoration: parsed.orders.length - productionOrders.length, automaticOrderCreation: false });
-        return { source, matches };
-      });
+      const outcome = idempotent(state, idempotencyKey, user.id, `INGEST_WEBSHOP_MAIL_DOCUMENT:${sourceMessageId}`, () => ingestWebshopDocumentIntoState(state, { sourceMessageId, receivedAt, inspected, parsed, actorId: user.id }));
       return { state, value: outcome };
     });
     const value = result.value.value;
@@ -9272,6 +9498,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       }
       if (route === "/api/sportpaleis/v1/webshop-intakes/mail-document" && method === "POST") {
         json(response, 201, await service.ingestWebshopMailDocument(token, csrf, await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const mailboxClassificationMatch = route.match(/^\/api\/sportpaleis\/v1\/mailbox\/messages\/([^/]+)\/classify$/);
+      if (mailboxClassificationMatch && method === "POST") {
+        json(response, 200, await service.manuallyClassifySportpaleisMailboxMessage(token, csrf, decodeURIComponent(mailboxClassificationMatch[1]), await readJson(request), request.headers["idempotency-key"]));
         return true;
       }
       const webshopSourceMatch = route.match(/^\/api\/sportpaleis\/v1\/webshop-intakes\/sources\/([^/]+)$/);

@@ -183,6 +183,36 @@ export interface SportpaleisWebshopIntakeState {
   stockLogo: { association: "VVA / Spartaan"; currentStock: number; unconfirmedValue20: number; mutations: { id: string; orderId: string; quantity: number; previousStock: number; nextStock: number; at: string; byUserId: string; idempotencyKey: string }[] };
 }
 
+export interface SportpaleisMailboxRoutingState {
+  schemaVersion: 1;
+  mailbox: {
+    id: "sportpaleis-bedrukking";
+    organizationId: string;
+    address: "bedrukking@sportpaleis.nl";
+    provider: "IMAP_TLS";
+    credentialStatus: "NOT_PROVISIONED" | "PROVISIONED";
+    connectionState: "NOT_CONNECTED" | "HEALTHY" | "UNAVAILABLE";
+    inboundStatus: "CREDENTIALS_REQUIRED" | "READY" | "ATTENTION" | "ERROR";
+    leastPrivilege: "READ_CAPTURE_NO_DELETE";
+    destructiveMailboxActions: false;
+    checkpoint: { uidValidity: string; highestUid: number; syncedAt: string } | null;
+    lastAttemptAt: string | null;
+    lastSuccessfulSyncAt: string | null;
+    lastFailureCode: string | null;
+  };
+  messages: {
+    id: string; messageId: string | null; sourceKey: string; threadId: string; subject: string; snippet: string;
+    from: { name: string | null; address: string }; to: { name: string | null; address: string }[]; cc: { name: string | null; address: string }[];
+    receivedAt: string; fetchedAt: string; orderIds: string[];
+    attachments: { id: string; filename: string; contentType: string; size: number; contentHash: string | null; disposition: "ATTACHMENT" | "INLINE"; storageReference: string | null }[];
+    rawEvidence: { sha256: string; sizeBytes: number; storageReference: string; immutable: true };
+    classification: { route: "WEBSHOP_ORDER_PDF" | "CUSTOMER_REPLY" | "UNKNOWN"; confidence: "HIGH" | "MEDIUM" | "LOW" | "HUMAN_CONFIRMED"; reasons: string[]; productionImpact: { detected: boolean; signals: string[] }; orderIds: string[]; pdfAttachmentIds: string[] };
+    attentionId: string | null; webshopMatchIds: string[];
+  }[];
+  attentions: { id: string; messageId: string; threadId: string; orderIds: string[]; reason: string; status: "OPEN" | "RESOLVED"; createdAt: string; resolvedAt: string | null; resolvedBy: string | null; automaticOrderMutation: false }[];
+  classificationHistory: { id: string; messageId: string; route: "WEBSHOP_ORDER_PDF" | "CUSTOMER_REPLY" | "UNKNOWN"; confidence: string; reasons: string[]; at: string; byUserId: string; source: "DETERMINISTIC" | "HUMAN_REVIEW"; previousRoute?: string }[];
+}
+
 export interface OrderAcceptedBy {
   userId: string;
   name: string;
@@ -1398,7 +1428,7 @@ export interface WorkspaceAuditEntry {
 }
 
 export interface SportpaleisWorkspaceState {
-  schemaVersion: 13;
+  schemaVersion: number;
   configurationVersion?: string;
   revision: number;
   currentUserId: string;
@@ -1432,6 +1462,7 @@ export interface SportpaleisWorkspaceState {
   mailbatches: SportpaleisMailbatch[];
   websiteSync?: SportpaleisWebsiteSyncState;
   webshopIntake?: SportpaleisWebshopIntakeState;
+  mailboxRouting?: SportpaleisMailboxRoutingState;
   productionElements: SportpaleisProductionElement[];
   productionAssetSources?: SportpaleisProductionAssetSource[];
   quickProductionIntakes?: SportpaleisQuickProductionIntake[];

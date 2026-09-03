@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 
@@ -49,11 +50,14 @@ export function parseWbdImapConfiguration(environment = process.env) {
 }
 
 export class WbdImapMailboxConnector {
-  constructor({ mailbox, clientFactory = (options) => new ImapFlow(options), parser = simpleParser, logger = false }) {
+  constructor({ mailbox, clientFactory = (options) => new ImapFlow(options), parser = simpleParser, logger = false, captureRawSource = false, captureAttachmentContents = false, maximumAttachmentBytes = 15 * 1024 * 1024 }) {
     this.mailbox = mailbox;
     this.clientFactory = clientFactory;
     this.parser = parser;
     this.logger = logger;
+    this.captureRawSource = captureRawSource === true;
+    this.captureAttachmentContents = captureAttachmentContents === true;
+    this.maximumAttachmentBytes = Math.max(1, Number(maximumAttachmentBytes) || 15 * 1024 * 1024);
   }
 
   publicSummary() {
@@ -94,6 +98,7 @@ export class WbdImapMailboxConnector {
           for await (const item of client.fetch(uids, { uid: true, source: { maxLength: MAX_SOURCE_BYTES }, flags: true, internalDate: true, size: true }, { uid: true })) {
             if (!item.source) continue;
             const parsed = await this.parser(item.source, { skipHtmlToText: true, skipTextToHtml: true, maxHtmlLengthToParse: 4_000_000 });
+            const rawSha256 = createHash("sha256").update(item.source).digest("hex");
             messages.push({
               folder, uidValidity, uid: Number(item.uid), messageId: parsed.messageId ?? null,
               inReplyTo: parsed.inReplyTo ?? null, references: references(parsed.references), from: addressList(parsed.from)[0] ?? null,
@@ -101,8 +106,14 @@ export class WbdImapMailboxConnector {
               subject: parsed.subject ?? "(geen onderwerp)", sentAt: parsed.date ?? item.internalDate,
               receivedAt: item.internalDate ?? parsed.date ?? new Date(), text: parsed.text ?? "", html: typeof parsed.html === "string" ? parsed.html : "",
               headers: headerRecord(parsed.headers), flags: [...(item.flags ?? [])].map(String), size: Number(item.size ?? item.source.length),
-              attachments: (parsed.attachments ?? []).map((attachment, index) => ({ id: `${this.mailbox.id}-${uidValidity}-${item.uid}-${index}`, filename: attachment.filename ?? `bijlage-${index + 1}`, contentType: attachment.contentType, size: attachment.size, contentHash: attachment.checksum ?? null, disposition: attachment.contentDisposition, contentId: attachment.cid ?? null, storageReference: null })),
-              rawReference: { kind: "IMAP", mailboxId: this.mailbox.id, folder, uidValidity, uid: Number(item.uid), immutable: false },
+              attachments: (parsed.attachments ?? []).map((attachment, index) => {
+                const content = Buffer.isBuffer(attachment.content) ? attachment.content : Buffer.from(attachment.content ?? "");
+                const withinBoundary = content.length <= this.maximumAttachmentBytes;
+                return { id: `${this.mailbox.id}-${uidValidity}-${item.uid}-${index}`, filename: attachment.filename ?? `bijlage-${index + 1}`, contentType: attachment.contentType, size: attachment.size ?? content.length, contentHash: attachment.checksum ?? createHash("sha256").update(content).digest("hex"), disposition: attachment.contentDisposition, contentId: attachment.cid ?? null, storageReference: null, contentCaptureStatus: !this.captureAttachmentContents ? "METADATA_ONLY" : withinBoundary ? "CAPTURED" : "SIZE_LIMIT_EXCEEDED", ...(this.captureAttachmentContents && withinBoundary ? { dataBase64: content.toString("base64") } : {}) };
+              }),
+              rawReference: { kind: "IMAP", mailboxId: this.mailbox.id, folder, uidValidity, uid: Number(item.uid), immutable: this.captureRawSource, sha256: rawSha256 },
+              rawSha256,
+              ...(this.captureRawSource ? { rawDataBase64: item.source.toString("base64") } : {}),
             });
           }
         }

@@ -30,6 +30,7 @@ import { WbdOwnerMariaDbStore } from "./wbd-owner-mariadb-store.mjs";
 import { MemoryWbdMailStore, WbdMailControlService } from "./wbd-mail-control.mjs";
 import { WbdMailMariaDbStore } from "./wbd-mail-mariadb-store.mjs";
 import { WbdImapMailboxConnector, WbdMailConnectorScheduler, parseWbdImapConfiguration } from "./wbd-imap-connector.mjs";
+import { parseSportpaleisMailboxConfiguration } from "./sportpaleis-mailbox-routing.mjs";
 import {
   WBD_HOMEPAGE_CONNECTOR_ID,
   WBD_HOMEPAGE_SOURCE_URL,
@@ -135,6 +136,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/orders`,
   `${sportpaleisBoundary}/orders/nieuw`,
   `${sportpaleisBoundary}/webshop`,
+  `${sportpaleisBoundary}/mail`,
   `${sportpaleisBoundary}/voorstellen`,
   `${sportpaleisBoundary}/voorstellen/nieuw`,
   `${sportpaleisBoundary}/studio`,
@@ -147,6 +149,7 @@ const exactWorkspaceRoutes = new Set([
   `${sportpaleisBoundary}/beheer`,
   `${sportpaleisBoundary}/beheer/rollen`,
   `${sportpaleisBoundary}/beheer/webshop`,
+  `${sportpaleisBoundary}/beheer/mailbox`,
   `${sportpaleisBoundary}/beheer/synchronisatie`,
 ]);
 
@@ -321,6 +324,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
   let activeWbdOwnerService;
   let wbdConnectorScheduler = options.wbdConnectorScheduler ?? null;
   let wbdMailConnectorScheduler = options.wbdMailConnectorScheduler ?? null;
+  let sportpaleisMailboxConnectorScheduler = options.sportpaleisMailboxConnectorScheduler ?? null;
   const sportpaleisHandler = () => {
     if (!sportpaleisHandlerPromise) {
       sportpaleisHandlerPromise = (async () => {
@@ -338,6 +342,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
             captureDirectory: SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
           })
           : options.mailFoundation;
+        const mailboxConfiguration = parseSportpaleisMailboxConfiguration(process.env);
         const service = new SportpaleisPilotService({
           store,
           mailFoundation,
@@ -349,6 +354,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           productionAssetUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.productionAssetUploadsEnabled : true,
           fontUploadsEnabled: config.nodeEnv === "production" ? config.productionPolicy.fontUploadsEnabled : true,
           mailMode: config.nodeEnv === "production" ? config.productionPolicy.mailMode : "capture",
+          mailboxConfiguration,
           creativeStudioEnabled: config.creativeStudioEnabled,
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
           reviewPrincipalIds: config.reviewPrincipalIds,
@@ -357,6 +363,18 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           reviewAccessIssuerPrincipalIds: config.reviewAccessIssuerPrincipalIds,
         });
         await service.initialize();
+        if (!sportpaleisMailboxConnectorScheduler && mailboxConfiguration.configured) {
+          sportpaleisMailboxConnectorScheduler = new WbdMailConnectorScheduler({
+            service: {
+              workspaceView: () => service.mailboxRoutingConnectorView(),
+              ingestMailboxSnapshot: (snapshot) => service.ingestSportpaleisMailboxSnapshot(snapshot),
+            },
+            connectors: [new WbdImapMailboxConnector({ mailbox: mailboxConfiguration, captureRawSource: true, captureAttachmentContents: true })],
+            intervalMs: Number(process.env.SPORTPALEIS_BEDRUKKING_IMAP_INTERVAL_MS || 2 * 60 * 1_000),
+            onResult: (result) => log(config, "info", "sportpaleis-mailbox-refreshed", { mailboxId: result.mailbox.id, ingested: result.ingested, duplicates: result.duplicates, routes: result.routes?.map(({ route }) => route) ?? [] }),
+            onError: (error) => log(config, "warn", "sportpaleis-mailbox-refresh-failed", { errorCode: String(error?.code ?? "SPORTPALEIS_MAILBOX_REFRESH_FAILED") }),
+          });
+        }
         return createSportpaleisPilotRequestHandler(service, {
           onError: (context) => log(
             config,
@@ -582,10 +600,15 @@ export async function createWorkspaceRuntimeServer(options = {}) {
       void wbdOwnerHandler().then(() => wbdMailConnectorScheduler?.start())
         .catch((error) => log(config, "error", "wbd-mail-connector-scheduler-start-failed", { errorCode: String(error?.code ?? "INTERNAL_ERROR") }));
     }
+    if (parseSportpaleisMailboxConfiguration(process.env).configured) {
+      void sportpaleisHandler().then(() => sportpaleisMailboxConnectorScheduler?.start())
+        .catch((error) => log(config, "error", "sportpaleis-mailbox-scheduler-start-failed", { errorCode: String(error?.code ?? "INTERNAL_ERROR") }));
+    }
   });
   server.on("close", () => {
     wbdConnectorScheduler?.stop?.();
     wbdMailConnectorScheduler?.stop?.();
+    sportpaleisMailboxConnectorScheduler?.stop?.();
     if (typeof activeSportpaleisStore?.close === "function") {
       void activeSportpaleisStore.close().catch(() => undefined);
     }
