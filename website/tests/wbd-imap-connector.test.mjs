@@ -85,6 +85,7 @@ test("inline attachment uses canonical SHA-256 and arbitrary mail remains fail-c
     clientFactory: () => new Client(),
     captureRawSource: true,
     captureAttachmentContents: true,
+    canonicalAttachmentSha256: true,
     parser: async () => ({
       messageId: "<arbitrary@example.com>",
       from: { value: [{ address: "customer@example.com" }] },

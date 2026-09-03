@@ -369,7 +369,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
               workspaceView: () => service.mailboxRoutingConnectorView(),
               ingestMailboxSnapshot: (snapshot) => service.ingestSportpaleisMailboxSnapshot(snapshot),
             },
-            connectors: [new WbdImapMailboxConnector({ mailbox: mailboxConfiguration, captureRawSource: true, captureAttachmentContents: true })],
+            connectors: [new WbdImapMailboxConnector({ mailbox: mailboxConfiguration, captureRawSource: true, captureAttachmentContents: true, canonicalAttachmentSha256: true })],
             intervalMs: Number(process.env.SPORTPALEIS_BEDRUKKING_IMAP_INTERVAL_MS || 2 * 60 * 1_000),
             onResult: (result) => log(config, "info", "sportpaleis-mailbox-refreshed", { mailboxId: result.mailbox.id, ingested: result.ingested, duplicates: result.duplicates, routes: result.routes?.map(({ route }) => route) ?? [] }),
             onError: (error) => log(config, "warn", "sportpaleis-mailbox-refresh-failed", { errorCode: String(error?.code ?? "SPORTPALEIS_MAILBOX_REFRESH_FAILED") }),

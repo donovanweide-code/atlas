@@ -50,13 +50,14 @@ export function parseWbdImapConfiguration(environment = process.env) {
 }
 
 export class WbdImapMailboxConnector {
-  constructor({ mailbox, clientFactory = (options) => new ImapFlow(options), parser = simpleParser, logger = false, captureRawSource = false, captureAttachmentContents = false, maximumAttachmentBytes = 15 * 1024 * 1024 }) {
+  constructor({ mailbox, clientFactory = (options) => new ImapFlow(options), parser = simpleParser, logger = false, captureRawSource = false, captureAttachmentContents = false, canonicalAttachmentSha256 = false, maximumAttachmentBytes = 15 * 1024 * 1024 }) {
     this.mailbox = mailbox;
     this.clientFactory = clientFactory;
     this.parser = parser;
     this.logger = logger;
     this.captureRawSource = captureRawSource === true;
     this.captureAttachmentContents = captureAttachmentContents === true;
+    this.canonicalAttachmentSha256 = canonicalAttachmentSha256 === true;
     this.maximumAttachmentBytes = Math.max(1, Number(maximumAttachmentBytes) || 15 * 1024 * 1024);
   }
 
@@ -115,7 +116,7 @@ export class WbdImapMailboxConnector {
               attachments: (parsed.attachments ?? []).map((attachment, index) => {
                 const content = Buffer.isBuffer(attachment.content) ? attachment.content : Buffer.from(attachment.content ?? "");
                 const withinBoundary = content.length <= this.maximumAttachmentBytes;
-                return { id: `${this.mailbox.id}-${uidValidity}-${item.uid}-${index}`, filename: attachment.filename ?? `bijlage-${index + 1}`, contentType: attachment.contentType, size: attachment.size ?? content.length, contentHash: createHash("sha256").update(content).digest("hex"), disposition: attachment.contentDisposition, contentId: attachment.cid ?? null, storageReference: null, contentCaptureStatus: !this.captureAttachmentContents ? "METADATA_ONLY" : withinBoundary ? "CAPTURED" : "SIZE_LIMIT_EXCEEDED", ...(this.captureAttachmentContents && withinBoundary ? { dataBase64: content.toString("base64") } : {}) };
+                return { id: `${this.mailbox.id}-${uidValidity}-${item.uid}-${index}`, filename: attachment.filename ?? `bijlage-${index + 1}`, contentType: attachment.contentType, size: attachment.size ?? content.length, contentHash: this.canonicalAttachmentSha256 ? createHash("sha256").update(content).digest("hex") : attachment.checksum ?? createHash("sha256").update(content).digest("hex"), disposition: attachment.contentDisposition, contentId: attachment.cid ?? null, storageReference: null, contentCaptureStatus: !this.captureAttachmentContents ? "METADATA_ONLY" : withinBoundary ? "CAPTURED" : "SIZE_LIMIT_EXCEEDED", ...(this.captureAttachmentContents && withinBoundary ? { dataBase64: content.toString("base64") } : {}) };
               }),
               rawReference: { kind: "IMAP", mailboxId: this.mailbox.id, folder, uidValidity, uid: Number(item.uid), immutable: this.captureRawSource, sha256: rawSha256 },
               rawSha256,
