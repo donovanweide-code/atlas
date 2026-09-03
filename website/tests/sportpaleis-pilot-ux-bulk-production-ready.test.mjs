@@ -178,6 +178,10 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(source, /action: "Order controleren ›"/u);
   assert.match(source, /data-action="select-all-completion-orders"[^]*?>Alles selecteren</u);
   assert.match(source, /data-action="bulk-complete-production-orders"[^]*?>Gereed</u);
+  assert.match(source, /data-action="bulk-ready-orders"[^>]*>Gereed melden</u);
+  assert.match(source, /data-action="bulk-ready-orders"[^]*data-action="bulk-delete-orders"/u);
+  assert.match(source, /Aangemaakt \$\{esc\(date\(order\.createdAt\)\)\}/u);
+  assert.match(source, /timeZone: "Europe\/Amsterdam"/u);
   assert.match(source, /filterButton\("deleted", "Verwijderd"\)/u);
   assert.match(source, /data-delete-order-form/u);
   assert.doesNotMatch(source, /bulk-complete-production-orders[^]{0,800}(mail|notification)/iu);
@@ -188,4 +192,21 @@ test("dunne UX toont select-all, exception-first, Produceren, bulk Gereed en Ver
   assert.match(source, /proposalGroupSequenceState\(state, groups, id, physicalState, projection\) === "CURRENT"/u);
   assert.match(source, /managedFoilColors\.has/u);
   assert.match(source, /actieve beheerde foliekleur ontbreekt/u);
+});
+
+test("Vrije opdruk kiest exact één invoerroute en gebruikt het centrale operator-kleurenregister", async (context) => {
+  const { service, operator } = await fixture(context);
+  const bootstrap = await service.bootstrap(operator.token);
+  assert.deepEqual(bootstrap.foilRolls, [], "commerciële rolgegevens blijven verborgen");
+  assert.deepEqual(bootstrap.activeProductionFoilColors, ["Wit", "Rood", "Blauw", "Zwart", "Groen", "Geel"]);
+  const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  assert.match(source, /Eén opdruk invoeren/u);
+  assert.match(source, /Meerdere opdrukken invoeren/u);
+  assert.match(source, /freeProductionEntryMode === "SINGLE"/u);
+  assert.match(source, /freeProductionEntryMode === "MULTIPLE"/u);
+  assert.match(source, /data-free-entry-route="single"/u);
+  assert.match(source, /data-free-entry-route="multiple"/u);
+  assert.match(source, /GECONTROLEERDE PREVIEW/u);
+  assert.match(source, /state\.activeProductionFoilColors \?\?/u);
+  assert.match(source, /Aandacht: niet actief/u);
 });

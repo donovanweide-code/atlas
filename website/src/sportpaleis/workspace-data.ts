@@ -145,7 +145,7 @@ export interface SportpaleisEmployee {
 
 export interface SportpaleisWebsiteSyncState {
   enabled: boolean;
-  mode: "STAGE_ONLY";
+  mode: "STAGE_ONLY" | "SAFE_AUTO_PROJECT";
   cadence: "NIGHTLY_03_00_EUROPE_AMSTERDAM";
   source: { storefrontUrl?: string; sitemapUrl: string; associationPath: string; cadence: string };
   status: "NOT_RUN" | "OK" | "ATTENTION" | "ERROR";
@@ -153,8 +153,8 @@ export interface SportpaleisWebsiteSyncState {
   lastSuccessfulSyncAt: string | null;
   nextRunAt: string | null;
   sourceFingerprint: string | null;
-  counts: { raw?: number; live?: number; productionRelevant?: number; autoNoop?: number; associations: number; articles: number; new: number; changed: number; attention: number };
-  changes: { id: string; kind: string; sourceIdentifier: string; sourceFingerprint?: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string; sourceValue?: { name?: string; url?: string; imageUrl?: string; productionRelevance?: { status: string; fields?: string[]; evidence?: string } }; workspaceValue?: { name?: string; url?: string | null } | null }[];
+  counts: { raw?: number; live?: number; productionRelevant?: number; autoNoop?: number; autoProjected?: number; associations: number; articles: number; new: number; changed: number; attention: number };
+  changes: { id: string; kind: string; sourceIdentifier: string; sourceFingerprint?: string; label: string; association?: string; status: "PENDING_REVIEW"; explanation: string; nextBestAction: string; sourceValue?: { name?: string; url?: string; imageUrl?: string; productionRelevance?: { status: string; fields?: string[]; evidence?: string }; productMetadata?: { articleNumber?: string | null; supplierArticleNumber?: string | null; availableSizes?: string[]; colorLabel?: string | null; articleUnitPriceEur?: number | null; commercialPrintOptions?: { sourceLabel: string; priceEur: number }[] } }; workspaceValue?: { name?: string; url?: string | null } | null }[];
   lastError: { code: string; message: string } | null;
 }
 

@@ -40,6 +40,9 @@ test("efficiënte route voegt alleen geometrisch passende interne folie-opvullin
   assert.equal(analysis.status, "FIT");
   assert.equal(analysis.evidence.customerOrderLinesCreated, false);
   assert.ok(analysis.evidence.augmentedUsedLengthMm <= analysis.evidence.baseUsedLengthMm);
+  const afterAnalysis = await store.read();
+  assert.equal(afterAnalysis.revision, before.revision, "voorstelanalyse wijzigt de centrale state niet");
+  assert.equal(afterAnalysis.productionJobs.length, before.productionJobs.length, "voorstelanalyse maakt geen PlotJob");
 
   const prepared = await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }], foilColor: "Wit", supplement, efficiencyAnalysisHash: analysis.analysisHash }, "efficiency-prepare");
   const job = prepared.value.job;
@@ -76,4 +79,13 @@ test("winkelrol kan de specialistische geometrieanalyse niet uitvoeren", async (
   const { order, font } = await readyOrder(service, admin);
   const storeUser = await service.login({ email: "collega@sportpaleis.nl", password: "Efficiency-Store-2026!" });
   await assert.rejects(service.analyzeProductionEfficiency(storeUser.token, storeUser.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }], foilColor: "Wit", supplement: { type: "NUMBER", content: "2", sourceId: font.id, heightMm: 200, quantity: 1 } }), (error) => error.code === "FORBIDDEN");
+});
+
+test("Vrij voorstel toont altijd voortgang, uitkomst of herstelbare fout en biedt geen productieactie", async () => {
+  const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  assert.match(source, /Vrij voorstel \/ Zuinig bedrukken/u);
+  assert.match(source, /Voorstel controleren…/u);
+  assert.match(source, /Voorstel niet berekend:/u);
+  assert.match(source, /er is geen PlotJob of statusmutatie gestart/u);
+  assert.doesNotMatch(source, /<button[^>]+data-action="prepare-efficient-production-color"/u);
 });

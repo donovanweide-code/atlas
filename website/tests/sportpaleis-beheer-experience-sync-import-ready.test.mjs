@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { reconcileSportpaleisEmployeeDirectory, SPORTPALEIS_UNVERIFIED_SALES_CODES } from "../scripts/sportpaleis-employee-directory.mjs";
 import { createSportpaleisWebshopIntakeState, normalizeDividePersonalization, parseSportpaleisDividePdfText, reconcileSportpaleisDivideRevision } from "../scripts/sportpaleis-divide-import.mjs";
-import { compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductMedia, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
+import { autoProjectSportpaleisWebsiteArticles, compareSportpaleisWebsiteSnapshot, createSportpaleisWebsiteSource, createSportpaleisWebsiteSyncState, parseSportpaleisAssociationPage, parseSportpaleisAssociationSitemap, parseSportpaleisLiveAssociationDirectory, parseSportpaleisProductMedia, parseSportpaleisProductMetadata, parseSportpaleisProductionRelevance, stageSportpaleisWebsiteSync } from "../scripts/sportpaleis-website-sync.mjs";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
@@ -44,6 +44,15 @@ test("officiële productgalerij bewaart front/back/alternatief binnen exact deze
   assert.equal(result[0].colorLabel, "ZWART");
   assert.equal(result.every(({ authority }) => authority === "SPORTPALEIS_LIVE_PRODUCT_GALLERY"), true);
   assert.equal(result.at(-1).sourceUrl, "https://www.sportpaleis.nl/img/181521.webp");
+});
+
+test("officiële productpagina levert artikelnummer, leverancier, maten en geprijsde decoration identity", () => {
+  const layer = JSON.stringify({ ecommerce: { detail: { products: [{ name: "DCG Wedstrijd shirt", category: "DCG", variant: "WIT", price: 49.95, discount: 6, itemgroupid: "141754-1" }] } } });
+  const html = `<main data-layer-product-detail='${layer}'><dl><dt>Artikelnummer:</dt><dd>141754</dd><dt>Artikelnummer leverancier:</dt><dd>987456</dd></dl><a class="sizeBox available">128</a><a class="sizeBox available">M</a><div class="row type-description"><span class="title">Rugnummer</span><input data-price="6.50"></div></main>`;
+  assert.deepEqual(parseSportpaleisProductMetadata(html), {
+    articleNumber: "141754", supplierArticleNumber: "987456", availableSizes: ["128", "M"], colorLabel: "WIT", articleUnitPriceEur: 43.95,
+    commercialPrintOptions: [{ sourceLabel: "Rugnummer", priceEur: 6.5 }],
+  });
 });
 
 test("officiële websitebron parseert stabiele verenigingen, paginatie en gestructureerde artikeldata", async () => {
@@ -86,7 +95,7 @@ test("dode of inhoudsloze directorylink wordt niet als live operationele clubsto
   assert.equal(snapshot.notLiveAssociationCandidates, 2);
 });
 
-test("website-sync stage-only bewaart lokale productieconfig, detecteert wijzigingen en is inhoudelijk idempotent", () => {
+test("website-sync projecteert alleen volledig eenduidige nieuwe artikelen en stageert overige bronwijzigingen", () => {
   const article = { id: "sp-live-137294", name: "Trainingsshirt", catalogProvenance: { url: "https://www.sportpaleis.nl/product/137294/" }, profileId: "senior", foilColorOverride: "Wit" };
   const state = { revision: 10, articles: [structuredClone(article)], associations: [{ id: "waterwijk", name: "A.S.C. Waterwijk", production: { workingWidthMm: 440 } }], audit: [], websiteSync: createSportpaleisWebsiteSyncState() };
   const sourceArticle = { sourceIdentifier: "137294", name: "Nieuw bronlabel", associationName: "A.S.C. Waterwijk", url: "https://www.sportpaleis.nl/product/137294/", fingerprint: "article-v2", storefrontStatus: "LIVE", productionRelevance: { status: "RELEVANT", fields: ["Initialen"], evidence: "PUBLIC_PERSONALIZATION_FIELDS" } };
@@ -97,10 +106,74 @@ test("website-sync stage-only bewaart lokale productieconfig, detecteert wijzigi
   stageSportpaleisWebsiteSync(state, snapshot, { now: new Date("2026-08-20T12:00:00Z") });
   assert.deepEqual(state.articles[0], before.article);
   assert.deepEqual(state.associations[0], before.association);
-  assert.equal(state.websiteSync.mode, "STAGE_ONLY");
+  assert.equal(state.websiteSync.mode, "SAFE_AUTO_PROJECT");
   assert.equal(state.websiteSync.changes.length, 1);
   const repeated = compareSportpaleisWebsiteSnapshot(state, snapshot);
   assert.equal(repeated.changes.length, 1, "dezelfde pending review wordt niet als duplicaat toegevoegd");
+});
+
+test("DCG artikel 141754 wordt idempotent onder de bestaande rugnummerwaarheid geprojecteerd", async (context) => {
+  const root = await mkdtemp(path.join(tmpdir(), "spw-dcg-141754-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const passwords = { kevin: "Sync-141754-Admin!", patrick: "Sync-141754-Operator!", collega: "Sync-141754-Store!", "donovan-support": "Sync-141754-Support!" };
+  const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
+  const product = {
+    sourceIdentifier: "141754", websiteProductId: "96268", name: "DCG Wedstrijd shirt", associationName: "DCG", brand: "DCG", priceEur: 43.95,
+    url: "https://www.sportpaleis.nl/dcg-wedstrijd-shirt_96268.html", imageUrl: "https://www.sportpaleis.nl/img/dcg-wedstrijd-shirt.webp", fingerprint: "dcg-141754-v1", storefrontStatus: "LIVE",
+    productionRelevance: { status: "RELEVANT", fields: ["Rugnummer"], evidence: "PUBLIC_PERSONALIZATION_FIELDS" },
+    productMetadata: { articleNumber: "141754", supplierArticleNumber: "987456", availableSizes: ["128", "140", "152", "164", "S", "M", "L", "XL", "XXL"], colorLabel: "WIT", articleUnitPriceEur: 43.95, commercialPrintOptions: [{ sourceLabel: "Rugnummer", priceEur: 6.5 }] },
+    catalogMedia: [{ kind: "FRONT", sourceUrl: "https://www.sportpaleis.nl/img/dcg-wedstrijd-shirt.webp", sourceIndex: 0, sourceProductId: "96268", sourceColorId: "12020", colorLabel: "WIT", authority: "SPORTPALEIS_LIVE_PRODUCT_GALLERY", classification: "SOURCE_GALLERY_ORDER_V1" }],
+  };
+  const snapshot = { fingerprint: "dcg-snapshot-v1", rawArticleCandidates: 1, associations: [{ sourceIdentifier: "https://www.sportpaleis.nl/verenigingen/dcg/", name: "DCG", fingerprint: "dcg-association-v1", articles: [product] }] };
+  const service = new SportpaleisPilotService({ store, websiteSource: { snapshot: async () => structuredClone(snapshot) }, artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime") });
+  await service.initialize();
+  const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
+  const first = await service.runWebsiteSync(admin.token, admin.csrfToken);
+  const afterFirst = await service.bootstrap(admin.token);
+  const article = afterFirst.articles.find(({ articleNumber }) => articleNumber === "141754");
+  assert.ok(article);
+  assert.deepEqual({ supplier: article.supplierArticleNumber, association: article.association, profileId: article.profileId, supports: article.supports, active: article.active }, { supplier: "987456", association: "DCG", profileId: "profile-source-dcg-backNumber", supports: ["backNumber"], active: true });
+  assert.deepEqual(article.availableSizes, product.productMetadata.availableSizes);
+  assert.deepEqual(article.commercialPrintOptions, [{ sourceLabel: "Rugnummer", canonicalField: "backNumber", priceEur: 6.5, status: "VALIDATED" }]);
+  assert.equal(first.counts.autoProjected, 1);
+  assert.equal(first.changes.some(({ sourceIdentifier }) => sourceIdentifier === "141754"), false);
+  const revision = afterFirst.revision;
+  await service.runWebsiteSync(admin.token, admin.csrfToken);
+  const afterSecond = await service.bootstrap(admin.token);
+  assert.equal(afterSecond.revision, revision);
+  assert.equal(afterSecond.articles.filter(({ articleNumber }) => articleNumber === "141754").length, 1);
+  const direct = autoProjectSportpaleisWebsiteArticles(afterSecond, snapshot, { now: new Date("2026-09-03T12:00:00Z") });
+  assert.equal(direct.projected.length, 0);
+});
+
+test("de nachtelijke sync migreert een eerdere stage-only snapshot één keer naar veilige auto-projectie", async () => {
+  const source = await readFile(new URL("../scripts/sportpaleis-website-sync-job.mjs", import.meta.url), "utf8");
+  assert.match(source, /current\.websiteSync\?\.mode === "SAFE_AUTO_PROJECT"/u);
+  assert.doesNotMatch(source, /sourceFingerprint === snapshot\.fingerprint && \(mode !== "ACTIVATE"/u);
+});
+
+test("auto-projectie blijft fail-closed bij ontbrekende artikelprijs of ambigue decorationprijs", () => {
+  const state = {
+    articles: [{ id: "dcg-template", association: "DCG", profileId: "profile-source-dcg-backNumber", supports: ["backNumber"], active: true, category: "Wedstrijdshirt", displayOrder: 1 }],
+    associations: [{ id: "dcg", name: "DCG", active: true }],
+    audit: [],
+  };
+  const product = {
+    sourceIdentifier: "141754", name: "DCG Wedstrijd shirt", imageUrl: "https://www.sportpaleis.nl/img/dcg.webp", url: "https://www.sportpaleis.nl/dcg-wedstrijd-shirt_96268.html", fingerprint: "dcg-v1",
+    productionRelevance: { status: "RELEVANT", fields: ["Rugnummer"] },
+    productMetadata: { articleNumber: "141754", supplierArticleNumber: "987456", availableSizes: ["M"], articleUnitPriceEur: null, commercialPrintOptions: [{ sourceLabel: "Rugnummer", priceEur: 6.5 }] },
+    catalogMedia: [{ kind: "FRONT", sourceUrl: "https://www.sportpaleis.nl/img/dcg.webp" }],
+  };
+  const snapshot = { associations: [{ name: "DCG", articles: [product] }] };
+  const missingArticlePrice = autoProjectSportpaleisWebsiteArticles(state, snapshot);
+  assert.equal(missingArticlePrice.projected.length, 0);
+  assert.match(missingArticlePrice.blocked[0].reason, /artikelprijs/u);
+  product.productMetadata.articleUnitPriceEur = 43.95;
+  product.productMetadata.commercialPrintOptions.push({ sourceLabel: "Rugnummer", priceEur: 8.5 });
+  const ambiguousDecorationPrice = autoProjectSportpaleisWebsiteArticles(state, snapshot);
+  assert.equal(ambiguousDecorationPrice.projected.length, 0);
+  assert.match(ambiguousDecorationPrice.blocked[0].reason, /eenduidige prijsbinding/u);
+  assert.equal(state.articles.length, 1);
 });
 
 test("website-sync endpoint is admin-only en herhaalt een identieke bron zonder datastore-revisiechurn", async (context) => {

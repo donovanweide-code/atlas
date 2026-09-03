@@ -59,6 +59,8 @@ export class PilotApiError extends Error {
 export interface PilotBootstrap extends SportpaleisWorkspaceState {
   currentUser: SportpaleisUser;
   switchableUsers: SportpaleisUser[];
+  /** Sanitized production admission view; contains no stock or purchasing data. */
+  activeProductionFoilColors?: string[];
   csrfToken?: string;
   capabilities: {
     admin: boolean;

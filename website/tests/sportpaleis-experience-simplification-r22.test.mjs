@@ -29,11 +29,14 @@ test("Creative Studio canvas ondersteunt directe manipulatie met dezelfde formul
 test("Vrije opdruk begint bij productieobjecten en accepteert reeksen, vrije waarden en tekstuele nummers", () => {
   const section = workspace.slice(workspace.indexOf("function freePrintingOrder"), workspace.indexOf("function productionFonts"));
   assert.match(section, /Wat moet ik maken\?/u);
-  assert.match(section, /Snelle lijst of reeks/u);
+  assert.match(section, /Eén opdruk invoeren/u);
+  assert.match(section, /Meerdere opdrukken invoeren/u);
+  assert.match(section, /Lijst, reeks of Excel-kolom/u);
   assert.match(section, /Optionele order- of artikelcontext/u);
   assert.doesNotMatch(section, /name="customer" required/u);
   assert.match(workspace, /dataset\.action === "add-free-bulk"/u);
-  assert.match(workspace, /Meerdere opdrukken tegelijk aanpassen/u);
+  assert.match(workspace, /GEDEELDE INSTELLINGEN/u);
+  assert.match(workspace, /Pas toe op alle/u);
   assert.match(workspace, /dataset\.action === "apply-free-bulk-settings"/u);
   assert.match(workspace, /selectedIds\.size/u);
   assert.doesNotMatch(workspace, /line\.content = line\.content\.replace\(\/\\D/u);

@@ -52,7 +52,9 @@ try {
         datastoreRevision: current.revision,
         persisted: false,
       })}\n`);
-    } else if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint && (mode !== "ACTIVATE" || current.websiteSync.enabled === true)) {
+    } else if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint
+      && current.websiteSync?.mode === "SAFE_AUTO_PROJECT"
+      && (mode !== "ACTIVATE" || current.websiteSync.enabled === true)) {
       process.stdout.write(`${JSON.stringify({ status: "NO_CHANGES", sourceFingerprint: snapshot.fingerprint, datastoreRevision: current.revision, persisted: false })}\n`);
     } else {
       const outcome = await store.mutate(async (state) => ({

@@ -76,7 +76,7 @@ test("concrete MHC-order bewaart naam én rugnummer server-side zonder catalogus
   }, "r2266-mhc-name-backnumber")).value;
   assert.deepEqual(created.items[0].personalizationValues, { name: "Jansen", backNumber: "28", backNumberSizeClass: "SENIOR" });
   assert.deepEqual(created.productionLines.map(({ personalizationField }) => personalizationField), ["name", "backNumber"]);
-  assert.equal(created.productionLines.find(({ personalizationField }) => personalizationField === "backNumber").heightMm, 220);
+  assert.equal(created.productionLines.find(({ personalizationField }) => personalizationField === "backNumber").heightMm, 200);
 });
 
 test("Vrije opdruk projecteert alle visuele productierijpe bronnen; context rangschikt maar verbergt niet", () => {
@@ -168,8 +168,8 @@ test("Vrije opdruk implementeert één generieke snelle productieflow en duideli
   assert.match(source, /Productiebron \/ stijl/u);
   assert.match(source, /quantity: 1/u);
   assert.match(source, /<label>Aantal<input[^>]+min="1"/u);
-  assert.match(source, /Plak een lijst, reeks of Excel-kolom/u);
-  assert.match(source, /Vrije folieruimte benutten/u);
+  assert.match(source, /Lijst, reeks of Excel-kolom/u);
+  assert.match(source, /Vrij voorstel \/ Zuinig bedrukken/u);
   assert.match(source, /Naar productie/u);
   assert.match(source, /Bekijk order/u);
 });

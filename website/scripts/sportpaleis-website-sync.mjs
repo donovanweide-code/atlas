@@ -10,7 +10,7 @@ export const SPORTPALEIS_WEBSITE_SYNC_SOURCE = Object.freeze({
 export function createSportpaleisWebsiteSyncState() {
   return {
     enabled: false,
-    mode: "STAGE_ONLY",
+    mode: "SAFE_AUTO_PROJECT",
     cadence: SPORTPALEIS_WEBSITE_SYNC_SOURCE.cadence,
     source: { ...SPORTPALEIS_WEBSITE_SYNC_SOURCE },
     status: "NOT_RUN",
@@ -83,6 +83,38 @@ export function parseSportpaleisProductionRelevance(html) {
   return fields.length
     ? { status: "RELEVANT", fields: [...new Set(fields)], evidence: "PUBLIC_PERSONALIZATION_FIELDS" }
     : { status: "NOT_RELEVANT", fields: [], evidence: "NO_PUBLIC_PERSONALIZATION_FIELDS" };
+}
+
+function textAfterDefinition(html, label) {
+  const escaped = String(label).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = String(html ?? "").match(new RegExp(`<dt>\\s*${escaped}:?\\s*</dt>\\s*<dd[^>]*>([\\s\\S]*?)</dd>`, "iu"));
+  return match ? decodeHtml(match[1].replace(/<[^>]+>/gu, " ")).replace(/\s+/gu, " ").trim() : null;
+}
+
+export function parseSportpaleisProductMetadata(html) {
+  const body = String(html ?? "");
+  const layerMatch = body.match(/data-layer-product-detail='([^']+)'/iu);
+  let product = {};
+  try { product = layerMatch ? JSON.parse(decodeHtml(layerMatch[1]))?.ecommerce?.detail?.products?.[0] ?? {} : {}; } catch { product = {}; }
+  const articleNumber = textAfterDefinition(body, "Artikelnummer") ?? (String(product.itemgroupid ?? "").replace(/-[^-]+$/u, "") || null);
+  const supplierArticleNumber = textAfterDefinition(body, "Artikelnummer leverancier");
+  const availableSizes = [...new Set([...body.matchAll(/<a[^>]*class="[^"]*sizeBox[^"]*"[^>]*>([\s\S]*?)<\/a>/giu)].map(([, value]) => decodeHtml(value.replace(/<[^>]+>/gu, " ")).replace(/\s+/gu, " ").trim()).filter(Boolean))];
+  const commercialPrintOptions = [];
+  for (const match of body.matchAll(/<span[^>]*class="title"[^>]*>([\s\S]*?)<\/span>[\s\S]{0,2200}?data-price="([0-9]+(?:\.[0-9]+)?)"/giu)) {
+    const sourceLabel = decodeHtml(match[1].replace(/<[^>]+>/gu, " ")).replace(/\s+/gu, " ").trim();
+    if (!/^(?:rugnummer|shortnummer|initialen|naam(?:\s*\(rug\))?)\b/iu.test(sourceLabel)) continue;
+    commercialPrintOptions.push({ sourceLabel, priceEur: Number(match[2]) });
+  }
+  const listedPrice = Number(product.price);
+  const discount = Number(product.discount ?? 0);
+  return {
+    articleNumber,
+    supplierArticleNumber,
+    availableSizes,
+    colorLabel: String(product.variant ?? "").trim() || null,
+    articleUnitPriceEur: Number.isFinite(listedPrice) ? Math.max(0, listedPrice - (Number.isFinite(discount) ? discount : 0)) : null,
+    commercialPrintOptions,
+  };
 }
 
 /**
@@ -220,12 +252,15 @@ export function createSportpaleisWebsiteSource({ fetcher = globalThis.fetch } = 
         const classified = await mapConcurrent([...articles.values()], 4, async (article) => {
           const cached = relevanceIndex[article.sourceIdentifier];
           const productPage = await fetchText(fetcher, article.url);
-          const productionRelevance = knownProductionArticleIds.has(article.sourceIdentifier)
+          const observedRelevance = parseSportpaleisProductionRelevance(productPage);
+          const productionRelevance = observedRelevance.status === "AMBIGUOUS" && knownProductionArticleIds.has(article.sourceIdentifier)
             ? { status: "RELEVANT", fields: [], evidence: "WORKSPACE_PRODUCTION_CONFIGURATION" }
-            : cached?.fingerprint === article.fingerprint
+            : cached?.fingerprint === article.fingerprint && observedRelevance.status === "AMBIGUOUS"
               ? cached.productionRelevance
-              : parseSportpaleisProductionRelevance(productPage);
-          return { ...article, storefrontStatus: "LIVE", productionRelevance, catalogMedia: parseSportpaleisProductMedia(productPage, article.url) };
+              : observedRelevance;
+          const enriched = { ...article, storefrontStatus: "LIVE", productionRelevance, productMetadata: parseSportpaleisProductMetadata(productPage), catalogMedia: parseSportpaleisProductMedia(productPage, article.url) };
+          const { fingerprint: _listingFingerprint, ...fingerprintBody } = enriched;
+          return { ...enriched, fingerprint: sha256(JSON.stringify(fingerprintBody)) };
         });
         const result = { sourceIdentifier: entry.url, name: associationName, url: entry.url, lastModified: entry.lastModified, storefrontStatus: "LIVE", articles: classified.sort((left, right) => left.sourceIdentifier.localeCompare(right.sourceIdentifier)) };
         return { ...result, fingerprint: sha256(JSON.stringify(result)) };
@@ -241,6 +276,99 @@ function currentArticleSourceId(article) {
   const articleNumber = String(article.articleNumber ?? "").trim();
   if (articleNumber) return articleNumber;
   return String(article.id ?? "").match(/^sp-live-(.+)$/u)?.[1] ?? null;
+}
+
+function canonicalPrintField(label) {
+  const value = normalized(label);
+  if (value.startsWith("rugnummer")) return "backNumber";
+  if (value.startsWith("shortnummer")) return "shortsNumber";
+  if (value.startsWith("initialen")) return "initials";
+  if (value.startsWith("naam")) return "name";
+  return null;
+}
+
+function safeAutoProjectionDecision(state, association, article) {
+  const associations = (state.associations ?? []).filter((candidate) => normalized(candidate.name) === normalized(association.name) && candidate.active !== false);
+  if (associations.length !== 1) return { allowed: false, reason: "De vereniging is niet uniek en actief gekoppeld." };
+  const metadata = article.productMetadata ?? {};
+  if (String(metadata.articleNumber ?? "") !== String(article.sourceIdentifier) || !metadata.supplierArticleNumber) return { allowed: false, reason: "Artikel- of leveranciersnummer ontbreekt of conflicteert." };
+  if (!Array.isArray(metadata.availableSizes) || !metadata.availableSizes.length) return { allowed: false, reason: "De websitebron bevat geen controleerbare maten." };
+  if (!Number.isFinite(metadata.articleUnitPriceEur) || metadata.articleUnitPriceEur < 0) return { allowed: false, reason: "De websitebron bevat geen betrouwbare artikelprijs." };
+  if (!article.imageUrl || !Array.isArray(article.catalogMedia) || !article.catalogMedia.length) return { allowed: false, reason: "De artikelafbeelding is niet eenduidig aan deze productcontext gebonden." };
+  const sourceFields = article.productionRelevance?.fields ?? [];
+  const supports = [...new Set(sourceFields.map(canonicalPrintField).filter(Boolean))];
+  if (!supports.length || supports.length !== new Set(sourceFields.map(normalized)).size) return { allowed: false, reason: "Een zichtbare bedrukoptie kan niet naar één centrale decoration identity worden vertaald." };
+  const candidates = (state.articles ?? []).filter((candidate) => candidate.active !== false
+    && normalized(candidate.association) === normalized(association.name)
+    && candidate.profileId && candidate.profileId !== "profile-none"
+    && supports.every((field) => candidate.supports?.includes(field)));
+  const profileIds = [...new Set(candidates.map(({ profileId }) => profileId))];
+  if (profileIds.length !== 1) return { allowed: false, reason: "Het productieprofiel is niet eenduidig uit bestaande verenigingswaarheid af te leiden." };
+  const templates = candidates.filter(({ profileId }) => profileId === profileIds[0]);
+  const template = templates[0];
+  const prices = new Map();
+  for (const field of supports) {
+    const options = (metadata.commercialPrintOptions ?? []).filter((option) => canonicalPrintField(option.sourceLabel) === field && Number.isFinite(option.priceEur) && option.priceEur >= 0);
+    if (options.length !== 1) return { allowed: false, reason: "Een zichtbare bedrukoptie mist één eenduidige prijsbinding." };
+    prices.set(field, options[0]);
+  }
+  return { allowed: true, association: associations[0], template, supports, profileId: profileIds[0], prices };
+}
+
+export function autoProjectSportpaleisWebsiteArticles(state, snapshot, { actorId = "system:website-sync", now = new Date() } = {}) {
+  const projected = [];
+  const blocked = [];
+  const currentIds = new Set((state.articles ?? []).map(currentArticleSourceId).filter(Boolean));
+  for (const association of snapshot.associations ?? []) for (const article of association.articles ?? []) {
+    if (currentIds.has(article.sourceIdentifier) || article.productionRelevance?.status !== "RELEVANT") continue;
+    const decision = safeAutoProjectionDecision(state, association, article);
+    if (!decision.allowed) { blocked.push({ sourceIdentifier: article.sourceIdentifier, reason: decision.reason }); continue; }
+    const at = now.toISOString();
+    const imageKey = `sp-live-${article.sourceIdentifier}`;
+    const commercialPrintOptions = decision.supports.map((field) => {
+      const option = decision.prices.get(field);
+      return { sourceLabel: option.sourceLabel, canonicalField: field, priceEur: option.priceEur, status: "VALIDATED" };
+    });
+    const personalizationUnitPricesEur = Object.fromEntries(commercialPrintOptions.map(({ canonicalField, priceEur }) => [canonicalField, priceEur]));
+    const projectedArticle = {
+      id: imageKey,
+      articleNumber: article.sourceIdentifier,
+      supplierArticleNumber: article.productMetadata.supplierArticleNumber,
+      name: article.name,
+      imageKey,
+      category: decision.template.category ?? "Live bedrukartikel",
+      association: decision.association.name,
+      profileId: decision.profileId,
+      supports: decision.supports,
+      active: true,
+      revision: 1,
+      displayOrder: Math.max(0, ...(state.articles ?? []).map(({ displayOrder }) => Number(displayOrder ?? 0))) + 1,
+      variantLabels: article.productMetadata.colorLabel ? [article.productMetadata.colorLabel] : [],
+      availableSizes: [...article.productMetadata.availableSizes],
+      commercialPrintOptions,
+      priceConfiguration: {
+        articleUnitPriceEur: article.productMetadata.articleUnitPriceEur,
+        articleUnitPricesBySizeEur: Object.fromEntries(article.productMetadata.availableSizes.map((size) => [size, article.productMetadata.articleUnitPriceEur])),
+        personalizationUnitPricesEur,
+        sourceLabel: `Sportpaleis.nl live · ${article.url}`,
+      },
+      catalogProvenance: { authority: "SPORTPALEIS_LIVE", url: article.url, imageUrl: article.imageUrl, checkedAt: at.slice(0, 10) },
+      catalogMedia: article.catalogMedia.map((media, index) => ({ ...media, imageKey: index === 0 ? imageKey : `${imageKey}-${media.kind.toLocaleLowerCase("en-US")}-${index}`, checkedAt: at.slice(0, 10) })),
+      printRelevance: { status: "CONFIRMED_VISIBLE_PERSONALIZATION", sourceLabel: (article.productionRelevance.fields ?? []).join(", "), checkedAt: at.slice(0, 10) },
+      productionDataGaps: structuredClone(decision.template.productionDataGaps ?? []),
+      personalizationPolicy: { mode: "optional", fields: Object.fromEntries(decision.supports.map((field) => [field, "optional"])) },
+      foilColorOverride: null,
+      validation: { status: "VALIDATED", source: `Sportpaleis live storefront · ${article.url}`, name: "VALIDATED", sku: "VALIDATED", image: "VALIDATED", variants: "VALIDATED", sizes: "VALIDATED", personalization: "VALIDATED" },
+      validationHistory: [{ at, userId: actorId, previous: null, next: { articleNumber: article.sourceIdentifier, supplierArticleNumber: article.productMetadata.supplierArticleNumber, association: decision.association.name, profileId: decision.profileId, status: "VALIDATED", active: true }, source: "Sportpaleis live storefront · veilige auto-projectie" }],
+      ...(decision.template.teamwearProductTruth ? { teamwearProductTruth: { ...structuredClone(decision.template.teamwearProductTruth), sourceArticleId: imageKey, articleNumber: article.sourceIdentifier, evidenceReference: `${article.url} | ${decision.profileId} | supports:${decision.supports.join(",")}`, reconciledAt: at } } : {}),
+    };
+    state.articles.push(projectedArticle);
+    currentIds.add(article.sourceIdentifier);
+    projected.push(projectedArticle);
+    state.audit ??= [];
+    state.audit.unshift({ id: `audit-website-auto-${randomBytes(8).toString("hex")}`, at, userId: actorId, action: "Websiteartikel veilig automatisch gekoppeld", subject: `${article.sourceIdentifier} · ${article.name}`, details: { association: decision.association.name, profileId: decision.profileId, supports: decision.supports, sourceFingerprint: article.fingerprint, historicalOrdersChanged: false } });
+  }
+  return { projected, blocked };
 }
 
 export function compareSportpaleisWebsiteSnapshot(state, snapshot) {
@@ -322,6 +450,7 @@ function nextNightlyRun(now) {
 }
 
 export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system:website-sync", trigger = "manual", now = new Date(), enabled = state.websiteSync?.enabled === true } = {}) {
+  const autoProjection = autoProjectSportpaleisWebsiteArticles(state, snapshot, { actorId, now });
   const { changes, nextIndex, nextScopeIndex, nextRelevanceIndex, reconciledLegacyCount } = compareSportpaleisWebsiteSnapshot(state, snapshot);
   const newCount = changes.filter(({ kind }) => kind === "NEW_ASSOCIATION" || kind === "NEW_ARTICLE").length;
   const changedCount = changes.filter(({ kind }) => kind === "SOURCE_ARTICLE_CHANGED" || kind === "WORKSPACE_SOURCE_DIFFERENCE").length;
@@ -330,7 +459,7 @@ export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system
   state.websiteSync = {
     ...(state.websiteSync ?? createSportpaleisWebsiteSyncState()),
     enabled,
-    mode: "STAGE_ONLY",
+    mode: "SAFE_AUTO_PROJECT",
     status: changes.length ? "ATTENTION" : "OK",
     lastAttemptAt: now.toISOString(),
     lastSuccessfulSyncAt: now.toISOString(),
@@ -341,7 +470,7 @@ export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system
     sourceRelevanceIndex: nextRelevanceIndex,
     reviewDecisions: state.websiteSync?.reviewDecisions ?? {},
     reconciliationHistory: [{ at: now.toISOString(), actorId, fromAttention: state.websiteSync?.counts?.attention ?? 0, toAttention: changes.length, removedAsLegacyOutOfBoundary: reconciledLegacyCount }, ...(state.websiteSync?.reconciliationHistory ?? [])].slice(0, 20),
-    counts: { raw: snapshot.rawArticleCandidates || articleCount, live: articleCount, productionRelevant, autoNoop: Math.max(0, articleCount - productionRelevant), associations: snapshot.associations.length, articles: articleCount, new: newCount, changed: changedCount, attention: changes.length },
+    counts: { raw: snapshot.rawArticleCandidates || articleCount, live: articleCount, productionRelevant, autoNoop: Math.max(0, articleCount - productionRelevant), autoProjected: autoProjection.projected.length, associations: snapshot.associations.length, articles: articleCount, new: newCount, changed: changedCount, attention: changes.length },
     changes,
     lastError: null,
   };
@@ -349,7 +478,7 @@ export function stageSportpaleisWebsiteSync(state, snapshot, { actorId = "system
     id: `audit-website-sync-${randomBytes(8).toString("hex")}`,
     at: now.toISOString(), userId: actorId, action: "Website gecontroleerd",
     subject: "Verenigingen en artikelen",
-    details: { trigger, mode: "STAGE_ONLY", associations: snapshot.associations.length, articles: articleCount, attention: changes.length },
+    details: { trigger, mode: "SAFE_AUTO_PROJECT", associations: snapshot.associations.length, articles: articleCount, autoProjected: autoProjection.projected.length, blockedAutoProjection: autoProjection.blocked.length, attention: changes.length },
   });
   return state.websiteSync;
 }

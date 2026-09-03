@@ -1204,7 +1204,7 @@ export function validateSportpaleisPilotState(input) {
     if (employee.userId && !state.users.some(({ id }) => id === employee.userId)) throw new Error("Werknemer verwijst naar een ontbrekende Workspace-gebruiker.");
     if (employee.accountType && !["HUMAN", "FUNCTION", "SYSTEM"].includes(employee.accountType)) throw new Error("Ongeldig verkoopnummer-accounttype.");
   }
-  if (state.websiteSync.mode !== "STAGE_ONLY") throw new Error("Website-sync mag alleen bronwijzigingen klaarzetten.");
+  if (!["STAGE_ONLY", "SAFE_AUTO_PROJECT"].includes(state.websiteSync.mode)) throw new Error("Website-sync mag alleen bewezen artikelen projecteren en overige bronwijzigingen klaarzetten.");
   if (state.webshopIntake.enabled !== true || state.webshopIntake.retrievalMode !== "CONTROLLED_MAIL_DOCUMENT_ADAPTER") throw new Error("Webshop document-intake moet uitsluitend via de gecontroleerde Mail/Document-adapter lopen.");
   for (const source of state.webshopIntake.sources ?? []) if (!source.immutable || source.mimeType !== "application/pdf" || sha256(Buffer.from(source.dataBase64, "base64")) !== String(source.sha256).toLowerCase()) throw new Error("Immutable webshop-PDF ontbreekt of is gewijzigd.");
   if (state.mailboxRouting?.mailbox?.id !== SPORTPALEIS_MAILBOX_ID || state.mailboxRouting.mailbox.organizationId !== state.organizationId || state.mailboxRouting.mailbox.destructiveMailboxActions !== false) throw new Error("Ongeldige of te ruime Sportpaleis-mailboxboundary.");
@@ -3045,6 +3045,7 @@ export class SportpaleisPilotService {
       configurationVersion: state.configurationVersion,
       productionProfiles: structuredClone(state.productionProfiles),
       settings: admin ? structuredClone(state.settings) : { processingDays: state.settings.processingDays, deliveryFeeEur: state.settings.deliveryFeeEur, productionDefaults: structuredClone(state.settings.productionDefaults) },
+      activeProductionFoilColors: productionWorkspace ? [...new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => String(color).trim()).filter(Boolean))] : [],
       foilRolls: admin ? structuredClone(state.foilRolls) : [],
       commercialAdministration: admin ? {
         sourceLabel: "Sportpaleis Workspace Pilot Foundation 006",
@@ -5018,7 +5019,7 @@ export class SportpaleisPilotService {
       await this.store.mutate(async (state) => ({ state, value: failSportpaleisWebsiteSync(state, error, { actorId: user.id }) }));
       throw Object.assign(new Error("De websitecontrole kon niet volledig worden uitgevoerd. Bestaande Workspace-data is niet gewijzigd."), { statusCode: 502, code: String(error?.code ?? "WEBSITE_SYNC_FAILED") });
     }
-    if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint) return publicSportpaleisWebsiteSync(current);
+    if (current.websiteSync?.sourceFingerprint === snapshot.fingerprint && current.websiteSync?.mode === "SAFE_AUTO_PROJECT") return publicSportpaleisWebsiteSync(current);
     const result = await this.store.mutate(async (state) => ({
       state,
       value: stageSportpaleisWebsiteSync(state, snapshot, { actorId: user.id, trigger: "manual" }),
@@ -8937,8 +8938,8 @@ function analyzeProductionEfficiency(state, user, orders, group, payload) {
   const checkAt = "2026-08-28T00:00:00.000Z";
   const baseGroup = { ...group, supplements: [] };
   const augmentedGroup = { ...group, supplements: [supplement], efficiencyEvidence: { analysisHash: "PENDING" } };
-  const base = buildProductionJobSnapshot(state, orders, "EFFICIENCY-PREFLIGHT", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, baseGroup, { persistArtifacts: false });
-  const augmented = buildProductionJobSnapshot(state, orders, "EFFICIENCY-PREFLIGHT", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, augmentedGroup, { persistArtifacts: false });
+  const base = buildProductionJobSnapshot(state, orders, "PLOT-0000-0000", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, baseGroup, { persistArtifacts: false });
+  const augmented = buildProductionJobSnapshot(state, orders, "PLOT-0000-0000", checkAt, DEFAULT_ARTIFACT_ROOT, DEFAULT_ARTIFACT_ROOT, augmentedGroup, { persistArtifacts: false });
   const baseArea = productionLayoutOccupiedArea(base);
   const augmentedArea = productionLayoutOccupiedArea(augmented);
   const rollArea = Math.max(1, Number(base.layout.configuredWidthMm ?? base.productionGroup.workingWidthMm) * Number(base.layout.usedLengthMm));
