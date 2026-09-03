@@ -35,7 +35,7 @@ test("Orders scheiden status, aandacht en gereed werk", async () => {
 
 test("Productie scheidt geblokkeerd en maakbaar werk en verbergt ontwikkelaarstaal", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
-  assert.match(source, /productionStatus === "READY" \|\| isActiveProductionStatus\(productionStatus\)/);
+  assert.match(source, /isReadyProductionStatus\(productionStatus\) \|\| isActiveProductionStatus\(productionStatus\)/);
   assert.match(source, /Nog niet maakbaar/);
   assert.match(source, /Klaar om te produceren/);
   assert.match(source, /Bekijk wat nodig is/);

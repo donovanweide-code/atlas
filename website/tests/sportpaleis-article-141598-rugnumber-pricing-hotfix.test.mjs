@@ -135,5 +135,7 @@ test("UI-contract houdt 141598 direct zichtbaar, artikelgebonden, geprijsd en mo
   assert.match(source, /Rugnummer.*× \$\{count\}/su);
   assert.match(source, /data-standard-price/u);
   assert.match(source, /clearUnprojectedStandardPersonalization/u);
+  assert.match(source, /captureMode === "mobile320"/u);
   assert.match(css, /sp-article-print-truth/u);
+  assert.match(css, /--sp-capture-width/u);
 });
