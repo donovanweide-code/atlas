@@ -62,9 +62,11 @@ test("unknown en malformed routes blijven expliciet fout en renderen niet als Ho
   assert.equal(isKnownWorkspaceRoute("/workspace/wbd/onbekend"), false);
 });
 
-test("de dagelijkse en beheer-Webshoproutes zijn expliciete HTTP 200-routes", () => {
+test("de dagelijkse Mail-, Webshop- en beheerroutes zijn expliciete HTTP 200-routes", () => {
   assert.equal(isKnownWorkspaceRoute("/workspace/sportpaleis/webshop"), true);
+  assert.equal(isKnownWorkspaceRoute("/workspace/sportpaleis/mail"), true);
   assert.equal(isKnownWorkspaceRoute("/workspace/sportpaleis/beheer/webshop"), true);
+  assert.equal(isKnownWorkspaceRoute("/workspace/sportpaleis/beheer/mailbox"), true);
 });
 
 test("organisatie- en focusroutes dragen stabiele context en actieve Organisaties-state", () => {
