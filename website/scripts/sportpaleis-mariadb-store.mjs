@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync, gzipSync } from "node:zlib";
 import mariadb from "mariadb";
 import {
   createSportpaleisProductionBootstrap,
@@ -20,8 +21,8 @@ const defaultMigrationFile = path.resolve(
 const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
 const REQUIRED_MIGRATION_VERSION = 1;
 const DIRECT_STATE_WRITE_MAX_BYTES = 8 * 1024 * 1024;
-const STATE_WRITE_CHUNK_CODE_UNITS = 512 * 1024;
-const LARGE_STATE_SESSION_VARIABLE = "@wbd_sportpaleis_runtime_state_json";
+const MAX_DECOMPRESSED_STATE_BYTES = 128 * 1024 * 1024;
+const COMPRESSED_STATE_ENCODING = "WBD_GZIP_BASE64_V1";
 
 export class SportpaleisMariaDbStoreError extends Error {
   constructor(message, code = "MARIADB_STORE_ERROR", cause) {
@@ -86,10 +87,32 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function jsonValue(value) {
-  if (typeof value === "string") return JSON.parse(value);
-  if (Buffer.isBuffer(value)) return JSON.parse(value.toString("utf8"));
-  return structuredClone(value);
+export function decodeSportpaleisRuntimeState(value) {
+  const parsed = typeof value === "string"
+    ? JSON.parse(value)
+    : Buffer.isBuffer(value)
+      ? JSON.parse(value.toString("utf8"))
+      : structuredClone(value);
+  if (parsed?.encoding !== COMPRESSED_STATE_ENCODING) return parsed;
+  if (typeof parsed.payload !== "string"
+    || !/^[a-f0-9]{64}$/u.test(String(parsed.sha256))
+    || !Number.isInteger(parsed.uncompressedBytes)
+    || parsed.uncompressedBytes < 1
+    || parsed.uncompressedBytes > MAX_DECOMPRESSED_STATE_BYTES
+    || !Number.isInteger(parsed.compressedBytes)
+    || parsed.compressedBytes < 1) {
+    throw new SportpaleisMariaDbStoreError("Gecomprimeerde Workspace-state heeft ongeldige metadata.", "DATABASE_STATE_ENCODING_INVALID");
+  }
+  try {
+    const compressed = Buffer.from(parsed.payload, "base64");
+    if (compressed.byteLength !== parsed.compressedBytes) throw new Error("compressed-byte-count-mismatch");
+    const raw = gunzipSync(compressed, { maxOutputLength: MAX_DECOMPRESSED_STATE_BYTES });
+    if (raw.byteLength !== parsed.uncompressedBytes || sha256(raw) !== parsed.sha256) throw new Error("state-integrity-mismatch");
+    return JSON.parse(raw.toString("utf8"));
+  } catch (error) {
+    if (error instanceof SportpaleisMariaDbStoreError) throw error;
+    throw new SportpaleisMariaDbStoreError("Gecomprimeerde Workspace-state kon niet integer worden gelezen.", "DATABASE_STATE_ENCODING_INVALID", error);
+  }
 }
 
 function immutableSnapshot(value) {
@@ -98,39 +121,34 @@ function immutableSnapshot(value) {
   return Object.freeze(value);
 }
 
-function safeStringChunks(value, maximumCodeUnits = STATE_WRITE_CHUNK_CODE_UNITS) {
-  const chunks = [];
-  for (let start = 0; start < value.length;) {
-    let end = Math.min(value.length, start + maximumCodeUnits);
-    if (end < value.length && value.charCodeAt(end - 1) >= 0xD800 && value.charCodeAt(end - 1) <= 0xDBFF
-      && value.charCodeAt(end) >= 0xDC00 && value.charCodeAt(end) <= 0xDFFF) end -= 1;
-    chunks.push(value.slice(start, end));
-    start = end;
+export function encodeSportpaleisRuntimeState(state) {
+  const raw = JSON.stringify(state);
+  const uncompressedBytes = Buffer.byteLength(raw, "utf8");
+  if (uncompressedBytes <= DIRECT_STATE_WRITE_MAX_BYTES) return { serialized: raw, encoding: "PLAIN_JSON", uncompressedBytes, storedBytes: uncompressedBytes };
+  const compressed = gzipSync(raw, { level: 9 });
+  const serialized = JSON.stringify({
+    encoding: COMPRESSED_STATE_ENCODING,
+    sha256: sha256(raw),
+    uncompressedBytes,
+    compressedBytes: compressed.byteLength,
+    payload: compressed.toString("base64"),
+  });
+  const storedBytes = Buffer.byteLength(serialized, "utf8");
+  if (storedBytes > DIRECT_STATE_WRITE_MAX_BYTES) {
+    throw new SportpaleisMariaDbStoreError(
+      "Workspace-state past ook na veilige compressie niet binnen het begrensde databasepakket.",
+      "DATABASE_STATE_PACKET_BUDGET_EXCEEDED",
+    );
   }
-  return chunks;
+  return { serialized, encoding: COMPRESSED_STATE_ENCODING, uncompressedBytes, storedBytes };
 }
 
 export async function updateSportpaleisRuntimeState(connection, state, previousRevision) {
-  const serialized = JSON.stringify(state);
-  if (Buffer.byteLength(serialized, "utf8") <= DIRECT_STATE_WRITE_MAX_BYTES) {
-    return connection.query(
-      "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
-      [state.schemaVersion, state.revision, serialized, state.organizationId, previousRevision],
-    );
-  }
-
-  await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = ?`, [""]);
-  try {
-    for (const chunk of safeStringChunks(serialized)) {
-      await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = CONCAT(${LARGE_STATE_SESSION_VARIABLE}, ?)`, [chunk]);
-    }
-    return await connection.query(
-      `UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ${LARGE_STATE_SESSION_VARIABLE}, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?`,
-      [state.schemaVersion, state.revision, state.organizationId, previousRevision],
-    );
-  } finally {
-    await connection.query(`SET ${LARGE_STATE_SESSION_VARIABLE} = NULL`).catch(() => undefined);
-  }
+  const encoded = encodeSportpaleisRuntimeState(state);
+  return connection.query(
+    "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
+    [state.schemaVersion, state.revision, encoded.serialized, state.organizationId, previousRevision],
+  );
 }
 
 function databaseOptions(config) {
@@ -208,7 +226,7 @@ export class SportpaleisMariaDbStore {
         );
         this.#remember(state);
       } else {
-        const persistedState = jsonValue(rows[0].state_json);
+        const persistedState = decodeSportpaleisRuntimeState(rows[0].state_json);
         const state = validateSportpaleisPilotState(structuredClone(persistedState));
         if (Number(rows[0].revision) !== Number(state.revision)) {
           throw new SportpaleisMariaDbStoreError(
@@ -259,7 +277,7 @@ export class SportpaleisMariaDbStore {
     if (rows.length !== 1) {
       throw new SportpaleisMariaDbStoreError("Workspace-productiestate ontbreekt.", "DATABASE_STATE_MISSING");
     }
-    const state = validateSportpaleisPilotState(jsonValue(rows[0].state_json));
+    const state = validateSportpaleisPilotState(decodeSportpaleisRuntimeState(rows[0].state_json));
     if (Number(rows[0].revision) !== Number(state.revision)) {
       throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
     }
@@ -284,7 +302,7 @@ export class SportpaleisMariaDbStore {
       if (rows.length !== 1) {
         throw new SportpaleisMariaDbStoreError("Workspace-productiestate ontbreekt.", "DATABASE_STATE_MISSING");
       }
-      const current = validateSportpaleisPilotState(jsonValue(rows[0].state_json));
+      const current = validateSportpaleisPilotState(decodeSportpaleisRuntimeState(rows[0].state_json));
       if (Number(rows[0].revision) !== Number(current.revision)) {
         throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
       }

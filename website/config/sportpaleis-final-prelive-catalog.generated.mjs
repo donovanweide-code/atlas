@@ -12704,9 +12704,21 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
         "XXL": 49.95
       },
       "personalizationUnitPricesEur": {
-        "backNumber": 6.5
+        "backNumber": null
       },
-      "sourceLabel": "Sportpaleis.nl live · zichtbare prijs per beschikbare maat en zichtbare bedrukoptie · gecontroleerd 2026-08-12 · https://www.sportpaleis.nl/sc-buitenboys-wedstrijd-shirt_96113.html"
+      "personalizationValuePricing": {
+        "backNumber": {
+          "normalization": "TRIMMED_DIGITS",
+          "maximumLength": 2,
+          "unitPricesByLengthEur": {
+            "1": 5,
+            "2": 8.5
+          },
+          "label": "Rugnummer",
+          "authority": "Donovan Product Truth · artikel 141598 · 2026-09-03"
+        }
+      },
+      "sourceLabel": "Donovan Product Truth · SC Buitenboys artikel 141598 · rugnummer 1 cijfer €5,00 / 2 cijfers €8,50 · 2026-09-03"
     },
     "catalogProvenance": {
       "authority": "SPORTPALEIS_LIVE",
@@ -12725,9 +12737,9 @@ export const SPORTPALEIS_LIVE_PILOT_ARTICLES = [
       "Rotatie en spiegeling volgen uitsluitend een aantoonbaar gevalideerde productieroute."
     ],
     "personalizationPolicy": {
-      "mode": "optional",
+      "mode": "combination",
       "fields": {
-        "backNumber": "optional"
+        "backNumber": "required"
       }
     },
     "validation": {

@@ -311,6 +311,13 @@ export interface CatalogArticle {
     articleUnitPriceEur: number | null;
     articleUnitPricesBySizeEur?: Record<string, number | null>;
     personalizationUnitPricesEur: Partial<Record<keyof OrderPersonalization, number | null>>;
+    personalizationValuePricing?: Partial<Record<keyof OrderPersonalization, {
+      normalization: "TRIMMED_DIGITS";
+      maximumLength: number;
+      unitPricesByLengthEur: Record<string, number>;
+      label: string;
+      authority: string;
+    }>>;
     sourceLabel: string;
   };
 }
@@ -462,6 +469,24 @@ export interface WorkspaceOrder {
   association: string;
   associations?: string[];
   standardPersonalization?: OrderPersonalization;
+  commercialPriceTruth?: {
+    version: "SPORTPALEIS_ORDER_COMMERCIAL_PRICE_TRUTH_V1";
+    source: "CATALOG_AT_ORDER_WRITE";
+    lines: {
+      identity: string;
+      articleId: string;
+      articleNumber: string;
+      itemId: string;
+      occurrenceId: string;
+      field: keyof OrderPersonalization;
+      value: string;
+      quantity: number;
+      unitPriceEur: number;
+      totalPriceEur: number;
+      sourceLabel: string;
+    }[];
+    totalPersonalizationEur: number;
+  };
   createdAt: string;
   updatedAt?: string;
   promisedAt: string | null;

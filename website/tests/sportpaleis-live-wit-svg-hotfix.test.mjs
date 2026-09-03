@@ -20,15 +20,15 @@ async function fixture(context) {
   const font = (await service.bootstrap(operator.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   assert.ok(font);
 
-  async function createReadyOrder(label, quantity, key) {
+  async function createReadyOrder(label, quantity, key, foilColor = "Wit") {
     const created = (await service.createOrder(operator.token, operator.csrfToken, {
       orderKind: "CUSTOM",
       customer: label,
       customerEmail: "",
       customerPhone: "",
       standardPersonalization: empty,
-      items: [{ product: label, size: "", quantity, personalization: `Initialen ${key}`, foilColor: "Wit", deviation: true, overrides: empty }],
-      productionLines: [{ id: `wit-line-${key}`, type: "INITIALS", content: key, previewLabel: `Initialen ${key}`, widthMm: 48, heightMm: 30, quantity, sourceId: font.id }],
+      items: [{ product: label, size: "", quantity, personalization: `Initialen ${key}`, foilColor, deviation: true, overrides: empty }],
+      productionLines: [{ id: `wit-line-${key}`, type: "INITIALS", content: key, previewLabel: `Initialen ${key}`, widthMm: 48, heightMm: 30, foilColor, quantity, sourceId: font.id }],
     }, `wit-svg-order-${key}`)).value;
     return (await service.advanceOrder(operator.token, operator.csrfToken, created.id, created.revision, `wit-svg-control-${key}`)).value;
   }
@@ -90,6 +90,39 @@ test("stale globale WIT-groep kaapt de actuele drie-orderbatch niet en één int
   assert.deepEqual(afterRejectedRetry.orders.map(({ id, revision }) => [id, revision]), beforeRejectedRetry.orders.map(({ id, revision }) => [id, revision]));
 });
 
+test("grote LIVE-vorm van 18 WIT-opdrukken uit vier orders eindigt in exact één bruikbare job en artifact", async (context) => {
+  const { store, service, operator, createReadyOrder } = await fixture(context);
+  const orders = await Promise.all([
+    createReadyOrder("LIVE WIT 0127", 8, "W27"),
+    createReadyOrder("LIVE WIT 0128", 4, "W28"),
+    createReadyOrder("LIVE WIT 0130", 5, "W30"),
+    createReadyOrder("LIVE WIT 0131", 1, "W31"),
+  ]);
+  const request = { orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor: "Wit" };
+  const first = await service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, request, "production-current-group-live-wit-18");
+  const retry = await service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, request, "production-current-group-live-wit-18");
+
+  assert.equal(first.duplicate, false);
+  assert.equal(retry.duplicate, true);
+  assert.equal(retry.value.job.id, first.value.job.id);
+  assert.equal(first.value.job.status, "AWAITING_HUMAN_CHECK");
+  assert.equal(first.value.job.snapshot.layout.objectCount, 18);
+  assert.deepEqual(first.value.job.snapshot.orderIds.toSorted(), orders.map(({ id }) => id).toSorted());
+
+  const artifact = await service.productionJobArtifact(operator.token, first.value.job.id);
+  assert.equal(artifact.mimeType, "image/svg+xml");
+  assert.equal(artifact.disposition, "attachment");
+  assert.equal(createHash("sha256").update(artifact.bytes).digest("hex").toUpperCase(), first.value.job.snapshot.artifact.sha256);
+
+  const committed = await store.read();
+  assert.equal(committed.productionJobs.filter(({ id }) => id === first.value.job.id).length, 1);
+  assert.equal(committed.productionProposals.filter(({ id }) => id === first.value.proposal.id).length, 1);
+  for (const order of committed.orders.filter(({ id }) => orders.some((candidate) => candidate.id === id))) {
+    assert.equal(order.stage, "PRINT");
+    assert.equal(order.eventHistory.filter(({ type }) => type === "PRODUCTION_JOB_CREATED").length, 1);
+  }
+});
+
 test("éénklik-UI gebruikt deterministische intentie en start de attachment vóór herladen", async () => {
   const workspace = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   const api = await readFile(new URL("../src/sportpaleis/pilot-api.ts", import.meta.url), "utf8");
@@ -99,6 +132,13 @@ test("éénklik-UI gebruikt deterministische intentie en start de attachment vó
   assert.match(workspace, /anchor\.download = job\.snapshot\.artifact\.filename/u);
   assert.match(workspace, /controleer de selectie en probeer één keer opnieuw/u);
   assert.match(workspace, /controleer of een nieuw PLOT-nummer bestaat voordat je opnieuw probeert/u);
+  assert.match(workspace, /De .*productiewrite is volledig teruggedraaid/u);
+  assert.match(workspace, /duurde langer dan 30 seconden/u);
   assert.match(api, /deterministicIdempotencyKey\("production-current-group", idempotencyPayload\)/u);
   assert.match(api, /crypto\.subtle\.digest\("SHA-256", bytes\)/u);
+  assert.match(api, /const PRODUCTION_WRITE_TIMEOUT_MS = 30_000/u);
+  assert.match(api, /#boundedProductionFetch\(`\$\{API\}\/production-proposals\/current-job`/u);
+  assert.match(api, /error: "PRODUCTION_REQUEST_TIMEOUT"/u);
+  const recovery = directHandler.slice(directHandler.indexOf(".catch((e)"));
+  assert.ok(recovery.indexOf("render({ preserveScroll: true })") < recovery.indexOf("void load()"), "de verwerkingsstatus verdwijnt vóór de read-only reconciliatie");
 });

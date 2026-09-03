@@ -70,7 +70,20 @@ function profileId(product, field) {
 
 const HUMAN_ARTICLE_TRUTH = Object.freeze({
   "138505": Object.freeze({ association: "Almere Pioneers" }),
-  "141598": Object.freeze({ foilColorOverride: "Blauw" }),
+  "141598": Object.freeze({
+    foilColorOverride: "Blauw",
+    personalizationPolicy: Object.freeze({ mode: "combination", fields: Object.freeze({ backNumber: "required" }) }),
+    personalizationValuePricing: Object.freeze({
+      backNumber: Object.freeze({
+        normalization: "TRIMMED_DIGITS",
+        maximumLength: 2,
+        unitPricesByLengthEur: Object.freeze({ "1": 5, "2": 8.5 }),
+        label: "Rugnummer",
+        authority: "Donovan Product Truth · artikel 141598 · 2026-09-03",
+      }),
+    }),
+    priceSourceLabel: "Donovan Product Truth · SC Buitenboys artikel 141598 · rugnummer 1 cijfer €5,00 / 2 cijfers €8,50 · 2026-09-03",
+  }),
   "140294": Object.freeze({ foilColorOverride: "Wit" }),
   "140305": Object.freeze({ foilColorOverride: "Wit" }),
 });
@@ -131,8 +144,9 @@ function toArticle(product, index, duplicateSkus, sourceMedia = []) {
     priceConfiguration: {
       articleUnitPriceEur,
       articleUnitPricesBySizeEur,
-      personalizationUnitPricesEur,
-      sourceLabel: `Sportpaleis.nl live \u00b7 zichtbare prijs per beschikbare maat en zichtbare bedrukoptie \u00b7 gecontroleerd 2026-08-12 \u00b7 ${product.sourceUrl}`,
+      personalizationUnitPricesEur: humanTruth.personalizationValuePricing ? { ...personalizationUnitPricesEur, [field]: null } : personalizationUnitPricesEur,
+      ...(humanTruth.personalizationValuePricing ? { personalizationValuePricing: humanTruth.personalizationValuePricing } : {}),
+      sourceLabel: humanTruth.priceSourceLabel ?? `Sportpaleis.nl live \u00b7 zichtbare prijs per beschikbare maat en zichtbare bedrukoptie \u00b7 gecontroleerd 2026-08-12 \u00b7 ${product.sourceUrl}`,
     },
     catalogProvenance: {
       authority: "SPORTPALEIS_LIVE",
@@ -146,7 +160,7 @@ function toArticle(product, index, duplicateSkus, sourceMedia = []) {
       checkedAt: "2026-08-12",
     },
     productionDataGaps: gaps,
-    personalizationPolicy: { mode: field ? "optional" : "none", fields: field ? { [field]: "optional" } : {} },
+    personalizationPolicy: humanTruth.personalizationPolicy ?? { mode: field ? "optional" : "none", fields: field ? { [field]: "optional" } : {} },
     validation: {
       status: "PARTIAL",
       source: `Actuele, werkelijk zichtbare Sportpaleis-productpagina \u00b7 ${product.sourceUrl} \u00b7 gecontroleerd 2026-08-12. Productievalidatie staat los van catalogusvalidatie.`,

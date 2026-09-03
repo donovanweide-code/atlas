@@ -648,6 +648,7 @@ form[data-settings-form] input, form[data-settings-form] textarea { width: 100%;
 .sp-price-lines { grid-column: 2; grid-row: 1 / span 3; padding: 18px; border: 1px solid var(--sp-border); border-radius: 10px; background: #fafafa; }
 .sp-price-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--sp-border); }
 .sp-price-lines .sp-price-print { padding-left: 14px; color: #555; font-size: 12px; }
+.sp-article-print-truth{display:block;margin-top:6px;color:#555;line-height:1.45}.sp-article-print-truth strong{color:#161616}.sp-stored-price-truth{margin-top:18px;padding:14px;border:1px solid #dedede;border-radius:12px}.sp-stored-price-truth h3{margin:0 0 8px}.sp-stored-price-truth .sp-price-print{display:flex;justify-content:space-between;gap:16px;padding:6px 0}.sp-stored-price-truth .sp-price-total{margin-top:8px}
 .sp-price-lines .sp-price-total { margin-top: 6px; padding-top: 14px; border-top: 2px solid #111; border-bottom: 0; font-size: 17px; }
 .sp-price-lines > p { margin: 10px 0 0; color: #8b5700; font-size: 11px; line-height: 1.45; }
 .sp-checkout-summary .sp-order-exceptions { display: block; margin: 0; padding: 12px 14px; }

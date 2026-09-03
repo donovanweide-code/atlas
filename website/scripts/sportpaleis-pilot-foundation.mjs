@@ -38,6 +38,7 @@ import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-pro
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
+import { resolveCatalogPersonalizationPrice } from "../src/sportpaleis/catalog-personalization-pricing.mjs";
 import { canonicalArticlePersonalizationFields, canonicalOrderFoilColors, executableProductionAssetDecision, productionAssetContextDecision, productionAssetReuseDecision, productionFontAssociationDecision, productionFontExecutableDecision, productionObjectFitsTrack } from "../src/sportpaleis/production-practice-contract.mjs";
 import {
   createWorkspacePasswordRecord,
@@ -1141,11 +1142,16 @@ export function validateSportpaleisPilotState(input) {
       for (const field of PERSONALIZATION_FIELDS) if (existing.priceConfiguration.personalizationUnitPricesEur[field] == null && article.priceConfiguration?.personalizationUnitPricesEur?.[field] != null) existing.priceConfiguration.personalizationUnitPricesEur[field] = article.priceConfiguration.personalizationUnitPricesEur[field];
       if ((!existing.priceConfiguration.sourceLabel || existing.priceConfiguration.sourceLabel.startsWith("DATA_GAP")) && article.priceConfiguration?.sourceLabel) existing.priceConfiguration.sourceLabel = article.priceConfiguration.sourceLabel;
       existing.displayOrder ??= ARTICLE_CATALOG.findIndex(({ id }) => id === article.id) + 1;
-      if (article.articleNumber === "140298" || article.association === PIONEERS_ASSOCIATION && ["116386", "116388"].includes(String(article.articleNumber))) {
+      if (["140298", "141598"].includes(String(article.articleNumber)) || article.association === PIONEERS_ASSOCIATION && ["116386", "116388"].includes(String(article.articleNumber))) {
         existing.supports = structuredClone(article.supports);
         existing.personalizationPolicy = structuredClone(article.personalizationPolicy);
         existing.commercialPrintOptions = structuredClone(article.commercialPrintOptions);
         existing.printRelevance = structuredClone(article.printRelevance);
+        if (article.articleNumber === "141598") {
+          existing.priceConfiguration.personalizationUnitPricesEur.backNumber = null;
+          existing.priceConfiguration.personalizationValuePricing = structuredClone(article.priceConfiguration.personalizationValuePricing);
+          existing.priceConfiguration.sourceLabel = article.priceConfiguration.sourceLabel;
+        }
       }
     }
   }
@@ -1252,6 +1258,9 @@ export function validateSportpaleisPilotState(input) {
   for (const order of state.orders) {
     if (!Number.isInteger(order.revision) || order.revision < 1 || !STAGE_ORDER.includes(order.stage)) {
       throw new Error("Ongeldige order in datastore.");
+    }
+    if (order.stage === "ORDER" && order.orderKind === "INDIVIDUAL" && order.items?.length && !order.commercialPriceTruth) {
+      order.commercialPriceTruth = catalogCommercialPriceTruth(state, order.items, "CATALOG_CONCEPT_REPROJECTION");
     }
     for (const line of order.productionLines ?? []) {
       const incompleteCompositeSegment = ["INITIALS_FIRST", "INITIALS_INFIX", "INITIALS_LAST"].includes(line.placementRole) && line.validation?.status === "BLOCKED" && line.widthMm >= 0 && line.heightMm >= 0;
@@ -1865,6 +1874,7 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     association: associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging",
     associations,
     standardPersonalization,
+    commercialPriceTruth: catalogCommercialPriceTruth(state, items),
     createdAt,
     updatedAt: createdAt,
     promisedAt: payload.promisedAt ? validDate(payload.promisedAt) : null,
@@ -4482,6 +4492,7 @@ export class SportpaleisPilotService {
         const associations = [...new Set(items.map(({ association }) => association).filter(Boolean))];
         order.standardPersonalization = standardPersonalization;
         order.items = items;
+        order.commercialPriceTruth = catalogCommercialPriceTruth(state, items);
         assertOrderProductionDecorationCardinality(state, order);
         order.associations = associations;
         order.association = associations.length === 1 ? associations[0] : associations.length > 1 ? "Meerdere verenigingen" : "Geen vereniging";
@@ -5790,6 +5801,7 @@ export class SportpaleisPilotService {
           articleUnitPriceEur: price(payload.priceConfiguration.articleUnitPriceEur, "Artikelprijs"),
           articleUnitPricesBySizeEur: Object.fromEntries((article.availableSizes ?? []).map((size) => [size, price(requestedSizePrices === undefined ? current.articleUnitPricesBySizeEur?.[size] : requestedSizePrices?.[size], `Artikelprijs maat ${size}`)])),
           personalizationUnitPricesEur: Object.fromEntries(PERSONALIZATION_FIELDS.map((field) => [field, price(payload.priceConfiguration.personalizationUnitPricesEur?.[field], `Bedrukkingsprijs ${field}`)])),
+          ...(current.personalizationValuePricing ? { personalizationValuePricing: structuredClone(current.personalizationValuePricing) } : {}),
           sourceLabel: requiredText(payload.priceConfiguration.sourceLabel ?? current.sourceLabel, "Prijsbron", 500),
         };
       }
@@ -7570,6 +7582,40 @@ function productionGroupCompatibilityKey(group) {
   ].join("|");
 }
 
+function catalogCommercialPriceTruth(state, items, source = "CATALOG_AT_ORDER_WRITE") {
+  const lines = [];
+  for (const item of items) {
+    const article = state.articles.find(({ id }) => id === item.articleId);
+    if (!article) continue;
+    for (const variant of item.variants ?? []) {
+      for (const field of PERSONALIZATION_FIELDS) {
+        const resolved = resolveCatalogPersonalizationPrice(article, field, variant.personalizationValues?.[field]);
+        if (resolved.status !== "PRICED") continue;
+        const totalPriceEur = Math.round(resolved.unitPriceEur * variant.quantity * 100) / 100;
+        lines.push({
+          identity: `${item.id}:${variant.id}:${field}`,
+          articleId: article.id,
+          articleNumber: article.articleNumber,
+          itemId: item.id,
+          occurrenceId: variant.id,
+          field,
+          value: resolved.normalizedValue,
+          quantity: variant.quantity,
+          unitPriceEur: resolved.unitPriceEur,
+          totalPriceEur,
+          sourceLabel: article.priceConfiguration?.sourceLabel ?? "DATA_GAP: prijsbron ontbreekt",
+        });
+      }
+    }
+  }
+  return {
+    version: "SPORTPALEIS_ORDER_COMMERCIAL_PRICE_TRUTH_V1",
+    source,
+    lines,
+    totalPersonalizationEur: Math.round(lines.reduce((sum, line) => sum + line.totalPriceEur, 0) * 100) / 100,
+  };
+}
+
 function openProductionGroupRevisionsCurrent(state, group) {
   return (group?.orders ?? []).length > 0 && group.orders.every(({ id, expectedRevision }) => {
     const order = state.orders.find((candidate) => candidate.id === id);
@@ -8955,6 +9001,13 @@ function validateItems(value, state, standardPersonalization, options = {}) {
         if (appliedFields.backNumber && options.requireBackNumberSizeClass === true && !BACK_NUMBER_SIZE_CLASSES.has(appliedBackNumberSizeClass)) throw Object.assign(new Error(`Kies Junior of Senior voor het rugnummer op ${article.name}.`), { statusCode: 400, code: "BACK_NUMBER_SIZE_CLASS_REQUIRED" });
         const applied = { ...appliedFields, backNumberSizeClass: appliedBackNumberSizeClass };
         const policy = { mode: article.personalizationPolicy?.mode ?? "combination", fields: Object.fromEntries(allowedPersonalizationFields.map((key) => [key, article.personalizationPolicy?.fields?.[key] ?? "optional"])) };
+        for (const field of allowedPersonalizationFields) {
+          if (!article.priceConfiguration?.personalizationValuePricing?.[field] || !applied[field]) continue;
+          const resolvedPrice = resolveCatalogPersonalizationPrice(article, field, applied[field]);
+          if (resolvedPrice.status !== "PRICED") throw Object.assign(new Error(resolvedPrice.reason ?? `${labels[field]} heeft geen geldige prijsregel.`), { statusCode: 400, code: "ARTICLE_PERSONALIZATION_PRICE_INVALID", articleId: article.id, field });
+          applied[field] = resolvedPrice.normalizedValue;
+          appliedFields[field] = resolvedPrice.normalizedValue;
+        }
         const populated = Object.entries(appliedFields).filter(([key, entry]) => key !== "initialsInfix" && entry);
         if (policy.mode === "mutually-exclusive" && populated.length > 1) throw Object.assign(new Error(`${article.name} staat slechts één bedrukkingstype tegelijk toe.`), { statusCode: 400, code: "PERSONALIZATION_MUTUALLY_EXCLUSIVE" });
         for (const [key, requirement] of Object.entries(policy.fields ?? {})) if (requirement === "required" && !applied[key]) throw Object.assign(new Error(`${article.name} vereist ${labels[key].toLowerCase()}.`), { statusCode: 400, code: "PERSONALIZATION_REQUIRED" });

@@ -31,6 +31,7 @@ import type {
 import { createNonCriticalReadonlyCache, type ReadonlyCacheObservation } from "../workspace-readonly-cache.ts";
 
 const API = "/api/sportpaleis/v1";
+const PRODUCTION_WRITE_TIMEOUT_MS = 30_000;
 export const SPORTPALEIS_READONLY_CACHE_KEY = "sportpaleis.workspace.readonly-cache.013";
 export const SPORTPALEIS_READONLY_CACHE_MAX_BYTES = 2 * 1024 * 1024;
 const CACHE_PREFIX = "sportpaleis.workspace.readonly-cache.";
@@ -627,7 +628,7 @@ export class SportpaleisPilotApi {
   }
 
   async createProductionJob(orders: readonly WorkspaceOrder[], proposalId?: string, proposalGroupId?: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
-    return responseBody(await this.#mutatingFetch(`${API}/production-jobs`, {
+    return responseBody(await this.#boundedProductionFetch(`${API}/production-jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("plotjob") },
       body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), proposalId, proposalGroupId }),
@@ -653,7 +654,7 @@ export class SportpaleisPilotApi {
   async prepareCurrentProductionGroup(orders: readonly WorkspaceOrder[], foilColor: string, efficiency?: { supplement: Record<string, unknown>; analysisHash: string }): Promise<{ duplicate: boolean; value: { proposal: ProductionProposal; job: ProductionJob } }> {
     const payload = { orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })).sort((left, right) => left.id.localeCompare(right.id)), foilColor, ...(efficiency ? { supplement: efficiency.supplement, efficiencyAnalysisHash: efficiency.analysisHash } : {}) };
     const idempotencyPayload = { ...payload, foilColor: foilColor.trim().toLocaleLowerCase("nl-NL") };
-    return responseBody(await this.#mutatingFetch(`${API}/production-proposals/current-job`, {
+    return responseBody(await this.#boundedProductionFetch(`${API}/production-proposals/current-job`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": await deterministicIdempotencyKey("production-current-group", idempotencyPayload) },
       body: JSON.stringify(payload),
@@ -808,5 +809,23 @@ export class SportpaleisPilotApi {
       credentials: "same-origin",
       headers: { ...init.headers, "X-CSRF-Token": this.#csrfToken },
     });
+  }
+
+  async #boundedProductionFetch(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), PRODUCTION_WRITE_TIMEOUT_MS);
+    try {
+      return await this.#mutatingFetch(input, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new PilotApiError(408, {
+          error: "PRODUCTION_REQUEST_TIMEOUT",
+          message: "De productiecontrole duurde te lang. Workspace controleert de actuele historie voordat opnieuw proberen veilig is.",
+        });
+      }
+      throw error;
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
   }
 }

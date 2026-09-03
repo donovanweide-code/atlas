@@ -1,33 +1,25 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 
-import { updateSportpaleisRuntimeState } from "../scripts/sportpaleis-mariadb-store.mjs";
+import {
+  decodeSportpaleisRuntimeState,
+  encodeSportpaleisRuntimeState,
+  updateSportpaleisRuntimeState,
+} from "../scripts/sportpaleis-mariadb-store.mjs";
 
 class RecordingConnection {
   constructor({ failFinalUpdate = false } = {}) {
     this.failFinalUpdate = failFinalUpdate;
     this.queries = [];
-    this.sessionValue = null;
     this.persisted = null;
   }
 
   async query(sql, parameters = []) {
     this.queries.push({ sql, parameters });
-    if (sql === "SET @wbd_sportpaleis_runtime_state_json = ?") {
-      this.sessionValue = parameters[0];
-      return { affectedRows: 0 };
-    }
-    if (sql.startsWith("SET @wbd_sportpaleis_runtime_state_json = CONCAT")) {
-      this.sessionValue += parameters[0];
-      return { affectedRows: 0 };
-    }
-    if (sql === "SET @wbd_sportpaleis_runtime_state_json = NULL") {
-      this.sessionValue = null;
-      return { affectedRows: 0 };
-    }
     if (sql.startsWith("UPDATE sp_runtime_state")) {
       if (this.failFinalUpdate) throw Object.assign(new Error("simulated final update failure"), { code: "SIMULATED_WRITE_FAILURE" });
-      this.persisted = sql.includes("state_json = @wbd_sportpaleis_runtime_state_json") ? this.sessionValue : parameters[2];
+      this.persisted = parameters[2];
       return { affectedRows: 1 };
     }
     throw new Error(`Onverwachte query: ${sql}`);
@@ -45,7 +37,7 @@ test("kleine state behoudt de bestaande enkelvoudige revision-checked update", a
   assert.deepEqual(connection.queries[0].parameters.slice(-2), [state.organizationId, 8]);
 });
 
-test("grote state wordt bytegetrouw in begrensde UTF-8-veilige sessiechunks opgebouwd en atomisch geschreven", async () => {
+test("grote state wordt integer gecomprimeerd en in één revision-checked update atomisch geschreven", async () => {
   const state = {
     schemaVersion: 13,
     revision: 1459,
@@ -57,21 +49,34 @@ test("grote state wordt bytegetrouw in begrensde UTF-8-veilige sessiechunks opge
   const result = await updateSportpaleisRuntimeState(connection, state, 1458);
 
   assert.equal(result.affectedRows, 1);
-  assert.equal(connection.persisted, expected);
-  assert.equal(connection.sessionValue, null, "de poolconnection houdt geen grote sessievariabele vast");
-  const chunkQueries = connection.queries.filter(({ sql }) => sql.includes("CONCAT"));
-  assert.ok(chunkQueries.length > 1);
-  assert.ok(chunkQueries.every(({ parameters }) => Buffer.byteLength(parameters[0], "utf8") < 3 * 1024 * 1024));
-  const final = connection.queries.find(({ sql }) => sql.startsWith("UPDATE sp_runtime_state"));
-  assert.ok(final.sql.includes("state_json = @wbd_sportpaleis_runtime_state_json"));
-  assert.deepEqual(final.parameters, [state.schemaVersion, state.revision, state.organizationId, 1458]);
+  assert.equal(connection.queries.length, 1);
+  assert.ok(Buffer.byteLength(connection.persisted, "utf8") < 8 * 1024 * 1024);
+  assert.notEqual(connection.persisted, expected);
+  assert.deepEqual(decodeSportpaleisRuntimeState(connection.persisted), state);
+  assert.deepEqual(connection.queries[0].parameters.slice(-2), [state.organizationId, 1458]);
 });
 
-test("mislukte finale update ruimt de sessiebuffer op zodat transaction rollback schoon blijft", async () => {
+test("mislukte grote-state update blijft één faalbare databasehandeling voor transaction rollback", async () => {
   const state = { schemaVersion: 13, revision: 3, organizationId: "sport-2000-sportpaleis-bv", payload: "B".repeat(9 * 1024 * 1024) };
   const connection = new RecordingConnection({ failFinalUpdate: true });
 
   await assert.rejects(() => updateSportpaleisRuntimeState(connection, state, 2), (error) => error.code === "SIMULATED_WRITE_FAILURE");
-  assert.equal(connection.sessionValue, null);
-  assert.equal(connection.queries.at(-1).sql, "SET @wbd_sportpaleis_runtime_state_json = NULL");
+  assert.equal(connection.queries.length, 1);
+  assert.equal(connection.persisted, null);
+});
+
+test("gecomprimeerde state weigert stille corruptie op hash en lengte", () => {
+  const state = { schemaVersion: 17, revision: 1505, organizationId: "sport-2000-sportpaleis-bv", payload: "C".repeat(9 * 1024 * 1024) };
+  const encoded = encodeSportpaleisRuntimeState(state);
+  const envelope = JSON.parse(encoded.serialized);
+  envelope.sha256 = "0".repeat(64);
+  assert.throws(() => decodeSportpaleisRuntimeState(JSON.stringify(envelope)), (error) => error.code === "DATABASE_STATE_ENCODING_INVALID");
+});
+
+test("oncompressibele state faalt vóór een databasewrite buiten het packetbudget", async () => {
+  const noise = randomBytes(7 * 1024 * 1024);
+  const state = { schemaVersion: 17, revision: 1505, organizationId: "sport-2000-sportpaleis-bv", payload: noise.toString("base64") };
+  const connection = new RecordingConnection();
+  await assert.rejects(() => updateSportpaleisRuntimeState(connection, state, 1504), (error) => error.code === "DATABASE_STATE_PACKET_BUDGET_EXCEEDED");
+  assert.equal(connection.queries.length, 0);
 });
