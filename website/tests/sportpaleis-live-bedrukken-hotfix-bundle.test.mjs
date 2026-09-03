@@ -108,7 +108,7 @@ test("SP-2026-0116-klasse projecteert Rug 10 en Short 10 exact één keer terwij
   const migrated = migrateSportpaleisPilotState(legacyState);
   const migratedOrder = migrated.orders.find(({ id }) => id === created.id);
   const migratedProfile = migrated.productionProfiles.find(({ id }) => id === legacyProfile.id);
-  assert.equal(migrated.schemaVersion, 17);
+  assert.equal(migrated.schemaVersion, 18);
   assert.equal(migrated.users.find(({ id }) => id === "patrick").workContexts.includes("WEBSHOP"), true);
   assert.equal(migratedProfile.backNumberSizeClasses.SENIOR.physicalHeightMm, 200);
   assert.doesNotMatch(migratedProfile.sizeLabel, /22\s*cm/iu);
@@ -133,7 +133,7 @@ test("SP-2026-0116-klasse projecteert Rug 10 en Short 10 exact één keer terwij
   assert.equal(first.value.snapshot.artifact.format, "SVG");
 });
 
-test("actuele LIVE-state migreert expliciet van schema 16 naar 17", async (context) => {
+test("actuele LIVE-state migreert expliciet van schema 16 naar 18 met fail-closed mailboxrouting", async (context) => {
   const { store } = await fixture(context);
   const liveState = structuredClone(await store.read());
   liveState.schemaVersion = 16;
@@ -141,6 +141,9 @@ test("actuele LIVE-state migreert expliciet van schema 16 naar 17", async (conte
     user.workContexts = user.workContexts.filter((workContext) => workContext !== "WEBSHOP");
   }
   const migrated = migrateSportpaleisPilotState(liveState);
-  assert.equal(migrated.schemaVersion, 17);
+  assert.equal(migrated.schemaVersion, 18);
+  assert.equal(migrated.mailboxRouting.mailbox.address, "bedrukking@sportpaleis.nl");
+  assert.equal(migrated.mailboxRouting.mailbox.inboundStatus, "CREDENTIALS_REQUIRED");
+  assert.equal(migrated.mailboxRouting.mailbox.destructiveMailboxActions, false);
   assert.ok(migrated.users.filter(({ role }) => ["operator", "store"].includes(role)).every(({ workContexts }) => workContexts.includes("WEBSHOP")));
 });

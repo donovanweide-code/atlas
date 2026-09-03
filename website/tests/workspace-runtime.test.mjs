@@ -239,6 +239,10 @@ test("dedicated Sportpaleis-host gebruikt korte routes en redirect oude links me
   assert.equal(legacy.status, 308); assert.equal(legacy.location, "/orders/SP-2026-0005?tab=detail");
   const clean = await request("/productie");
   assert.equal(clean.status, 200); assert.match(clean.body, /Sportpaleis Workspace/);
+  const mail = await request("/mail");
+  assert.equal(mail.status, 200); assert.match(mail.body, /Sportpaleis Workspace/);
+  const legacyMail = await request("/workspace/sportpaleis/mail");
+  assert.equal(legacyMail.status, 308); assert.equal(legacyMail.location, "/mail");
   const printingAlias = await request("/bedrukken?bron=snelkoppeling");
   assert.equal(printingAlias.status, 308); assert.equal(printingAlias.location, "/orders/nieuw?bron=snelkoppeling");
   const printing = await request(printingAlias.location);
