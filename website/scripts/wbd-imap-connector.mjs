@@ -83,20 +83,26 @@ export class WbdImapMailboxConnector {
     const boundedLimit = Math.max(1, Math.min(1_000, Number(limit) || DEFAULT_LIMIT));
     try {
       await client.connect();
-      const lock = await client.getMailboxLock(required(folder, "Mailmap"));
+      const lock = await client.getMailboxLock(required(folder, "Mailmap"), { readOnly: true });
       try {
         const uidValidity = String(client.mailbox?.uidValidity ?? "");
         if (!uidValidity) throw Object.assign(new Error("UIDVALIDITY ontbreekt."), { code: "UIDVALIDITY_MISSING" });
         const reset = Boolean(checkpoint?.uidValidity && String(checkpoint.uidValidity) !== uidValidity);
         const continuing = Boolean(checkpoint?.uidValidity && !reset && Number(checkpoint?.highestUid) >= 0);
-        const startUid = continuing ? Math.max(1, Number(checkpoint.highestUid) + 1) : 1;
+        const previousHighestUid = continuing ? Math.max(0, Number(checkpoint.highestUid)) : 0;
+        // Re-read the high-water UID on every incremental pass. The central ingest is
+        // idempotent, and this one-UID overlap repairs a message that was searchable
+        // while its source was not yet fetchable during an earlier pass.
+        const startUid = continuing ? Math.max(1, previousHighestUid) : 1;
         const matched = await client.search(continuing ? { uid: `${startUid}:*` } : { all: true }, { uid: true });
         const available = matched.filter((uid) => Number(uid) >= startUid).sort((a, b) => a - b);
         const uids = continuing ? available.slice(0, boundedLimit) : available.slice(-boundedLimit);
         const messages = [];
+        const fetchedUids = new Set();
         if (uids.length) {
           for await (const item of client.fetch(uids, { uid: true, source: { maxLength: MAX_SOURCE_BYTES }, flags: true, internalDate: true, size: true }, { uid: true })) {
             if (!item.source) continue;
+            fetchedUids.add(Number(item.uid));
             const parsed = await this.parser(item.source, { skipHtmlToText: true, skipTextToHtml: true, maxHtmlLengthToParse: 4_000_000 });
             const rawSha256 = createHash("sha256").update(item.source).digest("hex");
             messages.push({
@@ -117,7 +123,9 @@ export class WbdImapMailboxConnector {
             });
           }
         }
-        return { status: "SUCCEEDED", mailboxId: this.mailbox.id, folder, uidValidity, highestUid: uids.length ? Math.max(...uids) : Number(checkpoint?.highestUid ?? 0), resetRequired: Boolean(reset), messages };
+        const completeFetch = uids.every((uid) => fetchedUids.has(Number(uid)));
+        const highestUid = uids.length && completeFetch ? Math.max(...uids.map(Number)) : previousHighestUid;
+        return { status: "SUCCEEDED", mailboxId: this.mailbox.id, folder, uidValidity, highestUid, resetRequired: Boolean(reset), completeFetch, requestedUidCount: uids.length, fetchedUidCount: fetchedUids.size, messages };
       } finally { lock.release(); }
     } catch (cause) {
       return { status: "FAILED", mailboxId: this.mailbox.id, failureCode: String(cause?.code ?? "IMAP_FETCH_FAILED"), messages: [] };
