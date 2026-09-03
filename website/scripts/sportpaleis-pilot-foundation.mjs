@@ -3525,6 +3525,11 @@ export class SportpaleisPilotService {
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
     const requestedFoilColor = requiredText(payload.foilColor, "Foliekleur", 80);
+    const idempotencyPayload = {
+      orders: selections.map(({ id, expectedRevision }) => ({ id, expectedRevision: Number(expectedRevision) })).sort((left, right) => String(left.id).localeCompare(String(right.id))),
+      foilColor: normalizedProductionFoilColor(requestedFoilColor),
+      ...(payload.supplement ? { supplement: structuredClone(payload.supplement), efficiencyAnalysisHash: payload.efficiencyAnalysisHash } : {}),
+    };
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", () => {
         const orders = selections.map(({ id, expectedRevision }) => {
@@ -3545,7 +3550,7 @@ export class SportpaleisPilotService {
           ? (candidate.groups ?? []).filter((group) => group.status === "OPEN"
             && productionGroupCompatibilityKey(group) === productionGroupCompatibilityKey(requestedNewGroups[0]))
             .map((group) => ({ proposal: candidate, group }))
-          : []).find(({ proposal, group }) => productionGroupSequenceState(state, proposal, group.id) === "CURRENT") : null;
+          : []).find(({ proposal, group }) => openProductionGroupRevisionsCurrent(state, group) && productionGroupSequenceState(state, proposal, group.id) === "CURRENT") : null;
         const createdAt = iso();
         let proposal;
         if (mergeTarget) {
@@ -3626,7 +3631,7 @@ export class SportpaleisPilotService {
         audit(state, user.id, mergeTarget ? "Gelijke foliekleur veilig aan bestaand productievoorstel toegevoegd" : "Productievoorstel aangemaakt", proposal.proposalNumber, { orderIds: proposal.orders.map(({ id }) => id), productionGroupId: currentGroup.id, foilColor: currentGroup.foilColor, sameColorGroupMerged: Boolean(mergeTarget), hardwareSendPerformed: false });
         audit(state, user.id, "Human GO · PlotJob vastgelegd", jobNumber, { orderIds: currentOrders.map(({ id }) => id), productionGroupId: currentGroup.id, productionGroupLabel: currentGroup.label, foilColor: currentGroup.foilColor, physicalStepSelectedBy: user.name, snapshotHash: job.snapshotHash, ...(currentGroup.efficiencyEvidence ? { efficiencyAnalysisHash: currentGroup.efficiencyEvidence.analysisHash, productionSupplementIds: currentGroup.supplements.map(({ id }) => id), customerOrderLinesCreatedForSupplement: false } : {}), hardwareSendPerformed: false });
         return { proposal, job };
-      });
+      }, idempotencyPayload);
       return { state, value: outcome };
     });
     return result.value;
@@ -7563,6 +7568,16 @@ function productionGroupCompatibilityKey(group) {
     String(group?.outputWriter?.id ?? ""),
     String(group?.outputWriter?.version ?? ""),
   ].join("|");
+}
+
+function openProductionGroupRevisionsCurrent(state, group) {
+  return (group?.orders ?? []).length > 0 && group.orders.every(({ id, expectedRevision }) => {
+    const order = state.orders.find((candidate) => candidate.id === id);
+    return Boolean(order
+      && order.deletion?.status !== "DELETED"
+      && order.productionArchive?.status !== "ARCHIVED"
+      && order.revision === Number(expectedRevision));
+  });
 }
 
 function mergeOpenProductionGroup(target, source) {

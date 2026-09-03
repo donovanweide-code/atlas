@@ -204,6 +204,13 @@ function idempotencyKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${crypto.randomUUID()}`;
 }
 
+async function deterministicIdempotencyKey(prefix: string, payload: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${prefix}-${hash}`;
+}
+
 export class SportpaleisPilotApi {
   #csrfToken = "";
 
@@ -644,10 +651,12 @@ export class SportpaleisPilotApi {
   }
 
   async prepareCurrentProductionGroup(orders: readonly WorkspaceOrder[], foilColor: string, efficiency?: { supplement: Record<string, unknown>; analysisHash: string }): Promise<{ duplicate: boolean; value: { proposal: ProductionProposal; job: ProductionJob } }> {
+    const payload = { orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })).sort((left, right) => left.id.localeCompare(right.id)), foilColor, ...(efficiency ? { supplement: efficiency.supplement, efficiencyAnalysisHash: efficiency.analysisHash } : {}) };
+    const idempotencyPayload = { ...payload, foilColor: foilColor.trim().toLocaleLowerCase("nl-NL") };
     return responseBody(await this.#mutatingFetch(`${API}/production-proposals/current-job`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey("production-current-group") },
-      body: JSON.stringify({ orders: orders.map(({ id, revision }) => ({ id, expectedRevision: revision })), foilColor, ...(efficiency ? { supplement: efficiency.supplement, efficiencyAnalysisHash: efficiency.analysisHash } : {}) }),
+      headers: { "Content-Type": "application/json", "Idempotency-Key": await deterministicIdempotencyKey("production-current-group", idempotencyPayload) },
+      body: JSON.stringify(payload),
     }));
   }
 
