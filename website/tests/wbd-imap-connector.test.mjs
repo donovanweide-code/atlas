@@ -16,9 +16,12 @@ test("incremental connector uses UIDVALIDITY/UID and returns normalized source i
     mailbox = { uidValidity: 22n };
     async connect() {}
     async logout() {}
-    async getMailboxLock() { return { release() {} }; }
-    async search(query, options) { assert.deepEqual(query, { uid: "42:*" }); assert.deepEqual(options, { uid: true }); return [42, 43]; }
-    async *fetch(uids, query, options) { assert.deepEqual(uids, [42, 43]); assert.equal(query.uid, true); assert.deepEqual(options, { uid: true }); yield { uid: 42, source: Buffer.from("mail"), flags: new Set(["\\Seen"]), internalDate: new Date("2026-08-25T08:00:00Z"), size: 4 }; }
+    async getMailboxLock(folder, options) { assert.equal(folder, "INBOX"); assert.deepEqual(options, { readOnly: true }); return { release() {} }; }
+    async search(query, options) { assert.deepEqual(query, { uid: "41:*" }); assert.deepEqual(options, { uid: true }); return [41, 42]; }
+    async *fetch(uids, query, options) {
+      assert.deepEqual(uids, [41, 42]); assert.equal(query.uid, true); assert.deepEqual(options, { uid: true });
+      for (const uid of uids) yield { uid, source: Buffer.from(`mail-${uid}`), flags: new Set(["\\Seen"]), internalDate: new Date("2026-08-25T08:00:00Z"), size: 7 };
+    }
   }
   const connector = new WbdImapMailboxConnector({ mailbox: { id: "wbd-info", address: "info@webuildanddesign.nl", configured: true, host: "imap.example.com", port: 993, secure: true, user: "info", secret: "not-logged" }, clientFactory: () => new Client(), parser: async () => ({ messageId: "<1@example.com>", from: { value: [{ address: "customer@example.com" }] }, to: { value: [{ address: "info@webuildanddesign.nl" }] }, cc: { value: [] }, replyTo: { value: [] }, subject: "Vraag", text: "Kun je helpen?", html: false, headers: new Map(), attachments: [] }) });
   assert.equal(connector.publicSummary().secretExposed, false);
@@ -26,8 +29,40 @@ test("incremental connector uses UIDVALIDITY/UID and returns normalized source i
   const snapshot = await connector.fetchIncremental({ checkpoint: { uidValidity: "22", highestUid: 41 } });
   assert.equal(snapshot.status, "SUCCEEDED");
   assert.equal(snapshot.uidValidity, "22");
-  assert.equal(snapshot.messages[0].uid, 42);
-  assert.equal(snapshot.messages[0].from.address, "customer@example.com");
+  assert.equal(snapshot.highestUid, 42);
+  assert.equal(snapshot.completeFetch, true);
+  assert.equal(snapshot.messages[1].uid, 42);
+  assert.equal(snapshot.messages[1].from.address, "customer@example.com");
+});
+
+test("incremental connector retries the checkpoint UID when source fetch was temporarily empty", async () => {
+  let attempt = 0;
+  class Client extends EventEmitter {
+    mailbox = { uidValidity: 22n };
+    async connect() {}
+    async logout() {}
+    async getMailboxLock(folder, options) { assert.equal(folder, "INBOX"); assert.deepEqual(options, { readOnly: true }); return { release() {} }; }
+    async search(query, options) { assert.deepEqual(query, { uid: "1:*" }); assert.deepEqual(options, { uid: true }); return [1]; }
+    async *fetch(uids) {
+      assert.deepEqual(uids, [1]);
+      attempt += 1;
+      if (attempt === 2) yield { uid: 1, source: Buffer.from("mail-1"), flags: new Set(), internalDate: new Date("2026-09-03T11:00:00Z"), size: 6 };
+    }
+  }
+  const connector = new WbdImapMailboxConnector({
+    mailbox: { id: "sportpaleis-bedrukking", address: "bedrukking@sportpaleis.nl", configured: true, host: "imap.example.com", port: 993, secure: true, user: "bedrukking", secret: "not-logged" },
+    clientFactory: () => new Client(),
+    parser: async () => ({ messageId: "<1@example.com>", from: { value: [{ address: "customer@example.com" }] }, to: { value: [{ address: "bedrukking@sportpaleis.nl" }] }, cc: { value: [] }, replyTo: { value: [] }, subject: "Bestelling", text: "", html: false, headers: new Map(), attachments: [] }),
+  });
+  const checkpoint = { uidValidity: "22", highestUid: 1 };
+  const empty = await connector.fetchIncremental({ checkpoint });
+  assert.equal(empty.highestUid, 1);
+  assert.equal(empty.completeFetch, false);
+  assert.equal(empty.messages.length, 0);
+  const recovered = await connector.fetchIncremental({ checkpoint });
+  assert.equal(recovered.highestUid, 1);
+  assert.equal(recovered.completeFetch, true);
+  assert.equal(recovered.messages[0].uid, 1);
 });
 
 test("first connection ingests the bounded most recent window instead of the oldest mail", async () => {
@@ -35,7 +70,7 @@ test("first connection ingests the bounded most recent window instead of the old
     mailbox = { uidValidity: 31n };
     async connect() {}
     async logout() {}
-    async getMailboxLock() { return { release() {} }; }
+    async getMailboxLock(folder, options) { assert.equal(folder, "INBOX"); assert.deepEqual(options, { readOnly: true }); return { release() {} }; }
     async search(query, options) {
       assert.deepEqual(query, { all: true });
       assert.deepEqual(options, { uid: true });
@@ -45,13 +80,16 @@ test("first connection ingests the bounded most recent window instead of the old
       assert.equal(uids.length, 250);
       assert.equal(uids[0], 251);
       assert.equal(uids.at(-1), 500);
+      for (const uid of uids) yield { uid, source: Buffer.from(`mail-${uid}`), flags: new Set(), internalDate: new Date("2026-08-25T08:00:00Z"), size: 8 };
     }
   }
   const connector = new WbdImapMailboxConnector({
     mailbox: { id: "wbd-info", address: "info@webuildanddesign.nl", configured: true, host: "imap.example.com", port: 993, secure: true, user: "info", secret: "not-logged" },
     clientFactory: () => new Client(),
+    parser: async () => ({ messageId: "<mail@example.com>", from: { value: [] }, to: { value: [] }, cc: { value: [] }, replyTo: { value: [] }, subject: "", text: "", html: false, headers: new Map(), attachments: [] }),
   });
   const snapshot = await connector.fetchIncremental();
   assert.equal(snapshot.status, "SUCCEEDED");
   assert.equal(snapshot.highestUid, 500);
+  assert.equal(snapshot.completeFetch, true);
 });
