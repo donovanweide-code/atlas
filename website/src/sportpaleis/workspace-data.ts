@@ -1050,9 +1050,18 @@ export interface ProductionJob {
   reason: string | null;
   snapshot: ProductionJobSnapshot;
   snapshotHash: string;
-  status: "AWAITING_HUMAN_CHECK" | "COMPLETED" | "FAILED" | "CANCELLED";
+  status: "AWAITING_HUMAN_CHECK" | "COMPLETED" | "REJECTED" | "FAILED" | "CANCELLED";
   proofStatus: ProductionProofStatus;
   humanAcceptance: { status: "PENDING" | "PASS" | "FAIL"; acceptedSourceDate?: string; sourceProofStatus?: ProductionProofStatus; note: string };
+  rejection?: {
+    reason: string;
+    rejectedAt: string;
+    rejectedBy: { userId: string; name: string; role: SportpaleisRole };
+    immutableArtifactSha256: string;
+    snapshotHash: string;
+    physicalCompletionPerformed: false;
+    replacementJobCreated: false;
+  };
 }
 
 export interface ProductionProposal {

@@ -68,12 +68,14 @@ test("menselijk afgekeurde Pioneers 37 blijft immutable en retry gebruikt één 
     ["shortsNumber", "production-asset-verified-pioneers-rug-senior-200", "variant-verified-pioneers-rug-senior-200", 80, "VALID"],
   ]);
   const reason = "Menselijke productiecontrole: onderste shortnummer 37 heeft afwijkende glyphstijl.";
+  const rejected = await service.rejectProductionJob(operator.token, operator.csrfToken, original.id, { reason });
+  assert.equal(rejected.duplicate, false);
   const first = await service.retryRejectedProductionJob(operator.token, operator.csrfToken, original.id, { reason }, "pioneers-rejected-safe-retry");
   const duplicate = await service.retryRejectedProductionJob(operator.token, operator.csrfToken, original.id, { reason }, "pioneers-rejected-safe-retry");
   assert.equal(first.duplicate, false);
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.value.job.id, first.value.job.id);
-  assert.equal(first.value.rejectedJob.status, "FAILED");
+  assert.equal(first.value.rejectedJob.status, "REJECTED");
   assert.equal(first.value.rejectedJob.humanAcceptance.status, "FAIL");
   assert.equal(first.value.rejectedJob.snapshot.artifact.sha256, original.snapshot.artifact.sha256);
   const retainedDownload = await service.productionJobArtifact(operator.token, original.id);
@@ -97,7 +99,7 @@ test("menselijk afgekeurde Pioneers 37 blijft immutable en retry gebruikt één 
   assert.equal(savedOrder.eventHistory.filter(({ type, details }) => type === "PRODUCTION_JOB_REJECTED" && details.productionJobId === original.id).length, 1);
   assert.equal(savedOrder.eventHistory.filter(({ type, details }) => type === "PRODUCTION_JOB_CREATED" && details.productionJobId === replacement.id).length, 1);
   assert.ok(savedOrder.productionExecutionHistory.some(({ rejectedProductionJobId, immutableArtifactSha256 }) => rejectedProductionJobId === original.id && immutableArtifactSha256 === original.snapshot.artifact.sha256));
-  assert.equal(state.audit.filter(({ action, subject }) => action === "Productiejob menselijk afgekeurd" && subject === original.jobNumber).length, 1);
+  assert.equal(state.audit.filter(({ action, subject }) => action === "Productiejob uitsluitend afgekeurd" && subject === original.jobNumber).length, 1);
   assert.equal(state.audit.filter(({ action, subject }) => action === "Gecorrigeerde immutable productiejob vastgelegd" && subject === replacement.jobNumber).length, 1);
   const correctionAudit = state.audit.find(({ action, subject }) => action === "Gecorrigeerde immutable productiejob vastgelegd" && subject === replacement.jobNumber);
   assert.equal(correctionAudit.details.sourceCorrections.filter(({ changed }) => changed).length, 1);

@@ -1298,7 +1298,11 @@ export function validateSportpaleisPilotState(input) {
   for (const job of state.productionJobs) {
     if (!job.snapshot || job.snapshotHash !== sha256(JSON.stringify(job.snapshot))) throw new Error("Productiejob-snapshot is gewijzigd of beschadigd.");
     if (!PRODUCTION_PROOF_STATUSES.has(job.proofStatus)) throw new Error("Ongeldige bewijsstatus voor productiejob.");
-    if (!['ORIGINAL', 'REPLOT'].includes(job.kind) || !['AWAITING_HUMAN_CHECK', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) throw new Error("Ongeldige productiejobstatus.");
+    if (!['ORIGINAL', 'REPLOT'].includes(job.kind) || !['AWAITING_HUMAN_CHECK', 'COMPLETED', 'REJECTED', 'FAILED', 'CANCELLED'].includes(job.status)) throw new Error("Ongeldige productiejobstatus.");
+    if (job.status === "REJECTED") {
+      const rejection = job.rejection;
+      if (!rejection || !String(rejection.reason ?? "").trim() || !rejection.rejectedAt || !rejection.rejectedBy?.userId || !rejection.rejectedBy?.name || !rejection.rejectedBy?.role || rejection.immutableArtifactSha256 !== job.snapshot?.artifact?.sha256 || rejection.snapshotHash !== job.snapshotHash || rejection.physicalCompletionPerformed !== false || rejection.replacementJobCreated !== false || job.humanAcceptance?.status !== "FAIL") throw new Error("Afgekeurde productiejob mist immutable afkeur- en actorbewijs.");
+    }
     if (job.kind === "REPLOT" && (!job.originJobId || !state.productionJobs.some(({ id }) => id === job.originJobId))) throw new Error("Herplot mist de oorspronkelijke productiejob.");
   }
   return validateTeamkitProposalState(state);
@@ -3951,6 +3955,46 @@ export class SportpaleisPilotService {
     });
   }
 
+  async rejectProductionJob(token, csrfToken, productionJobId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
+    const result = await this.store.mutate(async (state) => {
+      const job = state.productionJobs.find(({ id }) => id === productionJobId);
+      if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+      if (job.status === "REJECTED") {
+        if (job.rejection?.reason !== reason) throw Object.assign(new Error("Deze productiejob is al met een andere immutable reden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECTION_REASON_CONFLICT" });
+        return { state, value: { duplicate: true, value: structuredClone(job) } };
+      }
+      if (job.kind !== "ORIGINAL" || job.status !== "AWAITING_HUMAN_CHECK" || job.humanAcceptance?.status !== "PENDING") throw Object.assign(new Error("Alleen een oorspronkelijke job die nog op menselijke controle wacht kan worden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_NOT_ALLOWED" });
+      if (!job.snapshotHash || sha256(JSON.stringify(job.snapshot)) !== job.snapshotHash || !job.snapshot?.artifact?.sha256) throw Object.assign(new Error("Het immutable snapshot of artifactbewijs wijkt af; afkeuren blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_INTEGRITY_FAILED" });
+      const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === job.id));
+      const group = proposal?.groups?.find(({ productionJobId: id }) => id === job.id);
+      if (!proposal || !group) throw Object.assign(new Error("De af te keuren job mist de exacte productiegroepkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
+      const orders = group.orders.map(({ id }) => state.orders.find((order) => order.id === id));
+      if (orders.some((order) => !order)) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
+      const physicalCompletion = orders.some((order) => (order.eventHistory ?? []).some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details?.productionJobId === job.id)
+        || (order.productionCompletionEvidence?.productionJobs ?? []).some(({ id }) => id === job.id));
+      if (physicalCompletion) throw Object.assign(new Error("Deze job heeft al fysiek completionbewijs en kan niet worden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_AFTER_COMPLETION_FORBIDDEN" });
+      const rejectedAt = iso();
+      const actor = { userId: user.id, name: user.name, role: user.role };
+      job.status = "REJECTED";
+      job.humanAcceptance = { status: "FAIL", acceptedSourceDate: rejectedAt.slice(0, 10), sourceProofStatus: job.proofStatus, note: `${reason} Afgekeurd door ${user.name}; immutable snapshot en artifacthash blijven behouden. Er is geen vervangende productiejob gemaakt.` };
+      job.rejection = { reason, rejectedAt, rejectedBy: actor, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, physicalCompletionPerformed: false, replacementJobCreated: false };
+      for (const order of orders) {
+        order.revision += 1;
+        order.updatedAt = rejectedAt;
+        order.eventHistory ??= [];
+        order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_REJECTED", at: rejectedAt, userId: user.id, userName: user.name, source: "human-acceptance", details: { productionJobId: job.id, jobNumber: job.jobNumber, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectOnly: true, physicalCompletionPerformed: false, replacementJobCreated: false } });
+        syncOpenProposalOrderRevisions(state, order);
+      }
+      audit(state, user.id, "Productiejob uitsluitend afgekeurd", job.jobNumber, { productionJobId: job.id, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectedBy: actor, orderIds: orders.map(({ id }) => id), physicalCompletionPerformed: false, replacementJobCreated: false });
+      return { state, value: { duplicate: false, value: structuredClone(job) } };
+    });
+    return result.value;
+  }
+
   async retryRejectedProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
@@ -3960,7 +4004,7 @@ export class SportpaleisPilotService {
       const outcome = idempotent(state, idempotencyKey, user.id, `RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}`, () => {
         const rejectedJob = state.productionJobs.find(({ id }) => id === productionJobId);
         if (!rejectedJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
-        if (rejectedJob.kind !== "ORIGINAL" || rejectedJob.status !== "AWAITING_HUMAN_CHECK" || rejectedJob.humanAcceptance?.status !== "PENDING") throw Object.assign(new Error("Alleen een nog niet als Bedrukt vastgelegde oorspronkelijke job kan na menselijke afkeuring veilig opnieuw worden opgebouwd."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_ALLOWED" });
+        if (rejectedJob.kind !== "ORIGINAL" || rejectedJob.status !== "REJECTED" || rejectedJob.humanAcceptance?.status !== "FAIL" || !rejectedJob.rejection) throw Object.assign(new Error("Keur de oorspronkelijke job eerst afzonderlijk af voordat een nieuwe productiejob wordt voorbereid."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_ALLOWED" });
         if (!rejectedJob.snapshotHash || sha256(JSON.stringify(rejectedJob.snapshot)) !== rejectedJob.snapshotHash) throw Object.assign(new Error("Het immutable snapshot van de afgekeurde job wijkt af; retry blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECTION_SNAPSHOT_INTEGRITY_FAILED" });
         const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === rejectedJob.id));
         const group = proposal?.groups?.find(({ productionJobId: id }) => id === rejectedJob.id);
@@ -3996,9 +4040,6 @@ export class SportpaleisPilotService {
         const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label });
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("De veilige retry leverde geen aantoonbaar nieuw gecorrigeerd vectorartifact op."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_CORRECTED" });
         const retryJob = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", sourceProofStatus: rejectedJob.proofStatus, note: `Nieuwe immutable broncorrectie na menselijke afkeuring van ${rejectedJob.jobNumber}; opnieuw fysieke Human Acceptance vereist.` } });
-        const rejectedAt = createdAt;
-        rejectedJob.status = "FAILED";
-        rejectedJob.humanAcceptance = { status: "FAIL", acceptedSourceDate: rejectedAt.slice(0, 10), sourceProofStatus: rejectedJob.proofStatus, note: `${reason} Afgekeurd door ${user.name}; immutable snapshot en artifacthash blijven behouden.` };
         state.productionJobs.unshift(retryJob);
         group.productionJobId = retryJob.id;
         group.status = "CONVERTED";
@@ -4006,16 +4047,14 @@ export class SportpaleisPilotService {
         if (!proposal.productionJobIds.includes(retryJob.id)) proposal.productionJobIds.push(retryJob.id);
         proposal.status = proposal.groups.every(({ status }) => status === "CONVERTED") ? "CONVERTED" : "OPEN";
         proposal.productionJobId = proposal.status === "CONVERTED" && proposal.productionJobIds.length === 1 ? retryJob.id : null;
-        for (const { order, previousExecutionHash, executionHash } of corrections) {
+        for (const { order, executionHash } of corrections) {
           order.stage = "PRINT";
           order.revision += 1;
           order.updatedAt = createdAt;
           order.eventHistory ??= [];
-          order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_REJECTED", at: rejectedAt, userId: user.id, userName: user.name, source: "human-acceptance", details: { productionJobId: rejectedJob.id, jobNumber: rejectedJob.jobNumber, immutableArtifactSha256: rejectedJob.snapshot.artifact.sha256, reason, previousExecutionHash } });
           order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-rejected-source-retry", details: { productionJobId: retryJob.id, jobNumber, productionGroupId: group.id, foilColor: group.foilColor, productionLineRefs: group.productionLineRefs.filter(({ orderId }) => orderId === order.id), correctedExecutionHash: executionHash, rejectedProductionJobId: rejectedJob.id } });
           syncOpenProposalOrderRevisions(state, order);
         }
-        audit(state, user.id, "Productiejob menselijk afgekeurd", rejectedJob.jobNumber, { productionJobId: rejectedJob.id, immutableArtifactSha256: rejectedJob.snapshot.artifact.sha256, reason, replacementJobId: retryJob.id, replacementJobNumber: retryJob.jobNumber, sourceCorrections });
         audit(state, user.id, "Gecorrigeerde immutable productiejob vastgelegd", retryJob.jobNumber, { productionJobId: retryJob.id, rejectedProductionJobId: rejectedJob.id, orderIds: orders.map(({ id }) => id), productionGroupId: group.id, foilColor: group.foilColor, snapshotHash: retryJob.snapshotHash, artifactSha256: retryJob.snapshot.artifact.sha256, sourceCorrections, hardwareSendPerformed: false });
         return { rejectedJob: structuredClone(rejectedJob), job: structuredClone(retryJob) };
       }, { productionJobId, reason });
@@ -9997,6 +10036,11 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const productionJobRejectedRetryMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/retry-after-rejection$/);
       if (productionJobRejectedRetryMatch && method === "POST") {
         json(response, 201, await service.retryRejectedProductionJob(token, csrf, decodeURIComponent(productionJobRejectedRetryMatch[1]), await readJson(request), request.headers["idempotency-key"]));
+        return true;
+      }
+      const productionJobRejectMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/reject$/);
+      if (productionJobRejectMatch && method === "POST") {
+        json(response, 200, await service.rejectProductionJob(token, csrf, decodeURIComponent(productionJobRejectMatch[1]), await readJson(request)));
         return true;
       }
       const productionJobCompleteMatch = route.match(/^\/api\/sportpaleis\/v1\/production-jobs\/([^/]+)\/complete$/);

@@ -603,6 +603,14 @@ export class SportpaleisPilotApi {
     }));
   }
 
+  async rejectProductionJob(productionJobId: string, reason: string): Promise<{ duplicate: boolean; value: ProductionJob }> {
+    return responseBody(await this.#mutatingFetch(`${API}/production-jobs/${encodeURIComponent(productionJobId)}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason.trim() }),
+    }));
+  }
+
   async orderHistory(input: { query?: string; cursor?: string; limit?: number } = {}): Promise<OrderHistoryPage> {
     const parameters = new URLSearchParams();
     if (input.query) parameters.set("q", input.query);
