@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -73,10 +73,17 @@ class MemoryPool {
     this.failNextUpdate = null;
     this.fullStateReads = 0;
     this.revisionReads = 0;
+    this.queryDelayMs = 0;
+    this.activeQueries = 0;
+    this.queryHighWatermark = 0;
+    this.activeConnections = 0;
+    this.connectionHighWatermark = 0;
   }
 
   async getConnection() {
-    return new MemoryConnection(this);
+    this.activeConnections += 1;
+    this.connectionHighWatermark = Math.max(this.connectionHighWatermark, this.activeConnections);
+    return new MemoryConnection(this, true);
   }
 
   async query(sql, params) {
@@ -85,16 +92,33 @@ class MemoryPool {
 }
 
 class MemoryConnection {
-  constructor(pool) {
+  constructor(pool, trackedConnection = false) {
     this.pool = pool;
+    this.trackedConnection = trackedConnection;
+    this.released = false;
   }
 
   async beginTransaction() {}
   async commit() {}
   async rollback() { this.pool.rollbackCalls += 1; }
-  release() {}
+  release() {
+    if (!this.trackedConnection || this.released) return;
+    this.released = true;
+    this.pool.activeConnections -= 1;
+  }
 
   async query(sql, params = []) {
+    this.pool.activeQueries += 1;
+    this.pool.queryHighWatermark = Math.max(this.pool.queryHighWatermark, this.pool.activeQueries);
+    if (this.pool.queryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.pool.queryDelayMs));
+    try {
+      return this.#execute(sql, params);
+    } finally {
+      this.pool.activeQueries -= 1;
+    }
+  }
+
+  #execute(sql, params = []) {
     if (sql.includes("FROM wbd_schema_migrations")) return [{ checksum: this.pool.checksum }];
     if (sql.startsWith("SELECT revision, state_json")) {
       this.pool.fullStateReads += 1;
@@ -384,6 +408,135 @@ test("MariaDB-store coalescet gelijktijdige snapshotreads tot één revision-que
   const snapshots = await Promise.all(pending);
   assert.equal(pool.revisionReads - readsBefore, 1);
   assert.ok(snapshots.every((snapshot) => snapshot === snapshots[0]));
+});
+
+test("R2.26.41 22-MB envelope-stress houdt auth, previews en cache-invalidatie begrensd", async (context) => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const password = "P1-MariaDB-Load-Foundation!";
+  await store.mutate(async (state) => {
+    state.users.push({
+      id: "p1-load-admin",
+      name: "P1 Load Admin",
+      initials: "PL",
+      role: "admin",
+      email: "p1-load-admin@sportpaleis.test",
+      status: "Actief",
+      seatType: "customer",
+      salesNumber: null,
+      password: await createSportpaleisPasswordRecord(password),
+    });
+    return { state, value: undefined };
+  });
+  const candidateId = "spw-experience-simplification-candidate-r2-2-20260828";
+  const service = new SportpaleisPilotService({
+    store,
+    allowedOrigin: "http://127.0.0.1",
+    activeReviewCandidateIds: [candidateId],
+    reviewAccessEnabled: true,
+    reviewAccessIssuerPrincipalIds: ["p1-load-admin"],
+    reviewAccessIssuerSecret: "p1-load-review-issuer-secret-with-sufficient-entropy",
+  });
+  await service.initialize();
+  const admin = await service.login({ email: "p1-load-admin@sportpaleis.test", password });
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, {
+    candidateId,
+    scopes: ["candidate.review.read", "candidate.debug.read"],
+    humanGoReference: "GO-P1-R22641-LOAD",
+    ttlMs: 30 * 60 * 1_000,
+    runId: "p1-r22641-load-run",
+    role: "operator",
+  });
+  const activation = new URL(issued.activationPath, "https://workspace.sportpaleis.nl");
+  const fragment = new URLSearchParams(activation.hash.slice(1));
+  const review = await service.activateReviewDeveloperGrant({ activationToken: fragment.get("token"), candidateId: fragment.get("candidate") });
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><path d="M0 0H100V50H0Z"/></svg>');
+  const source = await service.createProductionAssetSource(admin.token, admin.csrfToken, {
+    filename: "p1-production-shaped.svg",
+    mimeType: "image/svg+xml",
+    dataBase64: svg.toString("base64"),
+    provenance: "R2.26.41 production-shaped fixture",
+    intakeKind: "ARTWORK",
+    conversionMethod: "HUMAN_VERIFIED_SVG",
+  });
+  const randomBlock = randomBytes(16 * 1024).toString("base64");
+  await store.mutate(async (state) => {
+    const storedSource = state.productionAssetSources.find(({ id }) => id === source.id);
+    const candidate = storedSource.candidates[0];
+    storedSource.candidates = Array.from({ length: 300 }, (_, index) => ({ ...structuredClone(candidate), id: `${candidate.id}-load-${index}` }));
+    state.audit.unshift({
+      id: "audit-p1-production-shaped-load",
+      userId: admin.user.id,
+      action: "Production-shaped belastingsfixture",
+      subject: "R2.26.41",
+      at: new Date().toISOString(),
+      details: { payload: randomBlock.repeat(1_024) },
+    });
+    return { state, value: undefined };
+  });
+  const largeState = await store.readSnapshot();
+  assert.ok(Buffer.byteLength(JSON.stringify(largeState)) >= 22 * 1024 * 1024, "de echte MariaDB-state is minimaal 22 MB");
+  const businessHash = (state) => createHash("sha256").update(JSON.stringify({ orders: state.orders, productionJobs: state.productionJobs, productionProposals: state.productionProposals })).digest("hex");
+  const before = { revision: largeState.revision, audit: largeState.audit.length, businessHash: businessHash(largeState) };
+  const previewRoutes = largeState.productionAssetSources.find(({ id }) => id === source.id).candidates.map(({ id }) => `/api/sportpaleis/v1/production-asset-sources/${source.id}/candidates/${id}/preview.svg`);
+  const errors = [];
+  const server = createServer(createSportpaleisPilotRequestHandler(service, { onError: (entry) => errors.push(entry) }));
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  service.allowedOrigin = origin;
+  const cookies = { admin: `sportpaleis_session=${admin.token}`, review: `sportpaleis_session=${review.sessionToken}` };
+  pool.queryDelayMs = 8;
+  pool.queryHighWatermark = 0;
+  pool.connectionHighWatermark = 0;
+  const fullReadsBefore = pool.fullStateReads;
+  let lastTick = performance.now();
+  let maxEventLoopLagMs = 0;
+  const ticker = setInterval(() => {
+    const now = performance.now();
+    maxEventLoopLagMs = Math.max(maxEventLoopLagMs, now - lastTick - 10);
+    lastTick = now;
+  }, 10);
+  const timings = [];
+  const timedFetch = async (route, cookie) => {
+    const started = performance.now();
+    const response = await fetch(`${origin}${route}`, { headers: { cookie } });
+    await response.arrayBuffer();
+    timings.push(performance.now() - started);
+    return response.status;
+  };
+  const controlledMutation = store.mutate(async (state) => {
+    state.settings.processingDays += 1;
+    return { state, value: undefined };
+  });
+  const routes = Array.from({ length: 120 }, (_, index) => {
+    if (index % 20 === 0) return "/api/sportpaleis/v1/bootstrap";
+    if (index % 3 === 0) return previewRoutes[index % previewRoutes.length];
+    return index % 2 === 0 ? "/api/sportpaleis/v1/auth/session" : "/api/sportpaleis/v1/state-revision";
+  });
+  const statuses = [];
+  for (let offset = 0; offset < routes.length; offset += 12) {
+    const batch = await Promise.all(routes.slice(offset, offset + 12).map((route, index) => timedFetch(route, (offset + index) % 2 === 0 ? cookies.admin : cookies.review)));
+    statuses.push(...batch);
+  }
+  await controlledMutation;
+  clearInterval(ticker);
+  const after = await store.readSnapshot();
+  const sortedTimings = timings.toSorted((left, right) => left - right);
+  const p95 = sortedTimings[Math.floor(sortedTimings.length * 0.95)];
+  assert.ok(statuses.every((status) => status === 200), "alle auth/bootstrap/revision/previewroutes blijven 200");
+  assert.equal(errors.length, 0, "geen 500/504 of routefout onder belasting");
+  assert.equal(after.revision, before.revision + 1, "de gecontroleerde mutatie invalideert de cache exact eenmaal");
+  assert.equal(after.audit.length, before.audit, "normale reads schrijven geen audit");
+  assert.equal(businessHash(after), before.businessHash, "orders, productiejobs en voorstellen blijven bit-identiek");
+  assert.ok(pool.fullStateReads - fullReadsBefore <= 1, "cache-invalidatie veroorzaakt maximaal één gedeelde full-state read");
+  assert.ok(pool.queryHighWatermark <= 2, `query-high-watermark bleef ${pool.queryHighWatermark}`);
+  assert.ok(pool.connectionHighWatermark <= 1, `connection-high-watermark bleef ${pool.connectionHighWatermark}`);
+  assert.ok(maxEventLoopLagMs < 2_000, `zelfs onder parallelle volledige regressie bleef event-looplag ${maxEventLoopLagMs.toFixed(1)} ms`);
+  assert.ok(p95 < 5_000, `route-p95 bleef ${p95.toFixed(1)} ms`);
+  context.diagnostic(JSON.stringify({ stateBytes: Buffer.byteLength(JSON.stringify(after)), storedEnvelopeBytes: Buffer.byteLength(pool.row.state_json), distinctPreviewRoutes: previewRoutes.length, requests: timings.length, routeP95Ms: Number(p95.toFixed(1)), routeMaxMs: Number(Math.max(...timings).toFixed(1)), maxEventLoopLagMs: Number(maxEventLoopLagMs.toFixed(1)), queryHighWatermark: pool.queryHighWatermark, connectionHighWatermark: pool.connectionHighWatermark, fullStateReads: pool.fullStateReads - fullReadsBefore }));
 });
 
 test("MariaDB-store sluit expliciete no-op mutaties zonder revisionwrite af", async () => {

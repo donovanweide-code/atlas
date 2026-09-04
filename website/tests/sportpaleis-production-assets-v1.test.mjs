@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { inspectProductionAssetSource, NUMBER_GLYPH_SPACING_MM, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
-import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
+import { inspectProductionAssetSourceIsolated, productionAssetInspectionLoad } from "../src/sportpaleis/production-asset-inspection.mjs";
 import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
@@ -537,6 +537,35 @@ test("extreem complexe SVG faalt begrensd en geïsoleerde inspectie blokkeert de
   const inspected = await isolated;
   assert.equal(mainLoopProgressed, true);
   assert.equal(inspected.source.format, "SVG");
+});
+
+test("parallelle kwaadaardige SVG-inspecties blijven globaal begrensd en herstellen zonder achterstand", async () => {
+  const excessive = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<path d=\"M0 0H1V1Z\"/>".repeat(5_001)}</svg>`);
+  const attempts = Array.from({ length: 12 }, (_, index) => inspectProductionAssetSourceIsolated({
+    bytes: excessive,
+    filename: `parallel-extreme-${index}.svg`,
+    mimeType: "image/svg+xml",
+    intakeKind: "ARTWORK",
+  }));
+  const saturated = productionAssetInspectionLoad();
+  assert.equal(saturated.active, 2);
+  assert.equal(saturated.queued, 8);
+  assert.equal(saturated.maximumConcurrent, 2);
+  assert.equal(saturated.maximumQueued, 8);
+
+  const results = await Promise.allSettled(attempts);
+  const codes = results.map((result) => result.status === "rejected" ? result.reason?.code : "UNEXPECTED_SUCCESS");
+  assert.equal(codes.filter((code) => code === "PRODUCTION_ASSET_INSPECTION_BUSY").length, 2);
+  assert.equal(codes.filter((code) => code === "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT").length, 10);
+  assert.deepEqual(productionAssetInspectionLoad(), { active: 0, queued: 0, maximumConcurrent: 2, maximumQueued: 8 });
+
+  const recovered = await inspectProductionAssetSourceIsolated({
+    bytes: vectorSvg([{ x: 10, y: 10, width: 80, height: 40 }]),
+    filename: "recovered-after-pressure.svg",
+    mimeType: "image/svg+xml",
+    intakeKind: "ARTWORK",
+  });
+  assert.equal(recovered.source.format, "SVG");
 });
 
 test("identieke bronbytes canonicaliseren zonder verenigingsassociaties samen te voegen", async (context) => {

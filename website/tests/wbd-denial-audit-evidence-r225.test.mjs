@@ -114,7 +114,7 @@ test("vergelijkbare vroege grant/auth-denials zijn auditbaar zonder de boundary 
   assert.equal(state.reviewDeveloperAccess.grants.length, 0, "denial audit mag nooit een grant materialiseren");
 });
 
-test("service bewaart replay, expiry en cross-boundary denial evidence na restart", async (context) => {
+test("service bewaart consequential denials maar laat verlopen read-polls revision-neutraal", async (context) => {
   const { filePath, backupDirectory, store, service, admin } = await fixture(context);
   const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, {
     candidateId,
@@ -133,10 +133,14 @@ test("service bewaart replay, expiry en cross-boundary denial evidence na restar
     () => service.activateReviewDeveloperGrant({ activationToken, candidateId }, new Date(start.getTime() + 2_000)),
     (cause) => cause?.code === "REVIEW_GRANT_ACTIVATION_REPLAY",
   );
+  const beforeExpiredPoll = await store.read();
   await assert.rejects(
     () => service.authenticate(activated.sessionToken, new Date(start.getTime() + 5 * 60 * 1_000 + 1)),
     (cause) => cause?.code === "REVIEW_GRANT_EXPIRED",
   );
+  const afterExpiredPoll = await store.read();
+  assert.equal(afterExpiredPoll.revision, beforeExpiredPoll.revision);
+  assert.equal(afterExpiredPoll.audit.length, beforeExpiredPoll.audit.length);
 
   let crossBoundaryCause = null;
   await store.mutate(async (state) => {
@@ -156,10 +160,9 @@ test("service bewaart replay, expiry en cross-boundary denial evidence na restar
   const denials = denialRecords(persisted);
   assert.deepEqual(new Set(denials.map(({ details }) => details.reason)), new Set([
     "REVIEW_GRANT_ACTIVATION_REPLAY",
-    "REVIEW_GRANT_EXPIRED",
     "REVIEW_GRANT_TENANT_MISMATCH",
   ]));
-  assert.equal(denials.length, 3, "iedere poging is precies eenmaal persisted");
+  assert.equal(denials.length, 2, "alleen consequential denials worden in de business-state persisted");
   assert.ok(denials.every(({ details }) => details.provenance === WBD_REVIEW_DENIAL_AUDIT_PROVENANCE));
   const raw = await readFile(filePath, "utf8");
   assert.equal(raw.includes(activationToken), false);

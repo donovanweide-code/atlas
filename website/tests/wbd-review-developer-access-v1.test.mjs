@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createSportpaleisPilotRequestHandler, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { createSportpaleisDefaultPreference, createSportpaleisPilotRequestHandler, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import {
   WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES,
   WBD_REVIEW_DEVELOPER_PRINCIPAL,
@@ -55,6 +55,12 @@ function activationPayload(activationPath) {
   const url = new URL(activationPath, "https://workspace.sportpaleis.nl");
   const values = new URLSearchParams(url.hash.replace(/^#/, ""));
   return { activationToken: values.get("token"), candidateId: values.get("candidate") };
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return Object.freeze(value);
 }
 
 test("review/development principal is default-deny without configured access or Human GO", async (context) => {
@@ -241,11 +247,11 @@ test("central request guard fails closed outside exact read-only scope and audit
   const state = await store.read();
   assert.equal(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === issued.grant.principalId), false);
   assert.ok(state.audit.some(({ action }) => action === "Tijdelijke Codex-reviewsessie gestart"));
-  assert.ok(state.audit.some(({ action }) => action === "Codex-reviewactie geweigerd"));
+  assert.equal(service.reviewSecurityEvents.length, 4, "verboden methodes worden buiten de business-state geaudit");
   assert.deepEqual(WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES.includes("release.deploy"), true);
 });
 
-test("herhaalde verlopen reviewpolls leveren één denialbewijs zonder revision-storm", async (context) => {
+test("herhaalde verlopen reviewpolls blijven business-state-neutraal zonder revision-storm", async (context) => {
   const { service, admin, store } = await fixture(context);
   const start = new Date("2026-09-04T15:00:00.000Z");
   const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ ttlMs: 5 * 60 * 1_000 }), start);
@@ -262,7 +268,8 @@ test("herhaalde verlopen reviewpolls leveren één denialbewijs zonder revision-
   );
   const afterSecond = await store.read();
   assert.equal(afterSecond.revision, afterFirst.revision);
-  assert.equal(afterSecond.audit.filter(({ action, details }) => action === "Codex-review securityweigering" && details?.reason === "REVIEW_GRANT_EXPIRED").length, 1);
+  assert.equal(afterSecond.audit.length, afterFirst.audit.length);
+  assert.equal(afterSecond.audit.filter(({ action, details }) => action === "Codex-review securityweigering" && details?.reason === "REVIEW_GRANT_EXPIRED").length, 0);
 });
 
 test("normale Workspace-polling blijft via de echte HTTP-route revision- en auditneutraal", async (context) => {
@@ -279,10 +286,177 @@ test("normale Workspace-polling blijft via de echte HTTP-route revision- en audi
     const response = await fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { Cookie: `sportpaleis_session=${admin.token}` } });
     assert.equal(response.status, 200);
   }
+  for (let offset = 0; offset < 100; offset += 10) {
+    const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { Cookie: `sportpaleis_session=stale-r22641-${offset + index}` } })));
+    assert.ok(responses.every(({ status }) => status === 401), "unieke stale cookies falen zonder denial-write");
+  }
   const after = await store.read();
   assert.equal(after.revision, before.revision);
   assert.equal(after.audit.length, before.audit.length);
   assert.equal(after.audit.some(({ action, details }) => action === "Codex-review securityweigering" && details?.reason === "REVIEW_SESSION_UNKNOWN"), false);
+});
+
+test("R2.26.41 — frozen cached state blijft read-only voor normale en tijdelijke sessieroutes", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-r22641-frozen" }));
+  const activated = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
+  const originalRead = store.read.bind(store);
+  const originalMutate = store.mutate.bind(store);
+  let snapshot = await originalRead();
+  snapshot.productionAssetSources.push({
+    id: "source-r22641-preview",
+    candidates: Array.from({ length: 300 }, (_, index) => ({ id: `candidate-r22641-preview-${index}`, previewSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0H${(index % 9) + 1}V10H0Z"/></svg>`, geometryHash: "A".repeat(64) })),
+  });
+  snapshot.productionShapePadding = "x".repeat(22 * 1024 * 1024);
+  snapshot = deepFreeze(snapshot);
+  let datastoreWrites = 0;
+  store.readSnapshot = async () => snapshot;
+  store.mutate = async (mutator) => {
+    datastoreWrites += 1;
+    const result = await originalMutate(mutator);
+    snapshot = deepFreeze(await originalRead());
+    return result;
+  };
+
+  const before = await originalRead();
+  const businessBefore = structuredClone({ orders: before.orders, productionJobs: before.productionJobs, proposals: before.productionProposals });
+  const handler = createSportpaleisPilotRequestHandler(service);
+  const server = createServer(async (request, response) => {
+    if (!(await handler(request, response))) response.end();
+  });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const cookies = {
+    normal: `sportpaleis_session=${operator.token}`,
+    review: `sportpaleis_session=${activated.sessionToken}`,
+  };
+  const paths = [
+    "/api/sportpaleis/v1/auth/session",
+    "/api/sportpaleis/v1/state-revision",
+    "/api/sportpaleis/v1/bootstrap",
+    "/api/sportpaleis/v1/production-asset-sources/source-r22641-preview/candidates/candidate-r22641-preview-0/preview.svg",
+  ];
+  for (const cookie of Object.values(cookies)) {
+    for (const route of paths) {
+      const response = await fetch(`${origin}${route}`, { headers: { cookie } });
+      assert.equal(response.status, 200, `${route} moet ook vanaf frozen state beschikbaar blijven`);
+      if (route.endsWith("auth/session")) assert.match((await response.json()).csrfToken, /^session-bound:[a-f0-9]{64}$/u);
+      else await response.arrayBuffer();
+    }
+  }
+
+  const pollingStarted = performance.now();
+  for (let offset = 0; offset < 100; offset += 10) {
+    const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => {
+      const cookie = (offset + index) % 2 === 0 ? cookies.normal : cookies.review;
+      return fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { cookie } });
+    }));
+    assert.ok(responses.every(({ status }) => status === 200));
+  }
+  const productionLoadStatuses = [];
+  for (let offset = 0; offset < 300; offset += 12) {
+    const responses = await Promise.all(Array.from({ length: 12 }, (_, index) => {
+      const candidateIndex = offset + index;
+      const cookie = candidateIndex % 2 === 0 ? cookies.normal : cookies.review;
+      return fetch(`${origin}/api/sportpaleis/v1/production-asset-sources/source-r22641-preview/candidates/candidate-r22641-preview-${candidateIndex}/preview.svg`, { headers: { cookie } });
+    }));
+    productionLoadStatuses.push(...responses.map(({ status }) => status));
+    const adjacent = await Promise.all([
+      fetch(`${origin}/api/sportpaleis/v1/bootstrap`, { headers: { cookie: cookies.normal } }),
+      fetch(`${origin}/api/sportpaleis/v1/bootstrap`, { headers: { cookie: cookies.review } }),
+      fetch(`${origin}/api/sportpaleis/v1/auth/session`, { headers: { cookie: cookies.review } }),
+    ]);
+    productionLoadStatuses.push(...adjacent.map(({ status }) => status));
+  }
+  assert.ok(productionLoadStatuses.every((status) => status === 200));
+  const aborted = new AbortController();
+  aborted.abort();
+  await assert.rejects(fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { cookie: cookies.review }, signal: aborted.signal }), (error) => error.name === "AbortError");
+  assert.equal((await fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { cookie: cookies.review } })).status, 200, "retry na afgebroken read blijft veilig");
+  assert.ok(performance.now() - pollingStarted < 20_000, "begrensde read-only belasting mag de event-loop niet langdurig blokkeren");
+  assert.equal(datastoreWrites, 0, "authenticatie, polling, bootstrap en previews blijven datastore-neutraal");
+
+  const afterReads = await originalRead();
+  assert.equal(afterReads.revision, before.revision);
+  assert.equal(afterReads.audit.length, before.audit.length);
+  assert.deepEqual({ orders: afterReads.orders, productionJobs: afterReads.productionJobs, proposals: afterReads.productionProposals }, businessBefore);
+
+  const sessionView = await service.issueSessionView(operator.token);
+  const preference = { ...createSportpaleisDefaultPreference(), density: "compact" };
+  await service.savePreferences(operator.token, sessionView.csrfToken, preference);
+  assert.equal(datastoreWrites, 1, "alleen de expliciete fixturemutatie schrijft");
+  const afterMutation = await service.bootstrap(operator.token);
+  assert.equal(afterMutation.revision, before.revision + 1);
+  assert.equal(afterMutation.preferences[operator.user.id].density, "compact", "echte mutatie invalideert het snapshot direct");
+});
+
+test("R2.26.41 — begrensde soak houdt frozen 22-MB-state, sessies en previews stabiel", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-r22641-soak" }));
+  const activated = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
+  const originalRead = store.read.bind(store);
+  const originalMutate = store.mutate.bind(store);
+  let snapshot = await originalRead();
+  snapshot.productionAssetSources.push({
+    id: "source-r22641-soak",
+    candidates: Array.from({ length: 300 }, (_, index) => ({ id: `candidate-r22641-soak-${index}`, previewSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0H2V2H0Z"/></svg>', geometryHash: "B".repeat(64) })),
+  });
+  snapshot.productionShapePadding = "y".repeat(22 * 1024 * 1024);
+  snapshot = deepFreeze(snapshot);
+  let datastoreWrites = 0;
+  store.readSnapshot = async () => snapshot;
+  store.mutate = async (mutator) => {
+    datastoreWrites += 1;
+    const result = await originalMutate(mutator);
+    snapshot = deepFreeze(await originalRead());
+    return result;
+  };
+  const before = await originalRead();
+  const durationMs = Math.max(500, Number(process.env.SPW_P1_SOAK_MS) || 1_000);
+  const started = performance.now();
+  const heapStart = process.memoryUsage().heapUsed;
+  let heapPeak = heapStart;
+  let operations = 0;
+  let maxEventLoopLagMs = 0;
+  let expectedTick = performance.now() + 25;
+  const timer = setInterval(() => {
+    const now = performance.now();
+    maxEventLoopLagMs = Math.max(maxEventLoopLagMs, now - expectedTick);
+    expectedTick = now + 25;
+  }, 25);
+  try {
+    while (performance.now() - started < durationMs) {
+      const results = await Promise.all([
+        service.issueSessionView(operator.token),
+        service.issueSessionView(activated.sessionToken),
+        service.currentRevision(operator.token),
+        service.currentRevision(activated.sessionToken),
+        service.bootstrap(operator.token),
+        service.bootstrap(activated.sessionToken),
+        service.productionAssetCandidatePreview(activated.sessionToken, "source-r22641-soak", `candidate-r22641-soak-${operations % 300}`),
+      ]);
+      assert.equal(results[2].revision, before.revision);
+      assert.equal(results[3].revision, before.revision);
+      assert.equal(results[4].currentUser.id, operator.user.id);
+      assert.equal(results[5].currentUser.id, issued.grant.principalId);
+      assert.equal(results[6].mimeType, "image/svg+xml; charset=utf-8");
+      operations += results.length;
+      heapPeak = Math.max(heapPeak, process.memoryUsage().heapUsed);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  } finally {
+    clearInterval(timer);
+  }
+  const after = await originalRead();
+  assert.equal(datastoreWrites, 0);
+  assert.equal(after.revision, before.revision);
+  assert.equal(after.audit.length, before.audit.length);
+  assert.deepEqual(after.orders, before.orders);
+  assert.deepEqual(after.productionJobs, before.productionJobs);
+  assert.ok(maxEventLoopLagMs < 1_000, `event-looplag bleef ${maxEventLoopLagMs.toFixed(1)} ms`);
+  assert.ok(heapPeak - heapStart < 160 * 1024 * 1024, "geen onbegrensde heapgroei tijdens soak");
+  context.diagnostic(JSON.stringify({ durationMs, operations, maxEventLoopLagMs: Number(maxEventLoopLagMs.toFixed(1)), heapGrowthBytes: heapPeak - heapStart, datastoreWrites }));
 });
 
 test("safe-interact is limited to an explicit allowlist and disposable candidate state", async (context) => {
@@ -310,7 +484,7 @@ test("safe-interact is limited to an explicit allowlist and disposable candidate
 
   const state = await isolated.store.read();
   assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie uitgevoerd" && details.capability === "candidate.ui.safe-interact"));
-  assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie geweigerd" && details.reason === "OUTSIDE_GRANT_SCOPE"));
+  assert.equal(isolated.service.reviewSecurityEvents.length, 2, "denials blijven begrensde service-securityevents");
 });
 
 test("TTL, explicit revocation and logout invalidate all temporary access", async (context) => {
@@ -409,12 +583,37 @@ test("real HTTP activation creates an independent secure cookie session and reje
   assert.equal(forbiddenResponse.status, 403);
   assert.equal((await forbiddenResponse.json()).error, "REVIEW_SIDE_EFFECT_FORBIDDEN");
 
+  const stateBeforeDeniedStorm = await service.store.read();
+  const deniedStorm = await Promise.all(Array.from({ length: 100 }, () => fetch(`${baseUrl}/api/sportpaleis/v1/orders`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", "x-csrf-token": activated.csrfToken },
+    body: "{}",
+  })));
+  assert.ok(deniedStorm.every(({ status }) => status === 403));
+  const stateAfterDeniedStorm = await service.store.read();
+  assert.equal(stateAfterDeniedStorm.revision, stateBeforeDeniedStorm.revision, "verboden reviewwrites verhogen de businessrevision niet");
+  assert.equal(stateAfterDeniedStorm.audit.length, stateBeforeDeniedStorm.audit.length, "verboden reviewwrites schrijven niet naar de businessaudit");
+  assert.equal(service.reviewSecurityEvents.length, 1, "security-denials worden los en begrensd gecollecteerd");
+  assert.equal(service.reviewSecurityEvents[0].count, 101, "gelijke denials worden binnen het tijdvenster gecollecteerd");
+
   const csrfResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/auth/logout`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json", origin: baseUrl },
     body: "{}",
   });
   assert.equal(csrfResponse.status, 403);
+
+  const sessionResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/auth/session`, { headers: { cookie } });
+  assert.equal(sessionResponse.status, 200);
+  const sessionView = await sessionResponse.json();
+  assert.match(sessionView.csrfToken, /^session-bound:[a-f0-9]{64}$/u);
+  const logoutResponse = await fetch(`${baseUrl}/api/sportpaleis/v1/auth/logout`, {
+    method: "POST",
+    headers: { cookie, origin: service.allowedOrigin, "x-csrf-token": sessionView.csrfToken },
+  });
+  assert.equal(logoutResponse.status, 200);
+  assert.deepEqual(await logoutResponse.json(), { ok: true });
+  assert.equal((await fetch(`${baseUrl}/api/sportpaleis/v1/auth/session`, { headers: { cookie } })).status, 401);
 });
 
 test("real HTTP safe-interact mutates only disposable Candidate state and preserves the ephemeral principal boundary", async (context) => {
@@ -475,5 +674,5 @@ test("real HTTP safe-interact mutates only disposable Candidate state and preser
   assert.equal(state.orders.find(({ id }) => id === order.id).customer, customer);
   assert.equal(state.users.some(({ id }) => id === issued.grant.principalId), false, "temporary principal is never persisted as a customer user");
   assert.ok(state.audit.some(({ action, userId }) => action === "Order gewijzigd" && userId === issued.grant.principalId));
-  assert.ok(state.audit.some(({ action, details }) => action === "Codex-reviewactie geweigerd" && details.route.endsWith("/mail/capture")));
+  assert.ok(service.reviewSecurityEvents.some(({ route }) => route.endsWith("/mail/capture")));
 });

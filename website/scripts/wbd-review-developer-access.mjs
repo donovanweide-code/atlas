@@ -36,6 +36,7 @@ export const WBD_REVIEW_AUDIT_RETENTION_POLICY = Object.freeze({ version: "WBD_R
 export const WBD_REVIEW_DENIAL_AUDIT_PROVENANCE = "WBD_REVIEW_DEVELOPER_ACCESS_POLICY_V2";
 const DENIAL_AUDIT_RECORD = Symbol("wbd-review-denial-audit-record");
 const DENIAL_AUDIT_COALESCE_MS = 5 * 60 * 1_000;
+const SESSION_BOUND_CSRF_PREFIX = "session-bound:";
 
 function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
@@ -161,8 +162,28 @@ export function persistWbdReviewDeveloperAccessDenial(state, cause) {
 export function ensureWbdReviewDeveloperAccessState(state) {
   state.reviewDeveloperAccess ??= { grants: [], auditRetentionPolicy: { ...WBD_REVIEW_AUDIT_RETENTION_POLICY } };
   state.reviewDeveloperAccess.grants ??= [];
-  state.reviewDeveloperAccess.auditRetentionPolicy = { ...WBD_REVIEW_AUDIT_RETENTION_POLICY };
+  state.reviewDeveloperAccess.auditRetentionPolicy ??= { ...WBD_REVIEW_AUDIT_RETENTION_POLICY };
   return state.reviewDeveloperAccess;
+}
+
+export function createMutableWbdReviewDeveloperAccessProjection(state) {
+  return {
+    audit: [],
+    reviewDeveloperAccess: structuredClone(state?.reviewDeveloperAccess ?? {
+      grants: [],
+      auditRetentionPolicy: WBD_REVIEW_AUDIT_RETENTION_POLICY,
+    }),
+  };
+}
+
+function matchesSessionCsrf(session, presentedToken) {
+  const presented = String(presentedToken ?? "");
+  const sessionBoundVerifier = presented.startsWith(SESSION_BOUND_CSRF_PREFIX)
+    ? presented.slice(SESSION_BOUND_CSRF_PREFIX.length)
+    : "";
+  return sessionBoundVerifier
+    ? safeHashEqual(session.csrfHash, sessionBoundVerifier)
+    : Boolean(presented) && safeHashEqual(session.csrfHash, sha256(presented));
 }
 
 function publicGrant(grant) {
@@ -333,7 +354,7 @@ export class WbdReviewDeveloperAccessPolicy {
     let context;
     try {
       context = this.authenticateSession(state, input, now);
-      if (!safeHashEqual(context.session.csrfHash, sha256(input?.csrfToken ?? ""))) throw error("Ongeldige beveiligingscontrole voor de tijdelijke reviewsessie.", "REVIEW_CSRF_INVALID");
+      if (!matchesSessionCsrf(context.session, input?.csrfToken)) throw error("Ongeldige beveiligingscontrole voor de tijdelijke reviewsessie.", "REVIEW_CSRF_INVALID");
       context.session.endedAt = nowIso(now);
       context.grant.completedAt ??= nowIso(now);
       appendAudit(state, { actorId: context.grant.principalId, action: "Tijdelijke Codex-reviewsequence afgerond", subject: context.grant.id, at: nowIso(now), details: { humanGoReference: context.grant.humanGoReference, candidateId: context.grant.candidateId } });

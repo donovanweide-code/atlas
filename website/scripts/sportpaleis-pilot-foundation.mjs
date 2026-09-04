@@ -45,8 +45,8 @@ import {
   verifyWorkspacePassword,
 } from "./workspace-auth-foundation.mjs";
 import {
+  createMutableWbdReviewDeveloperAccessProjection,
   ensureWbdReviewDeveloperAccessState,
-  persistWbdReviewDeveloperAccessDenial,
   WBD_REVIEW_DEVELOPER_PRINCIPAL,
   WbdReviewDeveloperAccessPolicy,
 } from "./wbd-review-developer-access.mjs";
@@ -2613,6 +2613,7 @@ export class SportpaleisPilotService {
       : null;
     this.reviewAccessIssuerSecretHash = reviewAccessEnabled === true && reviewAccessIssuerSecret ? sha256(reviewAccessIssuerSecret) : null;
     this.reviewAccessIsolatedState = reviewAccessIsolatedState === true;
+    this.reviewSecurityEvents = [];
   }
 
   async initialize() {
@@ -2687,47 +2688,25 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
-  async #persistReviewDeveloperAccessDenial(cause) {
-    if (!cause) return false;
-    const result = await this.store.mutate(async (state) => {
-      const persisted = persistWbdReviewDeveloperAccessDenial(state, cause);
-      return { state, value: persisted, unchanged: !persisted };
-    });
-    return result.value;
-  }
-
   async assertTemporaryReviewRequest(token, { method, route }, now = new Date()) {
     if (!this.reviewDeveloperAccessPolicy || !token) return null;
     const state = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
     if (!this.reviewDeveloperAccessPolicy.recognizesSession(state, token)) return null;
-    const reviewState = {
-      audit: [],
-      reviewDeveloperAccess: structuredClone(state.reviewDeveloperAccess),
-    };
+    const reviewState = createMutableWbdReviewDeveloperAccessProjection(state);
     let context;
     try {
       context = this.reviewDeveloperAccessPolicy.authenticateSession(reviewState, { sessionToken: token, tenantId: "sportpaleis" }, now);
     } catch (cause) {
-      await this.#persistReviewDeveloperAccessDenial(cause);
       throw cause;
     }
     const capability = classifySportpaleisReviewRequest({ method, route, isolatedCandidateState: this.reviewAccessIsolatedState });
     if (!capability) {
-      await this.store.mutate(async (next) => {
-        try {
-          this.reviewDeveloperAccessPolicy.authorizeCapability(next, {
-            sessionToken: token,
-            tenantId: "sportpaleis",
-            candidateId: context.grant.candidateId,
-            capability: "review.side-effect.denied",
-            method,
-            route,
-          }, now);
-        } catch {
-          return { state: next, value: null };
-        }
-        return { state: next, value: null };
-      });
+      this.#recordReviewSecurityEvent({
+        principalId: context.principal.id,
+        grantId: context.grant.id,
+        method,
+        route,
+      }, now);
       throw Object.assign(new Error("De tijdelijke Codex-principal heeft geen productie- of beheerwrite-authority."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
     }
     if (capability === "candidate.review.read") {
@@ -2890,8 +2869,9 @@ export class SportpaleisPilotService {
     const session = state.sessions.find(({ idHash }) => safeEqualHex(idHash, sha256(token)));
     if (!session) {
       if (this.reviewDeveloperAccessPolicy) {
-        try {
-          const context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
+        if (this.reviewDeveloperAccessPolicy.recognizesSession(state, token)) {
+          const reviewState = createMutableWbdReviewDeveloperAccessProjection(state);
+          const context = this.reviewDeveloperAccessPolicy.authenticateSession(reviewState, { sessionToken: token, tenantId: "sportpaleis" }, now);
           const user = {
             ...context.principal,
             email: `${context.principal.id}@internal.invalid`,
@@ -2902,9 +2882,6 @@ export class SportpaleisPilotService {
             candidateStateIsolated: this.reviewAccessIsolatedState,
           };
           return { state, session: { ...context.session, reviewGrantId: context.grant.id, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT" }, user, reviewGrant: context.grant };
-        } catch (cause) {
-          await this.#persistReviewDeveloperAccessDenial(cause);
-          if (cause?.code !== "REVIEW_SESSION_UNKNOWN") throw cause;
         }
       }
       throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
@@ -2917,18 +2894,8 @@ export class SportpaleisPilotService {
 
   async issueSessionView(token) {
     const { user, session } = await this.authenticate(token);
-    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) {
-      const rotated = await this.#mutateReviewDeveloperAccess((state) => this.reviewDeveloperAccessPolicy.rotateSessionCsrf(state, { sessionToken: token, tenantId: "sportpaleis", candidateId: user.candidateId }));
-      return { user: publicUser(user), csrfToken: rotated.csrfToken, expiresAt: rotated.session.expiresAt, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT", demo: false };
-    }
-    const csrfToken = randomBytes(24).toString("base64url");
-    await this.store.mutate(async (state) => {
-      const active = state.sessions.find(({ idHash }) => idHash === session.idHash);
-      if (!active) throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
-      active.csrfHash = sha256(csrfToken);
-      active.lastSeenAt = iso();
-      return { state, value: undefined };
-    });
+    const csrfToken = session.csrfHash ? `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` : undefined;
+    if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType) return { user: publicUser(user), csrfToken, expiresAt: session.expiresAt, deviceMode: "SHARED", authMethod: "TEMPORARY_REVIEW_GRANT", demo: false };
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     return { user: sessionUser, csrfToken, expiresAt: session.expiresAt, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", demo: Boolean(session.demo) };
   }
@@ -4015,6 +3982,27 @@ export class SportpaleisPilotService {
       return { state, value: { duplicate: false, value: structuredClone(job) } };
     });
     return result.value;
+  }
+
+  #recordReviewSecurityEvent(event, now = new Date()) {
+    const normalized = {
+      at: iso(now),
+      principalId: String(event?.principalId ?? "unknown"),
+      grantId: String(event?.grantId ?? "unknown"),
+      method: String(event?.method ?? "").toUpperCase().slice(0, 12),
+      route: String(event?.route ?? "").split("?", 1)[0].slice(0, 240),
+      reason: String(event?.reason ?? "REVIEW_SIDE_EFFECT_FORBIDDEN"),
+      count: 1,
+    };
+    const key = `${normalized.principalId}:${normalized.grantId}:${normalized.method}:${normalized.route}:${normalized.reason}`;
+    const repeated = this.reviewSecurityEvents.find((candidate) => candidate.key === key && now.getTime() - new Date(candidate.at).getTime() < 60_000);
+    if (repeated) {
+      repeated.count += 1;
+      repeated.lastAt = normalized.at;
+      return;
+    }
+    this.reviewSecurityEvents.unshift({ key, ...normalized, lastAt: normalized.at });
+    if (this.reviewSecurityEvents.length > 100) this.reviewSecurityEvents.length = 100;
   }
 
   async rejectProductionJob(token, csrfToken, productionJobId, payload) {
