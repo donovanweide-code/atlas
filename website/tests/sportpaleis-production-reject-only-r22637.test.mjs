@@ -9,12 +9,13 @@ import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportp
 const passwords = { kevin: "Reject-Only-Admin-2026!", patrick: "Reject-Only-Operator-2026!", collega: "Reject-Only-Store-2026!", "donovan-support": "Reject-Only-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
 const reason = "WRONG_HEIGHT_200MM_INTENDED_80MM";
+const issuerSecret = "reject-only-issuer-secret-with-at-least-256-bits";
 
 async function fixture(context) {
   const root = await mkdtemp(path.join(tmpdir(), "sportpaleis-reject-only-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
-  const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve(import.meta.dirname, ".."), runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-REJECT-ONLY-R2.26.37-TEST" });
+  const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve(import.meta.dirname, ".."), runtimeArtifactRoot: path.join(root, "runtime"), releaseId: "SPW-REJECT-ONLY-R2.26.37-TEST", reviewAccessEnabled: true, activeReviewCandidateIds: ["SPW-REJECT-ONLY-R2.26.37-TEST"], reviewAccessIssuerPrincipalIds: ["kevin"], reviewAccessIssuerSecret: issuerSecret });
   await service.initialize();
   const operator = await service.login({ email: "patrick@sportpaleis.nl", password: passwords.patrick });
   return { root, store, service, operator };
@@ -115,4 +116,23 @@ test("transactiefout na reject-mutator bewaart state en audit volledig", async (
   await assert.rejects(service.rejectProductionJob(operator.token, operator.csrfToken, job.id, { reason }), (error) => error.code === "SIMULATED_REJECT_ONLY_ROLLBACK");
   store.mutate = originalMutate;
   assert.deepEqual(await store.read(), before);
+});
+
+test("loopback reconciliation bindt secret, Human GO, jobnummer en 200-mm-state", async (context) => {
+  const { store, service, job } = await createAwaitingJob(context);
+  await store.mutate(async (state) => {
+    state.productionJobs.find(({ id }) => id === job.id).jobNumber = "PLOT-2026-0077";
+    return { state, value: null };
+  });
+  const payload = { jobNumber: "PLOT-2026-0077", reason, humanGoReference: "GO-R2.26.36-COMPLETION-GATE:PLOT-2026-0077" };
+  await assert.rejects(service.rejectProductionJobForAuthorizedReconciliation(payload, issuerSecret, "203.0.113.10"), (error) => error.code === "PRODUCTION_RECONCILIATION_LOCAL_ONLY");
+  await assert.rejects(service.rejectProductionJobForAuthorizedReconciliation(payload, "wrong-secret", "127.0.0.1"), (error) => error.code === "PRODUCTION_RECONCILIATION_FORBIDDEN");
+  await assert.rejects(service.rejectProductionJobForAuthorizedReconciliation({ ...payload, reason: "andere reden" }, issuerSecret, "127.0.0.1"), (error) => error.code === "PRODUCTION_RECONCILIATION_SCOPE_MISMATCH");
+  const result = await service.rejectProductionJobForAuthorizedReconciliation(payload, issuerSecret, "127.0.0.1");
+  assert.equal(result.value.status, "REJECTED");
+  assert.equal(result.value.rejection.rejectedBy.userId, "kevin");
+  const state = await store.read();
+  const audit = state.audit.find(({ action, subject }) => action === "Productiejob uitsluitend afgekeurd" && subject === "PLOT-2026-0077");
+  assert.equal(audit.details.humanGoReference, payload.humanGoReference);
+  assert.equal(audit.details.authorizedReconciliation, true);
 });

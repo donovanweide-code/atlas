@@ -3955,14 +3955,18 @@ export class SportpaleisPilotService {
     });
   }
 
-  async rejectProductionJob(token, csrfToken, productionJobId, payload) {
-    const { user } = await this.authenticate(token);
-    await this.#assertCsrf(token, csrfToken);
-    assertRole(user, ["admin", "operator"]);
-    const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
+  async #rejectProductionJobWithActor(user, productionJobId, reason, { expectedJobNumber = null, expectedHeightsMm = null, humanGoReference = null } = {}) {
     const result = await this.store.mutate(async (state) => {
+      const activeActor = state.users.find(({ id, status, role }) => id === user.id && status === "Actief" && role === user.role);
+      if (!activeActor || !["admin", "operator"].includes(activeActor.role)) throw Object.assign(new Error("De afkeuractor is niet langer bevoegd."), { statusCode: 403, code: "PRODUCTION_REJECT_ONLY_ACTOR_INACTIVE" });
       const job = state.productionJobs.find(({ id }) => id === productionJobId);
       if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+      if (expectedJobNumber && job.jobNumber !== expectedJobNumber) throw Object.assign(new Error("De productiejobidentiteit wijkt af van de geautoriseerde reconciliatie."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_JOB_IDENTITY_MISMATCH" });
+      if (expectedHeightsMm) {
+        const actualHeights = [...new Set((job.snapshot?.productionLines ?? []).map(({ heightMm }) => Number(heightMm)))].sort((a, b) => a - b);
+        const expectedHeights = [...new Set(expectedHeightsMm.map(Number))].sort((a, b) => a - b);
+        if (JSON.stringify(actualHeights) !== JSON.stringify(expectedHeights)) throw Object.assign(new Error("De productiejobmaten wijken af van de geautoriseerde reconciliatie."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_HEIGHT_MISMATCH" });
+      }
       if (job.status === "REJECTED") {
         if (job.rejection?.reason !== reason) throw Object.assign(new Error("Deze productiejob is al met een andere immutable reden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECTION_REASON_CONFLICT" });
         return { state, value: { duplicate: true, value: structuredClone(job) } };
@@ -3989,10 +3993,35 @@ export class SportpaleisPilotService {
         order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "PRODUCTION_JOB_REJECTED", at: rejectedAt, userId: user.id, userName: user.name, source: "human-acceptance", details: { productionJobId: job.id, jobNumber: job.jobNumber, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectOnly: true, physicalCompletionPerformed: false, replacementJobCreated: false } });
         syncOpenProposalOrderRevisions(state, order);
       }
-      audit(state, user.id, "Productiejob uitsluitend afgekeurd", job.jobNumber, { productionJobId: job.id, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectedBy: actor, orderIds: orders.map(({ id }) => id), physicalCompletionPerformed: false, replacementJobCreated: false });
+      audit(state, user.id, "Productiejob uitsluitend afgekeurd", job.jobNumber, { productionJobId: job.id, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectedBy: actor, orderIds: orders.map(({ id }) => id), physicalCompletionPerformed: false, replacementJobCreated: false, ...(humanGoReference ? { humanGoReference, authorizedReconciliation: true } : {}) });
       return { state, value: { duplicate: false, value: structuredClone(job) } };
     });
     return result.value;
+  }
+
+  async rejectProductionJob(token, csrfToken, productionJobId, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator"]);
+    const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
+    return this.#rejectProductionJobWithActor(user, productionJobId, reason);
+  }
+
+  async rejectProductionJobForAuthorizedReconciliation(payload, providedSecret, remoteAddress) {
+    if (!this.reviewDeveloperAccessPolicy || !this.reviewAccessIssuerSecretHash) throw Object.assign(new Error("Geautoriseerde reconciliatie is niet geconfigureerd."), { statusCode: 404, code: "PRODUCTION_RECONCILIATION_DISABLED" });
+    const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]).has(String(remoteAddress ?? ""));
+    if (!loopback) throw Object.assign(new Error("Productiereconciliatie is uitsluitend lokaal op de server beschikbaar."), { statusCode: 404, code: "PRODUCTION_RECONCILIATION_LOCAL_ONLY" });
+    if (!safeEqualHex(sha256(String(providedSecret ?? "")), this.reviewAccessIssuerSecretHash)) throw Object.assign(new Error("Productiereconciliatie-authorisatie geweigerd."), { statusCode: 403, code: "PRODUCTION_RECONCILIATION_FORBIDDEN" });
+    const jobNumber = requiredText(payload?.jobNumber, "Productiejobnummer", 40);
+    const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
+    const humanGoReference = requiredText(payload?.humanGoReference, "Human-GO-referentie", 160);
+    if (jobNumber !== "PLOT-2026-0077" || reason !== "WRONG_HEIGHT_200MM_INTENDED_80MM" || humanGoReference !== "GO-R2.26.36-COMPLETION-GATE:PLOT-2026-0077") throw Object.assign(new Error("Deze reconciliatie valt buiten de vastgelegde Human GO."), { statusCode: 403, code: "PRODUCTION_RECONCILIATION_SCOPE_MISMATCH" });
+    const state = await this.store.read();
+    const issuer = state.users.find(({ id, role, status }) => this.reviewDeveloperAccessPolicy.issuerPrincipalIds.has(id) && role === "admin" && status === "Actief");
+    if (!issuer) throw Object.assign(new Error("De geconfigureerde reconciliatieactor is niet actief."), { statusCode: 503, code: "PRODUCTION_RECONCILIATION_ACTOR_UNAVAILABLE" });
+    const job = state.productionJobs.find(({ jobNumber: candidate }) => candidate === jobNumber);
+    if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+    return this.#rejectProductionJobWithActor(issuer, job.id, reason, { expectedJobNumber: jobNumber, expectedHeightsMm: [200], humanGoReference });
   }
 
   async retryRejectedProductionJob(token, csrfToken, productionJobId, payload, idempotencyKey) {
