@@ -4,6 +4,7 @@ import path from "node:path";
 const LOCAL_STATIC_SPECIFIERS = [
   /(?:import|export)\s+(?:type\s+)?(?:[^;"']*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/gu,
   /import\s*\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/gu,
+  /new\s+URL\s*\(\s*["'](\.{1,2}\/[^"']+\.(?:[cm]?[jt]s|mts|cts))["']\s*,\s*import\.meta\.url\s*\)/gu,
 ];
 const RUNTIME_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".mts", ".cts", ".json"]);
 

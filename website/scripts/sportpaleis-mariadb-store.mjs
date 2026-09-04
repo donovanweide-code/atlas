@@ -184,6 +184,7 @@ export class SportpaleisMariaDbStore {
     this.migrationFile = path.resolve(migrationFile);
     this.cachedState = null;
     this.cachedRevision = null;
+    this.snapshotReadPromise = null;
   }
 
   async initialize() {
@@ -261,6 +262,17 @@ export class SportpaleisMariaDbStore {
   }
 
   async readSnapshot() {
+    if (this.snapshotReadPromise) return this.snapshotReadPromise;
+    const pending = this.#readSnapshotOnce();
+    this.snapshotReadPromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.snapshotReadPromise === pending) this.snapshotReadPromise = null;
+    }
+  }
+
+  async #readSnapshotOnce() {
     if (this.cachedState && this.cachedRevision !== null) {
       const revisionRows = await this.pool.query(
         "SELECT revision FROM sp_runtime_state WHERE organization_id = ?",
@@ -281,6 +293,9 @@ export class SportpaleisMariaDbStore {
     if (Number(rows[0].revision) !== Number(state.revision)) {
       throw new SportpaleisMariaDbStoreError("Workspace-state heeft een ongeldige revisie.", "DATABASE_REVISION_MISMATCH");
     }
+    // A transaction can commit while this read is decoding an older row. Never
+    // replace a newer in-memory snapshot with that stale result.
+    if (this.cachedState && Number(this.cachedRevision) > Number(state.revision)) return this.cachedState;
     this.#remember(state);
     return this.cachedState;
   }

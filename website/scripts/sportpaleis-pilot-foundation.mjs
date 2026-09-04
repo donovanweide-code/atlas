@@ -28,12 +28,12 @@ import {
   validateManagedFontBytes,
 } from "../src/sportpaleis/managed-font-production.mjs";
 import {
-  inspectProductionAssetSource,
   NUMBER_GLYPH_SPACING_MM,
   productionAssetPreviewSvg,
   productionAssetPiece,
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
+import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
@@ -5179,7 +5179,7 @@ export class SportpaleisPilotService {
     const filename = requiredText(payload.filename, "Bestandsnaam", 180);
     const mimeType = allowedValue(payload.mimeType, ["image/svg+xml", "application/pdf", "application/illustrator", "application/octet-stream"], "Bestandstype");
     const intakeKind = allowedValue(payload.intakeKind ?? "ARTWORK", ["ARTWORK", "NUMBER_SET"], "Bronsoort");
-    const inspected = await inspectProductionAssetSource({ bytes, filename, mimeType, intakeKind });
+    const inspected = await inspectProductionAssetSourceIsolated({ bytes, filename, mimeType, intakeKind });
     const result = await this.store.mutate(async (state) => {
       state.productionAssetSources ??= [];
       const existing = state.productionAssetSources.find(({ original }) => original.sha256 === inspected.source.sha256);
@@ -5237,8 +5237,7 @@ export class SportpaleisPilotService {
   }
 
   async productionAssetOriginal(token, sourceId) {
-    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
-    const state = await this.store.read();
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
     const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
     if (!source?.original?.dataBase64) throw Object.assign(new Error("Oorspronkelijke productiebron niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_SOURCE_NOT_FOUND" });
     return { mimeType: source.original.mimeType, bytes: Buffer.from(source.original.dataBase64, "base64"), filename: source.original.filename, sha256: source.original.sha256, cacheControl: "private, no-store", allowSameOriginFrame: source.original.format === "PDF" };
@@ -5304,8 +5303,7 @@ export class SportpaleisPilotService {
   }
 
   async productionAssetCandidatePreview(token, sourceId, candidateId) {
-    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
-    const state = await this.store.read();
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
     const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
     const candidate = source?.candidates.find(({ id }) => id === candidateId);
     if (!candidate?.previewSvg) throw Object.assign(new Error("Vectorvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
@@ -5313,16 +5311,14 @@ export class SportpaleisPilotService {
   }
 
   async productionAssetDocumentPreview(token, sourceId) {
-    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
-    const state = await this.store.read();
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator"]);
     const source = state.productionAssetSources?.find(({ id }) => id === sourceId);
     if (!source?.documentPreviewSvg) throw Object.assign(new Error("Documentvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
     return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(source.documentPreviewSvg, "utf8"), filename: `${source.id}.svg`, sha256: source.original.sha256, cacheControl: "private, max-age=300" };
   }
 
   async productionAssetPreview(token, elementId) {
-    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
-    const state = await this.store.read();
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
     const asset = state.productionElements.find(({ id, sourceId }) => id === elementId && sourceId);
     if (!asset) throw Object.assign(new Error("Productieassetvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
     const svg = productionAssetPreviewSvg(asset);
@@ -5330,8 +5326,7 @@ export class SportpaleisPilotService {
   }
 
   async productionAssetNumberPreview(token, elementId, value) {
-    const { user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
-    const state = await this.store.read();
+    const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
     const asset = state.productionElements.find(({ id, sourceId, applications }) => id === elementId && sourceId && applications?.some(({ kind }) => kind === "NUMBER_SET"));
     const digits = String(value ?? "");
     if (!asset || !/^\d{1,4}$/u.test(digits)) throw Object.assign(new Error("Nummervoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });

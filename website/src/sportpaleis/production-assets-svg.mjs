@@ -4,6 +4,11 @@ const ILLUSTRATOR_PX_TO_MM = 25.4 / 72;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
 const MAX_POINTS = 250_000;
+const MAX_SVG_ELEMENTS = 25_000;
+const MAX_GEOMETRY_ELEMENTS = 5_000;
+const MAX_PATH_DATA_CHARACTERS = 1_000_000;
+const MAX_PATH_TOKENS = 100_000;
+const MAX_PARSE_DURATION_MS = 1_500;
 const FLATTEN_TOLERANCE_MM = 0.04;
 const ALLOWED_TAGS = new Set(["svg", "g", "path", "polygon", "polyline", "rect", "circle", "ellipse", "line", "title", "desc", "metadata", "text", "tspan"]);
 const GEOMETRY_TAGS = new Set(["path", "polygon", "polyline", "rect", "circle", "ellipse", "line"]);
@@ -74,30 +79,41 @@ function distanceToLine(point, start, end) {
   return Math.abs(dy * point.x - dx * point.y + end.x * start.y - end.y * start.x) / Math.hypot(dx, dy);
 }
 
-function flattenCubic(start, control1, control2, end, output, depth = 0) {
+function assertSvgBudget(budget, points = 0) {
+  budget.points += points;
+  if (budget.points > MAX_POINTS || performance.now() > budget.deadline) {
+    throw svgError("De SVG is te complex om veilig binnen Workspace te verwerken.", "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT", 422);
+  }
+}
+
+function flattenCubic(start, control1, control2, end, output, budget, depth = 0) {
+  assertSvgBudget(budget);
   if (depth >= 14 || Math.max(distanceToLine(control1, start, end), distanceToLine(control2, start, end)) <= FLATTEN_TOLERANCE_MM) {
+    assertSvgBudget(budget, 1);
     output.push(end);
     return;
   }
   const midpoint = (left, right) => ({ x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 });
   const a = midpoint(start, control1); const b = midpoint(control1, control2); const c = midpoint(control2, end);
   const d = midpoint(a, b); const e = midpoint(b, c); const f = midpoint(d, e);
-  flattenCubic(start, a, d, f, output, depth + 1);
-  flattenCubic(f, e, c, end, output, depth + 1);
+  flattenCubic(start, a, d, f, output, budget, depth + 1);
+  flattenCubic(f, e, c, end, output, budget, depth + 1);
 }
 
-function flattenQuadratic(start, control, end, output) {
+function flattenQuadratic(start, control, end, output, budget) {
   const control1 = { x: start.x + (2 / 3) * (control.x - start.x), y: start.y + (2 / 3) * (control.y - start.y) };
   const control2 = { x: end.x + (2 / 3) * (control.x - end.x), y: end.y + (2 / 3) * (control.y - end.y) };
-  flattenCubic(start, control1, control2, end, output);
+  flattenCubic(start, control1, control2, end, output, budget);
 }
 
 function samePoint(left, right) {
   return Math.abs(left.x - right.x) <= 0.000_01 && Math.abs(left.y - right.y) <= 0.000_01;
 }
 
-function pathContours(data, matrix, fillVisible) {
+function pathContours(data, matrix, fillVisible, budget) {
+  if (String(data).length > MAX_PATH_DATA_CHARACTERS) throw svgError("Een SVG-pad is te groot om veilig te verwerken.", "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT", 422);
   const tokens = [...String(data).matchAll(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:e[-+]?\d+)?/giu)].map(({ 0: value }) => value);
+  if (tokens.length > MAX_PATH_TOKENS) throw svgError("Een SVG-pad bevat te veel opdrachten om veilig te verwerken.", "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT", 422);
   if (!tokens.length) return [];
   const output = [];
   let index = 0; let command = null; let rawCursor = { x: 0, y: 0 }; let rawStart = null; let cursor = transformPoint(matrix, rawCursor); let start = null; let current = [];
@@ -120,29 +136,29 @@ function pathContours(data, matrix, fillVisible) {
     if (lower === "m") {
       const nextRaw = rawPoint(read(), read(), relative); const next = transformPoint(matrix, nextRaw);
       if (current.length) finish(false);
-      rawCursor = nextRaw; rawStart = nextRaw; cursor = next; start = next; current.push(next); command = relative ? "l" : "L"; continue;
+      rawCursor = nextRaw; rawStart = nextRaw; cursor = next; start = next; assertSvgBudget(budget, 1); current.push(next); command = relative ? "l" : "L"; continue;
     }
-    if (lower === "l") { rawCursor = rawPoint(read(), read(), relative); cursor = transformPoint(matrix, rawCursor); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
-    if (lower === "h") { const x = read(); rawCursor = { x: relative ? rawCursor.x + x : x, y: rawCursor.y }; cursor = transformPoint(matrix, rawCursor); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
-    if (lower === "v") { const y = read(); rawCursor = { x: rawCursor.x, y: relative ? rawCursor.y + y : y }; cursor = transformPoint(matrix, rawCursor); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
+    if (lower === "l") { rawCursor = rawPoint(read(), read(), relative); cursor = transformPoint(matrix, rawCursor); assertSvgBudget(budget, 1); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
+    if (lower === "h") { const x = read(); rawCursor = { x: relative ? rawCursor.x + x : x, y: rawCursor.y }; cursor = transformPoint(matrix, rawCursor); assertSvgBudget(budget, 1); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
+    if (lower === "v") { const y = read(); rawCursor = { x: rawCursor.x, y: relative ? rawCursor.y + y : y }; cursor = transformPoint(matrix, rawCursor); assertSvgBudget(budget, 1); current.push(cursor); lastCubicControl = null; lastQuadraticControl = null; continue; }
     if (lower === "c") {
       const control1Raw = rawPoint(read(), read(), relative); const control2Raw = rawPoint(read(), read(), relative); const endRaw = rawPoint(read(), read(), relative);
       const control1 = transformPoint(matrix, control1Raw); const control2 = transformPoint(matrix, control2Raw); const end = transformPoint(matrix, endRaw);
-      flattenCubic(cursor, control1, control2, end, current); rawCursor = endRaw; cursor = end; lastCubicControl = control2; lastQuadraticControl = null; continue;
+      flattenCubic(cursor, control1, control2, end, current, budget); rawCursor = endRaw; cursor = end; lastCubicControl = control2; lastQuadraticControl = null; continue;
     }
     if (lower === "s") {
       const control1 = lastCubicControl ? { x: cursor.x * 2 - lastCubicControl.x, y: cursor.y * 2 - lastCubicControl.y } : cursor;
       const control2Raw = rawPoint(read(), read(), relative); const endRaw = rawPoint(read(), read(), relative); const control2 = transformPoint(matrix, control2Raw); const end = transformPoint(matrix, endRaw);
-      flattenCubic(cursor, control1, control2, end, current); rawCursor = endRaw; cursor = end; lastCubicControl = control2; lastQuadraticControl = null; continue;
+      flattenCubic(cursor, control1, control2, end, current, budget); rawCursor = endRaw; cursor = end; lastCubicControl = control2; lastQuadraticControl = null; continue;
     }
     if (lower === "q") {
       const controlRaw = rawPoint(read(), read(), relative); const endRaw = rawPoint(read(), read(), relative); const control = transformPoint(matrix, controlRaw); const end = transformPoint(matrix, endRaw);
-      flattenQuadratic(cursor, control, end, current); rawCursor = endRaw; cursor = end; lastQuadraticControl = control; lastCubicControl = null; continue;
+      flattenQuadratic(cursor, control, end, current, budget); rawCursor = endRaw; cursor = end; lastQuadraticControl = control; lastCubicControl = null; continue;
     }
     if (lower === "t") {
       const control = lastQuadraticControl ? { x: cursor.x * 2 - lastQuadraticControl.x, y: cursor.y * 2 - lastQuadraticControl.y } : cursor;
       const endRaw = rawPoint(read(), read(), relative); const end = transformPoint(matrix, endRaw);
-      flattenQuadratic(cursor, control, end, current); rawCursor = endRaw; cursor = end; lastQuadraticControl = control; lastCubicControl = null; continue;
+      flattenQuadratic(cursor, control, end, current, budget); rawCursor = endRaw; cursor = end; lastQuadraticControl = control; lastCubicControl = null; continue;
     }
     throw svgError(`SVG-padopdracht ${command} wordt niet veilig ondersteund.`, "PRODUCTION_ASSET_SVG_PATH_UNSUPPORTED");
   }
@@ -154,25 +170,27 @@ function numberList(value) {
   return String(value ?? "").trim().split(/[\s,]+/u).filter(Boolean).map(Number);
 }
 
-function primitiveContours(tag, attrs, matrix, fillVisible) {
+function primitiveContours(tag, attrs, matrix, fillVisible, budget) {
   const numeric = (name, fallback = 0) => { const value = Number(attrs[name] ?? fallback); if (!Number.isFinite(value)) throw svgError(`SVG-attribuut ${name} is ongeldig.`, "PRODUCTION_ASSET_SVG_GEOMETRY_INVALID"); return value; };
-  if (tag === "path") return pathContours(attrs.d ?? "", matrix, fillVisible);
+  if (tag === "path") return pathContours(attrs.d ?? "", matrix, fillVisible, budget);
   if (["polygon", "polyline"].includes(tag)) {
     const values = numberList(attrs.points);
     if (values.length < 6 || values.length % 2) throw svgError("De SVG bevat een ongeldige puntenreeks.", "PRODUCTION_ASSET_SVG_GEOMETRY_INVALID");
-    const points = []; for (let index = 0; index < values.length; index += 2) points.push(transformPoint(matrix, { x: values[index], y: values[index + 1] }));
+    const points = []; for (let index = 0; index < values.length; index += 2) { assertSvgBudget(budget, 1); points.push(transformPoint(matrix, { x: values[index], y: values[index + 1] })); }
     if (tag === "polygon" || fillVisible) { if (!samePoint(points[0], points.at(-1))) points.push({ ...points[0] }); return [{ closed: true, points }]; }
     return [];
   }
   if (tag === "rect") {
     const x = numeric("x"); const y = numeric("y"); const width = numeric("width"); const height = numeric("height");
     if (!(width > 0) || !(height > 0) || numeric("rx") || numeric("ry")) throw svgError("Alleen rechthoekige gesloten SVG-vormen worden ondersteund.", "PRODUCTION_ASSET_SVG_GEOMETRY_UNSUPPORTED");
+    assertSvgBudget(budget, 5);
     const raw = [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }, { x, y }];
     return [{ closed: true, points: raw.map((entry) => transformPoint(matrix, entry)) }];
   }
   if (["circle", "ellipse"].includes(tag)) {
     const cx = numeric("cx"); const cy = numeric("cy"); const rx = tag === "circle" ? numeric("r") : numeric("rx"); const ry = tag === "circle" ? rx : numeric("ry");
     if (!(rx > 0) || !(ry > 0)) throw svgError("De SVG bevat een ongeldige ellips.", "PRODUCTION_ASSET_SVG_GEOMETRY_INVALID");
+    assertSvgBudget(budget, 65);
     const points = Array.from({ length: 65 }, (_, index) => transformPoint(matrix, { x: cx + Math.cos((index / 64) * Math.PI * 2) * rx, y: cy + Math.sin((index / 64) * Math.PI * 2) * ry }));
     return [{ closed: true, points }];
   }
@@ -316,9 +334,13 @@ function parseSvg(source, intakeKind) {
   if (/\son[a-z]+\s*=/iu.test(source) || /(?:href|xlink:href)\s*=/iu.test(source) || /url\s*\(/iu.test(source)) throw svgError("De SVG bevat een externe of actieve verwijzing.", "PRODUCTION_ASSET_SVG_REFERENCE_UNSAFE");
   const clean = source.replace(/<\?xml[^>]*>/giu, "").replace(/<!DOCTYPE[^>]*>/giu, "").replace(/<!--[\s\S]*?-->/gu, "");
   const stack = [{ tag: "root", matrix: [1, 0, 0, 1, 0, 0], hidden: false, contours: null, groupId: null }]; const contours = []; const sourceGroups = [];
+  const budget = { points: 0, deadline: performance.now() + MAX_PARSE_DURATION_MS };
   let nextGroupId = 1;
-  let strokeCount = 0; let pathCount = 0; let transformCount = 0;
+  let elementCount = 0; let strokeCount = 0; let pathCount = 0; let transformCount = 0;
   for (const match of clean.matchAll(/<\s*(\/?)\s*([a-zA-Z][\w:.-]*)([^>]*)>/gu)) {
+    elementCount += 1;
+    if (elementCount > MAX_SVG_ELEMENTS) throw svgError("De SVG bevat te veel elementen om veilig te verwerken.", "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT", 422);
+    assertSvgBudget(budget);
     const closing = Boolean(match[1]); const tag = match[2].toLowerCase(); const raw = match[3] ?? ""; const selfClosing = /\/\s*$/u.test(raw);
     if (!ALLOWED_TAGS.has(tag)) throw svgError(`SVG-element ${tag} wordt niet veilig ondersteund.`, "PRODUCTION_ASSET_SVG_ELEMENT_UNSUPPORTED");
     if (closing) {
@@ -331,11 +353,12 @@ function parseSvg(source, intakeKind) {
     const parent = stack.at(-1); const local = transformMatrix(attrs.transform); if (attrs.transform) transformCount += 1;
     const matrix = multiply(parent.matrix, local); const hidden = parent.hidden || attrs.display === "none" || attrs.visibility === "hidden";
     if (GEOMETRY_TAGS.has(tag) && !hidden) {
+      if (pathCount >= MAX_GEOMETRY_ELEMENTS) throw svgError("De SVG bevat te veel geometrie-elementen om veilig te verwerken.", "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT", 422);
       const fillVisible = (attrs.fill ?? "#000000").toLowerCase() !== "none";
       const strokeVisible = attrs.stroke && attrs.stroke.toLowerCase() !== "none";
       if (strokeVisible) strokeCount += 1;
       if (!fillVisible && strokeVisible) throw svgError("Een SVG met uitsluitend niet-uitgelijnde strokes is nog geen gesloten snijgeometrie.", "PRODUCTION_ASSET_SVG_STROKE_ONLY");
-      const parsed = primitiveContours(tag, attrs, matrix, fillVisible); pathCount += 1; contours.push(...parsed);
+      const parsed = primitiveContours(tag, attrs, matrix, fillVisible, budget); pathCount += 1; contours.push(...parsed);
       for (const entry of stack) if (entry.tag === "g") entry.contours.push(...parsed);
     }
     if (!selfClosing && !GEOMETRY_TAGS.has(tag) && !["title", "desc", "metadata"].includes(tag)) {

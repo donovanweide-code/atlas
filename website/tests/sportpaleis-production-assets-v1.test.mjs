@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { inspectProductionAssetSource, NUMBER_GLYPH_SPACING_MM, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
+import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
 import { createCutJobBatch, createProductionPreview } from "../src/sportpaleis/direct-print/index.ts";
 import { buildWorkspaceSearchIndex, queryWorkspaceSearch } from "../src/workspace-search.ts";
 import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
@@ -101,7 +102,11 @@ test("Production Assets V1 bewaart Source→Assets, vereist Human Acceptance en 
   let asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [candidate.id], name: "Gesanitiseerd sponsorbeeld", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm: physicalWidthMm, heightMm: physicalHeightMm, contexts: [{ type: "GENERIC", id: "all", label: "Alle teams" }], applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   assert.equal(asset.lifecycleStatus, "PRODUCTION_READY");
   assert.equal(asset.controlledVector.contours, undefined);
+  const persistedRead = store.read.bind(store);
+  let previewStateReads = 0;
+  store.read = async () => { previewStateReads += 1; return persistedRead(); };
   const managedPreview = await service.productionAssetPreview(operator.token, asset.id);
+  assert.equal(previewStateReads, 1, "preview hergebruikt de reeds geauthenticeerde state zonder tweede full-state read");
   assert.equal((managedPreview.bytes.toString("utf8").match(/M /gu) ?? []).length, candidate.contourCount);
   assert.equal(managedPreview.sha256, asset.sourceSelection.geometryHash);
   await assert.rejects(service.setProductionAssetLifecycle(operator.token, operator.csrfToken, asset.id, { lifecycleStatus: "ARCHIVED", expectedRevision: asset.revision }), (error) => error.code === "FORBIDDEN");
@@ -305,6 +310,8 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /Alleen kiezen toont een lokale preview; er wordt dan nog niets centraal opgeslagen/u);
   assert.match(source, /Stap 2 · SVG centraal opslaan en verdergaan/u);
   assert.match(source, /pendingSourceCount/u);
+  assert.match(source, /loading="lazy" decoding="async"/u);
+  assert.match(source, /Aandacht: \$\{message\(e\)\} Er is niets opgeslagen/u);
   assert.match(source, /opgeslagen bron/u);
   assert.match(source, /Van wie ontvangen\?/u);
   assert.match(source, /inferredProductionAssetKind/u);
@@ -313,6 +320,7 @@ test("Production Assets V1 UX is visueel, contextueel en laat bronbytes buiten b
   assert.match(source, /Productiebron voor \$\{esc\(association\.name\)\} toevoegen/u);
   assert.doesNotMatch(source, /name="provenance" required maxlength="500" placeholder="Aangeleverd/u);
   assert.match(server, /Toegevoegd via Sportpaleis Workspace door \$\{user\.name\}/u);
+  assert.match(server, /inspectProductionAssetSourceIsolated/u);
   assert.match(source, /data-production-asset-lifecycle-form/u);
   assert.match(source, /Logo\/opdruk toevoegen/u);
   assert.match(source, /exacte vectornummerbron/u);
@@ -512,6 +520,23 @@ test("Human Review bewaart iedere cijferkeuze als resumable serverconcept en val
   assert.equal(next.reviewDraft.revision, 2);
   assert.equal(next.reviewDraft.selectedCandidateIds.length, 9);
   await assert.rejects(service.saveProductionAssetReviewDraft(admin.token, admin.csrfToken, source.id, { ...draft.reviewDraft, revision: 1 }), (error) => error.code === "REVISION_CONFLICT");
+});
+
+test("extreem complexe SVG faalt begrensd en geïsoleerde inspectie blokkeert de event loop niet", async () => {
+  const excessive = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${"<path d=\"M0 0H1V1Z\"/>".repeat(5_001)}</svg>`);
+  const startedAt = performance.now();
+  await assert.rejects(
+    inspectProductionAssetSource({ bytes: excessive, filename: "extreme.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" }),
+    (error) => error.code === "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT" && error.statusCode === 422,
+  );
+  assert.ok(performance.now() - startedAt < 3_000);
+
+  let mainLoopProgressed = false;
+  const isolated = inspectProductionAssetSourceIsolated({ bytes: vectorSvg([{ x: 10, y: 10, width: 80, height: 40 }]), filename: "isolated.svg", mimeType: "image/svg+xml", intakeKind: "ARTWORK" });
+  setImmediate(() => { mainLoopProgressed = true; });
+  const inspected = await isolated;
+  assert.equal(mainLoopProgressed, true);
+  assert.equal(inspected.source.format, "SVG");
 });
 
 test("identieke bronbytes canonicaliseren zonder verenigingsassociaties samen te voegen", async (context) => {

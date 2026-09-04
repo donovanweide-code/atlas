@@ -269,6 +269,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
     "app/src/sportpaleis/direct-print/index.ts",
     "app/src/sportpaleis/direct-print/cut-job.ts",
     "app/src/sportpaleis/direct-print/reference-2-34-77.ts",
+    "app/src/sportpaleis/production-asset-inspection-worker.mjs",
   ]) assert.ok(packaged.has(required), `${required} ontbreekt in runtimegraph`);
   assert.ok([...packaged].every((archive) => !archive.includes("/tests/") && !archive.includes(".codex-tmp")));
 });
@@ -362,6 +363,27 @@ test("MariaDB-store geeft authenticated reads één immutable snapshot zonder fu
   assert.equal(Object.isFrozen(first.settings), true);
   assert.throws(() => { first.settings.processingDays = 99; }, TypeError);
   assert.equal((await store.read()).settings.processingDays, first.settings.processingDays);
+});
+
+test("MariaDB-store coalescet gelijktijdige snapshotreads tot één revision-query", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const originalQuery = pool.query.bind(pool);
+  let releaseRevisionRead;
+  const revisionGate = new Promise((resolve) => { releaseRevisionRead = resolve; });
+  pool.query = async (sql, params) => {
+    if (sql.startsWith("SELECT revision FROM sp_runtime_state")) await revisionGate;
+    return originalQuery(sql, params);
+  };
+  const readsBefore = pool.revisionReads;
+  const pending = Array.from({ length: 40 }, () => store.readSnapshot());
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseRevisionRead();
+  const snapshots = await Promise.all(pending);
+  assert.equal(pool.revisionReads - readsBefore, 1);
+  assert.ok(snapshots.every((snapshot) => snapshot === snapshots[0]));
 });
 
 test("MariaDB-store behoudt functionele fouten na rollback en vertaalt alleen echte DB-fouten", async () => {
