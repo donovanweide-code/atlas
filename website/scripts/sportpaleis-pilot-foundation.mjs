@@ -4275,24 +4275,34 @@ export class SportpaleisPilotService {
   }
 
   async mailboxRoutingConnectorView() {
-    const state = await this.store.read();
+    const state = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
     return { mailboxes: [{ ...state.mailboxRouting.mailbox, checkpoint: state.mailboxRouting.mailbox.checkpoint ? structuredClone(state.mailboxRouting.mailbox.checkpoint) : null }] };
   }
 
   async ingestSportpaleisMailboxSnapshot(snapshot) {
     const attemptedAt = iso();
     if (snapshot.mailboxId !== SPORTPALEIS_MAILBOX_ID) throw Object.assign(new Error("Mailboxsnapshot valt buiten de Sportpaleis-boundary."), { code: "SPORTPALEIS_MAILBOX_BOUNDARY" });
-    if (snapshot.status === "FAILED") return this.store.mutate(async (state) => {
+    if (snapshot.status === "FAILED") {
+      const current = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
+      const currentMailbox = current.mailboxRouting.mailbox;
+      const failureCode = String(snapshot.failureCode ?? "IMAP_FETCH_FAILED");
+      if (currentMailbox.connectionState === (currentMailbox.credentialStatus === "PROVISIONED" ? "UNAVAILABLE" : "NOT_CONNECTED")
+        && currentMailbox.inboundStatus === "ATTENTION"
+        && currentMailbox.lastFailureCode === failureCode) {
+        return { mailbox: structuredClone(currentMailbox), ingested: 0, duplicates: 0, malformed: 0, routes: [], unchanged: true };
+      }
+      return this.store.mutate(async (state) => {
       const mailbox = state.mailboxRouting.mailbox;
       mailbox.lastAttemptAt = attemptedAt;
       mailbox.connectionState = mailbox.credentialStatus === "PROVISIONED" ? "UNAVAILABLE" : "NOT_CONNECTED";
       mailbox.inboundStatus = "ATTENTION";
-      mailbox.lastFailureCode = String(snapshot.failureCode ?? "IMAP_FETCH_FAILED");
+      mailbox.lastFailureCode = failureCode;
       audit(state, "system:sportpaleis-mailbox", "Sportpaleis mailbox ophalen mislukt", mailbox.id, { failureCode: mailbox.lastFailureCode });
       return { state, value: { mailbox: structuredClone(mailbox), ingested: 0, duplicates: 0, malformed: 0, routes: [] } };
-    }).then(({ value }) => value);
+      }).then(({ value }) => value);
+    }
 
-    const current = await this.store.read();
+    const current = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
     const workingMessages = [...current.mailboxRouting.messages];
     const prepared = [];
     let malformed = 0;
@@ -4308,6 +4318,23 @@ export class SportpaleisPilotService {
       } catch {
         malformed += 1;
       }
+    }
+
+    const duplicateRoutes = prepared.map(({ message }) => {
+      const duplicate = current.mailboxRouting.messages.find((candidate) => candidate.sourceKey === message.sourceKey || candidate.id === message.id || (message.messageId && candidate.messageId && String(candidate.messageId).toLocaleLowerCase("en-US") === String(message.messageId).toLocaleLowerCase("en-US")));
+      if (!duplicate) return null;
+      if (duplicate.rawEvidence.sha256 !== message.rawEvidence.sha256 || duplicate.contentHash !== message.contentHash) throw Object.assign(new Error("Mailboxberichtidentiteit verwijst naar afwijkende immutable bytes."), { code: "SPORTPALEIS_MAIL_IDENTITY_CONFLICT" });
+      return { messageId: duplicate.id, route: duplicate.classification.route, duplicate: true };
+    });
+    const currentMailbox = current.mailboxRouting.mailbox;
+    const nextHighestUid = Math.max(Number(snapshot.highestUid ?? 0), ...prepared.map(({ message }) => message.uid), 0);
+    const checkpointUnchanged = currentMailbox.checkpoint?.uidValidity === String(snapshot.uidValidity)
+      && Number(currentMailbox.checkpoint?.highestUid ?? 0) === nextHighestUid;
+    const healthUnchanged = currentMailbox.credentialStatus === "PROVISIONED"
+      && currentMailbox.connectionState === "HEALTHY"
+      && currentMailbox.lastFailureCode === null;
+    if (malformed === 0 && prepared.every((_, index) => duplicateRoutes[index]) && checkpointUnchanged && healthUnchanged) {
+      return { mailbox: structuredClone(currentMailbox), ingested: 0, duplicates: prepared.length, malformed: 0, routes: duplicateRoutes, unchanged: true };
     }
 
     const result = await this.store.mutate(async (state) => {

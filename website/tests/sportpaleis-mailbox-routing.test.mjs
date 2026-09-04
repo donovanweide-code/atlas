@@ -76,9 +76,13 @@ test("representatieve Webshop-PDF route hergebruikt intake, bewaart evidence en 
   const before = await store.read();
   const first = await service.ingestSportpaleisMailboxSnapshot(snapshot([source]));
   const duplicate = await service.ingestSportpaleisMailboxSnapshot(snapshot([{ ...source, uid: 2 }]));
+  const revisionAfterCheckpointAdvance = (await store.read()).revision;
+  const unchanged = await service.ingestSportpaleisMailboxSnapshot(snapshot([{ ...source, uid: 2 }]));
   const state = await store.read();
   assert.deepEqual(first.routes.map(({ route }) => route), ["WEBSHOP_ORDER_PDF"]);
   assert.equal(duplicate.duplicates, 1);
+  assert.equal(unchanged.unchanged, true);
+  assert.equal(state.revision, revisionAfterCheckpointAdvance, "een identieke mailboxrefresh veroorzaakt geen globale revision-drift");
   assert.equal(state.orders.length, before.orders.length);
   assert.equal(state.webshopIntake.sources.length, 1);
   assert.equal(state.webshopIntake.matches.length, 1);
@@ -159,4 +163,14 @@ test("een malformed connectorrecord houdt de mailbox op Attention", async (conte
   const state = await store.read();
   assert.equal(state.mailboxRouting.mailbox.inboundStatus, "ATTENTION");
   assert.equal(state.mailboxRouting.mailbox.lastFailureCode, "MALFORMED_MESSAGES_FAIL_CLOSED");
+});
+
+test("herhaalde identieke mailboxfout veroorzaakt geen globale revision-drift", async (context) => {
+  const { store, service } = await fixture(context);
+  const failed = { status: "FAILED", mailboxId: "sportpaleis-bedrukking", failureCode: "IMAP_TIMEOUT", messages: [] };
+  await service.ingestSportpaleisMailboxSnapshot(failed);
+  const revisionAfterFailure = (await store.read()).revision;
+  const repeated = await service.ingestSportpaleisMailboxSnapshot(failed);
+  assert.equal(repeated.unchanged, true);
+  assert.equal((await store.read()).revision, revisionAfterFailure);
 });
