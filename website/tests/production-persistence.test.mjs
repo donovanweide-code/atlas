@@ -500,10 +500,12 @@ test("R2.26.41 22-MB envelope-stress houdt auth, previews en cache-invalidatie b
     lastTick = now;
   }, 10);
   const timings = [];
+  const bootstrapBytes = [];
   const timedFetch = async (route, cookie) => {
     const started = performance.now();
     const response = await fetch(`${origin}${route}`, { headers: { cookie } });
-    await response.arrayBuffer();
+    const body = await response.arrayBuffer();
+    if (route === "/api/sportpaleis/v1/bootstrap") bootstrapBytes.push(body.byteLength);
     timings.push(performance.now() - started);
     return response.status;
   };
@@ -536,7 +538,10 @@ test("R2.26.41 22-MB envelope-stress houdt auth, previews en cache-invalidatie b
   assert.ok(pool.connectionHighWatermark <= 1, `connection-high-watermark bleef ${pool.connectionHighWatermark}`);
   assert.ok(maxEventLoopLagMs < 2_000, `zelfs onder parallelle volledige regressie bleef event-looplag ${maxEventLoopLagMs.toFixed(1)} ms`);
   assert.ok(p95 < 5_000, `route-p95 bleef ${p95.toFixed(1)} ms`);
-  context.diagnostic(JSON.stringify({ stateBytes: Buffer.byteLength(JSON.stringify(after)), storedEnvelopeBytes: Buffer.byteLength(pool.row.state_json), distinctPreviewRoutes: previewRoutes.length, requests: timings.length, routeP95Ms: Number(p95.toFixed(1)), routeMaxMs: Number(Math.max(...timings).toFixed(1)), maxEventLoopLagMs: Number(maxEventLoopLagMs.toFixed(1)), queryHighWatermark: pool.queryHighWatermark, connectionHighWatermark: pool.connectionHighWatermark, fullStateReads: pool.fullStateReads - fullReadsBefore }));
+  assert.ok(Math.max(...bootstrapBytes) < 2 * 1024 * 1024, `forensische auditdetails blijven buiten bootstrap (${Math.max(...bootstrapBytes)} bytes)`);
+  const persistedForensicAudit = (await store.readSnapshot()).audit.find(({ id }) => id === "audit-p1-production-shaped-load");
+  assert.equal(persistedForensicAudit.details.payload, randomBlock.repeat(1_024), "volledige immutable auditevidence blijft uitsluitend server-side intact");
+  context.diagnostic(JSON.stringify({ stateBytes: Buffer.byteLength(JSON.stringify(after)), storedEnvelopeBytes: Buffer.byteLength(pool.row.state_json), bootstrapMaxBytes: Math.max(...bootstrapBytes), distinctPreviewRoutes: previewRoutes.length, requests: timings.length, routeP95Ms: Number(p95.toFixed(1)), routeMaxMs: Number(Math.max(...timings).toFixed(1)), maxEventLoopLagMs: Number(maxEventLoopLagMs.toFixed(1)), queryHighWatermark: pool.queryHighWatermark, connectionHighWatermark: pool.connectionHighWatermark, fullStateReads: pool.fullStateReads - fullReadsBefore }));
 });
 
 test("MariaDB-store sluit expliciete no-op mutaties zonder revisionwrite af", async () => {
