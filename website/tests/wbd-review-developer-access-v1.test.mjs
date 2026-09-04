@@ -213,11 +213,16 @@ test("Codex logs in independently with one-time handoff and receives read-only C
 
 test("central request guard fails closed outside exact read-only scope and audit records allow/deny", async (context) => {
   const { service, admin, store } = await fixture(context);
+  const revisionBeforeNormalRequest = (await store.read()).revision;
+  assert.equal(await service.assertTemporaryReviewRequest(admin.token, { method: "GET", route: "/api/sportpaleis/v1/bootstrap" }), null);
+  assert.equal((await store.read()).revision, revisionBeforeNormalRequest, "een gewone Workspace-sessie mag geen review-denial of globale revisionwrite veroorzaken");
   const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput());
   const activated = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
 
+  const revisionBeforeRead = (await store.read()).revision;
   const allowed = await service.assertTemporaryReviewRequest(activated.sessionToken, { method: "GET", route: "/api/sportpaleis/v1/bootstrap" });
   assert.equal(allowed.capability, "candidate.review.read");
+  assert.equal((await store.read()).revision, revisionBeforeRead, "read-only reviewrequests blijven werkelijk read-only");
   for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
     await assert.rejects(
       () => service.assertTemporaryReviewRequest(activated.sessionToken, { method, route: "/api/sportpaleis/v1/orders/SP-TEST" }),
@@ -234,9 +239,50 @@ test("central request guard fails closed outside exact read-only scope and audit
   );
 
   const state = await store.read();
-  assert.ok(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === issued.grant.principalId));
+  assert.equal(state.audit.some(({ action, userId }) => action === "Codex-reviewactie uitgevoerd" && userId === issued.grant.principalId), false);
   assert.ok(state.audit.some(({ action }) => action === "Tijdelijke Codex-reviewsessie gestart"));
+  assert.ok(state.audit.some(({ action }) => action === "Codex-reviewactie geweigerd"));
   assert.deepEqual(WBD_REVIEW_DEVELOPER_FORBIDDEN_CAPABILITIES.includes("release.deploy"), true);
+});
+
+test("herhaalde verlopen reviewpolls leveren één denialbewijs zonder revision-storm", async (context) => {
+  const { service, admin, store } = await fixture(context);
+  const start = new Date("2026-09-04T15:00:00.000Z");
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ ttlMs: 5 * 60 * 1_000 }), start);
+  const activated = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath), new Date(start.getTime() + 1_000));
+  const expiredAt = new Date(start.getTime() + 5 * 60 * 1_000 + 1);
+  await assert.rejects(
+    () => service.assertTemporaryReviewRequest(activated.sessionToken, { method: "GET", route: "/api/sportpaleis/v1/state-revision" }, expiredAt),
+    (error) => error?.code === "REVIEW_GRANT_EXPIRED",
+  );
+  const afterFirst = await store.read();
+  await assert.rejects(
+    () => service.assertTemporaryReviewRequest(activated.sessionToken, { method: "GET", route: "/api/sportpaleis/v1/state-revision" }, new Date(expiredAt.getTime() + 20_000)),
+    (error) => error?.code === "REVIEW_GRANT_EXPIRED",
+  );
+  const afterSecond = await store.read();
+  assert.equal(afterSecond.revision, afterFirst.revision);
+  assert.equal(afterSecond.audit.filter(({ action, details }) => action === "Codex-review securityweigering" && details?.reason === "REVIEW_GRANT_EXPIRED").length, 1);
+});
+
+test("normale Workspace-polling blijft via de echte HTTP-route revision- en auditneutraal", async (context) => {
+  const { service, admin, store } = await fixture(context);
+  const handler = createSportpaleisPilotRequestHandler(service);
+  const server = createServer(async (request, response) => {
+    if (!(await handler(request, response))) response.end();
+  });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const before = await store.read();
+  for (let index = 0; index < 20; index += 1) {
+    const response = await fetch(`${origin}/api/sportpaleis/v1/state-revision`, { headers: { Cookie: `sportpaleis_session=${admin.token}` } });
+    assert.equal(response.status, 200);
+  }
+  const after = await store.read();
+  assert.equal(after.revision, before.revision);
+  assert.equal(after.audit.length, before.audit.length);
+  assert.equal(after.audit.some(({ action, details }) => action === "Codex-review securityweigering" && details?.reason === "REVIEW_SESSION_UNKNOWN"), false);
 });
 
 test("safe-interact is limited to an explicit allowlist and disposable candidate state", async (context) => {

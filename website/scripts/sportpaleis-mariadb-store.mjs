@@ -323,6 +323,12 @@ export class SportpaleisMariaDbStore {
       }
       phase = "mutator";
       const result = await mutator(structuredClone(current));
+      if (result.unchanged === true) {
+        phase = "rollback-noop";
+        await connection.rollback();
+        this.#remember(current);
+        return { state: this.cachedState, value: result.value };
+      }
       phase = "state-validation";
       const next = validateSportpaleisPilotState(result.state);
       next.revision = current.revision + 1;

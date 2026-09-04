@@ -35,6 +35,7 @@ const MAX_TTL_MS = 2 * 60 * 60 * 1_000;
 export const WBD_REVIEW_AUDIT_RETENTION_POLICY = Object.freeze({ version: "WBD_REVIEW_AUDIT_RETENTION_V1", mode: "APPEND_ONLY", pruningAllowed: false });
 export const WBD_REVIEW_DENIAL_AUDIT_PROVENANCE = "WBD_REVIEW_DEVELOPER_ACCESS_POLICY_V2";
 const DENIAL_AUDIT_RECORD = Symbol("wbd-review-denial-audit-record");
+const DENIAL_AUDIT_COALESCE_MS = 5 * 60 * 1_000;
 
 function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
@@ -147,7 +148,13 @@ export function persistWbdReviewDeveloperAccessDenial(state, cause) {
   const record = cause?.[DENIAL_AUDIT_RECORD];
   if (!record) return false;
   state.audit ??= [];
-  if (!state.audit.some(({ id }) => id === record.id)) state.audit.unshift(structuredClone(record));
+  const repeated = state.audit.some((entry) => entry.action === record.action
+    && entry.details?.operation === record.details?.operation
+    && entry.details?.reason === record.details?.reason
+    && entry.details?.credentialFingerprint === record.details?.credentialFingerprint
+    && Math.abs(new Date(record.at).getTime() - new Date(entry.at).getTime()) < DENIAL_AUDIT_COALESCE_MS);
+  if (repeated || state.audit.some(({ id }) => id === record.id)) return false;
+  state.audit.unshift(structuredClone(record));
   return true;
 }
 
@@ -278,6 +285,11 @@ export class WbdReviewDeveloperAccessPolicy {
     } catch (cause) {
       denyWithAudit(state, cause, denialAuditContext({ operation: "AUTHENTICATE_SESSION", input, grant, credentialKind: "SESSION_TOKEN", credentialValue: input?.sessionToken }), now);
     }
+  }
+
+  recognizesSession(state, sessionToken) {
+    const sessionHash = sha256(sessionToken ?? "");
+    return (state.reviewDeveloperAccess?.grants ?? []).some((grant) => (grant.sessions ?? []).some(({ idHash }) => safeHashEqual(idHash, sessionHash)));
   }
 
   rotateSessionCsrf(state, input, now = new Date()) {

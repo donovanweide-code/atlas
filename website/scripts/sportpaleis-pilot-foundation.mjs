@@ -1409,6 +1409,7 @@ export class SportpaleisFileStore {
     const run = async () => this.#withLock(async () => {
       const current = await this.read();
       const result = await mutator(structuredClone(current));
+      if (result.unchanged === true) return { state: current, value: result.value };
       const next = validateState(result.state);
       next.revision = current.revision + 1;
       await this.#writeAtomic(next);
@@ -2688,19 +2689,26 @@ export class SportpaleisPilotService {
 
   async #persistReviewDeveloperAccessDenial(cause) {
     if (!cause) return false;
-    const result = await this.store.mutate(async (state) => ({ state, value: persistWbdReviewDeveloperAccessDenial(state, cause) }));
+    const result = await this.store.mutate(async (state) => {
+      const persisted = persistWbdReviewDeveloperAccessDenial(state, cause);
+      return { state, value: persisted, unchanged: !persisted };
+    });
     return result.value;
   }
 
   async assertTemporaryReviewRequest(token, { method, route }, now = new Date()) {
     if (!this.reviewDeveloperAccessPolicy || !token) return null;
-    const state = await this.store.read();
+    const state = typeof this.store.readSnapshot === "function" ? await this.store.readSnapshot() : await this.store.read();
+    if (!this.reviewDeveloperAccessPolicy.recognizesSession(state, token)) return null;
+    const reviewState = {
+      audit: [],
+      reviewDeveloperAccess: structuredClone(state.reviewDeveloperAccess),
+    };
     let context;
     try {
-      context = this.reviewDeveloperAccessPolicy.authenticateSession(state, { sessionToken: token, tenantId: "sportpaleis" }, now);
+      context = this.reviewDeveloperAccessPolicy.authenticateSession(reviewState, { sessionToken: token, tenantId: "sportpaleis" }, now);
     } catch (cause) {
       await this.#persistReviewDeveloperAccessDenial(cause);
-      if (cause?.code === "REVIEW_SESSION_UNKNOWN") return null;
       throw cause;
     }
     const capability = classifySportpaleisReviewRequest({ method, route, isolatedCandidateState: this.reviewAccessIsolatedState });
@@ -2721,6 +2729,16 @@ export class SportpaleisPilotService {
         return { state: next, value: null };
       });
       throw Object.assign(new Error("De tijdelijke Codex-principal heeft geen productie- of beheerwrite-authority."), { statusCode: 403, code: "REVIEW_SIDE_EFFECT_FORBIDDEN" });
+    }
+    if (capability === "candidate.review.read") {
+      return this.reviewDeveloperAccessPolicy.authorizeCapability(reviewState, {
+        sessionToken: token,
+        tenantId: "sportpaleis",
+        candidateId: context.grant.candidateId,
+        capability,
+        method,
+        route,
+      }, now);
     }
     const result = await this.store.mutate(async (next) => ({
       state: next,

@@ -386,6 +386,20 @@ test("MariaDB-store coalescet gelijktijdige snapshotreads tot één revision-que
   assert.ok(snapshots.every((snapshot) => snapshot === snapshots[0]));
 });
 
+test("MariaDB-store sluit expliciete no-op mutaties zonder revisionwrite af", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisMariaDbStore({ pool });
+  await store.initialize();
+  const before = await store.readSnapshot();
+  const rollbackCalls = pool.rollbackCalls;
+  const result = await store.mutate(async (state) => ({ state, value: "unchanged", unchanged: true }));
+  assert.equal(result.value, "unchanged");
+  assert.equal(result.state.revision, before.revision);
+  assert.equal(pool.rollbackCalls, rollbackCalls + 1);
+  assert.equal(JSON.parse(pool.row.state_json).revision, before.revision);
+});
+
 test("MariaDB-store behoudt functionele fouten na rollback en vertaalt alleen echte DB-fouten", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const pool = new MemoryPool(createHash("sha256").update(migration).digest("hex"));
