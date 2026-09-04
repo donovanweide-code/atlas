@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -389,6 +389,52 @@ test("R2.26.41 — frozen cached state blijft read-only voor normale en tijdelij
   const afterMutation = await service.bootstrap(operator.token);
   assert.equal(afterMutation.revision, before.revision + 1);
   assert.equal(afterMutation.preferences[operator.user.id].density, "compact", "echte mutatie invalideert het snapshot direct");
+});
+
+test("R2.26.43 — bootstrapbytes coalescen per revision, tenant, sessie en access-scope", async (context) => {
+  const { service, admin, operator, store } = await fixture(context);
+  const issued = await service.issueReviewDeveloperGrant(admin.token, admin.csrfToken, grantInput({ runId: "codex-run-r22643-bootstrap-cache" }));
+  const review = await service.activateReviewDeveloperGrant(activationPayload(issued.activationPath));
+
+  const concurrent = await Promise.all(Array.from({ length: 12 }, () => service.bootstrapSerialized(operator.token)));
+  assert.ok(concurrent.every((body) => body === concurrent[0]), "identieke gelijktijdige bootstrap bouwt en serialiseert exact eenmaal");
+  const operatorBootstrap = JSON.parse(concurrent[0].toString("utf8"));
+  const reviewBody = await service.bootstrapSerialized(review.sessionToken);
+  const adminBody = await service.bootstrapSerialized(admin.token);
+  const reviewBootstrap = JSON.parse(reviewBody.toString("utf8"));
+  const adminBootstrap = JSON.parse(adminBody.toString("utf8"));
+  assert.equal(operatorBootstrap.currentUser.id, operator.user.id);
+  assert.equal(reviewBootstrap.currentUser.id, issued.grant.principalId);
+  assert.equal(reviewBootstrap.capabilities.reviewDeveloper, true);
+  assert.equal(operatorBootstrap.capabilities.reviewDeveloper, false);
+  assert.notEqual(reviewBody, concurrent[0], "reviewscope deelt nooit bytes met een normale gebruiker");
+  assert.notEqual(adminBody, concurrent[0], "adminscope deelt nooit bytes met een operator");
+  assert.ok(adminBootstrap.users.length > operatorBootstrap.users.length, "rolgebonden projectie blijft geïsoleerd");
+
+  const revisionBeforeMutation = operatorBootstrap.revision;
+  await service.savePreferences(operator.token, operator.csrfToken, { ...createSportpaleisDefaultPreference(), density: "compact" });
+  const afterMutationBody = await service.bootstrapSerialized(operator.token);
+  const afterMutation = JSON.parse(afterMutationBody.toString("utf8"));
+  assert.equal(afterMutation.revision, revisionBeforeMutation + 1);
+  assert.equal(afterMutation.preferences[operator.user.id].density, "compact");
+  assert.notEqual(afterMutationBody, concurrent[0], "nieuwe revision kan geen oude geserialiseerde bytes hergebruiken");
+  assert.ok([...service.bootstrapResponseCache.values()].every(({ revision }) => revision === afterMutation.revision), "oude revisions worden direct uit de cache verwijderd");
+
+  const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+  const extraSessions = Array.from({ length: 12 }, () => ({ token: randomBytes(32).toString("base64url"), csrf: randomBytes(24).toString("base64url") }));
+  await store.mutate(async (state) => {
+    const now = new Date();
+    for (const session of extraSessions) state.sessions.push({ idHash: sha256(session.token), userId: operator.user.id, csrfHash: sha256(session.csrf), createdAt: now.toISOString(), lastSeenAt: now.toISOString(), expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(), deviceMode: "SHARED", authMethod: "R22643_CACHE_BOUND_FIXTURE" });
+    return { state, value: null };
+  });
+  for (const { token } of extraSessions) await service.bootstrapSerialized(token);
+  assert.ok(service.bootstrapResponseCache.size <= 8, "LRU-entrygrens blijft hard begrensd");
+  assert.ok(service.bootstrapResponseCacheBytes <= 64 * 1024 * 1024, "geserialiseerde bootstrapbytes blijven hard begrensd");
+  assert.ok([...service.bootstrapResponseCache.values()].every(({ expiresAtMs }) => expiresAtMs > Date.now() && expiresAtMs <= Date.now() + 2 * 60 * 1_000), "cache-TTL blijft korter dan twee minuten en nooit langer dan de sessie");
+  assert.equal(service.bootstrapResponsePromises.size, 0, "afgeronde of onderbroken single-flight blijft niet hangen");
+
+  await service.revokeReviewDeveloperGrant(admin.token, admin.csrfToken, issued.grant.id);
+  await assert.rejects(() => service.bootstrapSerialized(review.sessionToken), (error) => error?.code === "REVIEW_GRANT_INACTIVE", "ingetrokken sessie wordt vóór iedere cache-hit opnieuw geauthenticeerd");
 });
 
 test("R2.26.41 — begrensde soak houdt frozen 22-MB-state, sessies en previews stabiel", async (context) => {

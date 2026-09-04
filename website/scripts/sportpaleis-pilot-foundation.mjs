@@ -124,6 +124,10 @@ const ORDER_HISTORY_PAGE_LIMIT = 40;
 const ORDER_HISTORY_PAGE_LIMIT_MAX = 80;
 const PRODUCTION_ASSET_PREVIEW_CACHE_MAX_ENTRIES = 64;
 const PRODUCTION_ASSET_PREVIEW_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+const BOOTSTRAP_RESPONSE_CACHE_MAX_ENTRIES = 8;
+const BOOTSTRAP_RESPONSE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const BOOTSTRAP_RESPONSE_MAX_IN_FLIGHT = 8;
+const BOOTSTRAP_RESPONSE_CACHE_TTL_MS = 2 * 60 * 1_000;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const LEGACY_PIONEERS_ASSOCIATION = "Almerer Pioneers";
 const CANONICAL_PIONEERS_ASSOCIATION = "Almere Pioneers";
@@ -2618,6 +2622,9 @@ export class SportpaleisPilotService {
     this.reviewSecurityEvents = [];
     this.productionAssetPreviewCache = new Map();
     this.productionAssetPreviewCacheBytes = 0;
+    this.bootstrapResponseCache = new Map();
+    this.bootstrapResponseCacheBytes = 0;
+    this.bootstrapResponsePromises = new Map();
   }
 
   async initialize() {
@@ -2977,7 +2984,95 @@ export class SportpaleisPilotService {
   }
 
   async bootstrap(token) {
-    const { state, user, session } = await this.authenticate(token);
+    return this.#projectBootstrap(await this.authenticate(token));
+  }
+
+  async bootstrapSerialized(token) {
+    const context = await this.authenticate(token);
+    const cacheKey = this.#bootstrapResponseCacheKey(context);
+    const cached = this.bootstrapResponseCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > Date.now()) {
+      this.bootstrapResponseCache.delete(cacheKey);
+      this.bootstrapResponseCache.set(cacheKey, cached);
+      return cached.body;
+    }
+    if (cached) this.#deleteBootstrapResponse(cacheKey, cached);
+    const active = this.bootstrapResponsePromises.get(cacheKey);
+    if (active) return active;
+    if (this.bootstrapResponsePromises.size >= BOOTSTRAP_RESPONSE_MAX_IN_FLIGHT) {
+      throw Object.assign(new Error("Workspace-bootstrap is kort bezet. Probeer direct opnieuw."), { statusCode: 503, code: "BOOTSTRAP_BACKPRESSURE" });
+    }
+    const pending = Promise.resolve().then(() => {
+      const body = Buffer.from(`${JSON.stringify(this.#projectBootstrap(context))}\n`, "utf8");
+      const sessionExpiryMs = new Date(context.session.expiresAt).getTime();
+      const expiresAtMs = Math.min(Date.now() + BOOTSTRAP_RESPONSE_CACHE_TTL_MS, sessionExpiryMs);
+      this.#rememberBootstrapResponse(cacheKey, Number(context.state.revision), expiresAtMs, body);
+      return body;
+    });
+    this.bootstrapResponsePromises.set(cacheKey, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.bootstrapResponsePromises.get(cacheKey) === pending) this.bootstrapResponsePromises.delete(cacheKey);
+    }
+  }
+
+  #bootstrapResponseCacheKey({ state, user, session }) {
+    const accessScope = {
+      tenantId: state.organizationId,
+      revision: Number(state.revision),
+      principalId: user.id,
+      principalType: user.principalType ?? "WORKSPACE_USER",
+      role: user.role,
+      scopes: [...(user.scopes ?? [])].sort(),
+      featureExposure: user.featureExposure ?? {},
+      session: {
+        csrfHash: session.csrfHash ?? null,
+        expiresAt: session.expiresAt,
+        deviceMode: session.deviceMode ?? "SHARED",
+        authMethod: session.authMethod ?? "PASSWORD",
+        demo: Boolean(session.demo),
+        reviewGrantId: session.reviewGrantId ?? null,
+      },
+      service: {
+        releaseId: this.releaseId,
+        reviewAccessIsolatedState: this.reviewAccessIsolatedState,
+        uploadsEnabled: this.uploadsEnabled,
+        productionAssetUploadsEnabled: this.productionAssetUploadsEnabled,
+        fontUploadsEnabled: this.fontUploadsEnabled,
+        mailMode: this.mailMode,
+        mailboxConfigured: this.mailboxConfiguration.configured,
+        creativeStudioEnabled: this.creativeStudioEnabled,
+      },
+    };
+    return `${state.organizationId}:${state.revision}:${sha256(JSON.stringify(accessScope))}`;
+  }
+
+  #deleteBootstrapResponse(cacheKey, entry = this.bootstrapResponseCache.get(cacheKey)) {
+    if (!entry) return;
+    this.bootstrapResponseCache.delete(cacheKey);
+    this.bootstrapResponseCacheBytes -= entry.body.length;
+  }
+
+  #rememberBootstrapResponse(cacheKey, revision, expiresAtMs, body) {
+    if (body.length > BOOTSTRAP_RESPONSE_CACHE_MAX_BYTES) return;
+    for (const [key, entry] of this.bootstrapResponseCache) {
+      if (entry.revision === revision) continue;
+      this.#deleteBootstrapResponse(key, entry);
+    }
+    const previous = this.bootstrapResponseCache.get(cacheKey);
+    if (previous) this.#deleteBootstrapResponse(cacheKey, previous);
+    this.bootstrapResponseCache.set(cacheKey, { revision, expiresAtMs, body });
+    this.bootstrapResponseCacheBytes += body.length;
+    while (this.bootstrapResponseCache.size > BOOTSTRAP_RESPONSE_CACHE_MAX_ENTRIES || this.bootstrapResponseCacheBytes > BOOTSTRAP_RESPONSE_CACHE_MAX_BYTES) {
+      const oldestKey = this.bootstrapResponseCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      const oldest = this.bootstrapResponseCache.get(oldestKey);
+      this.#deleteBootstrapResponse(oldestKey, oldest);
+    }
+  }
+
+  #projectBootstrap({ state, user, session }) {
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
     const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
     const admin = user.role === "admin";
@@ -9686,11 +9781,14 @@ function securityHeaders(response) {
 }
 
 function json(response, statusCode, payload) {
-  const body = `${JSON.stringify(payload)}\n`;
+  serializedJson(response, statusCode, Buffer.from(`${JSON.stringify(payload)}\n`, "utf8"));
+}
+
+function serializedJson(response, statusCode, body) {
   response.statusCode = statusCode;
   securityHeaders(response);
   response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.setHeader("Content-Length", Buffer.byteLength(body));
+  response.setHeader("Content-Length", body.length);
   response.end(body);
 }
 
@@ -9814,7 +9912,7 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         return true;
       }
       if (route === "/api/sportpaleis/v1/bootstrap" && method === "GET") {
-        json(response, 200, await service.bootstrap(token));
+        serializedJson(response, 200, await service.bootstrapSerialized(token));
         return true;
       }
       if (route === "/api/sportpaleis/v1/reviews" && method === "GET") {
