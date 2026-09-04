@@ -122,6 +122,8 @@ const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
 const BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT = 120;
 const ORDER_HISTORY_PAGE_LIMIT = 40;
 const ORDER_HISTORY_PAGE_LIMIT_MAX = 80;
+const PRODUCTION_ASSET_PREVIEW_CACHE_MAX_ENTRIES = 64;
+const PRODUCTION_ASSET_PREVIEW_CACHE_MAX_BYTES = 16 * 1024 * 1024;
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const LEGACY_PIONEERS_ASSOCIATION = "Almerer Pioneers";
 const CANONICAL_PIONEERS_ASSOCIATION = "Almere Pioneers";
@@ -2614,6 +2616,8 @@ export class SportpaleisPilotService {
     this.reviewAccessIssuerSecretHash = reviewAccessEnabled === true && reviewAccessIssuerSecret ? sha256(reviewAccessIssuerSecret) : null;
     this.reviewAccessIsolatedState = reviewAccessIsolatedState === true;
     this.reviewSecurityEvents = [];
+    this.productionAssetPreviewCache = new Map();
+    this.productionAssetPreviewCacheBytes = 0;
   }
 
   async initialize() {
@@ -3032,10 +3036,10 @@ export class SportpaleisPilotService {
       visualCompositions: productionWorkspace ? state.visualCompositions.map(publicVisualComposition).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
       creativeVectorDrafts: productionWorkspace ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       preferences: { [user.id]: structuredClone(state.preferences[user.id] ?? defaultPreference()) },
-      articles: structuredClone(state.articles.filter(({ active }) => admin || active)),
-      associations: structuredClone(state.associations),
+      articles: structuredClone(state.articles.filter(({ active }) => admin || active).map(({ validationHistory: _validationHistory, ...article }) => article)),
+      associations: structuredClone(state.associations.map(({ validationHistory: _validationHistory, ...association }) => association)),
       configurationVersion: state.configurationVersion,
-      productionProfiles: structuredClone(state.productionProfiles),
+      productionProfiles: structuredClone(state.productionProfiles.map(({ validationHistory: _validationHistory, ...profile }) => profile)),
       settings: admin ? structuredClone(state.settings) : { processingDays: state.settings.processingDays, deliveryFeeEur: state.settings.deliveryFeeEur, productionDefaults: structuredClone(state.settings.productionDefaults) },
       activeProductionFoilColors: productionWorkspace ? [...new Set(state.foilRolls.filter(({ active }) => active !== false).map(({ color }) => String(color).trim()).filter(Boolean))] : [],
       foilRolls: admin ? structuredClone(state.foilRolls) : [],
@@ -5354,8 +5358,11 @@ export class SportpaleisPilotService {
     const { state, user } = await this.authenticate(token); assertRole(user, ["admin", "operator", "store"]);
     const asset = state.productionElements.find(({ id, sourceId }) => id === elementId && sourceId);
     if (!asset) throw Object.assign(new Error("Productieassetvoorbeeld niet gevonden."), { statusCode: 404, code: "PRODUCTION_ASSET_PREVIEW_NOT_FOUND" });
-    const svg = productionAssetPreviewSvg(asset);
-    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}.svg`, sha256: asset.controlledVector.geometryHash, cacheControl: "private, max-age=300" };
+    const identity = `${asset.id}:${asset.version ?? asset.revision}:${asset.controlledVector.geometryHash}:managed`;
+    return this.#cachedProductionAssetPreview(identity, () => {
+      const svg = productionAssetPreviewSvg(asset);
+      return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}.svg`, sha256: asset.controlledVector.geometryHash, cacheControl: "private, max-age=300" };
+    });
   }
 
   async productionAssetNumberPreview(token, elementId, value) {
@@ -5369,9 +5376,34 @@ export class SportpaleisPilotService {
     // under a preview-only readiness projection; no persisted lifecycle state
     // or production eligibility is changed.
     const previewAsset = asset.lifecycleStatus === "ARCHIVED" ? { ...asset, lifecycleStatus: "PRODUCTION_READY" } : asset;
-    const piece = productionAssetPiece({ asset: previewAsset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
-    const svg = productionAssetPreviewSvg({ controlledVector: { contours: piece.contours } });
-    return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}-${digits}.svg`, sha256: sha256(svg).toUpperCase(), cacheControl: "private, max-age=300" };
+    const identity = `${asset.id}:${asset.version ?? asset.revision}:${asset.controlledVector.geometryHash}:number:${digits}:${variant?.heightMm ?? "missing"}`;
+    return this.#cachedProductionAssetPreview(identity, () => {
+      const piece = productionAssetPiece({ asset: previewAsset, variant, line: { id: "number-preview", content: digits, widthMm: Number(variant?.widthMm), heightMm: Number(variant?.heightMm), preview: { label: `Nummer ${digits}` } }, order: { id: "PREVIEW", association: asset.ownerName, items: [] }, foilColor: asset.defaultFoilColor ?? "Preview" });
+      const svg = productionAssetPreviewSvg({ controlledVector: { contours: piece.contours } });
+      return { mimeType: "image/svg+xml; charset=utf-8", bytes: Buffer.from(svg, "utf8"), filename: `${asset.id}-${digits}.svg`, sha256: sha256(svg).toUpperCase(), cacheControl: "private, max-age=300" };
+    });
+  }
+
+  #cachedProductionAssetPreview(identity, create) {
+    const cached = this.productionAssetPreviewCache.get(identity);
+    if (cached) {
+      this.productionAssetPreviewCache.delete(identity);
+      this.productionAssetPreviewCache.set(identity, cached);
+      return cached.value;
+    }
+    const value = create();
+    const bytes = value.bytes.length;
+    if (bytes <= PRODUCTION_ASSET_PREVIEW_CACHE_MAX_BYTES) {
+      this.productionAssetPreviewCache.set(identity, { value, bytes });
+      this.productionAssetPreviewCacheBytes += bytes;
+      while (this.productionAssetPreviewCache.size > PRODUCTION_ASSET_PREVIEW_CACHE_MAX_ENTRIES || this.productionAssetPreviewCacheBytes > PRODUCTION_ASSET_PREVIEW_CACHE_MAX_BYTES) {
+        const oldestKey = this.productionAssetPreviewCache.keys().next().value;
+        const oldest = this.productionAssetPreviewCache.get(oldestKey);
+        this.productionAssetPreviewCache.delete(oldestKey);
+        this.productionAssetPreviewCacheBytes -= oldest?.bytes ?? 0;
+      }
+    }
+    return value;
   }
 
   async promoteProductionAsset(token, csrfToken, sourceId, payload) {

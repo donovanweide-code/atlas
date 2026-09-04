@@ -409,8 +409,28 @@ test("één SVG blijft één complete composition zonder fragmentatie", async (c
   const widthMm = 120; const heightMm = widthMm * composition.boundsMm.height / composition.boundsMm.width;
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: [composition.id], name: "Compleet sponsorwoordmerk", ownerType: "SPONSOR", ownerName: "Fictieve sponsor", productionMethod: "SELF_PRODUCED", widthMm, heightMm, applications: [{ kind: "SPONSOR", placement: "Borst" }], proofAuthority: "HUMAN_ACCEPTANCE" });
   const preview = await service.productionAssetPreview(operator.token, asset.id);
+  const cachedPreview = await service.productionAssetPreview(operator.token, asset.id);
   assert.equal((preview.bytes.toString("utf8").match(/M /gu) ?? []).length, 4);
+  assert.equal(cachedPreview, preview, "dezelfde immutable geometrie wordt als begrensde previewcache-hit geleverd");
+  assert.equal(service.productionAssetPreviewCache.size, 1);
   assert.equal(asset.sourceSelection.candidateIds.length, 1);
+});
+
+test("bootstrap projecteert operationele productieprofielen zonder historische recursieve snapshots", async (context) => {
+  const { service, store, admin } = await fixture(context);
+  await store.mutate(async (state) => {
+    state.productionProfiles[0].validationHistory = [{ at: new Date().toISOString(), userId: "fixture", previous: { payload: "x".repeat(250_000) }, next: { payload: "y".repeat(250_000) }, source: "P1 regressie" }];
+    state.articles[0].validationHistory = [{ at: new Date().toISOString(), userId: "fixture", previous: null, next: { payload: "z".repeat(50_000) }, source: "P1 regressie" }];
+    state.associations[0].validationHistory = [{ at: new Date().toISOString(), userId: "fixture", field: "association", previous: null, next: { payload: "a".repeat(50_000) }, source: "P1 regressie" }];
+    return { state, value: null };
+  });
+  const persisted = await store.read();
+  assert.equal(persisted.productionProfiles[0].validationHistory.length, 1, "auditbron blijft immutable bewaard");
+  const bootstrap = await service.bootstrap(admin.token);
+  assert.equal(bootstrap.productionProfiles[0].validationHistory, undefined);
+  assert.equal(bootstrap.articles[0].validationHistory, undefined);
+  assert.equal(bootstrap.associations[0].validationHistory, undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(bootstrap)) < Buffer.byteLength(JSON.stringify(persisted)) - 400_000);
 });
 
 test("tussenvoegsel heeft canonical 20 mm default en blijft fail-closed zonder fysiek profielbewijs", async (context) => {
