@@ -1793,6 +1793,19 @@ function freePrintingOrder(state: PilotBootstrap): string {
   const completion = freeProductionEntryMode ? `<details class="sp-panel sp-progressive-details sp-free-context"><summary>Optionele order- of artikelcontext</summary><p>Alleen invullen wanneer die context helpt bij terugvinden of overname. Er wordt nooit fictieve administratie vereist.</p><div class="sp-form-grid"><label>Naam / referentie<input name="customer" autocomplete="name" placeholder="Optioneel"></label><label>E-mail<input name="customerEmail" type="email" autocomplete="email" placeholder="Optioneel"></label><label>Telefoon<input name="customerPhone" type="tel" autocomplete="tel" placeholder="Optioneel"></label><label>Artikel<input name="product" placeholder="Optioneel"></label><label>Kledingmaat<input name="size" placeholder="Optioneel"></label></div></details><section class="sp-panel sp-checkout-summary"><p class="sp-eyebrow">HUMAN GO</p><h2>Klopt dit?</h2><p>De zichtbare bron, fysieke maat, kleur en aantallen worden server-side opnieuw gevalideerd.</p><button class="sp-button sp-button--primary" type="submit" ${freeProductionEntryMode === "MULTIPLE" && !multipleHasValues ? "disabled" : ""}>Productieklaar maken</button></section>` : "";
   return `<a class="sp-back" data-link href="${fromProduction ? `${BASE}/productie` : `${BASE}/winkel`}">← ${fromProduction ? "Productie" : "Winkel"}</a>${head("VRIJE OPDRUK", "Wat moet ik maken?", "Kies eerst één duidelijke invoerroute. Order- of artikelcontext is alleen een versneller.")}<form class="sp-capability-form sp-free-printing" data-free-order-form data-production-context="${fromProduction}">${modeChoice}${singleRoute}${multipleRoute}${completion}</form>`;
 }
+function applyVisibleFreeProductionSharedSettings(form: HTMLFormElement, state: PilotBootstrap): number {
+  if (freeProductionEntryMode !== "MULTIPLE" || freeProductionLines.length < 2) return 0;
+  const editor = form.querySelector<HTMLElement>("[data-free-shared-settings]");
+  if (!editor) return 0;
+  const type = editor.querySelector<HTMLSelectElement>('select[name="type"]')?.value as FreeProductionLine["type"] | undefined;
+  const heightCm = Number(editor.querySelector<HTMLInputElement>('input[name="heightCm"]')?.value.replace(",", ".") ?? 0);
+  const quantity = Number(editor.querySelector<HTMLInputElement>('input[name="quantity"]')?.value ?? 0);
+  const foilColor = editor.querySelector<HTMLSelectElement>('select[name="foilColor"]')?.value ?? "";
+  const fontId = editor.querySelector<HTMLSelectElement>('select[name="fontId"]')?.value ?? "";
+  const numberSet = allowedProductionNumberSets(state).find(({ id }) => id === fontId);
+  if (numberSet && (type !== "NUMBER" || freeProductionLines.some(({ content }) => !/^\d{1,4}$/u.test(content) || Array.from(content).some((digit) => !numberSet.numberGlyphs?.[digit])))) throw new Error("Deze SVG-nummerset dekt niet alle waarden in de lijst.");
+  return applyFreeProductionBulkSettings(freeProductionLines, new Set(freeProductionLines.map(({ id }) => id)), { type, heightCm, quantity, foilColor, fontId });
+}
 
 function productionFonts(state: PilotBootstrap): string {
   if (!["admin", "operator"].includes(state.currentUser.role)) return empty("Geen toegang");
@@ -3011,6 +3024,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     if (form.matches("[data-free-order-form]")) {
       if (freeOrderSubmitting) return;
       try {
+        applyVisibleFreeProductionSharedSettings(form, state!);
         const productionLines: PendingProductionLine[] = freeProductionLines.flatMap((line) => line.type === "INITIALS" ? composedInitialsLines({ id: line.id, initials: line.content, infix: line.initialsInfix, sourceId: line.fontId, widthMm: line.widthMm, heightMm: line.heightMm, foilColor: line.foilColor, quantity: line.quantity, provenance: "Vrije bedrukking · winkelinvoer met beheerde fontversie" }) : [{ id: line.id, type: line.type, content: line.content, sourceId: line.fontId, widthMm: line.widthMm, heightMm: line.heightMm, foilColor: line.foilColor, quantity: line.quantity, previewLabel: line.content, provenance: "Vrije bedrukking · winkelinvoer met beheerde fontversie" }]);
         for (const draft of freeAssetDrafts) { const asset = state?.productionElements.find(({ id, lifecycleStatus, productionMethod }) => id === draft.assetId && lifecycleStatus === "PRODUCTION_READY" && productionMethod === "SELF_PRODUCED"); if (!asset) throw new Error("Een gekozen visuele productieasset is niet meer productierijp."); productionLines.push({ id: draft.id, type: "LOGO", content: asset.name, sourceId: asset.id, widthMm: draft.widthMm, heightMm: draft.heightMm, foilColor: draft.foilColor, quantity: draft.quantity, previewLabel: asset.name, provenance: `Vrije bedrukking · beheerde productieasset ${asset.version}` }); }
         const quantity = productionLines.reduce((sum, line) => sum + line.quantity, 0);

@@ -78,6 +78,10 @@ function compareNumberTuples(left: readonly number[], right: readonly number[]):
 }
 
 const NESTING_STRATEGY = "DETERMINISTIC_MULTI_HEURISTIC_CONTOUR_SAFE_NO_SCALE" as const;
+// Keep synchronous request work strictly bounded. Four combinations still
+// cover the common one/two-set cases; larger batches use the safe envelope
+// heuristics below.
+const MAX_EXHAUSTIVE_SEMANTIC_ORIENTATION_COMBINATIONS = 4;
 
 function normalizedFoilColor(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
@@ -373,6 +377,12 @@ function orderings(prepared: readonly PreparedObject[]): readonly (readonly Prep
   });
 }
 
+function semanticOrientationCombinationCount(prepared: readonly PreparedObject[]): number {
+  return prepared.reduce((count, item) => item.input.semanticGroup?.kind === "MULTI_DIGIT_NUMBER"
+    ? count * item.orientations.length
+    : count, 1);
+}
+
 function orientationStrategies(prepared: readonly PreparedObject[]): readonly (readonly PreparedObject[])[] {
   const variants: PreparedObject[][] = [[...prepared]];
   const seen = new Set<string>([prepared.map(({ input }) => `${input.id}:AUTO`).join("\u0000")]);
@@ -389,7 +399,8 @@ function orientationStrategies(prepared: readonly PreparedObject[]): readonly (r
   // Alleen herkenbare multi-digitgroepen hebben de aanvullende gezamenlijke
   // combinatiesearch nodig. Andere jobs behouden de bestaande snelle AUTO-
   // heuristic, zodat voorstelperformance niet exponentieel verslechtert.
-  if (semanticIndexes.length <= 8) {
+  const exhaustiveCombinationCount = semanticOrientationCombinationCount(prepared);
+  if (exhaustiveCombinationCount <= MAX_EXHAUSTIVE_SEMANTIC_ORIENTATION_COMBINATIONS) {
     const visit = (semanticIndex: number, choices: PreparedOrientation[]): void => {
       if (semanticIndex === semanticIndexes.length) { add(choices); return; }
       const preparedIndex = semanticIndexes[semanticIndex];
@@ -400,8 +411,12 @@ function orientationStrategies(prepared: readonly PreparedObject[]): readonly (r
     };
     visit(0, prepared.map(({ orientations }) => orientations[0]));
   } else {
-    // Grote nummerbatches houden de zoekruimte begrensd en onderzoeken naast
-    // AUTO iedere uniforme veilige groepsoriëntatie.
+    // De grens volgt het werkelijke aantal combinaties, niet alleen het aantal
+    // groepen. Zes tweevoudig roteerbare nummers zijn al 2^6 strategieën; bij
+    // meer oriëntaties groeit dezelfde zoekruimte nog sneller en kan zij de
+    // request/event-loop langer blokkeren dan het HTTP-budget.
+    // AUTO plus iedere uniforme veilige groepsoriëntatie blijft deterministisch,
+    // contourveilig en schaalvrij zonder exponentiële requestlatency.
     for (const rotation of [0, 90, 180, 270] as const) {
       const choices = prepared.map(({ orientations }) => orientations[0]);
       let valid = true;
@@ -425,11 +440,26 @@ function optimizeNesting(
     configuration.absoluteMaxWidthMm,
   ])].sort((left, right) => left - right);
   const baselineArrangements = orderings(prepared);
-  const arrangements = orientationStrategies(prepared).flatMap((strategy) => orderings(strategy));
+  const strategies = orientationStrategies(prepared);
+  const arrangements = strategies.flatMap((strategy) => orderings(strategy));
   const baselines = widths.flatMap((width) => {
     const result = baselineShelf(baselineArrangements[0], configuration, width);
     return result ? [result] : [];
   });
+  if (semanticOrientationCombinationCount(prepared) > MAX_EXHAUSTIVE_SEMANTIC_ORIENTATION_COMBINATIONS) {
+    // Een bounding-envelope shelf is conservatief contourveilig en lineair in
+    // het aantal objecten. Voor een te grote rotatiezoekruimte vergelijken we
+    // de begrensde AUTO/uniforme strategieën hiermee, zonder dure pairwise
+    // contourafstandsearch in de synchrone HTTP-request.
+    const boundedEnvelopeSolutions = widths.flatMap((width) => arrangements.flatMap((arrangement) => {
+      const result = baselineShelf(arrangement, configuration, width);
+      return result ? [result] : [];
+    }));
+    const candidates = [...boundedEnvelopeSolutions, ...baselines].sort(compareSolutions);
+    if (!candidates.length) throw new Error(`Geometrie past niet binnen de absolute productiebreedte van ${configuration.absoluteMaxWidthMm} mm en wordt niet geschaald.`);
+    const baseline = [...baselines].sort(compareSolutions)[0] ?? candidates[0];
+    return { solution: candidates[0], baselineLengthMm: baseline.totalLengthMm };
+  }
   const collisionCache = new Map<string, boolean>();
   const solutions = widths.flatMap((width) => arrangements.flatMap((arrangement) => {
     const result = nestInOrder(arrangement, configuration, width, collisionCache);
