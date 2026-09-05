@@ -159,6 +159,6 @@ test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze
   assert.match(source, /blijft centraal aanwezig en wordt beschikbaar zodra de actieve kleur Bedrukt is gemeld/u);
   assert.match(source, /nu produceren/u);
   assert.match(source, /state\.readOnlyFallback = true;[\s\S]*productieacties uitgeschakeld/u);
-  assert.match(source, /if \(state\.readOnlyFallback\) \{[\s\S]*state = await api\.bootstrap\(\)/u);
+  assert.match(source, /if \(state\.readOnlyFallback\) \{[\s\S]*state = await api\.bootstrap\(bootstrapSurfaceForPath\(\)\)/u);
   assert.match(source, /const actionsDisabled = Boolean\(state\.readOnlyFallback\)/u);
 });
