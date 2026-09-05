@@ -281,7 +281,7 @@ async function storeInitialize() {
   await assert.rejects(store.mutate(async (state) => {
     state.preferences[normalUser.id].density = "assurance-rollback-probe";
     throw Object.assign(new Error("assurance rollback probe"), { code: "ASSURANCE_ROLLBACK_PROBE" });
-  }), (error) => error?.code === "ASSURANCE_ROLLBACK_PROBE");
+  }), (error) => error?.code === "DOMAIN_TRANSACTION_FAILED" && error?.cause?.code === "ASSURANCE_ROLLBACK_PROBE");
   const afterRollbackProbe = await store.readSnapshot();
   assert.equal(afterRollbackProbe.revision, beforeRollbackProbe.revision, "afgebroken mutatie wijzigde revision");
   assert.equal(afterRollbackProbe.preferences[normalUser.id].density, nextDensity, "afgebroken mutatie lekte gedeeltelijke state");
