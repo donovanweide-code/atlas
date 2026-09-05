@@ -158,6 +158,7 @@ test("authenticatiepolls zijn cachehits zonder revision-, audit- of legacywrite"
     service.promotions(login.token),
   ]);
   assert.equal(atlas.schemaVersion, 1);
+  for (const key of ["importantNow", "decisionsNeeded", "preparedActions", "sinceLastVisit", "evidence", "organizations", "capabilityRegistry"]) assert.ok(Array.isArray(atlas[key]), `Atlas-readmodel mist ${key}`);
   assert.equal(search.query, "Sportpaleis");
   assert.equal(promotions.schemaVersion, 1);
   const after = await store.read();

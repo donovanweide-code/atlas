@@ -105,7 +105,7 @@ try {
     interruptedMutationAtomic,
     tenantIsolation,
     auditAppendOnly: afterMutation.audit.length === afterReads.audit.length + 1,
-    ownerSurfacesPresent: Array.isArray(lastAtlas?.importantNow) && Array.isArray(lastAtlas?.decisionsNeeded) && Array.isArray(lastAtlas?.preparedActions) && Array.isArray(lastAtlas?.recentChanges) && Array.isArray(lastAtlas?.evidence) && Array.isArray(lastAtlas?.organizations) && Array.isArray(lastAtlas?.capabilityRegistry),
+    ownerSurfacesPresent: Array.isArray(lastAtlas?.importantNow) && Array.isArray(lastAtlas?.decisionsNeeded) && Array.isArray(lastAtlas?.preparedActions) && Array.isArray(lastAtlas?.sinceLastVisit) && Array.isArray(lastAtlas?.evidence) && Array.isArray(lastAtlas?.organizations) && Array.isArray(lastAtlas?.capabilityRegistry),
   };
   const rssEndBytes = process.memoryUsage().rss;
   const metrics = {
