@@ -152,6 +152,14 @@ test("authenticatiepolls zijn cachehits zonder revision-, audit- of legacywrite"
     const session = await service.issueSessionView(login.token, new Date("2026-09-05T13:01:00.000Z"));
     assert.equal(session.csrfToken, login.csrfToken);
   }
+  const [atlas, search, promotions] = await Promise.all([
+    service.atlasWorkspace(login.token),
+    service.search(login.token, "Sportpaleis"),
+    service.promotions(login.token),
+  ]);
+  assert.equal(atlas.schemaVersion, 1);
+  assert.equal(search.query, "Sportpaleis");
+  assert.equal(promotions.schemaVersion, 1);
   const after = await store.read();
   assert.equal(after.revision, baseline.revision);
   assert.equal(after.audit.length, baseline.audit.length);

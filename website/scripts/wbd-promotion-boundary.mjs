@@ -1,9 +1,11 @@
 import {
   appendControlAudit,
   controlRecordSourceRefs,
+  createInitialControlPlane,
   createControlRecord,
   ensureControlPlane,
   updateControlRecord,
+  validateControlPlane,
 } from "./wbd-control-plane.mjs";
 
 const SCHEMA_VERSION = 1;
@@ -161,7 +163,9 @@ function availability(proposal, plane, boundary) {
 }
 
 export function publicPromotionView(state, { releaseId }) {
-  const plane = ensureControlPlane(state);
+  const plane = state.controlPlane === undefined
+    ? createInitialControlPlane({ ownerId: state.owner.id })
+    : validateControlPlane(state.controlPlane);
   const boundary = validatePromotionBoundary(state.promotionBoundary);
   return {
     schemaVersion: SCHEMA_VERSION,
