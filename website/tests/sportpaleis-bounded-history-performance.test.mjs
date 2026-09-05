@@ -63,7 +63,7 @@ test("dagelijkse bootstrap blijft bounded bij 2.000 historische PlotJobs; histor
   assert.equal(bootstrap.productionJobs.length, 24);
   assert.equal(bootstrap.orderHistory.bounded, true);
   assert.ok(bootstrap.orderHistory.total >= 2_000);
-  assert.ok(bootstrap.orders.length <= 140, `orderbootstrap is niet bounded: ${bootstrap.orders.length}`);
+  assert.ok(bootstrap.orders.length <= 44, `orderbootstrap is niet bounded: ${bootstrap.orders.length}`);
   assert.ok(JSON.stringify(bootstrap.productionJobs).length < JSON.stringify((await store.read()).productionJobs).length / 20);
   assert.ok(JSON.stringify(bootstrap.orders).length < JSON.stringify((await store.read()).orders).length / 10);
 

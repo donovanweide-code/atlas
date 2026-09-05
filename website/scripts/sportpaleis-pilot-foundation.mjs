@@ -121,7 +121,9 @@ const PILOT_SCHEMA_VERSION = 18;
 const BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT = 24;
 const PRODUCTION_HISTORY_PAGE_LIMIT = 40;
 const PRODUCTION_HISTORY_PAGE_LIMIT_MAX = 80;
-const BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT = 120;
+// Historical orders have their own cursor route. Bootstrap only carries a small
+// recent tail plus every non-terminal order needed by the current screens.
+const BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT = 24;
 const ORDER_HISTORY_PAGE_LIMIT = 40;
 const ORDER_HISTORY_PAGE_LIMIT_MAX = 80;
 const PRODUCTION_ASSET_PREVIEW_CACHE_MAX_ENTRIES = 64;

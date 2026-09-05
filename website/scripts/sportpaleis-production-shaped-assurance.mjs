@@ -264,7 +264,7 @@ async function storeInitialize() {
   loop.disable(); clearInterval(poolSampler);
   assert.ok(statuses.every((status) => status === 200), "minstens één canaryroute faalde");
   const allMs = timings.map(({ ms }) => ms);
-  const metricsFor = (entries) => ({ count: entries.length, p50Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.5)), p95Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.95)), maxMs: rounded(Math.max(0, ...entries.map(({ ms }) => ms))) });
+  const metricsFor = (entries) => ({ count: entries.length, p50Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.5)), p95Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.95)), maxMs: rounded(Math.max(0, ...entries.map(({ ms }) => ms))), maxBytes: Math.max(0, ...entries.map(({ bytes }) => Number(bytes) || 0)) });
   const metrics = { ...metricsFor(timings), eventLoopP95Ms: rounded(loop.percentile(95) / 1e6), eventLoopMaxMs: rounded(loop.max / 1e6) };
   const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route === "/api/sportpaleis/v1/bootstrap"));
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
