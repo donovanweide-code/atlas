@@ -1,0 +1,551 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import mariadb from "mariadb";
+
+import {
+  decodeSportpaleisRuntimeState,
+  encodeSportpaleisRuntimeState,
+  SportpaleisMariaDbStoreError,
+} from "./sportpaleis-mariadb-store.mjs";
+import {
+  assertSportpaleisDomainPayload,
+  assertIncrementalSportpaleisState,
+  composeSportpaleisState,
+  createLazySportpaleisStateDraft,
+  detachSportpaleisRecordCollections,
+  immutableDomain,
+  partitionSportpaleisState,
+  sha256CanonicalJson,
+  sportpaleisRecordIdentity,
+  SPORTPALEIS_DOMAIN_CONTRACT_VERSION,
+  SPORTPALEIS_RECORD_COLLECTIONS,
+  SPORTPALEIS_STATE_DOMAINS,
+} from "./workspace-domain-state.mjs";
+import { diffStableRecords } from "./workspace-domain-storage-primitives.mjs";
+
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const defaultMigrationFile = path.resolve(scriptDirectory, "..", "sportpaleis-server", "production-migrations", "workspace", "007-sportpaleis-domain-state.sql");
+const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
+const REQUIRED_MIGRATION_VERSION = 7;
+const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
+
+function databaseOptions(config) {
+  return {
+    host: config.host, port: config.port, database: config.name, user: config.user, password: config.password,
+    connectionLimit: config.connectionLimit ?? 8, acquireTimeout: config.acquireTimeoutMs ?? 5_000,
+    connectTimeout: config.connectTimeoutMs ?? 5_000, idleTimeout: 30, bigIntAsNumber: true,
+    insertIdAsNumber: true, timezone: "Z", charset: "utf8mb4", multipleStatements: false,
+  };
+}
+
+function withoutAuditEvents(payload) {
+  if (!Object.hasOwn(payload, "audit")) return payload;
+  const { audit: _audit, ...rest } = payload;
+  return rest;
+}
+
+function persistedDomainPayload(domain, sourcePayload) {
+  const withoutAudit = domain === "audit" ? withoutAuditEvents(sourcePayload) : sourcePayload;
+  const withoutIdempotency = domain === "platform" && Object.hasOwn(withoutAudit, "idempotency")
+    ? (({ idempotency: _idempotency, ...rest }) => rest)(withoutAudit)
+    : withoutAudit;
+  return detachSportpaleisRecordCollections(withoutIdempotency);
+}
+
+function idempotencyIdentityHash(identity) {
+  return createHash("sha256").update(identity).digest("hex");
+}
+
+function recordMap(records, collectionKey) {
+  return new Map(records.map((record) => [sportpaleisRecordIdentity(collectionKey, record), record]));
+}
+
+function orderHistoryRows(orders) {
+  return orders.flatMap((order) => (order.eventHistory ?? []).map((event, ordinal) => ({ order, event, ordinal })));
+}
+
+function persistedRecord(collectionKey, record) {
+  if (collectionKey !== "orders") return record;
+  const { eventHistory: _eventHistory, ...order } = record;
+  return order;
+}
+
+function artifactReference(job) {
+  const artifact = job?.snapshot?.artifact;
+  if (!artifact?.sha256 || !artifact?.path || !artifact?.format) return null;
+  return { plotJobId: job.id, sha256: String(artifact.sha256).toLowerCase(), path: artifact.path, format: artifact.format };
+}
+
+function decodePayload(value) {
+  return decodeSportpaleisRuntimeState(value);
+}
+
+function encodePayload(value) {
+  return encodeSportpaleisRuntimeState(value).serialized;
+}
+
+async function insertBatches(connection, sql, parameters, maximumBatchSize = 200) {
+  for (let offset = 0; offset < parameters.length; offset += maximumBatchSize) {
+    const batch = parameters.slice(offset, offset + maximumBatchSize);
+    if (typeof connection.batch === "function") await connection.batch(sql, batch);
+    else for (const values of batch) await connection.query(sql, values);
+  }
+}
+
+function changedAuditEvents(previous, next) {
+  const previousIds = new Set(previous.map(({ id }) => id));
+  const nextById = new Map(next.map((event) => [event.id, event]));
+  const nextIds = new Set(nextById.keys());
+  if (previous.some(({ id }) => !nextIds.has(id))) throw Object.assign(new Error("Immutable auditregels mogen niet worden verwijderd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
+  for (const event of previous) {
+    const candidate = nextById.get(event.id);
+    if (sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) throw Object.assign(new Error("Immutable auditregels mogen niet worden gewijzigd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
+  }
+  return next.filter(({ id }) => !previousIds.has(id));
+}
+
+function createMetrics() {
+  return {
+    metaQueries: 0, fullLegacyLoads: 0, domainRowsLoaded: 0, recordRowsLoaded: 0,
+    auditRowsLoaded: 0, historyRowsLoaded: 0, idempotencyRowsLoaded: 0,
+    decodedBytes: 0, domainWrites: 0, recordWrites: 0, recordDeletes: 0,
+    auditAppends: 0, historyWrites: 0, artifactReferenceWrites: 0,
+    idempotencyWrites: 0, idempotencyDeletes: 0,
+    mutations: 0, unchangedMutations: 0, clonedKeys: 0, cacheHits: 0, cacheMisses: 0,
+  };
+}
+
+export class SportpaleisDomainMariaDbStore {
+  constructor({ database, pool, migrationFile = defaultMigrationFile }) {
+    if (!pool && !database) throw new SportpaleisMariaDbStoreError("Workspace MariaDB-configuratie ontbreekt.", "DATABASE_CONFIG_MISSING");
+    this.pool = pool ?? mariadb.createPool(databaseOptions(database));
+    this.ownsPool = !pool;
+    this.migrationFile = path.resolve(migrationFile);
+    this.domainCache = new Map();
+    this.collectionCache = new Map();
+    this.domainRevisions = new Map();
+    this.globalRevision = null;
+    this.schemaVersion = null;
+    this.snapshot = null;
+    this.refreshPromise = null;
+    this.metrics = createMetrics();
+  }
+
+  async initialize() {
+    const migration = await readFile(this.migrationFile, "utf8");
+    const connection = await this.#connection();
+    try {
+      await connection.beginTransaction();
+      const registered = await connection.query(
+        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ? FOR UPDATE",
+        [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION],
+      );
+      const checksum = createHash("sha256").update(migration).digest("hex");
+      if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
+      if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+      const metaRows = await connection.query(
+        "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
+        [ORGANIZATION_ID],
+      );
+      if (metaRows.length === 0) await this.#backfill(connection);
+      await connection.commit();
+    } catch (cause) {
+      await connection.rollback().catch(() => undefined);
+      if (cause instanceof SportpaleisMariaDbStoreError) throw cause;
+      throw new SportpaleisMariaDbStoreError("Domeinopslag kon niet worden geïnitialiseerd.", "DOMAIN_INITIALIZATION_FAILED", cause);
+    } finally {
+      connection.release();
+    }
+    await this.#refresh(true);
+  }
+
+  async #backfill(connection) {
+    const rows = await connection.query(
+      "SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE",
+      [ORGANIZATION_ID],
+    );
+    if (rows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
+    const legacy = decodeSportpaleisRuntimeState(rows[0].state_json);
+    if (!legacy || typeof legacy !== "object" || legacy.organizationId !== ORGANIZATION_ID || !Number.isInteger(Number(legacy.schemaVersion))) {
+      throw new SportpaleisMariaDbStoreError("Legacy migratiebron heeft een ongeldige identiteit.", "DATABASE_STATE_INVALID");
+    }
+    if (Number(rows[0].revision) !== Number(legacy.revision)) throw new SportpaleisMariaDbStoreError("Legacy revisie is inconsistent.", "DATABASE_REVISION_MISMATCH");
+    this.metrics.fullLegacyLoads += 1;
+    const domains = partitionSportpaleisState(legacy);
+    const legacyHash = sha256CanonicalJson(legacy);
+    await connection.query(
+      "INSERT INTO sp_workspace_domain_meta (organization_id, schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'SHADOW', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+      [ORGANIZATION_ID, legacy.schemaVersion, legacy.revision, legacy.revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION],
+    );
+    for (const [domain, sourcePayload] of Object.entries(domains)) {
+      const { scalar: payload, collections } = persistedDomainPayload(domain, sourcePayload);
+      const evidence = assertSportpaleisDomainPayload(domain, payload);
+      await connection.query(
+        "INSERT INTO sp_workspace_domain_state (organization_id, domain_key, domain_revision, global_revision, payload_json, payload_sha256, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+        [ORGANIZATION_ID, domain, legacy.revision, encodePayload(payload), evidence.sha256],
+      );
+      for (const [collectionKey, records] of Object.entries(collections)) {
+        const sql = "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))";
+        const parameters = records.map((sourceRecord, ordinal) => {
+          const record = persistedRecord(collectionKey, sourceRecord);
+          return [ORGANIZATION_ID, domain, collectionKey, sportpaleisRecordIdentity(collectionKey, record), ordinal, legacy.revision, encodePayload(record), sha256CanonicalJson(record)];
+        });
+        await insertBatches(connection, sql, parameters);
+      }
+    }
+    const insertAuditSql = "INSERT INTO sp_workspace_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))";
+    const auditParameters = legacy.audit.map((event, index) => [ORGANIZATION_ID, event.id, index, legacy.revision, encodePayload(event), sha256CanonicalJson(event)]);
+    await insertBatches(connection, insertAuditSql, auditParameters);
+    const historySql = "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))";
+    const historyParameters = orderHistoryRows(legacy.orders ?? []).map(({ order, event, ordinal }) => {
+      const eventId = typeof event.id === "string" && event.id ? event.id : sha256CanonicalJson({ orderId: order.id, ordinal, event });
+      return [ORGANIZATION_ID, order.id, eventId, ordinal, Number(order.revision ?? 1), legacy.revision, encodePayload(event), sha256CanonicalJson(event)];
+    });
+    await insertBatches(connection, historySql, historyParameters);
+    const artifactSql = "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))";
+    const artifactParameters = (legacy.productionJobs ?? []).flatMap((job) => {
+      const reference = artifactReference(job);
+      return reference ? [[ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, legacy.revision]] : [];
+    });
+    await insertBatches(connection, artifactSql, artifactParameters);
+    const idempotencySql = "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))";
+    const idempotencyParameters = Object.entries(legacy.idempotency ?? {}).map(([identity, record]) => [
+      ORGANIZATION_ID, idempotencyIdentityHash(identity), identity, legacy.revision, encodePayload(record), sha256CanonicalJson(record),
+    ]);
+    await insertBatches(connection, idempotencySql, idempotencyParameters);
+    const composed = composeSportpaleisState({ ...domains, audit: { ...domains.audit, audit: legacy.audit } });
+    const composedHash = sha256CanonicalJson(composed);
+    await connection.query(
+      "INSERT INTO sp_workspace_domain_reconciliation (organization_id, legacy_revision, contract_version, legacy_sha256, composed_sha256, domain_manifest_json, status, compared_at) VALUES (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
+      [ORGANIZATION_ID, legacy.revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION, legacyHash, composedHash,
+        JSON.stringify(Object.fromEntries(Object.entries(domains).map(([domain, payload]) => [domain, { count: Object.keys(payload).length, sha256: sha256CanonicalJson(payload) }]))),
+        legacyHash === composedHash ? "MATCH" : "MISMATCH"],
+    );
+    if (legacyHash !== composedHash) throw new SportpaleisMariaDbStoreError("Domeinbackfill wijkt af van de migratiebron.", "DOMAIN_BACKFILL_MISMATCH");
+  }
+
+  async readSnapshot() {
+    await this.#refresh(false);
+    return this.snapshot;
+  }
+
+  async read() {
+    return this.readSnapshot();
+  }
+
+  async #refresh(force) {
+    if (this.refreshPromise) return this.refreshPromise;
+    const pending = this.#refreshOnce(force);
+    this.refreshPromise = pending;
+    try { return await pending; } finally { if (this.refreshPromise === pending) this.refreshPromise = null; }
+  }
+
+  async #refreshOnce(force) {
+    this.metrics.metaQueries += 1;
+    const meta = await this.pool.query(
+      "SELECT schema_version, global_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?",
+      [ORGANIZATION_ID],
+    );
+    if (meta.length !== 1 || Number(meta[0].contract_version) !== SPORTPALEIS_DOMAIN_CONTRACT_VERSION) throw new SportpaleisMariaDbStoreError("Domeinmetadata ontbreekt of is incompatibel.", "DOMAIN_META_INVALID");
+    const nextRevision = Number(meta[0].global_revision);
+    if (!force && this.snapshot && nextRevision === this.globalRevision) {
+      this.metrics.cacheHits += 1;
+      return;
+    }
+    this.metrics.cacheMisses += 1;
+    const rows = await this.pool.query(
+      force || this.globalRevision === null
+        ? "SELECT domain_key, domain_revision, global_revision, payload_json, payload_sha256 FROM sp_workspace_domain_state WHERE organization_id = ?"
+        : "SELECT domain_key, domain_revision, global_revision, payload_json, payload_sha256 FROM sp_workspace_domain_state WHERE organization_id = ? AND global_revision > ?",
+      this.globalRevision === null || force ? [ORGANIZATION_ID] : [ORGANIZATION_ID, this.globalRevision],
+    );
+    const domainsToReload = new Set(rows.map(({ domain_key: domain }) => domain));
+    this.metrics.domainRowsLoaded += rows.length;
+    for (const row of rows) {
+      const payload = decodePayload(row.payload_json);
+      this.metrics.decodedBytes += Buffer.byteLength(String(row.payload_json));
+      const evidence = assertSportpaleisDomainPayload(row.domain_key, payload);
+      if (evidence.sha256 !== row.payload_sha256) throw new SportpaleisMariaDbStoreError(`Domeinhash wijkt af voor ${row.domain_key}.`, "DOMAIN_HASH_MISMATCH");
+      this.domainCache.set(row.domain_key, immutableDomain(payload));
+      this.domainRevisions.set(row.domain_key, Number(row.domain_revision));
+    }
+    for (const domain of domainsToReload) {
+      const recordRows = await this.pool.query(
+        "SELECT collection_key, record_id, ordinal, record_revision, record_json, record_sha256 FROM sp_workspace_domain_record WHERE organization_id = ? AND domain_key = ? ORDER BY collection_key ASC, ordinal ASC",
+        [ORGANIZATION_ID, domain],
+      );
+      this.metrics.recordRowsLoaded += recordRows.length;
+      const grouped = new Map();
+      for (const row of recordRows) {
+        const record = decodePayload(row.record_json);
+        this.metrics.decodedBytes += Buffer.byteLength(String(row.record_json));
+        if (sha256CanonicalJson(record) !== row.record_sha256 || sportpaleisRecordIdentity(row.collection_key, record) !== row.record_id) {
+          throw new SportpaleisMariaDbStoreError(`Recordhash wijkt af voor ${row.collection_key}/${row.record_id}.`, "DOMAIN_RECORD_HASH_MISMATCH");
+        }
+        if (!grouped.has(row.collection_key)) grouped.set(row.collection_key, []);
+        grouped.get(row.collection_key).push(immutableDomain(record));
+      }
+      if (domain === "orders") {
+        const historyRows = await this.pool.query(
+          "SELECT order_id, event_json, event_sha256 FROM sp_workspace_order_history_event WHERE organization_id = ? ORDER BY order_id ASC, ordinal ASC",
+          [ORGANIZATION_ID],
+        );
+        this.metrics.historyRowsLoaded += historyRows.length;
+        const histories = new Map();
+        for (const row of historyRows) {
+          const event = decodePayload(row.event_json);
+          if (sha256CanonicalJson(event) !== row.event_sha256) throw new SportpaleisMariaDbStoreError(`Orderhistoriehash wijkt af voor ${row.order_id}.`, "ORDER_HISTORY_HASH_MISMATCH");
+          if (!histories.has(row.order_id)) histories.set(row.order_id, []);
+          histories.get(row.order_id).push(immutableDomain(event));
+        }
+        grouped.set("orders", (grouped.get("orders") ?? []).map((order) => immutableDomain({ ...order, eventHistory: histories.get(order.id) ?? [] })));
+      }
+      if (domain === "platform") {
+        const idempotencyRows = await this.pool.query(
+          "SELECT identity_key, record_json, record_sha256 FROM sp_workspace_idempotency_record WHERE organization_id = ? ORDER BY identity_key ASC",
+          [ORGANIZATION_ID],
+        );
+        this.metrics.idempotencyRowsLoaded += idempotencyRows.length;
+        const idempotency = {};
+        for (const row of idempotencyRows) {
+          const record = decodePayload(row.record_json);
+          if (sha256CanonicalJson(record) !== row.record_sha256) throw new SportpaleisMariaDbStoreError(`Idempotencyhash wijkt af voor ${row.identity_key}.`, "IDEMPOTENCY_HASH_MISMATCH");
+          idempotency[row.identity_key] = immutableDomain(record);
+        }
+        const platform = { ...(this.domainCache.get("platform") ?? {}), idempotency: Object.freeze(idempotency) };
+        this.domainCache.set("platform", Object.freeze(platform));
+      }
+      const complete = { ...(this.domainCache.get(domain) ?? {}) };
+      for (const key of SPORTPALEIS_STATE_DOMAINS[domain]) {
+        if (!SPORTPALEIS_RECORD_COLLECTIONS.has(key)) continue;
+        const records = Object.freeze(grouped.get(key) ?? []);
+        complete[key] = records;
+        this.collectionCache.set(key, records);
+      }
+      this.domainCache.set(domain, Object.freeze(complete));
+    }
+    if (force || rows.some(({ domain_key: key }) => key === "audit")) {
+      const auditRows = await this.pool.query(
+        "SELECT event_json, event_sha256 FROM sp_workspace_audit_event WHERE organization_id = ? ORDER BY ordinal ASC",
+        [ORGANIZATION_ID],
+      );
+      this.metrics.auditRowsLoaded += auditRows.length;
+      const events = auditRows.map((row) => {
+        const event = decodePayload(row.event_json);
+        if (sha256CanonicalJson(event) !== row.event_sha256) throw new SportpaleisMariaDbStoreError("Audit-evidencehash wijkt af.", "AUDIT_HASH_MISMATCH");
+        return immutableDomain(event);
+      });
+      this.domainCache.set("audit", immutableDomain({ ...(this.domainCache.get("audit") ?? {}), audit: events }));
+    }
+    for (const domain of Object.keys(SPORTPALEIS_STATE_DOMAINS)) if (!this.domainCache.has(domain)) throw new SportpaleisMariaDbStoreError(`Domein ${domain} ontbreekt.`, "DOMAIN_MISSING");
+    const composed = composeSportpaleisState(Object.fromEntries(this.domainCache));
+    composed.revision = nextRevision;
+    this.snapshot = Object.freeze(composed);
+    this.globalRevision = nextRevision;
+    this.schemaVersion = Number(meta[0].schema_version);
+  }
+
+  async mutate(mutator) {
+    const connection = await this.#connection();
+    let phase = "begin";
+    try {
+      await connection.beginTransaction();
+      phase = "lock-meta";
+      const meta = await connection.query(
+        "SELECT schema_version, global_revision, contract_version FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
+        [ORGANIZATION_ID],
+      );
+      if (meta.length !== 1 || Number(meta[0].contract_version) !== SPORTPALEIS_DOMAIN_CONTRACT_VERSION) throw new SportpaleisMariaDbStoreError("Domeinmetadata ontbreekt.", "DOMAIN_META_INVALID");
+      if (this.globalRevision !== Number(meta[0].global_revision)) {
+        throw new SportpaleisMariaDbStoreError("De lokale domeinsnapshot is verouderd; herhaal veilig na refresh.", "DOMAIN_SNAPSHOT_STALE");
+      }
+      const current = this.snapshot;
+      const lazy = createLazySportpaleisStateDraft(current);
+      phase = "mutator";
+      const result = await mutator(lazy.draft);
+      if (result.unchanged === true) {
+        this.metrics.unchangedMutations += 1;
+        await connection.rollback();
+        return { state: current, value: result.value };
+      }
+      const finalized = lazy.finalize();
+      this.metrics.mutations += 1;
+      this.metrics.clonedKeys += finalized.clonedKeys.length;
+      const nextRevision = this.globalRevision + 1;
+      finalized.state.revision = nextRevision;
+      if (finalized.state.organizationId !== ORGANIZATION_ID || Number(finalized.state.schemaVersion) !== this.schemaVersion) throw new SportpaleisMariaDbStoreError("Immutable state-identiteit is gewijzigd.", "DOMAIN_IDENTITY_VIOLATION");
+      assertIncrementalSportpaleisState(finalized.state, finalized.changedKeys);
+      const partitioned = partitionSportpaleisState(finalized.state);
+      const nextDomainCache = new Map(this.domainCache);
+      const nextDomainRevisions = new Map(this.domainRevisions);
+      phase = "write-domains";
+      for (const domain of finalized.changedDomains) {
+        const sourcePayload = partitioned[domain];
+        if (domain === "audit") {
+          const additions = changedAuditEvents(current.audit, finalized.state.audit);
+          const minimum = await connection.query("SELECT COALESCE(MIN(ordinal), 0) AS minimum_ordinal FROM sp_workspace_audit_event WHERE organization_id = ?", [ORGANIZATION_ID]);
+          let ordinal = Number(minimum[0].minimum_ordinal) - additions.length;
+          for (const event of additions) {
+            await connection.query(
+              "INSERT INTO sp_workspace_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
+              [ORGANIZATION_ID, event.id, ordinal, nextRevision, encodePayload(event), sha256CanonicalJson(event)],
+            );
+            this.metrics.auditAppends += 1;
+            ordinal += 1;
+          }
+        }
+        const { scalar: payload, collections } = persistedDomainPayload(domain, sourcePayload);
+        for (const [collectionKey, records] of Object.entries(collections)) {
+          const priorRecords = current[collectionKey] ?? [];
+          const delta = diffStableRecords(
+            priorRecords.map((record) => persistedRecord(collectionKey, record)),
+            records.map((record) => persistedRecord(collectionKey, record)),
+            { identity: (record) => sportpaleisRecordIdentity(collectionKey, record), hash: sha256CanonicalJson },
+          );
+          const deletedIds = delta.deleted;
+          if (["orders", "productionJobs"].includes(collectionKey) && deletedIds.length) {
+            throw new SportpaleisMariaDbStoreError(`${collectionKey} mag geen immutable records fysiek verwijderen.`, "DOMAIN_RECORD_IMMUTABILITY_VIOLATION");
+          }
+          for (const recordId of deletedIds) {
+            await connection.query(
+              "DELETE FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = ? AND record_id = ?",
+              [ORGANIZATION_ID, collectionKey, recordId],
+            );
+            this.metrics.recordDeletes += 1;
+          }
+          for (const { id: recordId, record, ordinal, hash } of delta.changed) {
+            await connection.query(
+              "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE domain_key = VALUES(domain_key), ordinal = VALUES(ordinal), record_revision = record_revision + 1, global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
+              [ORGANIZATION_ID, domain, collectionKey, recordId, ordinal, nextRevision, encodePayload(record), hash],
+            );
+            this.metrics.recordWrites += 1;
+          }
+        }
+        if (domain === "orders") {
+          const priorOrders = recordMap(current.orders ?? [], "orders");
+          for (const order of finalized.state.orders ?? []) {
+            const prior = priorOrders.get(order.id);
+            if (prior && sha256CanonicalJson(prior) === sha256CanonicalJson(order)) continue;
+            const priorEvents = new Map((prior?.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), event]));
+            const nextEvents = new Map((order.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), { event, ordinal }]));
+            for (const [eventId, event] of priorEvents) {
+              const candidate = nextEvents.get(eventId)?.event;
+              if (!candidate || sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) {
+                throw new SportpaleisMariaDbStoreError(`Orderhistorie ${order.id}/${eventId} is niet append-only.`, "ORDER_HISTORY_IMMUTABILITY_VIOLATION");
+              }
+            }
+            for (const [eventId, { event, ordinal }] of nextEvents) {
+              if (priorEvents.has(eventId)) continue;
+              await connection.query(
+                "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+                [ORGANIZATION_ID, order.id, eventId, ordinal, Number(order.revision ?? 1), nextRevision, encodePayload(event), sha256CanonicalJson(event)],
+              );
+              this.metrics.historyWrites += 1;
+            }
+          }
+        }
+        if (domain === "artifacts") {
+          const priorJobs = recordMap(current.productionJobs ?? [], "productionJobs");
+          for (const job of finalized.state.productionJobs ?? []) {
+            const reference = artifactReference(job);
+            if (!reference) continue;
+            const priorReference = artifactReference(priorJobs.get(job.id));
+            if (priorReference && sha256CanonicalJson(priorReference) !== sha256CanonicalJson(reference)) {
+              throw new SportpaleisMariaDbStoreError(`Immutable artifactreferentie van ${job.id} is gewijzigd.`, "ARTIFACT_REFERENCE_IMMUTABILITY_VIOLATION");
+            }
+            if (priorReference) continue;
+            await connection.query(
+              "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+              [ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, nextRevision],
+            );
+            this.metrics.artifactReferenceWrites += 1;
+          }
+        }
+        if (domain === "platform" && finalized.changedKeys.includes("idempotency")) {
+          const previous = current.idempotency ?? {};
+          const next = finalized.state.idempotency ?? {};
+          for (const identity of Object.keys(previous)) {
+            if (Object.hasOwn(next, identity)) continue;
+            await connection.query(
+              "DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_sha256 = ? AND identity_key = ?",
+              [ORGANIZATION_ID, idempotencyIdentityHash(identity), identity],
+            );
+            this.metrics.idempotencyDeletes += 1;
+          }
+          for (const [identity, record] of Object.entries(next)) {
+            if (Object.hasOwn(previous, identity) && sha256CanonicalJson(previous[identity]) === sha256CanonicalJson(record)) continue;
+            await connection.query(
+              "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
+              [ORGANIZATION_ID, idempotencyIdentityHash(identity), identity, nextRevision, encodePayload(record), sha256CanonicalJson(record)],
+            );
+            this.metrics.idempotencyWrites += 1;
+          }
+        }
+        const evidence = assertSportpaleisDomainPayload(domain, payload);
+        const update = await connection.query(
+          "UPDATE sp_workspace_domain_state SET domain_revision = domain_revision + 1, global_revision = ?, payload_json = ?, payload_sha256 = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND domain_key = ? AND domain_revision = ?",
+          [nextRevision, encodePayload(payload), evidence.sha256, ORGANIZATION_ID, domain, this.domainRevisions.get(domain)],
+        );
+        if (Number(update.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError(`Gelijktijdige wijziging in domein ${domain}.`, "DOMAIN_CONCURRENCY_CONFLICT");
+        this.metrics.domainWrites += 1;
+        const complete = { ...immutableDomain(payload) };
+        for (const key of SPORTPALEIS_STATE_DOMAINS[domain]) {
+          if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) complete[key] = immutableDomain(sourcePayload[key] ?? []);
+        }
+        if (domain === "platform") complete.idempotency = immutableDomain(sourcePayload.idempotency ?? {});
+        if (domain === "audit") {
+          const priorEvents = new Map(current.audit.map((event) => [event.id, event]));
+          complete.audit = Object.freeze(finalized.state.audit.map((event) => priorEvents.get(event.id) ?? immutableDomain(event)));
+        }
+        nextDomainCache.set(domain, Object.freeze(complete));
+        nextDomainRevisions.set(domain, Number(nextDomainRevisions.get(domain) ?? 0) + 1);
+      }
+      const metaUpdate = await connection.query(
+        "UPDATE sp_workspace_domain_meta SET global_revision = ?, schema_version = ?, cutover_mode = 'DOMAIN_READS', updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ?",
+        [nextRevision, this.schemaVersion, ORGANIZATION_ID, this.globalRevision],
+      );
+      if (Number(metaUpdate.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
+      const composed = composeSportpaleisState(Object.fromEntries(nextDomainCache));
+      composed.revision = nextRevision;
+      const nextSnapshot = Object.freeze(composed);
+      phase = "commit";
+      await connection.commit();
+      this.domainCache = nextDomainCache;
+      this.domainRevisions = nextDomainRevisions;
+      this.globalRevision = nextRevision;
+      this.snapshot = nextSnapshot;
+      return { state: this.snapshot, value: result.value };
+    } catch (cause) {
+      await connection.rollback().catch(() => undefined);
+      if (cause?.statusCode || cause instanceof SportpaleisMariaDbStoreError) throw cause;
+      throw new SportpaleisMariaDbStoreError("Domeintransactie is mislukt.", "DOMAIN_TRANSACTION_FAILED", cause);
+    } finally {
+      connection.release();
+    }
+  }
+
+  async latestBackupStatus() { return { status: "external", strategy: "encrypted-logical-dump-plus-provider-backup" }; }
+  async storageStatus() {
+    const [rows, recordRows] = await Promise.all([
+      this.pool.query("SELECT domain_key, OCTET_LENGTH(payload_json) AS bytes FROM sp_workspace_domain_state WHERE organization_id = ?", [ORGANIZATION_ID]),
+      this.pool.query("SELECT domain_key, COUNT(*) AS record_count, COALESCE(SUM(OCTET_LENGTH(record_json)), 0) AS bytes FROM sp_workspace_domain_record WHERE organization_id = ? GROUP BY domain_key", [ORGANIZATION_ID]),
+    ]);
+    const domains = Object.fromEntries(rows.map(({ domain_key, bytes }) => [domain_key, { scalarBytes: Number(bytes), recordBytes: 0, records: 0 }]));
+    for (const row of recordRows) domains[row.domain_key] = { ...(domains[row.domain_key] ?? { scalarBytes: 0 }), recordBytes: Number(row.bytes), records: Number(row.record_count) };
+    return { engine: "mariadb-domain-record-v1", domains, globalRevision: this.globalRevision, metrics: this.metricsSnapshot() };
+  }
+  metricsSnapshot() { return Object.freeze({ ...this.metrics }); }
+  async close() { if (this.ownsPool) await this.pool.end(); }
+  async #connection() {
+    try { return await this.pool.getConnection(); } catch (cause) { throw new SportpaleisMariaDbStoreError("Workspace MariaDB is niet bereikbaar.", "DATABASE_CONNECTION_FAILED", cause); }
+  }
+}
+
+export const sportpaleisDomainMariaDbMigrationContract = Object.freeze({
+  component: MIGRATION_COMPONENT,
+  version: REQUIRED_MIGRATION_VERSION,
+  file: defaultMigrationFile,
+  domainContractVersion: SPORTPALEIS_DOMAIN_CONTRACT_VERSION,
+});

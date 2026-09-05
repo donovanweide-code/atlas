@@ -35,9 +35,10 @@ tag=SPW-CANDIDATE-TAG-20260821
 fixture="$root/fixture"
 artifact="$root/$candidate_id.tar.gz"
 external_manifest="$root/$candidate_id.manifest.json"
+assurance_evidence="$root/$candidate_id.assurance.json"
 
 mkdir -p "$WBD_ROOT/releases/$old_id/website" "$WBD_ROOT/shared" "$WBD_BACKUP_DIR" \
-  "$fixture/app/scripts" "$fixture/app/dist-workspace/assets" "$fixture/deployment"
+  "$fixture/app/scripts" "$fixture/app/config" "$fixture/app/dist-workspace/assets" "$fixture/deployment"
 printf 'old\n' > "$WBD_ROOT/releases/$old_id/website/version.txt"
 cat > "$WBD_ROOT/releases/$old_id/RELEASE-MANIFEST.json" <<EOF
 {"schemaVersion":2,"releaseId":"$old_id","commit":"0000000000000000000000000000000000000000","tag":"$old_id","files":[]}
@@ -53,6 +54,9 @@ printf '{"name":"fixture","private":true,"version":"1.0.0"}\n' > "$fixture/app/p
 printf 'candidate\n' > "$fixture/app/version.txt"
 printf 'export {};\n' > "$fixture/app/scripts/workspace-runtime.mjs"
 printf 'export {};\n' > "$fixture/app/scripts/production-migrate.mjs"
+printf 'export {};\n' > "$fixture/app/scripts/sportpaleis-production-shaped-assurance.mjs"
+printf 'process.stdout.write("{\\"status\\":\\"PASS\\"}\\n");\n' > "$fixture/app/scripts/sportpaleis-domain-rollback-bridge.mjs"
+printf '{"schemaVersion":3}\n' > "$fixture/app/config/sportpaleis-production-shaped-assurance-v3.json"
 printf '<!doctype html>workspace\n' > "$fixture/app/dist-workspace/workspace.html"
 printf '<!doctype html>sportpaleis\n' > "$fixture/app/dist-workspace/sportpaleis.html"
 printf 'asset\n' > "$fixture/app/dist-workspace/assets/app.js"
@@ -69,18 +73,29 @@ const [root, releaseId, commit, tag] = process.argv.slice(2);
 const files = [
   "app/package-lock.json", "app/package.json", "app/version.txt",
   "app/scripts/workspace-runtime.mjs", "app/scripts/production-migrate.mjs",
+  "app/scripts/sportpaleis-production-shaped-assurance.mjs",
+  "app/scripts/sportpaleis-domain-rollback-bridge.mjs",
+  "app/config/sportpaleis-production-shaped-assurance-v3.json",
   "app/dist-workspace/workspace.html", "app/dist-workspace/sportpaleis.html",
   "app/dist-workspace/assets/app.js", "deployment/wbd-workspace.service",
 ].map((name) => {
   const bytes = fs.readFileSync(path.join(root, name));
   return { path: name, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
 });
-fs.writeFileSync(path.join(root, "RELEASE-MANIFEST.json"), JSON.stringify({ schemaVersion: 2, releaseId, commit, tag, files }, null, 2));
+const assurance = files.find(({ path: name }) => name === "app/scripts/sportpaleis-production-shaped-assurance.mjs");
+const contract = files.find(({ path: name }) => name === "app/config/sportpaleis-production-shaped-assurance-v3.json");
+fs.writeFileSync(path.join(root, "RELEASE-MANIFEST.json"), JSON.stringify({ schemaVersion: 2, releaseId, commit, tag, files, deployability: { productionShapedAssuranceRequired: true }, productionShapedAssurance: { entrypoint: assurance.path, sha256: assurance.sha256, contract: contract.path, contractSha256: contract.sha256, requiredPhase: "PRE_DEPLOY" } }, null, 2));
 NODE
 tar -C "$fixture" -czf "$artifact" app deployment RELEASE-MANIFEST.json
 artifact_hash="$(sha256sum "$artifact" | awk '{print $1}')"
+assurance_hash="$(sha256sum "$fixture/app/scripts/sportpaleis-production-shaped-assurance.mjs" | awk '{print $1}')"
+contract_hash="$(sha256sum "$fixture/app/config/sportpaleis-production-shaped-assurance-v3.json" | awk '{print $1}')"
+backup_hash="$(awk 'NR==1 {print $1}' "$WBD_BACKUP_DIR/wbd-mariadb-20260821T000000Z.sql.enc.sha256")"
 cat > "$external_manifest" <<EOF
-{"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$artifact")","artifactSha256":"$artifact_hash"}
+{"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$artifact")","artifactSha256":"$artifact_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v3.json","contractSha256":"$contract_hash","requiredPhase":"PRE_DEPLOY"}}
+EOF
+cat > "$assurance_evidence" <<EOF
+{"schemaVersion":3,"status":"PASS","releaseId":"$candidate_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$artifact_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}]},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"productionIdempotency":true,"artifactIdentity":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true}}
 EOF
 
 # Een structureel incompleet raw artifact moet vóór staging, rollbackmateriaal en
@@ -105,7 +120,7 @@ grep -q 'vereist artifactpad ontbreekt: app/scripts/workspace-runtime.mjs' "$roo
 [[ ! -e "$WBD_ROOT/shared/deploy-plans/$candidate_id.json" ]]
 [[ ! -e "$WBD_ROOT/shared/deploy-rollbacks/$candidate_id-prechange.tar.gz" ]]
 
-output="$($deploy_script prepare --artifact "$artifact" --manifest "$external_manifest" --expected-current "$old_id")"
+output="$($deploy_script prepare --artifact "$artifact" --manifest "$external_manifest" --expected-current "$old_id" --assurance-evidence "$assurance_evidence")"
 grep -q 'PREPARE=PASS' <<<"$output"
 grep -q 'HUMAN_GO_REQUIRED=YES' <<<"$output"
 [[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$old_id" ]]
@@ -129,6 +144,7 @@ second_id=SPW-CANDIDATE-FAIL-20260821
 second_fixture="$root/fixture-fail"
 second_artifact="$root/$second_id.tar.gz"
 second_manifest="$root/$second_id.manifest.json"
+second_assurance="$root/$second_id.assurance.json"
 cp -a "$fixture" "$second_fixture"
 node - "$second_fixture/RELEASE-MANIFEST.json" "$second_id" <<'NODE'
 const fs = require("fs");
@@ -141,9 +157,15 @@ NODE
 tar -C "$second_fixture" -czf "$second_artifact" app deployment RELEASE-MANIFEST.json
 second_hash="$(sha256sum "$second_artifact" | awk '{print $1}')"
 cat > "$second_manifest" <<EOF
-{"releaseId":"$second_id","commit":"$commit","tag":"$second_id","artifact":"$(basename "$second_artifact")","artifactSha256":"$second_hash"}
+{"releaseId":"$second_id","commit":"$commit","tag":"$second_id","artifact":"$(basename "$second_artifact")","artifactSha256":"$second_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v3.json","contractSha256":"$contract_hash","requiredPhase":"PRE_DEPLOY"}}
 EOF
-$deploy_script prepare --artifact "$second_artifact" --manifest "$second_manifest" --expected-current "$candidate_id" >/dev/null
+cat > "$second_assurance" <<EOF
+{"schemaVersion":3,"status":"PASS","releaseId":"$second_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$second_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}]},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"productionIdempotency":true,"artifactIdentity":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true}}
+EOF
+if ! $deploy_script prepare --artifact "$second_artifact" --manifest "$second_manifest" --expected-current "$candidate_id" --assurance-evidence "$second_assurance" >"$root/second-prepare.out" 2>&1; then
+  cat "$root/second-prepare.out" >&2
+  exit 1
+fi
 second_plan="$WBD_ROOT/shared/deploy-plans/$second_id.json"
 
 # Een gewijzigde centrale state maakt het plan stale en blokkeert vóór switch.
@@ -264,3 +286,16 @@ printf 'INTERMEDIATE_SWITCH_FAILURE_ROLLBACK=PASS\n'
 printf 'STALE_AND_HUMAN_GO_GUARDS=PASS\n'
 printf 'PRECHECK_FAILED_EVIDENCE=PASS\n'
 printf 'PRECHECK_FAILURE_ACTIVE_UNCHANGED=PASS\n'
+
+export SPW_TEST_MIGRATION_STATUS=FAIL
+set +e
+"$deploy_script" switch --plan "$second_plan" --human-go "$second_id" >/dev/null 2>&1
+migration_status=$?
+set -e
+[[ "$migration_status" -ne 0 ]]
+[[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$candidate_id" ]]
+grep -q "RELEASE_ID=$candidate_id" "$WBD_ENV_FILE"
+grep -q '^result=PRECHECK_FAILED$' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
+grep -q '^failed_gate=CANDIDATE_MIGRATIONS$' "$WBD_ROOT/shared/deploy-evidence/$second_id/deployment.txt"
+unset SPW_TEST_MIGRATION_STATUS
+printf 'CANDIDATE_MIGRATION_FAIL_CLOSED=PASS\n'

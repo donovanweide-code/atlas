@@ -1,31 +1,47 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import path from "node:path";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import mariadb from "mariadb";
 
-import { SportpaleisMariaDbStore } from "./sportpaleis-mariadb-store.mjs";
+import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
+import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
+import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
 const artifactRoot = process.env.CANARY_ARTIFACT_ROOT;
 const releaseId = process.env.CANARY_RELEASE_ID;
+const candidateCommit = process.env.CANARY_CANDIDATE_COMMIT;
+const candidateArtifactSha256 = process.env.CANARY_CANDIDATE_ARTIFACT_SHA256;
+const restoreBackupSha256 = process.env.CANARY_RESTORE_BACKUP_SHA256;
 const activeCandidateIds = String(process.env.SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerIds = String(process.env.WBD_REVIEW_ACCESS_ISSUER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerSecret = String(process.env.WBD_REVIEW_ACCESS_ISSUER_SECRET ?? "");
+const assuranceContractBytes = await readFile(new URL("../config/sportpaleis-production-shaped-assurance-v3.json", import.meta.url));
+const assuranceContract = JSON.parse(assuranceContractBytes);
+const assuranceContractSha256 = createHash("sha256").update(assuranceContractBytes).digest("hex");
+assert.equal(assuranceContract.schemaVersion, 3, "onbekende assurancecontractversie");
 assert.ok(database && artifactRoot && releaseId, "canaryconfiguratie ontbreekt");
+assert.match(candidateCommit ?? "", /^[a-f0-9]{40}$/u, "candidatecommit ontbreekt");
+assert.match(candidateArtifactSha256 ?? "", /^[a-f0-9]{64}$/u, "candidate-artifacthash ontbreekt");
+assert.match(restoreBackupSha256 ?? "", /^[a-f0-9]{64}$/u, "restore-backuphash ontbreekt");
 assert.ok(activeCandidateIds.length && issuerIds.length && issuerSecret.length >= 43, "reviewconfiguratie ontbreekt");
 
 const sha = (value) => createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
+const assuranceEntrypointSha256 = sha(await readFile(fileURLToPath(import.meta.url)));
 const hashJson = (value) => sha(JSON.stringify(value));
 // LIVE has three customer seats. The temporary review principal is explicitly
 // outside those seats, so four simultaneous full bootstraps are the hard
 // production-shaped upper bound. Poll traffic remains concurrent around them.
 const productionCustomerSeats = 3;
 const concurrentReviewPrincipals = 1;
-const concurrentFullBootstraps = productionCustomerSeats + concurrentReviewPrincipals;
-const concurrentRevisionPolls = 20;
-const rssRecoveryBudgetBytes = 512 * 1024 * 1024;
+const concurrentFullBootstraps = assuranceContract.minimumLoad.concurrentFullBootstraps;
+const concurrentRevisionPolls = assuranceContract.minimumLoad.concurrentRevisionPolls;
+const rssRecoveryBudgetBytes = assuranceContract.limits.rssRecoveryBudgetBytes;
 const businessHashes = (state) => ({
   orders: hashJson(state.orders),
   orderHistory: hashJson(state.orders.map(({ id, eventHistory }) => ({ id, eventHistory: eventHistory ?? [] }))),
@@ -35,6 +51,15 @@ const businessHashes = (state) => ({
 });
 const percentile = (values, fraction) => values.length ? values.slice().sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * fraction))] : 0;
 const rounded = (value) => Math.round(value * 100) / 100;
+const emptyPersonalization = Object.freeze({ initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" });
+
+function largeFreeLines(fontId, heightMm) {
+  return assuranceContract.minimumLoad.largeFreeProductionValues.map((content) => ({
+    id: `assurance-free-${heightMm}-${content}`, type: "NUMBER", content, previewLabel: content,
+    widthMm: 180, heightMm, quantity: assuranceContract.minimumLoad.quantityPerValue,
+    foilColor: "Wit", sourceId: fontId, provenance: `Production-shaped assurance ${heightMm} mm`,
+  }));
+}
 
 const pool = mariadb.createPool({ socketPath: "/run/mysqld/mysqld.sock", user: "root", database, connectionLimit: 8, acquireTimeout: 5_000, connectTimeout: 5_000, idleTimeout: 30, bigIntAsNumber: true, insertIdAsNumber: true, timezone: "Z", charset: "utf8mb4", multipleStatements: false });
 const rssStartBytes = process.memoryUsage().rss;
@@ -70,7 +95,7 @@ try {
 }
 
 async function storeInitialize() {
-  const store = new SportpaleisMariaDbStore({ pool });
+  const store = new SportpaleisDomainMariaDbStore({ pool });
   await store.initialize();
   const initial = await store.read();
   const issuer = initial.users.find(({ id, role, status }) => issuerIds.includes(id) && role === "admin" && status === "Actief");
@@ -172,6 +197,48 @@ async function storeInitialize() {
   assert.equal(afterMutation.preferences[normalUser.id].density, nextDensity, "fixturemutatie werd niet zichtbaar");
   assert.deepEqual(businessHashes(await store.read()), beforeBusiness, "fixturemutatie raakte businessproductiedata");
 
+  loadPhase = "large-free-production";
+  const practiceBefore = await store.readSnapshot();
+  const originalOrderHashes = new Map(practiceBefore.orders.map((order) => [order.id, sha256CanonicalJson(order)]));
+  const originalJobHashes = new Map(practiceBefore.productionJobs.map((job) => [job.id, sha256CanonicalJson(job)]));
+  const originalProposalHashes = new Map(practiceBefore.productionProposals.map((proposal) => [proposal.id, sha256CanonicalJson(proposal)]));
+  const font = practiceBefore.productionFonts.find(({ name, status }) => name === "Spain Euro 2016" && status === "TECHNICALLY_VALID");
+  assert.ok(font, "authoritative Spain Euro 2016 ontbreekt in de production-shaped restore");
+  const practiceRuns = [];
+  for (const heightMm of assuranceContract.minimumLoad.largeFreeProductionHeightsMm) {
+    const operationPrefix = `assurance-${candidateCommit.slice(0, 12)}-${heightMm}`;
+    const created = (await service.createOrder(normalToken, normalSession.csrf, {
+      orderKind: "CUSTOM", customer: `Geïsoleerde assurancefixture ${heightMm} mm`, customerEmail: "", customerPhone: "",
+      standardPersonalization: emptyPersonalization, productionLines: largeFreeLines(font.id, heightMm),
+      items: [{ product: "Vrije opdruk 2 t/m 12", association: "Vrije bedrukking", size: "", quantity: 22, personalization: "2 t/m 12 ieder ×2", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }],
+    }, `${operationPrefix}-order`)).value;
+    const proposal = (await service.createProductionProposal(normalToken, normalSession.csrf, { orders: [{ id: created.id, expectedRevision: created.revision }] }, `${operationPrefix}-proposal`)).value;
+    const started = performance.now();
+    const productionPayload = { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders };
+    const first = await service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
+    const wallMs = performance.now() - started;
+    const retry = await service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
+    assert.equal(first.duplicate, false, `${heightMm} mm eerste productie-intentie is niet nieuw`);
+    assert.equal(retry.duplicate, true, `${heightMm} mm retry is niet idempotent`);
+    assert.equal(first.value.id, retry.value.id, `${heightMm} mm retry maakte een andere PlotJob`);
+    assert.equal(first.value.snapshot.productionLines.length, assuranceContract.minimumLoad.largeFreeProductionValues.length);
+    assert.ok(first.value.snapshot.productionLines.every((line) => line.heightMm === heightMm && line.quantity === assuranceContract.minimumLoad.quantityPerValue));
+    const artifactBytes = await readFile(path.join(artifactRoot, first.value.snapshot.artifact.path));
+    const artifactSha256 = sha(artifactBytes).toUpperCase();
+    assert.equal(artifactSha256, first.value.snapshot.artifact.sha256, `${heightMm} mm artifacthash wijkt af`);
+    practiceRuns.push({ heightMm, wallMs: rounded(wallMs), orderId: created.id, plotJobId: first.value.id, artifactSha256, generationMetrics: first.value.snapshot.generationMetrics });
+  }
+  const practiceAfter = await store.readSnapshot();
+  for (const order of practiceAfter.orders) if (originalOrderHashes.has(order.id)) assert.equal(sha256CanonicalJson(order), originalOrderHashes.get(order.id), `bestaande order ${order.id} wijzigde door assurancefixture`);
+  for (const job of practiceAfter.productionJobs) if (originalJobHashes.has(job.id)) assert.equal(sha256CanonicalJson(job), originalJobHashes.get(job.id), `bestaande PlotJob ${job.id} wijzigde door assurancefixture`);
+  for (const proposal of practiceAfter.productionProposals) if (originalProposalHashes.has(proposal.id)) assert.equal(sha256CanonicalJson(proposal), originalProposalHashes.get(proposal.id), `bestaand voorstel ${proposal.id} wijzigde door assurancefixture`);
+  assert.equal(practiceAfter.orders.length, practiceBefore.orders.length + practiceRuns.length);
+  assert.equal(practiceAfter.productionJobs.length, practiceBefore.productionJobs.length + practiceRuns.length);
+  assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length);
+  const storeMetricsAfterPractice = store.metricsSnapshot();
+  assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 1, "legacy monolith werd na backfill opnieuw geladen");
+  assert.ok(storeMetricsAfterPractice.recordWrites > 0 && storeMetricsAfterPractice.domainWrites > 0, "domeinrecordwrites zijn niet gebruikt");
+
   loadPhase = "bounded-cache-reuse";
   const memoryCycles = [];
   let cacheReuse = [];
@@ -186,6 +253,9 @@ async function storeInitialize() {
   global.gc?.();
   await new Promise((resolve) => setTimeout(resolve, 100));
   const rssEndBytes = process.memoryUsage().rss;
+  const rollbackSource = await store.readSnapshot();
+  const rollbackProof = await materializeLegacyRollbackState({ pool, expectedGlobalRevision: rollbackSource.revision, expectedDomainHash: sha256CanonicalJson(rollbackSource) });
+  assert.equal(rollbackProof.stateSha256, sha256CanonicalJson(rollbackSource), "rollbackmaterialisatie is niet hashgelijk");
 
   const cpu = process.cpuUsage(cpuStart);
   const elapsedMs = performance.now() - wallStart;
@@ -195,16 +265,21 @@ async function storeInitialize() {
   const metricsFor = (entries) => ({ count: entries.length, p50Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.5)), p95Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.95)), maxMs: rounded(Math.max(0, ...entries.map(({ ms }) => ms))) });
   const metrics = { ...metricsFor(timings), eventLoopP95Ms: rounded(loop.percentile(95) / 1e6), eventLoopMaxMs: rounded(loop.max / 1e6) };
   const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route === "/api/sportpaleis/v1/bootstrap"));
-  const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= 64 * 1024 * 1024;
+  const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
-  const thresholdsPassed = metrics.p95Ms <= 1_000 && metrics.maxMs <= 5_000 && bootstrapMetrics.p95Ms <= 2_000 && bootstrapMetrics.maxMs <= 3_000 && metrics.eventLoopMaxMs <= 1_000 && rssHighWater <= 1_073_741_824 && rssRecoveredWithinBudget;
+  const limits = assuranceContract.limits;
+  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000);
   const result = {
+    schemaVersion: 3,
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
+    identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId },
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
-    invariants: { readRevisionStable: true, readAuditStable: true, readStateUpdatedAtStable: true, businessHashesStable: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget },
+    persistence: { store: storeMetricsAfterPractice, rollbackProof },
+    practice: { largeFreeProduction: practiceRuns },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

@@ -173,6 +173,8 @@ async function main() {
     [path.join(websiteRoot, "package.production.json"), "app/package.json"],
     [path.join(websiteRoot, "package-lock.json"), "app/package-lock.json"],
     [path.join(websiteRoot, "scripts", "sportpaleis-production-shaped-assurance.mjs"), "app/scripts/sportpaleis-production-shaped-assurance.mjs"],
+    [path.join(websiteRoot, "scripts", "sportpaleis-domain-rollback-bridge.mjs"), "app/scripts/sportpaleis-domain-rollback-bridge.mjs"],
+    [path.join(websiteRoot, "config", "sportpaleis-production-shaped-assurance-v3.json"), "app/config/sportpaleis-production-shaped-assurance-v3.json"],
     [path.join(websiteRoot, "public", "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png"), "app/public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
     [path.join(repositoryRoot, "ops", "production", "wbd-sportpaleis-website-sync.service"), "deployment/wbd-sportpaleis-website-sync.service"],
@@ -209,6 +211,8 @@ async function main() {
   }
   const productionShapedAssurance = entries.find(({ path: entryPath }) => entryPath === "app/scripts/sportpaleis-production-shaped-assurance.mjs");
   if (!productionShapedAssurance) throw new Error("Permanente Sportpaleis production-shaped assurancegate ontbreekt uit het artifact.");
+  const productionShapedContract = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-production-shaped-assurance-v3.json");
+  if (!productionShapedContract) throw new Error("Versioned Sportpaleis assurancedrempelcontract ontbreekt uit het artifact.");
   const embeddedManifest = Buffer.from(`${JSON.stringify({
     schemaVersion: 2,
     releaseId,
@@ -231,6 +235,8 @@ async function main() {
       requiredPhase: "PRE_DEPLOY",
       entrypoint: productionShapedAssurance.path,
       sha256: productionShapedAssurance.sha256,
+      contract: productionShapedContract.path,
+      contractSha256: productionShapedContract.sha256,
       binds: ["commit", "artifact", "restore-backup", "tenant", "revision", "access-scope"],
     },
     runtimeDependencyGraph: {
@@ -280,7 +286,7 @@ async function main() {
     assetManifestFingerprint: sha256(Buffer.from(`${JSON.stringify(entries.filter(({ path: entryPath }) => entryPath.startsWith("app/dist-workspace/")))}\n`, "utf8")),
     sourceProvenance: { remote: sourceRemote, tag, commit: remoteTagCommit, tree: sourceTree, verifiedAtBuild: true },
     deployability: { rollbackArtifactRequired: true, productionShapedAssuranceRequired: true },
-    productionShapedAssurance: { entrypoint: productionShapedAssurance.path, sha256: productionShapedAssurance.sha256, requiredPhase: "PRE_DEPLOY" },
+    productionShapedAssurance: { entrypoint: productionShapedAssurance.path, sha256: productionShapedAssurance.sha256, contract: productionShapedContract.path, contractSha256: productionShapedContract.sha256, requiredPhase: "PRE_DEPLOY" },
     runtimeDependencyCount: runtimeDependencies.length,
     persistentProductionArtifactCount: productionArtifacts.references.length,
     authoritativeProductionAssetCount: authoritativeProductionAssets.length,

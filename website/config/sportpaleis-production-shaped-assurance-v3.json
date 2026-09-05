@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 3,
+  "contractId": "SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V3_DOMAIN_RECORDS",
+  "minimumLoad": {
+    "revisionPolls": 100,
+    "libraryPreviews": 300,
+    "concurrentFullBootstraps": 4,
+    "concurrentRevisionPolls": 20,
+    "heldDatabaseConnections": 6,
+    "largeFreeProductionHeightsMm": [80, 200],
+    "largeFreeProductionValues": ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+    "quantityPerValue": 2
+  },
+  "limits": {
+    "allRoutesP95Ms": 1000,
+    "allRoutesMaxMs": 5000,
+    "bootstrapP95Ms": 2000,
+    "bootstrapMaxMs": 3000,
+    "eventLoopP95Ms": 100,
+    "eventLoopMaxMs": 1000,
+    "rssHighWaterBytes": 1073741824,
+    "rssRecoveryBudgetBytes": 536870912,
+    "steadyStateRssGrowthBytes": 67108864,
+    "databaseConnectionLimit": 8,
+    "databaseAcquireTimeouts": 0,
+    "httpErrors": 0,
+    "serverErrors": 0
+  },
+  "requiredInvariants": [
+    "authenticatedRoutes",
+    "normalAndReviewAuth",
+    "readRevisionStable",
+    "readAuditStable",
+    "legacyStateWriteStable",
+    "businessHashesStable",
+    "domainRecordWritesIncremental",
+    "cacheInvalidationExact",
+    "interruptedRetryRecovered",
+    "previewFanoutBounded",
+    "bootstrapCacheBounded",
+    "largeFreeProduction80Mm",
+    "largeFreeProduction200Mm",
+    "productionIdempotency",
+    "artifactIdentity",
+    "tenantAndScopeIsolation",
+    "rollbackMaterializationProven"
+  ]
+}

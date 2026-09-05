@@ -40,7 +40,7 @@ usage() {
   cat <<'EOF'
 Gebruik:
   spw-immutable-release.sh inspect
-  spw-immutable-release.sh prepare --artifact FILE --manifest FILE --expected-current RELEASE_ID
+  spw-immutable-release.sh prepare --artifact FILE --manifest FILE --expected-current RELEASE_ID --assurance-evidence FILE
   spw-immutable-release.sh switch --plan FILE --human-go RELEASE_ID
 
 prepare bouwt een actuele rollbackset en staged de kandidaat, maar wijzigt
@@ -171,6 +171,37 @@ verify_external_artifact() {
   validate_tar_entries "$artifact"
 }
 
+verify_production_shaped_assurance() {
+  local evidence="$1" manifest="$2" artifact_hash release_id commit assurance_hash contract_hash
+  [[ -n "$evidence" && -f "$evidence" ]] || fail "verplichte production-shaped assurance-evidence ontbreekt."
+  release_id="$(manifest_field "$manifest" releaseId)"
+  commit="$(manifest_field "$manifest" commit)"
+  artifact_hash="$(manifest_field "$manifest" artifactSha256 | tr '[:upper:]' '[:lower:]')"
+  assurance_hash="$(manifest_field "$manifest" productionShapedAssurance.sha256 | tr '[:upper:]' '[:lower:]')"
+  contract_hash="$(manifest_field "$manifest" productionShapedAssurance.contractSha256 | tr '[:upper:]' '[:lower:]')"
+  node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256] = process.argv.slice(2);
+const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
+if (evidence.schemaVersion !== 3 || evidence.status !== "PASS" || evidence.releaseId !== releaseId) throw new Error("production-shaped assurance is niet PASS voor deze release");
+if (evidence.identity?.candidateCommit !== commit || evidence.identity?.candidateArtifactSha256 !== artifactSha256) throw new Error("assurance candidatebinding wijkt af");
+if (!/^[a-f0-9]{64}$/u.test(String(evidence.identity?.restoreBackupSha256 ?? ""))) throw new Error("assurance restorebinding ontbreekt");
+if (evidence.identity?.assuranceEntrypointSha256 !== assuranceSha256) throw new Error("assurance testversie wijkt af");
+if (evidence.identity?.assuranceContractSha256 !== contractSha256) throw new Error("assurance drempelcontract wijkt af");
+if (evidence.load?.httpErrors !== 0 || evidence.load?.serverErrors !== 0) throw new Error("assurance bevat HTTP-fouten");
+const required = ["authenticatedRoutes","normalAndReviewAuth","readRevisionStable","readAuditStable","legacyStateWriteStable","businessHashesStable","domainRecordWritesIncremental","cacheInvalidationExact","interruptedRetryRecovered","previewFanoutBounded","bootstrapCacheBounded","largeFreeProduction80Mm","largeFreeProduction200Mm","productionIdempotency","artifactIdentity","tenantAndScopeIsolation","rollbackMaterializationProven"];
+if (!required.every((key) => evidence.invariants?.[key] === true) || !Object.values(evidence.invariants ?? {}).every((value) => value === true)) throw new Error("assurance-invariant is niet groen");
+if (evidence.load?.p95Ms > 1000 || evidence.load?.maxMs > 5000 || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.p95Ms > 2000 || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.maxMs > 3000) throw new Error("assurance latencygrens is overschreden");
+if (evidence.runtime?.eventLoopP95Ms > 100 || evidence.runtime?.eventLoopMaxMs > 1000 || evidence.runtime?.rssHighWaterBytes > 1073741824 || evidence.runtime?.rssRecoveredWithinBudget !== true || evidence.runtime?.steadyStateMemoryStable !== true) throw new Error("assurance runtimegrens is overschreden");
+if (evidence.pool?.connectionLimit !== 8 || evidence.pool?.acquireTimeouts !== 0) throw new Error("assurance databasepoolgrens is overschreden");
+const heights = new Set((evidence.practice?.largeFreeProduction ?? []).map(({ heightMm }) => heightMm));
+if (!heights.has(80) || !heights.has(200)) throw new Error("assurance grote Vrije-productiepraktijk ontbreekt");
+const body = fs.readFileSync(file);
+process.stdout.write(crypto.createHash("sha256").update(body).digest("hex"));
+NODE
+}
+
 verify_artifact_layout_contract() {
   local artifact="$1" listing
   listing="$(tar -tzf "$artifact")"
@@ -179,6 +210,9 @@ verify_artifact_layout_contract() {
     app/package-lock.json \
     app/scripts/workspace-runtime.mjs \
     app/scripts/production-migrate.mjs \
+    app/scripts/sportpaleis-production-shaped-assurance.mjs \
+    app/scripts/sportpaleis-domain-rollback-bridge.mjs \
+    app/config/sportpaleis-production-shaped-assurance-v3.json \
     app/dist-workspace/workspace.html \
     app/dist-workspace/sportpaleis.html \
     deployment/wbd-workspace.service \
@@ -297,17 +331,18 @@ create_rollback_set() {
 write_plan() {
   local plan="$1" release_id="$2" commit="$3" tag="$4" artifact_hash="$5"
   local previous_path="$6" previous_id="$7" current_manifest_hash="$8" env_hash="$9"
-  local backup_info="${10}" rollback_info="${11}" candidate_path="${12}"
+  local backup_info="${10}" rollback_info="${11}" candidate_path="${12}" assurance_path="${13:-}" assurance_hash="${14:-}"
   local backup_path backup_hash backup_age rollback rollback_hash env_copy env_copy_hash
   IFS='|' read -r backup_path backup_hash backup_age <<<"$backup_info"
   IFS='|' read -r rollback rollback_hash env_copy env_copy_hash <<<"$rollback_info"
   node - "$plan.tmp" "$release_id" "$commit" "$tag" "$artifact_hash" "$candidate_path" \
     "$previous_path" "$previous_id" "$current_manifest_hash" "$env_hash" \
-    "$backup_path" "$backup_hash" "$backup_age" "$rollback" "$rollback_hash" "$env_copy" "$env_copy_hash" <<'NODE'
+    "$backup_path" "$backup_hash" "$backup_age" "$rollback" "$rollback_hash" "$env_copy" "$env_copy_hash" "$assurance_path" "$assurance_hash" <<'NODE'
 const fs = require("fs");
 const [out, releaseId, commit, tag, artifactSha256, candidatePath, previousPath, previousReleaseId,
   currentManifestSha256, productionEnvSha256, backupPath, backupSha256, backupAgeSeconds,
-  rollbackArtifact, rollbackSha256, environmentSnapshot, environmentSnapshotSha256] = process.argv.slice(2);
+  rollbackArtifact, rollbackSha256, environmentSnapshot, environmentSnapshotSha256,
+  assuranceEvidence, assuranceEvidenceSha256] = process.argv.slice(2);
 fs.writeFileSync(out, `${JSON.stringify({
   schemaVersion: 1,
   releaseId, commit, tag, artifactSha256, candidatePath,
@@ -315,6 +350,7 @@ fs.writeFileSync(out, `${JSON.stringify({
   productionEnvSha256,
   backup: { path: backupPath, sha256: backupSha256, ageSecondsAtPreparation: Number(backupAgeSeconds) },
   rollback: { artifact: rollbackArtifact, sha256: rollbackSha256, environmentSnapshot, environmentSnapshotSha256 },
+  productionShapedAssurance: { evidence: assuranceEvidence, sha256: assuranceEvidenceSha256, required: true },
   preparedAt: new Date().toISOString(),
   switchAuthorized: false,
   databaseRestoreAutomatic: false,
@@ -363,6 +399,28 @@ atomic_link() {
 service_restart() {
   if [[ "$TEST_MODE" == "1" ]]; then return; fi
   systemctl restart "$SERVICE"
+}
+
+run_candidate_migrations() {
+  local candidate_path="$1"
+  if [[ "$TEST_MODE" == "1" ]]; then
+    [[ "${SPW_TEST_MIGRATION_STATUS:-PASS}" == "PASS" ]]
+    return
+  fi
+  [[ -f "$candidate_path/website/scripts/production-migrate.mjs" ]] \
+    || fail "kandidaat-migratie-entrypoint ontbreekt."
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+    NODE_ENV=production node "$candidate_path/website/scripts/production-migrate.mjs" workspace
+  )
+}
+
+service_stop() {
+  if [[ "$TEST_MODE" == "1" ]]; then return; fi
+  systemctl stop "$SERVICE"
 }
 
 readiness_probe() {
@@ -523,10 +581,24 @@ switch_exit_evidence() {
 
 rollback_application() {
   local plan="$1" previous_path previous_id env_snapshot
+  local candidate_path bridge bridge_evidence
   previous_path="$(normalize_plan_path "$(manifest_field "$plan" previous.path)")"
   previous_id="$(manifest_field "$plan" previous.releaseId)"
+  candidate_path="$(normalize_plan_path "$(manifest_field "$plan" candidatePath)")"
   env_snapshot="$(normalize_plan_path "$(manifest_field "$plan" rollback.environmentSnapshot)")"
   [[ -d "$previous_path" && -f "$env_snapshot" ]] || fail "automatische rollbackbron ontbreekt."
+  bridge="$candidate_path/website/scripts/sportpaleis-domain-rollback-bridge.mjs"
+  if [[ -f "$bridge" ]]; then
+    service_stop
+    bridge_evidence="$EVIDENCE_DIR/$(manifest_field "$plan" releaseId)/legacy-rollback-materialization.json"
+    if ! (set -a; source "$ENV_FILE"; set +a; WBD_RELEASEBROKER_LOCK_HELD=true NODE_ENV=production node "$bridge") > "$bridge_evidence.tmp"; then
+      rm -f -- "$bridge_evidence.tmp"
+      service_restart || true
+      fail "CRITICAL: domeinstaat kon niet atomair naar de legacy rollbackbron worden gematerialiseerd."
+    fi
+    mv "$bridge_evidence.tmp" "$bridge_evidence"
+    chmod 0640 "$bridge_evidence"
+  fi
   cp --preserve=mode,ownership,timestamps "$env_snapshot" "$ENV_FILE.rollback.tmp"
   mv -T "$ENV_FILE.rollback.tmp" "$ENV_FILE"
   atomic_link "$previous_path"
@@ -548,12 +620,13 @@ command_inspect() {
 
 command_prepare() {
   require_production_boundary
-  local artifact="" manifest="" expected_current=""
+  local artifact="" manifest="" expected_current="" assurance_evidence=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --artifact) artifact="$2"; shift 2;;
       --manifest) manifest="$2"; shift 2;;
       --expected-current) expected_current="$2"; shift 2;;
+      --assurance-evidence) assurance_evidence="$2"; shift 2;;
       *) fail "onbekend prepare-argument: $1";;
     esac
   done
@@ -563,6 +636,8 @@ command_prepare() {
   [[ "$(current_release_id)" == "$expected_current" ]] || fail "actuele release wijkt af van preflightverwachting."
   verify_external_artifact "$artifact" "$manifest"
   verify_artifact_layout_contract "$artifact"
+  local assurance_source_hash assurance_copy assurance_copy_hash
+  assurance_source_hash="$(verify_production_shaped_assurance "$assurance_evidence" "$manifest")"
 
   local release_id commit tag artifact_hash candidate_path stage previous_path previous_id
   local backup_info rollback_info plan current_manifest_hash env_hash
@@ -596,9 +671,18 @@ command_prepare() {
   mv "$stage" "$candidate_path"
   trap - ERR
 
+  mkdir -p "$EVIDENCE_DIR/$release_id"
+  assurance_copy="$EVIDENCE_DIR/$release_id/predeploy-production-shaped-assurance.json"
+  [[ ! -e "$assurance_copy" ]] || fail "immutable assurance-evidence bestaat al."
+  cp "$assurance_evidence" "$assurance_copy.tmp"
+  mv "$assurance_copy.tmp" "$assurance_copy"
+  chmod 0640 "$assurance_copy"
+  assurance_copy_hash="$(sha256_file "$assurance_copy")"
+  [[ "$assurance_copy_hash" == "$assurance_source_hash" ]] || fail "assurance-evidence wijzigde tijdens prepare."
+
   rollback_info="$(create_rollback_set "$release_id" "$previous_path")"
   write_plan "$plan" "$release_id" "$commit" "$tag" "$artifact_hash" "$previous_path" "$previous_id" \
-    "$current_manifest_hash" "$env_hash" "$backup_info" "$rollback_info" "$candidate_path"
+    "$current_manifest_hash" "$env_hash" "$backup_info" "$rollback_info" "$candidate_path" "$assurance_copy" "$assurance_copy_hash"
   verify_plan "$plan"
   verify_current_consistency
   [[ "$(current_release_id)" == "$expected_current" ]] || fail "prepare wijzigde onverwacht de actieve release."
@@ -626,6 +710,7 @@ command_switch() {
   verify_plan "$plan"
   local release_id candidate_path previous_path previous_id expected_env_hash expected_manifest_hash
   local rollback rollback_hash env_snapshot env_snapshot_hash
+  local assurance_evidence assurance_hash
   release_id="$(manifest_field "$plan" releaseId)"
   validate_release_id "$release_id"
   SWITCH_EVIDENCE_RELEASE="$release_id"
@@ -645,6 +730,8 @@ command_switch() {
   rollback_hash="$(manifest_field "$plan" rollback.sha256)"
   env_snapshot="$(normalize_plan_path "$(manifest_field "$plan" rollback.environmentSnapshot)")"
   env_snapshot_hash="$(manifest_field "$plan" rollback.environmentSnapshotSha256)"
+  assurance_evidence="$(normalize_plan_path "$(manifest_field "$plan" productionShapedAssurance.evidence)")"
+  assurance_hash="$(manifest_field "$plan" productionShapedAssurance.sha256)"
   local actual_current
   set_switch_gate CORE_PREFLIGHT CURRENT_RELEASE "Actieve release wijkt af van het deployplan."
   actual_current="$(current_release_path)"
@@ -657,6 +744,8 @@ command_switch() {
   [[ "$(sha256_file "$rollback")" == "$rollback_hash" ]] || fail "rollbackartifact is gewijzigd."
   set_switch_gate CORE_PREFLIGHT ENVIRONMENT_SNAPSHOT "Rollback-environmentsnapshot wijkt af van het deployplan."
   [[ "$(sha256_file "$env_snapshot")" == "$env_snapshot_hash" ]] || fail "rollback-envsnapshot is gewijzigd."
+  set_switch_gate CORE_PREFLIGHT PRODUCTION_SHAPED_ASSURANCE "Production-shaped assurance-evidence ontbreekt of is gewijzigd."
+  [[ -f "$assurance_evidence" && "$(sha256_file "$assurance_evidence")" == "$assurance_hash" ]] || fail "production-shaped assurance-evidence is gewijzigd."
   set_switch_gate CORE_PREFLIGHT BACKUP_FRESHNESS "Actuele backup of backupchecksum voldoet niet."
   verify_backup >/dev/null
   set_switch_gate CORE_PREFLIGHT CURRENT_CONSISTENCY "Actieve symlink en RELEASE_ID zijn niet consistent."
@@ -664,6 +753,8 @@ command_switch() {
 
   set_switch_gate CORE_PREFLIGHT DEPLOYMENT_LOCK "Een andere deployment houdt de lock vast."
   acquire_lock
+  set_switch_gate CORE_PREFLIGHT CANDIDATE_MIGRATIONS "Additieve kandidaat-migraties zijn niet volledig toegepast."
+  run_candidate_migrations "$candidate_path"
   SWITCH_PREACTIVATION=0
   set_switch_gate ACTIVATION ATOMIC_SWITCH "Kandidaatactivering is gestart."
   local switch_status=0

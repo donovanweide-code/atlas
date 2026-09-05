@@ -15,6 +15,46 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function splitMigrationStatements(sql) {
+  const statements = [];
+  let current = "";
+  let quote = null;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const character = sql[index];
+    const next = sql[index + 1];
+    if (lineComment) {
+      if (character === "\n") { lineComment = false; current += character; }
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") { blockComment = false; index += 1; }
+      continue;
+    }
+    if (!quote && character === "-" && next === "-" && /\s/u.test(sql[index + 2] ?? "")) { lineComment = true; index += 1; continue; }
+    if (!quote && character === "#") { lineComment = true; continue; }
+    if (!quote && character === "/" && next === "*") { blockComment = true; index += 1; continue; }
+    if (quote) {
+      current += character;
+      if (character === "\\" && next !== undefined) { current += next; index += 1; continue; }
+      if (character === quote && next === quote) { current += next; index += 1; continue; }
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (["'", '"', "`"].includes(character)) { quote = character; current += character; continue; }
+    if (character === ";") {
+      if (current.trim()) statements.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || blockComment) throw new Error("Migratie bevat een niet-afgesloten quote of comment.");
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
 function required(environment, name) {
   const value = String(environment[name] ?? "").trim();
   if (!value) throw new Error(`${name} is verplicht.`);
@@ -44,12 +84,15 @@ async function migrationFiles(target) {
   if (!definition) throw new Error("Migration target moet workspace of atlas zijn.");
   const directory = path.join(migrationsRoot, definition.directory);
   const names = (await readdir(directory)).filter((name) => /^\d{3}-[a-z0-9-]+\.sql$/u.test(name)).sort();
-  return Promise.all(names.map(async (name) => {
+  const files = await Promise.all(names.map(async (name) => {
     const version = Number(name.slice(0, 3));
     const filePath = path.join(directory, name);
     const sql = await readFile(filePath, "utf8");
     return { version, name, sql, checksum: sha256(sql) };
   }));
+  const duplicates = files.filter(({ version }, index) => files.findIndex((candidate) => candidate.version === version) !== index);
+  if (duplicates.length) throw new Error(`${target} bevat dubbele migratieversies: ${[...new Set(duplicates.map(({ version }) => version))].join(", ")}.`);
+  return files;
 }
 
 export async function runProductionMigrations({ target, database, mode = "apply", pool: suppliedPool }) {
@@ -100,7 +143,9 @@ export async function runProductionMigrations({ target, database, mode = "apply"
       }
       await connection.beginTransaction();
       try {
-        await connection.query(migration.sql);
+        const statements = splitMigrationStatements(migration.sql);
+        if (statements.length === 0) throw new Error(`${target} migration ${migration.version} bevat geen uitvoerbare SQL.`);
+        for (const statement of statements) await connection.query(statement);
         await connection.query(
           "INSERT INTO wbd_schema_migrations (component, version, name, checksum, applied_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3))",
           [definition.component, migration.version, migration.name, migration.checksum],

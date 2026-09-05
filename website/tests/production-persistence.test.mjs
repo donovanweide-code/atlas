@@ -242,7 +242,7 @@ test("production startup controleert Atlas en Workspace vóór luisteren en valt
     /database unavailable/,
   );
   const source = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
-  assert.match(source, /config\.nodeEnv === "production"[\s\S]*SportpaleisMariaDbStore/);
+  assert.match(source, /config\.nodeEnv === "production"[\s\S]*SportpaleisDomainMariaDbStore/);
   assert.match(source, /config\.nodeEnv === "production"[\s\S]*await sportpaleisHandler\(\)/);
   assert.match(source, /createSportpaleisProductionMailFoundation/);
   assert.match(source, /SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY/);

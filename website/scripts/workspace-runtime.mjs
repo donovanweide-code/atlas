@@ -8,7 +8,8 @@ import {
   productionDatabaseCredentialsFromEnvironment,
 } from "./workspace-runtime-config.mjs";
 import { verifyAtlasMariaDbBoundary } from "./atlas-mariadb-boundary.mjs";
-import { SportpaleisMariaDbStore, secretSafeMariaDbStartupDiagnostic } from "./sportpaleis-mariadb-store.mjs";
+import { secretSafeMariaDbStartupDiagnostic } from "./sportpaleis-mariadb-store.mjs";
+import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import {
   SPORTPALEIS_PRODUCTION_MAIL_CAPTURE_DIRECTORY,
   createSportpaleisProductionMailFoundation,
@@ -329,7 +330,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
     if (!sportpaleisHandlerPromise) {
       sportpaleisHandlerPromise = (async () => {
         const store = options.sportpaleisStore ?? (config.nodeEnv === "production"
-          ? new SportpaleisMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace })
+          ? new SportpaleisDomainMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace })
           : new SportpaleisFileStore({
             filePath: process.env.SPORTPALEIS_DATA_FILE ?? path.join(websiteRoot, "data", "sportpaleis-pilot", `${config.appEnv}-state.json`),
             backupDirectory: process.env.SPORTPALEIS_BACKUP_DIRECTORY ?? path.join(websiteRoot, "data", "sportpaleis-pilot", "backups"),
