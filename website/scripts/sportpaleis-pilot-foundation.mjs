@@ -3773,8 +3773,8 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
-    const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_PRODUCTION_PROPOSAL", () => {
+    const result = await this.#productionMutation(async (state) => {
+      const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_PRODUCTION_PROPOSAL", async () => {
         const orders = selections.map(({ id, expectedRevision }) => {
           const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, `${id}: order niet gevonden.`);
           if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
@@ -4315,8 +4315,8 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator", "store"]);
-    const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_ORDER", () => createWorkspaceOrderRecord(state, user, payload), payload);
+    const result = await this.#productionMutation(async (state) => {
+      const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_ORDER", async () => createWorkspaceOrderRecord(state, user, payload), payload);
       return { state, value: outcome };
     });
     return result.value;
