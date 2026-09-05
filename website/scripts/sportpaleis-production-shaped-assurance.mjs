@@ -74,6 +74,20 @@ let activeHighWater = 0;
 let idleLowWater = 8;
 let queueHighWater = 0;
 let rssHighWater = rssStartBytes;
+const phaseEventLoopMaxMs = new Map();
+let loopTickAt = performance.now();
+const loopSampler = setInterval(() => {
+  const now = performance.now();
+  const lag = Math.max(0, now - loopTickAt - 10);
+  phaseEventLoopMaxMs.set(loadPhase, Math.max(phaseEventLoopMaxMs.get(loadPhase) ?? 0, lag));
+  loopTickAt = now;
+}, 10);
+loopSampler.unref();
+const enterLoadPhase = async (next) => {
+  await new Promise((resolve) => setImmediate(resolve));
+  loadPhase = next;
+  loopTickAt = performance.now();
+};
 const poolSampler = setInterval(() => {
   activeHighWater = Math.max(activeHighWater, Number(pool.activeConnections?.() ?? 0));
   idleLowWater = Math.min(idleLowWater, Number(pool.idleConnections?.() ?? 0));
@@ -90,6 +104,7 @@ try {
   await storeInitialize();
 } finally {
   loop.disable();
+  clearInterval(loopSampler);
   clearInterval(poolSampler);
   if (server) await new Promise((resolve) => server.close(resolve));
   await pool.end().catch(() => undefined);
@@ -149,18 +164,18 @@ async function storeInitialize() {
     ...before.productionElements.map((asset) => `/api/sportpaleis/v1/production-assets/${encodeURIComponent(asset.id)}/preview.svg`),
   ];
   assert.ok(previewRoutes.length > 0, "restorefixture bevat geen previewroutes");
-  loadPhase = "polls";
+  await enterLoadPhase("polls");
   for (let offset = 0; offset < 100; offset += 20) {
     const batch = await Promise.all(Array.from({ length: 20 }, (_, index) => request("/api/sportpaleis/v1/state-revision", allCookies[(offset + index) % allCookies.length])));
     assert.ok(batch.every((status) => status === 200));
   }
-  loadPhase = "previews";
+  await enterLoadPhase("previews");
   for (let offset = 0; offset < 300; offset += 12) {
     const batch = await Promise.all(Array.from({ length: 12 }, (_, index) => request(previewRoutes[(offset + index) % previewRoutes.length], allCookies[(offset + index) % allCookies.length])));
     assert.ok(batch.every((status) => status === 200));
     if (offset % 48 === 0) assert.ok((await Promise.all(coreRoutes.map((route, index) => request(route, allCookies[index % allCookies.length])))).every((status) => status === 200));
   }
-  loadPhase = "pool-pressure";
+  await enterLoadPhase("pool-pressure");
   const blockers = await Promise.all(Array.from({ length: 6 }, () => pool.getConnection()));
   const sleeps = blockers.map((connection) => connection.query("SELECT SLEEP(0.75)").finally(() => connection.release()));
   const underPressureRoutes = [
@@ -170,7 +185,7 @@ async function storeInitialize() {
   const underPressure = await Promise.all(underPressureRoutes.map((route, index) => request(route, allCookies[index % allCookies.length])));
   await Promise.all(sleeps);
   assert.ok(underPressure.every((status) => status === 200), "pooldruk mag geen route laten uitvallen");
-  loadPhase = "recovery";
+  await enterLoadPhase("recovery");
   service.bootstrapResponseCache.clear();
   service.bootstrapResponseCacheBytes = 0;
   const receivedBeforeInterrupt = bootstrapRequestsReceived;
@@ -183,12 +198,14 @@ async function storeInitialize() {
   assert.equal(service.bootstrapResponsePromises.size, 0, "interrupted bootstrap laat geen single-flight achter");
   assert.equal(await request("/api/sportpaleis/v1/bootstrap", reviewCookie), 200, "retry na gestart maar interrupted request");
 
+  await enterLoadPhase("read-reconciliation");
   const afterReads = await store.read();
   const afterReadRow = (await pool.query("SELECT revision, updated_at, OCTET_LENGTH(state_json) AS bytes FROM sp_runtime_state WHERE organization_id = ?", [afterReads.organizationId]))[0];
   assert.equal(afterReads.revision, beforeRevision, "read-only routes wijzigden revision");
   assert.equal(afterReads.audit.length, beforeAudit, "read-only routes wijzigden audit");
   assert.deepEqual(businessHashes(afterReads), beforeBusiness, "read-only routes wijzigden businessdata");
   assert.equal(new Date(afterReadRow.updated_at).getTime(), new Date(beforeRow.updated_at).getTime(), "read-only routes schreven volledige state");
+  await enterLoadPhase("cache-invalidation");
   const sessionView = await service.issueSessionView(normalToken);
   const existingPreference = before.preferences[normalUser.id] ?? {};
   const nextDensity = existingPreference.density === "compact" ? "comfortable" : "compact";
@@ -198,7 +215,7 @@ async function storeInitialize() {
   assert.equal(afterMutation.preferences[normalUser.id].density, nextDensity, "fixturemutatie werd niet zichtbaar");
   assert.deepEqual(businessHashes(await store.read()), beforeBusiness, "fixturemutatie raakte businessproductiedata");
 
-  loadPhase = "large-free-production";
+  await enterLoadPhase("large-free-production");
   const practiceBefore = await store.readSnapshot();
   const originalOrderHashes = new Map(practiceBefore.orders.map((order) => [order.id, sha256CanonicalJson(order)]));
   const originalJobHashes = new Map(practiceBefore.productionJobs.map((job) => [job.id, sha256CanonicalJson(job)]));
@@ -241,7 +258,7 @@ async function storeInitialize() {
   assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 1, "legacy monolith werd na backfill opnieuw geladen");
   assert.ok(storeMetricsAfterPractice.recordWrites > 0 && storeMetricsAfterPractice.domainWrites > 0, "domeinrecordwrites zijn niet gebruikt");
 
-  loadPhase = "bounded-cache-reuse";
+  await enterLoadPhase("bounded-cache-reuse");
   const memoryCycles = [];
   let cacheReuse = [];
   for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -255,6 +272,7 @@ async function storeInitialize() {
   global.gc?.();
   await new Promise((resolve) => setTimeout(resolve, 100));
   const rssEndBytes = process.memoryUsage().rss;
+  await enterLoadPhase("rollback-materialization");
   const rollbackSource = await store.readSnapshot();
   const rollbackProof = await materializeLegacyRollbackState({ pool, expectedGlobalRevision: rollbackSource.revision });
   assert.match(rollbackProof.stateSha256, /^[a-f0-9]{64}$/u, "rollbackmaterialisatie mist de domeinhash");
@@ -280,7 +298,7 @@ async function storeInitialize() {
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
-    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
+    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
     invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
