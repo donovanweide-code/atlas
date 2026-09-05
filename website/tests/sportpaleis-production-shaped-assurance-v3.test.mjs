@@ -35,7 +35,8 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(builder, /workspace-legacy-state-encode-worker\.mjs/u);
   assert.match(builder, /contractSha256/u);
   assert.match(broker, /assuranceContractSha256/u);
-  assert.match(broker, /largeFreeProduction80Mm/u);
+  assert.match(broker, /largeFreeProductionHeightsMm/u);
+  assert.match(broker, /bootstrapSurfaceMaxBytes/u);
   assert.match(broker, /eventLoopP95Ms > 100/u);
   assert.match(broker, /website\/scripts\/sportpaleis-domain-rollback-bridge\.mjs/u);
   assert.match(assurance, /materializeLegacyRollbackState/u);
