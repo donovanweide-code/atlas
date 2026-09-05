@@ -19,6 +19,7 @@ const releaseId = process.env.CANARY_RELEASE_ID;
 const candidateCommit = process.env.CANARY_CANDIDATE_COMMIT;
 const candidateArtifactSha256 = process.env.CANARY_CANDIDATE_ARTIFACT_SHA256;
 const restoreBackupSha256 = process.env.CANARY_RESTORE_BACKUP_SHA256;
+const backfillEvidenceFile = process.env.CANARY_BACKFILL_EVIDENCE_FILE;
 const activeCandidateIds = String(process.env.SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerIds = String(process.env.WBD_REVIEW_ACCESS_ISSUER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerSecret = String(process.env.WBD_REVIEW_ACCESS_ISSUER_SECRET ?? "");
@@ -30,7 +31,11 @@ assert.ok(database && artifactRoot && releaseId, "canaryconfiguratie ontbreekt")
 assert.match(candidateCommit ?? "", /^[a-f0-9]{40}$/u, "candidatecommit ontbreekt");
 assert.match(candidateArtifactSha256 ?? "", /^[a-f0-9]{64}$/u, "candidate-artifacthash ontbreekt");
 assert.match(restoreBackupSha256 ?? "", /^[a-f0-9]{64}$/u, "restore-backuphash ontbreekt");
+assert.ok(backfillEvidenceFile, "offline backfillevidence ontbreekt");
 assert.ok(activeCandidateIds.length && issuerIds.length && issuerSecret.length >= 43, "reviewconfiguratie ontbreekt");
+const backfillEvidence = JSON.parse(await readFile(backfillEvidenceFile, "utf8"));
+assert.equal(backfillEvidence.status, "BACKFILLED", "canary vereist een verse offline backfill");
+assert.equal(backfillEvidence.legacySha256, backfillEvidence.composedSha256, "offline backfill is niet hashgelijk");
 
 const sha = (value) => createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
 const assuranceEntrypointSha256 = sha(await readFile(fileURLToPath(import.meta.url)));
@@ -255,7 +260,7 @@ async function storeInitialize() {
   assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length);
   const storeMetricsAfterPractice = store.metricsSnapshot();
   const productionBuildQueue = productionJobBuildLoad();
-  assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 1, "legacy monolith werd na backfill opnieuw geladen");
+  assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 0, "runtime-start mag de legacy monolith niet laden of backfillen");
   assert.ok(storeMetricsAfterPractice.recordWrites > 0 && storeMetricsAfterPractice.domainWrites > 0, "domeinrecordwrites zijn niet gebruikt");
 
   await enterLoadPhase("bounded-cache-reuse");
@@ -299,9 +304,9 @@ async function storeInitialize() {
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
-    persistence: { store: storeMetricsAfterPractice, rollbackProof },
+    persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

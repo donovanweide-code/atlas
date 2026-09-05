@@ -155,12 +155,23 @@ class DomainMemoryConnection {
   }
 }
 
+test("runtime-start weigert een ontbrekende offline backfill zonder state te muteren", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await assert.rejects(store.initialize(), ({ code }) => code === "DOMAIN_BACKFILL_REQUIRED");
+  assert.equal(pool.meta, null);
+  assert.equal(pool.commits, 0);
+});
+
 test("additieve backfill is hashgelijk en een kleine mutatie schrijft geen legacy blob", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
   legacy.audit[0].details.largeEvidence = "x".repeat(6 * 1024 * 1024);
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
   await store.initialize();
   assert.deepEqual(await store.read(), legacy);
   const legacyWritesBefore = pool.queries.filter((sql) => sql.startsWith("UPDATE sp_runtime_state")).length;
@@ -183,6 +194,7 @@ test("auditappend schrijft alleen nieuwe immutable event en geen volledige audit
   legacy.audit[0].details.largeEvidence = "x".repeat(3 * 1024 * 1024);
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
   await store.initialize();
   const before = pool.audit.size;
   await store.mutate(async (state) => {
@@ -202,6 +214,7 @@ test("auth, bootstrap en honderd polls blijven read-only op de domeinopslag", as
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
   const service = new SportpaleisPilotService({ store, allowedOrigin: "http://127.0.0.1" });
+  await store.backfillLegacySource();
   await service.initialize();
   const login = await service.login({ email: "operator@example.test", password: "Domain-Store-Test!" });
   const writesAfterLogin = pool.queries.filter((sql) => sql.startsWith("UPDATE sp_workspace_domain_state")).length;
@@ -221,6 +234,7 @@ test("ordermutatie schrijft één record en historie append-only zonder andere c
   legacy.orders.push({ id: "SP-TEST-1", revision: 1, status: "NEW", eventHistory: [{ id: "event-1", at: "2026-09-05T06:00:00.000Z", action: "Aangemaakt" }] });
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
   await store.initialize();
   const beforeQueries = pool.queries.length;
   await store.mutate(async (state) => {
@@ -245,6 +259,7 @@ test("een nieuwe store reconstrueert exact de actuele domeinen en aparte orderhi
   legacy.orders.push({ id: "SP-RESTART-1", revision: 1, status: "NEW", eventHistory: [{ id: "event-start", at: "2026-09-05T06:00:00.000Z", action: "Aangemaakt" }] });
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const first = new SportpaleisDomainMariaDbStore({ pool });
+  await first.backfillLegacySource();
   await first.initialize();
   await first.mutate(async (state) => {
     const order = state.orders.find(({ id }) => id === "SP-RESTART-1");
@@ -268,6 +283,7 @@ test("gelijktijdige stores blokkeren stale writes en kunnen daarna veilig refres
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const first = new SportpaleisDomainMariaDbStore({ pool });
   const second = new SportpaleisDomainMariaDbStore({ pool });
+  await first.backfillLegacySource();
   await first.initialize();
   await second.initialize();
   await first.mutate(async (state) => {
@@ -292,6 +308,7 @@ test("historie en artifactreferentie zijn immutable en een fout rolt recordwrite
   legacy.orders.push({ id: "SP-TEST-2", revision: 1, eventHistory: [{ id: "event-fixed", at: "2026-09-05T06:00:00.000Z", action: "Aangemaakt" }] });
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
   await store.initialize();
   const beforeRevision = (await store.read()).revision;
   const beforeArtifacts = structuredClone(pool.artifacts);
@@ -313,6 +330,7 @@ test("rollbackbridge materialiseert onder revision- en hashlock exact één lega
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
   await store.initialize();
   await store.mutate(async (state) => {
     state.preferences.operator = { density: "compact" };
@@ -339,6 +357,7 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
   const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve("."), runtimeArtifactRoot: runtimeRoot, allowedOrigin: "http://127.0.0.1" });
+  await store.backfillLegacySource();
   await service.initialize();
   const login = await service.login({ email: "operator@example.test", password: "Domain-Production-Test!" });
   const bootstrap = await service.bootstrap(login.token);

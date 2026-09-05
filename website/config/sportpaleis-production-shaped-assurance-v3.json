@@ -37,6 +37,7 @@
     "legacyStateWriteStable",
     "businessHashesStable",
     "domainRecordWritesIncremental",
+    "runtimeInitializationReadOnly",
     "cacheInvalidationExact",
     "interruptedRetryRecovered",
     "previewFanoutBounded",

@@ -189,28 +189,58 @@ export class SportpaleisDomainMariaDbStore {
     const migration = await readFile(this.migrationFile, "utf8");
     const connection = await this.#connection();
     try {
-      await connection.beginTransaction();
       const registered = await connection.query(
-        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ? FOR UPDATE",
+        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ?",
         [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION],
       );
       const checksum = createHash("sha256").update(migration).digest("hex");
       if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
       if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
       const metaRows = await connection.query(
-        "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
+        "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?",
         [ORGANIZATION_ID],
       );
-      if (metaRows.length === 0) await this.#backfill(connection);
-      await connection.commit();
+      if (metaRows.length !== 1) throw new SportpaleisMariaDbStoreError("De offline domeinbackfill ontbreekt; runtime-start muteert nooit de migratiebron.", "DOMAIN_BACKFILL_REQUIRED");
+      if (Number(metaRows[0].contract_version) !== SPORTPALEIS_DOMAIN_CONTRACT_VERSION) throw new SportpaleisMariaDbStoreError("Domeincontractversie is incompatibel.", "DOMAIN_CONTRACT_MISMATCH");
     } catch (cause) {
-      await connection.rollback().catch(() => undefined);
       if (cause instanceof SportpaleisMariaDbStoreError) throw cause;
       throw new SportpaleisMariaDbStoreError("Domeinopslag kon niet worden geïnitialiseerd.", "DOMAIN_INITIALIZATION_FAILED", cause);
     } finally {
       connection.release();
     }
     await this.#refresh(true);
+  }
+
+  // Releasebroker-only additive migration step. Runtime initialization is
+  // deliberately read-only and refuses to perform this CPU/DB-heavy backfill.
+  async backfillLegacySource() {
+    const migration = await readFile(this.migrationFile, "utf8");
+    const checksum = createHash("sha256").update(migration).digest("hex");
+    const connection = await this.#connection();
+    try {
+      await connection.beginTransaction();
+      const registered = await connection.query(
+        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ? FOR UPDATE",
+        [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION],
+      );
+      if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
+      if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+      const metaRows = await connection.query(
+        "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
+        [ORGANIZATION_ID],
+      );
+      const evidence = metaRows.length === 0
+        ? await this.#backfill(connection)
+        : Object.freeze({ status: "ALREADY_BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(metaRows[0].global_revision), contractVersion: Number(metaRows[0].contract_version) });
+      await connection.commit();
+      return evidence;
+    } catch (cause) {
+      await connection.rollback().catch(() => undefined);
+      if (cause instanceof SportpaleisMariaDbStoreError) throw cause;
+      throw new SportpaleisMariaDbStoreError("Domeinbackfill kon niet atomair worden uitgevoerd.", "DOMAIN_BACKFILL_FAILED", cause);
+    } finally {
+      connection.release();
+    }
   }
 
   async #backfill(connection) {
@@ -279,6 +309,7 @@ export class SportpaleisDomainMariaDbStore {
         legacyHash === composedHash ? "MATCH" : "MISMATCH"],
     );
     if (legacyHash !== composedHash) throw new SportpaleisMariaDbStoreError("Domeinbackfill wijkt af van de migratiebron.", "DOMAIN_BACKFILL_MISMATCH");
+    return Object.freeze({ status: "BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(legacy.revision), contractVersion: SPORTPALEIS_DOMAIN_CONTRACT_VERSION, legacySha256: legacyHash, composedSha256: composedHash });
   }
 
   async readSnapshot() {

@@ -28,6 +28,8 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   ]);
   assert.match(builder, /sportpaleis-production-shaped-assurance-v3\.json/u);
   assert.match(builder, /sportpaleis-domain-rollback-bridge\.mjs/u);
+  assert.match(builder, /sportpaleis-domain-backfill\.mjs/u);
+  assert.match(builder, /workspace-legacy-state-encode-worker\.mjs/u);
   assert.match(builder, /contractSha256/u);
   assert.match(broker, /assuranceContractSha256/u);
   assert.match(broker, /largeFreeProduction80Mm/u);
