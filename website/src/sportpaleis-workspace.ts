@@ -4,7 +4,7 @@ import "./styles/sportpaleis-teamwear.css";
 import { articleImage } from "./sportpaleis/catalog-images.ts";
 import { createCutJobBatch, createProductionPreview, createReferencePieces, sha256, SPORTPALEIS_MACHINE_CONSTRAINTS } from "./sportpaleis/direct-print/index.ts";
 import { calculateBedrukkenCheckoutTotal, canAccessAdmin, type AssociationConfiguration, type BackNumberSizeClass, type CatalogArticle, type ManagedCheckoutPriceLine, type ProductionJob, type ProductionLineType, type ProductionProofStatus, type ProductionProposal, type SportpaleisProductionFont, type SportpaleisVisualComposition, type TeamkitProposal, type TeamkitProposalItem, type ValidationStatus, type WorkspaceOrder } from "./sportpaleis/workspace-data.ts";
-import { PilotApiError, SportpaleisPilotApi, type PilotBootstrap, type ProductionCompletionProjection } from "./sportpaleis/pilot-api.ts";
+import { PilotApiError, SportpaleisPilotApi, type BootstrapSurface, type PilotBootstrap, type ProductionCompletionProjection } from "./sportpaleis/pilot-api.ts";
 import { associationPersonalizationModel, isOrderablePrintedArticle, type CatalogPrintField } from "./sportpaleis/order-personalization.ts";
 import { catalogPersonalizationPriceHint, resolveCatalogPersonalizationPrice } from "./sportpaleis/catalog-personalization-pricing.mjs";
 import { exactManagedFontForLine, managedFontIdentity } from "./sportpaleis/managed-font-client-gate.ts";
@@ -1673,6 +1673,16 @@ function productionFoilOptions(state: PilotBootstrap, selected: string): string 
   const selectedValid = colors.includes(selected);
   return `${selected && !selectedValid ? `<option value="${esc(selected)}" selected disabled>${esc(selected)} — Aandacht: niet actief</option>` : ""}${colors.map((color) => `<option value="${esc(color)}" ${color === selected ? "selected" : ""}>${esc(color)}</option>`).join("")}`;
 }
+function bootstrapSurfaceForPath(route = path()): BootstrapSurface {
+  if (route === `${BASE}/orders/team` || route.startsWith(`${BASE}/voorstellen`)) return "teamwear";
+  if (route === `${BASE}/orders/eigen-artikel` || route.startsWith(`${BASE}/productie`)) {
+    if (route === `${BASE}/productie/elementen` || route === `${BASE}/productie/fonts`) return "library";
+    return "production";
+  }
+  if (route.startsWith(`${BASE}/orders`)) return "orders";
+  if (route.startsWith(`${BASE}/beheer`)) return "admin";
+  return "overview";
+}
 function ensureFreeProductionDraft(state: PilotBootstrap): void {
   const defaults = state.settings.productionDefaults; const fonts = allowedProductionFonts(state); const font = fonts.find(({ id }) => id === defaults?.defaultFontId) ?? fonts[0];
   if (!freeProductionLines.length && font) freeProductionLines = [{ id: crypto.randomUUID(), type: "TEXT", content: "", fontId: font.id, widthMm: defaults?.defaultWidthMm ?? 180, heightMm: defaults?.defaultHeightMm ?? 30, foilColor: defaults?.defaultFoilColor ?? "Wit", quantity: 1 }];
@@ -2365,7 +2375,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   const load = async (): Promise<void> => {
     const bootstrapStartedAt = performance.now();
     try {
-      state = await api.bootstrap();
+      state = await api.bootstrap(bootstrapSurfaceForPath());
       const bootstrapMs = performance.now() - bootstrapStartedAt;
       candidateReviewAuthorized = state.capabilities.reviewMode === true;
       leaveUnauthorizedCandidateRoute();
@@ -2402,7 +2412,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     try {
       const { revision } = await api.currentRevision();
       if (state.readOnlyFallback) {
-        state = await api.bootstrap();
+        state = await api.bootstrap(bootstrapSurfaceForPath());
         deferredSharedRevision = null;
         notice = "Workspace-service hersteld · actuele productiestatus geladen.";
         render({ preserveScroll: true });
@@ -2410,7 +2420,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       }
       if (revision === state.revision) { deferredSharedRevision = null; return; }
       if (sharedSyncFormDirty || hasFocusedEditor()) { deferredSharedRevision = revision; showDeferredSyncNotice(); return; }
-      state = await api.bootstrap();
+      state = await api.bootstrap(bootstrapSurfaceForPath());
       deferredSharedRevision = null;
       notice = trigger === "safe-boundary" ? "Actuele wijzigingen van een collega zijn veilig geladen." : "Werkplek automatisch bijgewerkt met de laatste status.";
       render({ preserveScroll: true });
@@ -2435,7 +2445,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       target.focus({ preventScroll: true });
     });
   };
-  const go = (href: string): void => { const hadDeferredSync = deferredSharedRevision !== null; history.pushState({}, "", candidateHref(href)); sharedSyncFormDirty = false; deferredSharedRevision = null; cancellationConfirmationUserId = null; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); if (hadDeferredSync) void checkSharedRevision("safe-boundary"); };
+  const go = (href: string): void => { const hadDeferredSync = deferredSharedRevision !== null; history.pushState({}, "", candidateHref(href)); sharedSyncFormDirty = false; deferredSharedRevision = null; cancellationConfirmationUserId = null; const requestedSurface = bootstrapSurfaceForPath(); if (state && state.bootstrapSurface !== requestedSurface) { app.setAttribute("aria-busy", "true"); void load().then(() => { app.removeAttribute("aria-busy"); render(); focusLocationHashTarget(); }); } else { render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); } if (hadDeferredSync) void checkSharedRevision("safe-boundary"); };
   const productionAssetReviewDraftSaveQueue = new WeakMap<HTMLFormElement, Promise<void>>();
   const saveProductionAssetReviewDraft = (form: HTMLFormElement): Promise<void> => {
     const previous = productionAssetReviewDraftSaveQueue.get(form) ?? Promise.resolve();
@@ -3245,7 +3255,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   addEventListener("focus", () => { if (document.visibilityState === "visible") void checkSharedRevision("focus"); });
   addEventListener("resize", () => syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches), { passive: true });
   window.setInterval(() => { if (document.visibilityState === "visible") void checkSharedRevision("interval"); }, SHARED_STATUS_POLL_MS);
-  addEventListener("popstate", () => { sharedSyncFormDirty = false; deferredSharedRevision = null; notice = ""; render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); }); if (location.pathname === BASE || location.pathname === `${BASE}/` || (!BASE && location.pathname === "/")) history.replaceState({}, "", `${BASE}/overzicht`);
+  addEventListener("popstate", () => { sharedSyncFormDirty = false; deferredSharedRevision = null; notice = ""; const requestedSurface = bootstrapSurfaceForPath(); if (state && state.bootstrapSurface !== requestedSurface) { app.setAttribute("aria-busy", "true"); void load().then(() => { app.removeAttribute("aria-busy"); render(); focusLocationHashTarget(); }); } else { render(); void Promise.all([loadProductionHistoryRoute(), loadOrderDetailRoute()]).then(() => { render(); focusLocationHashTarget(); }); } }); if (location.pathname === BASE || location.pathname === `${BASE}/` || (!BASE && location.pathname === "/")) history.replaceState({}, "", `${BASE}/overzicht`);
   const initialize = async (): Promise<void> => {
     if (path() === `${BASE}/review-toegang`) {
       const handoff = new URLSearchParams(location.hash.replace(/^#/, ""));

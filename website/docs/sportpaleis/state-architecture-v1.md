@@ -41,7 +41,7 @@ principal, role, scopes, feature exposure and session security metadata.
 
 ## Candidate transaction and revision model
 
-Migration 003 is additive. It retains `sp_runtime_state` unchanged as the rollback
+Migration 007 is additive. It retains `sp_runtime_state` unchanged as the rollback
 source and introduces domain metadata, scalar domain payloads, stable record rows,
 append-only audit events, an order-history read model and immutable artifact
 references. Initial backfill locks the legacy row, partitions deterministically and

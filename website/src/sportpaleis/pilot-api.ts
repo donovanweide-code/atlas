@@ -56,7 +56,10 @@ export class PilotApiError extends Error {
   }
 }
 
+export type BootstrapSurface = "overview" | "orders" | "production" | "library" | "teamwear" | "admin";
+
 export interface PilotBootstrap extends SportpaleisWorkspaceState {
+  bootstrapSurface?: BootstrapSurface;
   currentUser: SportpaleisUser;
   switchableUsers: SportpaleisUser[];
   /** Sanitized production admission view; contains no stock or purchasing data. */
@@ -290,8 +293,8 @@ export class SportpaleisPilotApi {
     return result.user;
   }
 
-  async bootstrap(): Promise<PilotBootstrap> {
-    const result = await responseBody<PilotBootstrap>(await fetch(`${API}/bootstrap`, {
+  async bootstrap(surface: BootstrapSurface = "overview"): Promise<PilotBootstrap> {
+    const result = await responseBody<PilotBootstrap>(await fetch(`${API}/bootstrap?surface=${encodeURIComponent(surface)}`, {
       credentials: "same-origin",
       headers: { Accept: "application/json" },
     }));

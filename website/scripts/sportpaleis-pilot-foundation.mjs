@@ -3060,13 +3060,14 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
-  async bootstrap(token) {
-    return this.#projectBootstrap(await this.authenticate(token));
+  async bootstrap(token, surface = "overview") {
+    return this.#projectBootstrap(await this.authenticate(token), surface);
   }
 
-  async bootstrapSerialized(token) {
+  async bootstrapSerialized(token, surface = "overview") {
     const context = await this.authenticate(token);
-    const cacheKey = this.#bootstrapResponseCacheKey(context);
+    const normalizedSurface = this.#bootstrapSurface(surface);
+    const cacheKey = this.#bootstrapResponseCacheKey(context, normalizedSurface);
     const cached = this.bootstrapResponseCache.get(cacheKey);
     if (cached && cached.expiresAtMs > Date.now()) {
       this.bootstrapResponseCache.delete(cacheKey);
@@ -3080,7 +3081,7 @@ export class SportpaleisPilotService {
       throw Object.assign(new Error("Workspace-bootstrap is kort bezet. Probeer direct opnieuw."), { statusCode: 503, code: "BOOTSTRAP_BACKPRESSURE" });
     }
     const pending = Promise.resolve().then(() => {
-      const body = Buffer.from(`${JSON.stringify(this.#projectBootstrap(context))}\n`, "utf8");
+      const body = Buffer.from(`${JSON.stringify(this.#projectBootstrap(context, normalizedSurface))}\n`, "utf8");
       const sessionExpiryMs = new Date(context.session.expiresAt).getTime();
       const expiresAtMs = Math.min(Date.now() + BOOTSTRAP_RESPONSE_CACHE_TTL_MS, sessionExpiryMs);
       this.#rememberBootstrapResponse(cacheKey, Number(context.state.revision), expiresAtMs, body);
@@ -3094,7 +3095,12 @@ export class SportpaleisPilotService {
     }
   }
 
-  #bootstrapResponseCacheKey({ state, user, session }) {
+  #bootstrapSurface(surface) {
+    const normalized = String(surface ?? "overview").trim().toLowerCase();
+    return new Set(["overview", "orders", "production", "library", "teamwear", "admin"]).has(normalized) ? normalized : "overview";
+  }
+
+  #bootstrapResponseCacheKey({ state, user, session }, surface) {
     const accessScope = {
       tenantId: state.organizationId,
       revision: Number(state.revision),
@@ -3121,6 +3127,7 @@ export class SportpaleisPilotService {
         mailboxConfigured: this.mailboxConfiguration.configured,
         creativeStudioEnabled: this.creativeStudioEnabled,
       },
+      surface,
     };
     return `${state.organizationId}:${state.revision}:${sha256(JSON.stringify(accessScope))}`;
   }
@@ -3149,7 +3156,8 @@ export class SportpaleisPilotService {
     }
   }
 
-  #projectBootstrap({ state, user, session }) {
+  #projectBootstrap({ state, user, session }, requestedSurface = "overview") {
+    const bootstrapSurface = this.#bootstrapSurface(requestedSurface);
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
     const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
     const admin = user.role === "admin";
@@ -3157,7 +3165,10 @@ export class SportpaleisPilotService {
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
-    const allOperationalOrders = state.orders.filter((order) => !finalCleanStartOrder(order));
+    const includeOrders = ["overview", "orders", "production"].includes(bootstrapSurface);
+    const includeProduction = bootstrapSurface === "production";
+    const includeTeamwear = bootstrapSurface === "teamwear";
+    const allOperationalOrders = includeOrders ? state.orders.filter((order) => !finalCleanStartOrder(order)) : [];
     const operationalOrderIds = new Set(allOperationalOrders.map(({ id }) => id));
     const terminalOrder = (order) => order.deletion
       || (order.stage === "DONE" && ["PICKED_UP", "DELIVERED"].includes(order.fulfillment?.status));
@@ -3165,23 +3176,24 @@ export class SportpaleisPilotService {
     const activeOrders = sortedOperationalOrders.filter((order) => !terminalOrder(order));
     const activeOrderIds = new Set(activeOrders.map(({ id }) => id));
     const bootstrapOrders = sortedOperationalOrders.filter((order, index) => activeOrderIds.has(order.id) || index < BOOTSTRAP_RECENT_COMPLETED_ORDER_LIMIT);
-    const knownOrderIds = new Set(state.orders.map(({ id }) => id));
-    const operationalJobs = state.productionJobs.filter(({ snapshot }) => snapshot.orderIds.some((id) => operationalOrderIds.has(id)) || snapshot.orderIds.every((id) => !knownOrderIds.has(id)));
+    const knownOrderIds = includeProduction ? new Set(state.orders.map(({ id }) => id)) : new Set();
+    const operationalJobs = includeProduction ? state.productionJobs.filter(({ snapshot }) => snapshot.orderIds.some((id) => operationalOrderIds.has(id)) || snapshot.orderIds.every((id) => !knownOrderIds.has(id))) : [];
     const sortedOperationalJobs = [...operationalJobs].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.jobNumber.localeCompare(left.jobNumber));
     const activeProductionJobIds = new Set(sortedOperationalJobs.filter(({ status }) => status === "AWAITING_HUMAN_CHECK").map(({ id }) => id));
     const bootstrapJobs = sortedOperationalJobs.filter((job, index) => activeProductionJobIds.has(job.id) || index < BOOTSTRAP_RECENT_PRODUCTION_JOB_LIMIT);
-    const operationalProposals = state.productionProposals.filter((proposal) => proposal.orders?.some(({ id }) => operationalOrderIds.has(id)));
+    const operationalProposals = includeProduction ? state.productionProposals.filter((proposal) => proposal.orders?.some(({ id }) => operationalOrderIds.has(id))) : [];
     return {
       schemaVersion: PILOT_SCHEMA_VERSION,
       revision: state.revision,
       currentUserId: user.id,
       currentUser: sessionUser,
+      bootstrapSurface,
       csrfToken: session.csrfHash ? `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` : undefined,
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) }))),
-      orderHistory: { total: sortedOperationalOrders.length, loaded: bootstrapOrders.length, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
+      orders: includeOrders ? structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) }))) : [],
+      orderHistory: { total: includeOrders ? sortedOperationalOrders.length : 0, loaded: includeOrders ? bootstrapOrders.length : 0, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
       mailbatches: structuredClone(state.mailbatches),
@@ -3200,10 +3212,10 @@ export class SportpaleisPilotService {
       productionFonts: structuredClone(state.productionFonts.map(({ sourceDataBase64: _sourceDataBase64, ...font }) => font)),
       productionElementRequirements: productionWorkspace ? structuredClone(state.productionElementRequirements) : [],
       productionInventory: productionWorkspace ? sportpaleisProductionInventoryView(state) : [],
-      productionJobs: productionWorkspace ? structuredClone(bootstrapJobs) : [],
-      productionHistory: productionWorkspace ? { total: sortedOperationalJobs.length, loaded: bootstrapJobs.length, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true } : { total: 0, loaded: 0, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true },
-      productionProposals: productionWorkspace ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
-      teamkitProposals: user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      productionJobs: productionWorkspace && includeProduction ? structuredClone(bootstrapJobs) : [],
+      productionHistory: productionWorkspace && includeProduction ? { total: sortedOperationalJobs.length, loaded: bootstrapJobs.length, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true } : { total: 0, loaded: 0, pageSize: PRODUCTION_HISTORY_PAGE_LIMIT, bounded: true },
+      productionProposals: productionWorkspace && includeProduction ? structuredClone(operationalProposals).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
+      teamkitProposals: includeTeamwear && user.featureExposure?.teamwearExperiencePilot === true ? state.teamkitProposals.filter(({ status }) => status !== "ARCHIVED").map(publicProposal).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.proposalNumber.localeCompare(left.proposalNumber)) : [],
       quickProductionIntakes: productionWorkspace ? state.quickProductionIntakes.map(publicQuickProductionIntake).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
       visualCompositions: productionWorkspace ? state.visualCompositions.map(publicVisualComposition).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) : [],
       creativeVectorDrafts: productionWorkspace ? state.creativeVectorDrafts.map(publicCreativeVectorDraft).sort((left, right) => right.createdAt.localeCompare(left.createdAt)) : [],
@@ -9993,7 +10005,7 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
         return true;
       }
       if (route === "/api/sportpaleis/v1/bootstrap" && method === "GET") {
-        serializedJson(response, 200, await service.bootstrapSerialized(token));
+        serializedJson(response, 200, await service.bootstrapSerialized(token, requestUrl.searchParams.get("surface") ?? "overview"));
         return true;
       }
       if (route === "/api/sportpaleis/v1/reviews" && method === "GET") {

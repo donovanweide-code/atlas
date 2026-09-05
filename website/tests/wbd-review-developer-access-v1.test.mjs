@@ -410,6 +410,19 @@ test("R2.26.43 — bootstrapbytes coalescen per revision, tenant, sessie en acce
   assert.notEqual(reviewBody, concurrent[0], "reviewscope deelt nooit bytes met een normale gebruiker");
   assert.notEqual(adminBody, concurrent[0], "adminscope deelt nooit bytes met een operator");
   assert.ok(adminBootstrap.users.length > operatorBootstrap.users.length, "rolgebonden projectie blijft geïsoleerd");
+  const productionBootstrap = JSON.parse((await service.bootstrapSerialized(operator.token, "production")).toString("utf8"));
+  const libraryBootstrap = JSON.parse((await service.bootstrapSerialized(operator.token, "library")).toString("utf8"));
+  const teamwearBootstrap = JSON.parse((await service.bootstrapSerialized(operator.token, "teamwear")).toString("utf8"));
+  assert.equal(operatorBootstrap.bootstrapSurface, "overview");
+  assert.equal(operatorBootstrap.productionJobs.length, 0);
+  assert.equal(operatorBootstrap.teamkitProposals.length, 0);
+  assert.equal(productionBootstrap.bootstrapSurface, "production");
+  assert.equal(libraryBootstrap.bootstrapSurface, "library");
+  assert.equal(libraryBootstrap.orders.length, 0);
+  assert.equal(libraryBootstrap.productionJobs.length, 0);
+  assert.equal(teamwearBootstrap.bootstrapSurface, "teamwear");
+  assert.equal(teamwearBootstrap.orders.length, 0);
+  assert.notEqual(await service.bootstrapSerialized(operator.token, "production"), await service.bootstrapSerialized(operator.token, "library"), "surfacegebonden read-modelbytes delen geen cache-entry");
 
   const revisionBeforeMutation = operatorBootstrap.revision;
   await service.savePreferences(operator.token, operator.csrfToken, { ...createSportpaleisDefaultPreference(), density: "compact" });

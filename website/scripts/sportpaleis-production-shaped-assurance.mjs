@@ -73,7 +73,7 @@ let server;
 let bootstrapRequestsReceived = 0;
 const handlerErrors = [];
 const timings = [];
-let bootstrapFieldBytes = null;
+const bootstrapFieldBytes = {};
 let loadPhase = "warmup";
 const statuses = [];
 let activeHighWater = 0;
@@ -145,7 +145,7 @@ async function storeInitialize() {
 
   const handler = createSportpaleisPilotRequestHandler(service, { onError: (entry) => handlerErrors.push(entry) });
   server = createServer(async (request, response) => {
-    if (request.url === "/api/sportpaleis/v1/bootstrap") bootstrapRequestsReceived += 1;
+    if (request.url?.startsWith("/api/sportpaleis/v1/bootstrap")) bootstrapRequestsReceived += 1;
     if (!(await handler(request, response))) { response.statusCode = 404; response.end(); }
   });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
@@ -158,15 +158,19 @@ async function storeInitialize() {
     const response = await fetch(`${origin}${route}`, { ...options, headers: { ...(options.headers ?? {}), cookie } });
     statuses.push(response.status);
     const body = Buffer.from(await response.arrayBuffer());
-    if (route === "/api/sportpaleis/v1/bootstrap" && response.status === 200) {
+    if (route.startsWith("/api/sportpaleis/v1/bootstrap") && response.status === 200) {
       const parsed = JSON.parse(body.toString("utf8"));
-      bootstrapFieldBytes ??= Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, Buffer.byteLength(JSON.stringify(value))]).sort((left, right) => right[1] - left[1]));
+      const surface = new URL(route, "http://canary.local").searchParams.get("surface") ?? "overview";
+      bootstrapFieldBytes[surface] ??= Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, Buffer.byteLength(JSON.stringify(value))]).sort((left, right) => right[1] - left[1]));
     }
     timings.push({ route, phase: loadPhase, ms: performance.now() - started, bytes: body.length });
     return response.status;
   };
-  const coreRoutes = ["/api/sportpaleis/v1/auth/session", "/api/sportpaleis/v1/state-revision", "/api/sportpaleis/v1/bootstrap"];
-  for (const cookie of allCookies) for (const route of coreRoutes) assert.equal(await request(route, cookie), 200, `${route} moet bereikbaar zijn`);
+  const bootstrapRoutes = ["overview", "production", "library", "teamwear"].map((surface) => `/api/sportpaleis/v1/bootstrap?surface=${surface}`);
+  const coreRoutes = ["/api/sportpaleis/v1/auth/session", "/api/sportpaleis/v1/state-revision"];
+  for (let index = 0; index < allCookies.length; index += 1) {
+    for (const route of [...coreRoutes, bootstrapRoutes[index % bootstrapRoutes.length]]) assert.equal(await request(route, allCookies[index]), 200, `${route} moet bereikbaar zijn`);
+  }
   const previewRoutes = [
     ...before.productionAssetSources.flatMap((source) => (source.candidates ?? []).map((candidate) => `/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(source.id)}/candidates/${encodeURIComponent(candidate.id)}/preview.svg`)),
     ...before.productionAssetSources.filter(({ documentPreviewSvg }) => Boolean(documentPreviewSvg)).map((source) => `/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(source.id)}/preview.svg`),
@@ -182,13 +186,13 @@ async function storeInitialize() {
   for (let offset = 0; offset < 300; offset += 12) {
     const batch = await Promise.all(Array.from({ length: 12 }, (_, index) => request(previewRoutes[(offset + index) % previewRoutes.length], allCookies[(offset + index) % allCookies.length])));
     assert.ok(batch.every((status) => status === 200));
-    if (offset % 48 === 0) assert.ok((await Promise.all(coreRoutes.map((route, index) => request(route, allCookies[index % allCookies.length])))).every((status) => status === 200));
+    if (offset % 48 === 0) assert.ok((await Promise.all([...coreRoutes, bootstrapRoutes[offset % bootstrapRoutes.length]].map((route, index) => request(route, allCookies[index % allCookies.length])))).every((status) => status === 200));
   }
   await enterLoadPhase("pool-pressure");
   const blockers = await Promise.all(Array.from({ length: 6 }, () => pool.getConnection()));
   const sleeps = blockers.map((connection) => connection.query("SELECT SLEEP(0.75)").finally(() => connection.release()));
   const underPressureRoutes = [
-    ...Array.from({ length: concurrentFullBootstraps }, () => "/api/sportpaleis/v1/bootstrap"),
+    ...Array.from({ length: concurrentFullBootstraps }, (_, index) => bootstrapRoutes[index % bootstrapRoutes.length]),
     ...Array.from({ length: concurrentRevisionPolls }, () => "/api/sportpaleis/v1/state-revision"),
   ];
   const underPressure = await Promise.all(underPressureRoutes.map((route, index) => request(route, allCookies[index % allCookies.length])));
@@ -199,13 +203,13 @@ async function storeInitialize() {
   service.bootstrapResponseCacheBytes = 0;
   const receivedBeforeInterrupt = bootstrapRequestsReceived;
   const aborted = new AbortController();
-  const interrupted = fetch(`${origin}/api/sportpaleis/v1/bootstrap`, { headers: { cookie: reviewCookie }, signal: aborted.signal });
+  const interrupted = fetch(`${origin}/api/sportpaleis/v1/bootstrap?surface=production`, { headers: { cookie: reviewCookie }, signal: aborted.signal });
   setTimeout(() => aborted.abort(), 5);
   await assert.rejects(interrupted, (error) => error.name === "AbortError");
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.ok(bootstrapRequestsReceived > receivedBeforeInterrupt, "interrupted request bereikte de server");
   assert.equal(service.bootstrapResponsePromises.size, 0, "interrupted bootstrap laat geen single-flight achter");
-  assert.equal(await request("/api/sportpaleis/v1/bootstrap", reviewCookie), 200, "retry na gestart maar interrupted request");
+  assert.equal(await request("/api/sportpaleis/v1/bootstrap?surface=production", reviewCookie), 200, "retry na gestart maar interrupted request");
 
   await enterLoadPhase("read-reconciliation");
   const afterReads = await store.read();
@@ -271,7 +275,7 @@ async function storeInitialize() {
   const memoryCycles = [];
   let cacheReuse = [];
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    cacheReuse = await Promise.all(allCookies.map((cookie) => request("/api/sportpaleis/v1/bootstrap", cookie)));
+    cacheReuse = await Promise.all(allCookies.map((cookie, index) => request(bootstrapRoutes[index % bootstrapRoutes.length], cookie)));
     global.gc?.();
     memoryCycles.push(process.memoryUsage().rss);
   }
@@ -293,7 +297,7 @@ async function storeInitialize() {
   const allMs = timings.map(({ ms }) => ms);
   const metricsFor = (entries) => ({ count: entries.length, p50Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.5)), p95Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.95)), maxMs: rounded(Math.max(0, ...entries.map(({ ms }) => ms))), maxBytes: Math.max(0, ...entries.map(({ bytes }) => Number(bytes) || 0)) });
   const metrics = { ...metricsFor(timings), eventLoopP95Ms: rounded(loop.percentile(95) / 1e6), eventLoopMaxMs: rounded(loop.max / 1e6) };
-  const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route === "/api/sportpaleis/v1/bootstrap"));
+  const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route.startsWith("/api/sportpaleis/v1/bootstrap")));
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
   const limits = assuranceContract.limits;
@@ -305,7 +309,7 @@ async function storeInitialize() {
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
     identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId },
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
-    load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
+    load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: { ...Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])), "/api/sportpaleis/v1/bootstrap": bootstrapMetrics } },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
