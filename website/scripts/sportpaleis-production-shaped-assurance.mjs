@@ -12,6 +12,7 @@ import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-br
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, reserveImmutableProductionArtifact, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
 import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
+import { inspectProductionAssetSvg } from "../src/sportpaleis/production-assets-svg.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
 const artifactRoot = process.env.CANARY_ARTIFACT_ROOT;
@@ -126,6 +127,20 @@ async function storeInitialize() {
   assert.ok(issuer && normalUser && customerUsers.length === productionCustomerSeats, "issuer, operator of drie customer seats ontbreken in restorefixture");
 
   const service = new SportpaleisPilotService({ store, releaseId, secureCookies: false, allowedOrigin: "http://127.0.0.1", uploadsEnabled: false, productionAssetUploadsEnabled: false, fontUploadsEnabled: false, mailMode: "capture", mailboxConfiguration: { configured: false }, creativeStudioEnabled: false, artifactRoot, runtimeArtifactRoot: artifactRoot, installedProductionAssetRoot: `${artifactRoot}/installed-assets`, activeReviewCandidateIds: activeCandidateIds, reviewAccessEnabled: true, reviewAccessIsolatedState: true, reviewAccessIssuerPrincipalIds: issuerIds, reviewAccessIssuerSecret: issuerSecret });
+  const safeSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg>', "utf8");
+  const inspectedSafeSvg = inspectProductionAssetSvg({ bytes: safeSvg, filename: "assurance-safe.svg" });
+  assert.equal(inspectedSafeSvg.source.sha256, sha(safeSvg).toUpperCase(), "geldige SVG verliest bronidentiteit");
+  await assert.rejects(
+    async () => inspectProductionAssetSvg({ bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), filename: "assurance-script.svg" }),
+    (error) => String(error?.code ?? "").startsWith("PRODUCTION_ASSET_SVG_"),
+    "uitvoerbare SVG-inhoud moet fail-closed stoppen",
+  );
+  const overComplexSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${'<rect x="0" y="0" width="1" height="1"/>'.repeat(5_001)}</svg>`, "utf8");
+  await assert.rejects(
+    async () => inspectProductionAssetSvg({ bytes: overComplexSvg, filename: "assurance-complex.svg" }),
+    (error) => error?.code === "PRODUCTION_ASSET_SVG_COMPLEXITY_LIMIT",
+    "te complexe SVG moet begrensd stoppen",
+  );
   const interruptedArtifactBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>', "utf8");
   const interruptedArtifact = reserveImmutableProductionArtifact({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9999", bytes: interruptedArtifactBytes, operationIdentity: `assurance-interrupted-${candidateCommit}` });
   await service.initialize();
@@ -146,7 +161,23 @@ async function storeInitialize() {
   const activationUrl = new URL(issued.activationPath, "http://127.0.0.1");
   const activation = new URLSearchParams(activationUrl.hash.slice(1));
   const review = await service.activateReviewDeveloperGrant({ activationToken: activation.get("token"), candidateId: activation.get("candidate") });
+  assert.equal(review.principal.role, "operator", "reviewrol wijkt af");
+  assert.equal(review.principal.mutationDisabled, true, "reviewprincipal is niet mutation-disabled");
+  const securityStart = new Date(Date.now() - 20 * 60_000);
+  const expiredIssued = await service.issueAutomatedReviewGrant({ candidateId: activeCandidateIds[0], scopes: ["candidate.review.read"], humanGoReference: "GO-SPORTPALEIS-P1-RECOVERY-20260905", ttlMs: 5 * 60_000, runId: `expired-${randomBytes(6).toString("hex")}`, role: "operator" }, issuerSecret, "127.0.0.1", securityStart);
+  const expiredUrl = new URL(expiredIssued.activationPath, "http://127.0.0.1");
+  const expiredActivation = new URLSearchParams(expiredUrl.hash.slice(1));
+  const expired = await service.activateReviewDeveloperGrant({ activationToken: expiredActivation.get("token"), candidateId: expiredActivation.get("candidate") }, new Date(securityStart.getTime() + 1_000));
+  await assert.rejects(() => service.authenticate(expired.sessionToken, new Date(securityStart.getTime() + 5 * 60_000 + 1)), (error) => error?.code === "REVIEW_GRANT_EXPIRED", "verlopen reviewtoegang bleef actief");
+  const revokedIssued = await service.issueAutomatedReviewGrant({ candidateId: activeCandidateIds[0], scopes: ["candidate.review.read"], humanGoReference: "GO-SPORTPALEIS-P1-RECOVERY-20260905", ttlMs: 10 * 60_000, runId: `revoked-${randomBytes(6).toString("hex")}`, role: "operator" }, issuerSecret, "127.0.0.1", new Date(securityStart.getTime() + 6 * 60_000));
+  const revokedUrl = new URL(revokedIssued.activationPath, "http://127.0.0.1");
+  const revokedActivation = new URLSearchParams(revokedUrl.hash.slice(1));
+  const revoked = await service.activateReviewDeveloperGrant({ activationToken: revokedActivation.get("token"), candidateId: revokedActivation.get("candidate") }, new Date(securityStart.getTime() + 6 * 60_000 + 1_000));
+  await service.revokeAutomatedReviewGrant({ grantId: revokedIssued.grant.id }, issuerSecret, "127.0.0.1", new Date(securityStart.getTime() + 6 * 60_000 + 2_000));
+  await assert.rejects(() => service.authenticate(revoked.sessionToken, new Date(securityStart.getTime() + 6 * 60_000 + 3_000)), (error) => error?.code === "REVIEW_GRANT_INACTIVE", "ingetrokken reviewtoegang bleef actief");
   const before = await store.read();
+  const activeFoilColors = before.foilRolls.filter(({ active }) => active !== false).map(({ color }) => String(color).trim());
+  assert.ok(activeFoilColors.length >= 6 && new Set(activeFoilColors.map((color) => color.toLocaleLowerCase("nl-NL"))).size === activeFoilColors.length, "centrale actieve foliekleuren zijn niet volledig en uniek");
   const beforeRow = (await pool.query("SELECT revision, updated_at, OCTET_LENGTH(state_json) AS bytes FROM sp_runtime_state WHERE organization_id = ?", [before.organizationId]))[0];
   const beforeBusiness = businessHashes(before);
   const beforeRevision = before.revision;
@@ -181,6 +212,13 @@ async function storeInitialize() {
     for (const route of coreRoutes) assert.equal(await request(route, allCookies[index]), 200, `${route} moet bereikbaar zijn`);
   }
   for (let index = 0; index < bootstrapRoutes.length; index += 1) assert.equal(await request(bootstrapRoutes[index], allCookies[index % allCookies.length]), 200, `${bootstrapRoutes[index]} moet bereikbaar zijn`);
+  service.bootstrapResponseCache.clear();
+  service.bootstrapResponseCacheBytes = 0;
+  assert.equal(await request("/api/sportpaleis/v1/bootstrap?surface=library", reviewCookie), 200, "koude Library-bootstrap faalde");
+  const coldCache = { entries: service.bootstrapResponseCache.size, bytes: service.bootstrapResponseCacheBytes };
+  assert.ok(coldCache.entries === 1 && coldCache.bytes > 0, "koude bootstrap bouwde geen begrensde cache-entry");
+  assert.equal(await request("/api/sportpaleis/v1/bootstrap?surface=library", reviewCookie), 200, "warme Library-bootstrap faalde");
+  assert.deepEqual({ entries: service.bootstrapResponseCache.size, bytes: service.bootstrapResponseCacheBytes }, coldCache, "warme bootstrap serialiseerde een tweede cache-entry");
   const previewRoutes = [
     ...before.productionAssetSources.flatMap((source) => (source.candidates ?? []).map((candidate) => `/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(source.id)}/candidates/${encodeURIComponent(candidate.id)}/preview.svg`)),
     ...before.productionAssetSources.filter(({ documentPreviewSvg }) => Boolean(documentPreviewSvg)).map((source) => `/api/sportpaleis/v1/production-asset-sources/${encodeURIComponent(source.id)}/preview.svg`),
@@ -236,7 +274,17 @@ async function storeInitialize() {
   const afterMutation = await store.readSnapshot();
   assert.equal(afterMutation.revision, beforeRevision + 1, "fixturemutatie invalideerde cache niet exact eenmaal");
   assert.equal(afterMutation.preferences[normalUser.id].density, nextDensity, "fixturemutatie werd niet zichtbaar");
+  const refreshedOverview = await service.bootstrap(normalToken, "overview");
+  assert.equal(refreshedOverview.preferences[normalUser.id].density, nextDensity, "bootstrap leverde stale data na cache-invalidatie");
   assert.deepEqual(businessHashes(await store.read()), beforeBusiness, "fixturemutatie raakte businessproductiedata");
+  const beforeRollbackProbe = await store.readSnapshot();
+  await assert.rejects(store.mutate(async (state) => {
+    state.preferences[normalUser.id].density = "assurance-rollback-probe";
+    throw Object.assign(new Error("assurance rollback probe"), { code: "ASSURANCE_ROLLBACK_PROBE" });
+  }), (error) => error?.code === "ASSURANCE_ROLLBACK_PROBE");
+  const afterRollbackProbe = await store.readSnapshot();
+  assert.equal(afterRollbackProbe.revision, beforeRollbackProbe.revision, "afgebroken mutatie wijzigde revision");
+  assert.equal(afterRollbackProbe.preferences[normalUser.id].density, nextDensity, "afgebroken mutatie lekte gedeeltelijke state");
 
   await enterLoadPhase("large-free-production");
   const practiceBefore = await store.readSnapshot();
@@ -302,6 +350,11 @@ async function storeInitialize() {
   const rollbackSource = await store.readSnapshot();
   const rollbackProof = await materializeLegacyRollbackState({ pool, expectedGlobalRevision: rollbackSource.revision });
   assert.match(rollbackProof.stateSha256, /^[a-f0-9]{64}$/u, "rollbackmaterialisatie mist de domeinhash");
+  const restartedStore = new SportpaleisDomainMariaDbStore({ pool });
+  await restartedStore.initialize();
+  const restarted = await restartedStore.readSnapshot();
+  assert.equal(restarted.revision, rollbackSource.revision, "restart verloor de domeinrevision");
+  assert.deepEqual(businessHashes(restarted), businessHashes(rollbackSource), "restart wijzigde businessdata");
 
   const cpu = process.cpuUsage(cpuStart);
   const elapsedMs = performance.now() - wallStart;
@@ -335,7 +388,7 @@ async function storeInitialize() {
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

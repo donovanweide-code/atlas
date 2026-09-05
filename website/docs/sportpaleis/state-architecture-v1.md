@@ -77,6 +77,39 @@ No Owner data migration or cutover is part of the Sportpaleis release. Mail's ne
 message/thread/audit tables already demonstrate a separate hot-data boundary and
 must not be folded back into an Owner state blob.
 
+## Measured structural candidate
+
+The restored MariaDB structural canary at commit `ae6b9b7` exercised 472
+authenticated requests, 300 Library previews, four concurrent scoped bootstraps,
+20 concurrent revision polls while six of eight pool connections were held, and
+isolated 80 mm and 200 mm production fixtures. It returned zero HTTP errors and
+zero 5xx responses. The measured route p50/p95/maximum were 15.88/71.02/566.68 ms;
+aggregate bootstrap p95/maximum were 507.77/566.68 ms. Event-loop p95/maximum were
+13.60/633.34 ms. RSS moved from 192 MB through an 809 MB high-water mark to 381 MB
+after recovery. The pool high-water mark was seven of eight connections, queue
+high-water was one and there were zero acquisition timeouts. The legacy monolith
+was loaded zero times after the offline cutover. The legacy revision and audit
+counts were unchanged by read traffic.
+
+Scoped serialized bootstrap maxima in that run were 2,962,979 bytes (overview),
+2,600,709 (orders), 4,528,050 (production), 1,035,199 (Library), 3,076,186
+(Teamwear) and 1,069,918 (admin). These limits and the equal-or-heavier workload
+are stored in the versioned assurance contract and enforced by the immutable
+Sportpaleis releasebroker.
+
+The repository-wide suite was also run before and after the architecture commits.
+The pre-change baseline contained 62 failing tests. The candidate contained 59:
+one assertion still expected the intentionally removed unscoped `bootstrap()`
+call and was updated to the new surface-scoped contract; all other candidate
+failures were already present in the extracted pre-change tree. This attribution
+is not a waiver: the permanent release gate and the isolated practice chain remain
+blocking, and historical contradictory or missing-fixture tests remain visible.
+
+Artifact storage is reconciled transactionally. Create-only reservation evidence
+precedes a database commit, a committed marker binds the database reference to the
+immutable bytes, and startup quarantines only uncommitted artifacts while retaining
+their bytes, hash and provenance. Existing artifacts are never overwritten.
+
 ## Release blockers still applying
 
 This document and the local domain tests are not acceptance. Deployment remains
