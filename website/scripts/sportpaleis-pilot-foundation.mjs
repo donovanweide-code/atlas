@@ -132,6 +132,7 @@ const BOOTSTRAP_RESPONSE_CACHE_MAX_ENTRIES = 8;
 const BOOTSTRAP_RESPONSE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const BOOTSTRAP_RESPONSE_MAX_IN_FLIGHT = 8;
 const BOOTSTRAP_RESPONSE_CACHE_TTL_MS = 2 * 60 * 1_000;
+const INTERNAL_FULL_BOOTSTRAP = Symbol("INTERNAL_FULL_BOOTSTRAP");
 const PILOT_RELEASE_ID = "SPW-FOIL-ROLLS-PILOT-CORRECTION-20260817";
 const LEGACY_PIONEERS_ASSOCIATION = "Almerer Pioneers";
 const CANONICAL_PIONEERS_ASSOCIATION = "Almere Pioneers";
@@ -2671,14 +2672,28 @@ export class SportpaleisPilotService {
 
   async initialize() {
     await this.store.initialize();
+    if (this.isolatedProductionBuilds) await reconcileProductionArtifactStorage({ runtimeArtifactRoot: this.runtimeArtifactRoot, state: await this.store.read() });
   }
 
   async #productionMutation(mutator) {
-    if (this.isolatedProductionBuilds) return this.store.prepareAndCommit(mutator);
+    if (this.isolatedProductionBuilds) {
+      const effects = { artifacts: [] };
+      try {
+        const result = await this.store.prepareAndCommit((state) => mutator(state, effects));
+        for (const artifact of effects.artifacts) await markProductionArtifactCommitted({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifact, globalRevision: result.state.revision });
+        return result;
+      } catch (error) {
+        if (effects.artifacts.length) {
+          const committed = await this.store.read().catch(() => null);
+          await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifacts: effects.artifacts, state: committed, reason: error?.code ?? "PRODUCTION_TRANSACTION_FAILED" });
+        }
+        throw error;
+      }
+    }
     return this.store.mutate(mutator);
   }
 
-  async #productionSnapshot(state, orders, jobNumber, createdAt, productionGroup, operationIdentity) {
+  async #productionSnapshot(state, orders, jobNumber, createdAt, productionGroup, operationIdentity, effects = undefined) {
     const options = { installedProductionAssetRoot: this.installedProductionAssetRoot };
     if (!this.isolatedProductionBuilds) {
       return buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, productionGroup, options);
@@ -2696,7 +2711,7 @@ export class SportpaleisPilotService {
       foilRolls: source.foilRolls,
     };
     options.abMirrorAccepted = source.productionJobs?.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS") ?? false;
-    return buildProductionJobSnapshotIsolated({
+    const snapshot = await buildProductionJobSnapshotIsolated({
       state: projectedState,
       orders,
       jobNumber,
@@ -2704,8 +2719,10 @@ export class SportpaleisPilotService {
       artifactRoot: this.artifactRoot,
       runtimeArtifactRoot: this.runtimeArtifactRoot,
       productionGroup,
-      options,
+      options: { ...options, operationIdentity },
     }, { operationIdentity });
+    if (snapshot?.artifact?.format === "SVG" && snapshot.artifact.path && snapshot.artifact.sha256) effects?.artifacts.push({ jobNumber, path: snapshot.artifact.path, sha256: snapshot.artifact.sha256, operationIdentityHash: snapshot.artifact.reservation?.operationIdentityHash ?? sha256(operationIdentity) });
+    return snapshot;
   }
 
   async reviewManifest(token) {
@@ -3060,7 +3077,7 @@ export class SportpaleisPilotService {
     return result.value;
   }
 
-  async bootstrap(token, surface = "overview") {
+  async bootstrap(token, surface = INTERNAL_FULL_BOOTSTRAP) {
     return this.#projectBootstrap(await this.authenticate(token), surface);
   }
 
@@ -3157,7 +3174,8 @@ export class SportpaleisPilotService {
   }
 
   #projectBootstrap({ state, user, session }, requestedSurface = "overview") {
-    const bootstrapSurface = this.#bootstrapSurface(requestedSurface);
+    const internalFullBootstrap = requestedSurface === INTERNAL_FULL_BOOTSTRAP;
+    const bootstrapSurface = internalFullBootstrap ? "overview" : this.#bootstrapSurface(requestedSurface);
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
     const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
     const admin = user.role === "admin";
@@ -3165,9 +3183,9 @@ export class SportpaleisPilotService {
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
-    const includeOrders = ["overview", "orders", "production"].includes(bootstrapSurface);
-    const includeProduction = bootstrapSurface === "production";
-    const includeTeamwear = bootstrapSurface === "teamwear";
+    const includeOrders = internalFullBootstrap || ["overview", "orders", "production"].includes(bootstrapSurface);
+    const includeProduction = internalFullBootstrap || bootstrapSurface === "production";
+    const includeTeamwear = internalFullBootstrap || bootstrapSurface === "teamwear";
     const allOperationalOrders = includeOrders ? state.orders.filter((order) => !finalCleanStartOrder(order)) : [];
     const operationalOrderIds = new Set(allOperationalOrders.map(({ id }) => id));
     const terminalOrder = (order) => order.deletion
@@ -3787,7 +3805,7 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
-    const result = await this.#productionMutation(async (state) => {
+    const result = await this.#productionMutation(async (state, effects) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_PRODUCTION_PROPOSAL", async () => {
         const orders = selections.map(({ id, expectedRevision }) => {
           const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, `${id}: order niet gevonden.`);
@@ -3855,7 +3873,7 @@ export class SportpaleisPilotService {
       foilColor: normalizedProductionFoilColor(requestedFoilColor),
       ...(payload.supplement ? { supplement: structuredClone(payload.supplement), efficiencyAnalysisHash: payload.efficiencyAnalysisHash } : {}),
     };
-    const result = await this.#productionMutation(async (state) => {
+    const result = await this.#productionMutation(async (state, effects) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", async () => {
         const orders = selections.map(({ id, expectedRevision }) => {
           const order = state.orders.find((candidate) => candidate.id === id);
@@ -3940,7 +3958,7 @@ export class SportpaleisPilotService {
           supplements: currentGroup.supplements ?? [],
           efficiencyEvidence: currentGroup.efficiencyEvidence,
         };
-        const snapshot = await this.#productionSnapshot(state, currentOrders, jobNumber, createdAt, productionGroup, `${user.id}:PREPARE_CURRENT_PRODUCTION_GROUP:${idempotencyKey}`);
+        const snapshot = await this.#productionSnapshot(state, currentOrders, jobNumber, createdAt, productionGroup, `${user.id}:PREPARE_CURRENT_PRODUCTION_GROUP:${idempotencyKey}`, effects);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.nextProductionJobSequence += 1;
@@ -3969,7 +3987,7 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
-    const result = await this.#productionMutation(async (state) => {
+    const result = await this.#productionMutation(async (state, effects) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_PRODUCTION_JOB", async () => {
         let proposal = payload.proposalId ? mutableStateRecord(state, "productionProposals", ({ id }) => id === payload.proposalId, "Productievoorstel niet gevonden.") : null;
         if (payload.proposalId && (!proposal || proposal.status !== "OPEN")) throw Object.assign(new Error("Het productievoorstel is niet meer open."), { statusCode: 409, code: "PRODUCTION_PROPOSAL_NOT_OPEN" });
@@ -4015,7 +4033,7 @@ export class SportpaleisPilotService {
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label }, `${user.id}:CREATE_PRODUCTION_JOB:${idempotencyKey}`);
+        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label }, `${user.id}:CREATE_PRODUCTION_JOB:${idempotencyKey}`, effects);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
@@ -4226,7 +4244,7 @@ export class SportpaleisPilotService {
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator"]);
     const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
-    const result = await this.#productionMutation(async (state) => {
+    const result = await this.#productionMutation(async (state, effects) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, `RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}`, async () => {
         const rejectedJob = state.productionJobs.find(({ id }) => id === productionJobId);
         if (!rejectedJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
@@ -4264,7 +4282,7 @@ export class SportpaleisPilotService {
         const sequence = state.nextProductionJobSequence;
         state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label }, `${user.id}:RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}:${idempotencyKey}`);
+        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label }, `${user.id}:RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}:${idempotencyKey}`, effects);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("De veilige retry leverde geen aantoonbaar nieuw gecorrigeerd vectorartifact op."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_CORRECTED" });
         const retryJob = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", sourceProofStatus: rejectedJob.proofStatus, note: `Nieuwe immutable broncorrectie na menselijke afkeuring van ${rejectedJob.jobNumber}; opnieuw fysieke Human Acceptance vereist.` } });
         state.productionJobs.unshift(retryJob);
@@ -9356,7 +9374,23 @@ export function assertSportpaleisProductionInstanceIntegrity(pieces, cutJob, svg
   return { expectedInstances: expected, actualInstances: actual };
 }
 
-export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist = true }) {
+function productionArtifactEvidenceRecord({ jobNumber, relativePath, artifactHash, operationIdentity }) {
+  return Object.freeze({ schemaVersion: 1, status: "PREPARED", jobNumber, artifactPath: relativePath, artifactSha256: artifactHash, operationIdentityHash: sha256(String(operationIdentity)), immutableArtifact: true });
+}
+
+function ensureProductionArtifactReservationEvidence(absolutePath, runtimeArtifactRoot, record) {
+  const evidencePath = `${absolutePath}.reservation.json`;
+  const bytes = Buffer.from(`${JSON.stringify(record)}\n`, "utf8");
+  try { writeFileSync(evidencePath, bytes, { flag: "wx", mode: 0o640 }); }
+  catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    const existing = readFileSync(evidencePath);
+    if (sha256(existing) !== sha256(bytes)) throw Object.assign(new Error("Bestaande artifactreservering wijkt af en blijft onaangeroerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_RESERVATION_EVIDENCE_COLLISION" });
+  }
+  return path.relative(runtimeArtifactRoot, evidencePath).replaceAll(path.sep, "/");
+}
+
+export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist = true, operationIdentity = undefined }) {
   if (!/^PLOT-\d{4}-\d{4,}$/u.test(String(jobNumber ?? ""))) throw Object.assign(new Error("Ongeldig productiebestandnummer."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_INVALID" });
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw Object.assign(new Error("Lege productiebestandbytes kunnen niet immutable worden gereserveerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_BYTES_INVALID" });
   const artifactHash = sha256(bytes).toUpperCase();
@@ -9377,7 +9411,8 @@ export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNum
     if (existingHash !== artifactHash || existing.length !== bytes.length) {
       throw Object.assign(new Error("Bestaande immutable artifactidentiteit bevat andere bytes en blijft onaangeroerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_COLLISION", artifactIdentity, expectedSha256: artifactHash, actualSha256: existingHash });
     }
-    return { artifactHash, artifactIdentity, filename, relativePath, reused: true };
+    const reservationEvidencePath = operationIdentity ? ensureProductionArtifactReservationEvidence(absolutePath, runtimeArtifactRoot, productionArtifactEvidenceRecord({ jobNumber, relativePath, artifactHash, operationIdentity })) : null;
+    return { artifactHash, artifactIdentity, filename, relativePath, reused: true, ...(operationIdentity ? { operationIdentityHash: sha256(String(operationIdentity)), reservationEvidencePath } : {}) };
   };
   try { return verifyExisting(); }
   catch (error) { if (error?.code !== "ENOENT") throw error; }
@@ -9392,7 +9427,8 @@ export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNum
     pendingHandle = undefined;
     try {
       linkSync(pendingPath, absolutePath);
-      return { artifactHash, artifactIdentity, filename, relativePath, reused: false };
+      const reservationEvidencePath = operationIdentity ? ensureProductionArtifactReservationEvidence(absolutePath, runtimeArtifactRoot, productionArtifactEvidenceRecord({ jobNumber, relativePath, artifactHash, operationIdentity })) : null;
+      return { artifactHash, artifactIdentity, filename, relativePath, reused: false, ...(operationIdentity ? { operationIdentityHash: sha256(String(operationIdentity)), reservationEvidencePath } : {}) };
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       return verifyExisting();
@@ -9401,6 +9437,84 @@ export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNum
     if (pendingHandle !== undefined) try { closeSync(pendingHandle); } catch {}
     rmSync(pendingPath, { force: true });
   }
+}
+
+function committedArtifactReferenceSet(state) {
+  return new Set((state?.productionJobs ?? []).flatMap((job) => {
+    const artifact = job?.snapshot?.artifact;
+    return artifact?.path && artifact?.sha256 ? [`${String(artifact.path).replaceAll("\\", "/")}|${String(artifact.sha256).toUpperCase()}`] : [];
+  }));
+}
+
+function checkedRuntimeArtifactPath(runtimeArtifactRoot, relativePath) {
+  const root = path.resolve(runtimeArtifactRoot);
+  const absolute = path.resolve(root, String(relativePath));
+  if (!absolute.startsWith(`${root}${path.sep}`)) throw Object.assign(new Error("Artifactpad valt buiten de runtimegrens."), { code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+  return absolute;
+}
+
+async function writeCreateOnlyEvidence(filePath, value) {
+  const bytes = Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
+  try { await writeFile(filePath, bytes, { flag: "wx", mode: 0o640 }); }
+  catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    const existing = await readFile(filePath);
+    if (sha256(existing) !== sha256(bytes)) throw Object.assign(new Error("Immutable artifactevidence wijkt af."), { code: "PRODUCTION_ARTIFACT_EVIDENCE_COLLISION" });
+  }
+}
+
+async function markProductionArtifactCommitted({ runtimeArtifactRoot, artifact, globalRevision }) {
+  const absolute = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifact.path);
+  const bytes = await readFile(absolute);
+  if (sha256(bytes).toUpperCase() !== String(artifact.sha256).toUpperCase()) throw Object.assign(new Error("Artifactbytes wijken af vóór commitmarkering."), { code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
+  await writeCreateOnlyEvidence(`${absolute}.committed.json`, { schemaVersion: 1, status: "COMMITTED", jobNumber: artifact.jobNumber, artifactPath: artifact.path, artifactSha256: String(artifact.sha256).toUpperCase(), operationIdentityHash: artifact.operationIdentityHash, globalRevision: Number(globalRevision), immutableArtifact: true });
+}
+
+async function moveCreateOnly(source, destination) {
+  try { await rename(source, destination); return true; }
+  catch (error) {
+    if (error?.code === "ENOENT") return false;
+    if (error?.code !== "EEXIST") throw error;
+    const [sourceBytes, destinationBytes] = await Promise.all([readFile(source), readFile(destination)]);
+    if (sha256(sourceBytes) !== sha256(destinationBytes)) throw Object.assign(new Error("Quarantainebestemming bevat afwijkende immutable evidence."), { code: "PRODUCTION_ARTIFACT_QUARANTINE_COLLISION" });
+    await unlink(source);
+    return true;
+  }
+}
+
+async function quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts, state, reason }) {
+  const committed = committedArtifactReferenceSet(state);
+  for (const artifact of artifacts) {
+    const key = `${String(artifact.path).replaceAll("\\", "/")}|${String(artifact.sha256).toUpperCase()}`;
+    if (committed.has(key)) continue;
+    const source = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifact.path);
+    const quarantineDirectory = checkedRuntimeArtifactPath(runtimeArtifactRoot, path.join("outputs", "sportpaleis-artifact-quarantine", artifact.jobNumber, String(artifact.sha256).toLowerCase()));
+    await mkdir(quarantineDirectory, { recursive: true });
+    const destination = path.join(quarantineDirectory, path.basename(source));
+    await moveCreateOnly(source, destination);
+    await moveCreateOnly(`${source}.reservation.json`, `${destination}.reservation.json`);
+    await writeCreateOnlyEvidence(path.join(quarantineDirectory, "quarantine.json"), { schemaVersion: 1, status: "QUARANTINED_UNCOMMITTED", jobNumber: artifact.jobNumber, artifactSha256: String(artifact.sha256).toUpperCase(), sourcePath: artifact.path, operationIdentityHash: artifact.operationIdentityHash, reason: String(reason), businessStateMutated: false, immutableEvidencePreserved: true });
+  }
+}
+
+export async function reconcileProductionArtifactStorage({ runtimeArtifactRoot, state }) {
+  const root = path.resolve(runtimeArtifactRoot, "outputs", "sportpaleis-plotjobs");
+  let entries;
+  try { entries = await readdir(root, { recursive: true }); }
+  catch (error) { if (error?.code === "ENOENT") return Object.freeze({ checked: 0, committed: 0, quarantined: 0 }); throw error; }
+  const reservations = entries.filter((entry) => String(entry).endsWith("-production.svg.reservation.json"));
+  if (reservations.length > 10_000) throw Object.assign(new Error("Te veel artifactreserveringen voor begrensde startupreconciliatie."), { code: "PRODUCTION_ARTIFACT_RECONCILIATION_LIMIT" });
+  const references = committedArtifactReferenceSet(state);
+  let committed = 0; let quarantined = 0;
+  for (const relativeEvidence of reservations) {
+    const evidencePath = path.resolve(root, relativeEvidence);
+    const record = JSON.parse(await readFile(evidencePath, "utf8"));
+    const key = `${String(record.artifactPath).replaceAll("\\", "/")}|${String(record.artifactSha256).toUpperCase()}`;
+    const artifact = { jobNumber: record.jobNumber, path: record.artifactPath, sha256: record.artifactSha256, operationIdentityHash: record.operationIdentityHash };
+    if (references.has(key)) { await markProductionArtifactCommitted({ runtimeArtifactRoot, artifact, globalRevision: state.revision }); committed += 1; }
+    else { await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts: [artifact], state, reason: "STARTUP_UNCOMMITTED_RECONCILIATION" }); quarantined += 1; }
+  }
+  return Object.freeze({ checked: reservations.length, committed, quarantined });
 }
 
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, options = {}) {
@@ -9505,7 +9619,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const artifactHash = sha256(bytes).toUpperCase();
   const svgAndIntegrityMs = millisecondsSince(svgStartedAt);
   const persistenceStartedAt = performance.now();
-  const reservation = reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist: options.persist !== false });
+  const reservation = reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNumber, bytes, persist: options.persist !== false, operationIdentity: options.operationIdentity });
   const persistenceMs = options.persist === false ? 0 : millisecondsSince(persistenceStartedAt);
   return {
     cutJob,
@@ -9514,7 +9628,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     sources: resolved.map(({ source }) => source),
     outputWriter: { ...CUTJOB_SVG_WRITER },
     generationMetrics: { sourceResolutionMs, geometryMs, semanticGroupingMs, nestingMs, svgAndIntegrityMs, persistenceMs, totalMs: millisecondsSince(generationStartedAt), inputLineCount: productionLines.length, physicalPieceCount: rawPieces.length, nestedObjectCount: pieces.length },
-    artifact: { filename: reservation.filename, format: "SVG", version: `${CUTJOB_SVG_WRITER.id}@${CUTJOB_SVG_WRITER.version}`, sha256: artifactHash, path: reservation.relativePath, identity: reservation.artifactIdentity, reservation: { strategy: "JOB_NUMBER_PLUS_CONTENT_SHA256_CREATE_ONLY_V1", reused: reservation.reused }, productionDataHash },
+    artifact: { filename: reservation.filename, format: "SVG", version: `${CUTJOB_SVG_WRITER.id}@${CUTJOB_SVG_WRITER.version}`, sha256: artifactHash, path: reservation.relativePath, identity: reservation.artifactIdentity, reservation: { strategy: "JOB_NUMBER_PLUS_CONTENT_SHA256_CREATE_ONLY_V1", reused: reservation.reused, ...(reservation.operationIdentityHash ? { operationIdentityHash: reservation.operationIdentityHash, evidencePath: reservation.reservationEvidencePath } : {}) }, productionDataHash },
   };
 }
 

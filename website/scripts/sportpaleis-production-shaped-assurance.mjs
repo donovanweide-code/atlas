@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
@@ -10,7 +10,7 @@ import mariadb from "mariadb";
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
-import { createSportpaleisPilotRequestHandler, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
+import { createSportpaleisPilotRequestHandler, reserveImmutableProductionArtifact, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
 import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
@@ -126,6 +126,15 @@ async function storeInitialize() {
   assert.ok(issuer && normalUser && customerUsers.length === productionCustomerSeats, "issuer, operator of drie customer seats ontbreken in restorefixture");
 
   const service = new SportpaleisPilotService({ store, releaseId, secureCookies: false, allowedOrigin: "http://127.0.0.1", uploadsEnabled: false, productionAssetUploadsEnabled: false, fontUploadsEnabled: false, mailMode: "capture", mailboxConfiguration: { configured: false }, creativeStudioEnabled: false, artifactRoot, runtimeArtifactRoot: artifactRoot, installedProductionAssetRoot: `${artifactRoot}/installed-assets`, activeReviewCandidateIds: activeCandidateIds, reviewAccessEnabled: true, reviewAccessIsolatedState: true, reviewAccessIssuerPrincipalIds: issuerIds, reviewAccessIssuerSecret: issuerSecret });
+  const interruptedArtifactBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>', "utf8");
+  const interruptedArtifact = reserveImmutableProductionArtifact({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9999", bytes: interruptedArtifactBytes, operationIdentity: `assurance-interrupted-${candidateCommit}` });
+  await service.initialize();
+  const interruptedAbsolute = path.join(artifactRoot, interruptedArtifact.relativePath);
+  const interruptedQuarantine = path.join(artifactRoot, "outputs", "sportpaleis-artifact-quarantine", "PLOT-9999-9999", interruptedArtifact.artifactHash.toLowerCase(), interruptedArtifact.filename);
+  await assert.rejects(access(interruptedAbsolute), (error) => error?.code === "ENOENT", "startupreconciliatie liet een uncommitted artifact actief");
+  await access(interruptedQuarantine);
+  await access(`${interruptedQuarantine}.reservation.json`);
+  await access(path.join(path.dirname(interruptedQuarantine), "quarantine.json"));
   const customerSessions = customerUsers.map((user) => ({ user, token: randomBytes(32).toString("base64url"), csrf: randomBytes(24).toString("base64url") }));
   const normalSession = customerSessions.find(({ user }) => user.id === normalUser.id);
   const normalToken = normalSession.token;
@@ -258,7 +267,10 @@ async function storeInitialize() {
     const artifactBytes = await readFile(path.join(artifactRoot, first.value.snapshot.artifact.path));
     const artifactSha256 = sha(artifactBytes).toUpperCase();
     assert.equal(artifactSha256, first.value.snapshot.artifact.sha256, `${heightMm} mm artifacthash wijkt af`);
-    practiceRuns.push({ heightMm, wallMs: rounded(wallMs), orderId: created.id, plotJobId: first.value.id, artifactSha256, generationMetrics: first.value.snapshot.generationMetrics });
+    const committedMarker = JSON.parse(await readFile(path.join(artifactRoot, `${first.value.snapshot.artifact.path}.committed.json`), "utf8"));
+    assert.equal(committedMarker.status, "COMMITTED", `${heightMm} mm artifact mist de commitmarkering`);
+    assert.equal(committedMarker.artifactSha256, artifactSha256, `${heightMm} mm commitmarkering wijkt af`);
+    practiceRuns.push({ heightMm, wallMs: rounded(wallMs), orderId: created.id, plotJobId: first.value.id, artifactSha256, committedMarker: true, generationMetrics: first.value.snapshot.generationMetrics });
   }
   const practiceAfter = await store.readSnapshot();
   for (const order of practiceAfter.orders) if (originalOrderHashes.has(order.id)) assert.equal(sha256CanonicalJson(order), originalOrderHashes.get(order.id), `bestaande order ${order.id} wijzigde door assurancefixture`);
@@ -323,7 +335,7 @@ async function storeInitialize() {
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

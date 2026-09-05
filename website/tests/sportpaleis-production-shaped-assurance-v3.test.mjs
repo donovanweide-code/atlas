@@ -20,7 +20,7 @@ test("V3-drempels zijn zwaarder dan of gelijk aan de falende R2.26.45-gate", asy
   assert.equal(contract.limits.databaseAcquireTimeouts, 0);
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.production < 6_534_299, "productionbootstrap blijft onder de gemeten monolithische nulmeting");
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.library < contract.limits.bootstrapSurfaceMaxBytes.production);
-  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "productionIdempotency", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads"]) assert.ok(contract.requiredInvariants.includes(required));
+  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "productionIdempotency", "productionArtifactReconciliation", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads"]) assert.ok(contract.requiredInvariants.includes(required));
 });
 
 test("releaseartifact en broker binden dezelfde immutable gatecode en het drempelcontract", async () => {
@@ -44,4 +44,5 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /recordWrites/u);
   assert.match(assurance, /bootstrapFieldBytes/u);
   assert.match(assurance, /scopedBootstrapPayloads/u);
+  assert.match(assurance, /productionArtifactReconciliation/u);
 });

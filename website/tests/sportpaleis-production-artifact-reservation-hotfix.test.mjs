@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { reserveImmutableProductionArtifact, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
 const passwords = { kevin: "Artifact-Admin-2026!", patrick: "Artifact-Operator-2026!", collega: "Artifact-Store-2026!", "donovan-support": "Artifact-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -108,9 +108,10 @@ class RollbackOnceStore {
     await mutator(structuredClone(state));
     throw Object.assign(new Error("Gesimuleerde database-rollback na artifactreservering."), { code: "SIMULATED_TRANSACTION_ROLLBACK" });
   }
+  prepareAndCommit(mutator) { return this.mutate(mutator); }
 }
 
-test("database-rollback laat state atomisch en retry hergebruikt exact dezelfde output", async (context) => {
+test("database-rollback laat state atomisch en bewaart uncommitted output uitsluitend als quarantaine-evidence", async (context) => {
   const root = await temporaryRoot(context, "rollback-retry");
   const inner = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: passwords });
   const store = new RollbackOnceStore(inner);
@@ -134,13 +135,29 @@ test("database-rollback laat state atomisch en retry hergebruikt exact dezelfde 
   assert.equal(rolledBack.revision, before.revision);
   assert.equal(rolledBack.productionJobs.length, before.productionJobs.length);
   assert.equal(rolledBack.nextProductionJobSequence, before.nextProductionJobSequence);
-  const orphanFiles = (await readdir(runtimeArtifactRoot, { recursive: true })).filter((name) => name.endsWith("-production.svg"));
-  assert.equal(orphanFiles.length, 1);
+  const afterRollbackFiles = await readdir(runtimeArtifactRoot, { recursive: true });
+  const orphanFiles = afterRollbackFiles.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg"));
+  const quarantinedFiles = afterRollbackFiles.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg"));
+  assert.equal(orphanFiles.length, 0);
+  assert.equal(quarantinedFiles.length, 1);
+  assert.ok(afterRollbackFiles.some((name) => name.endsWith("quarantine.json")));
 
   const retried = await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, request, "artifact-rollback-retry");
-  assert.equal(retried.value.job.snapshot.artifact.reservation.reused, true);
+  assert.equal(retried.value.job.snapshot.artifact.reservation.reused, false);
   const committed = await inner.read();
   assert.equal(committed.productionJobs.filter(({ id }) => id === retried.value.job.id).length, 1);
   assert.equal(committed.nextProductionJobSequence, before.nextProductionJobSequence + 1);
-  assert.equal((await readdir(runtimeArtifactRoot, { recursive: true })).filter((name) => name.endsWith("-production.svg")).length, 1);
+  const finalFiles = await readdir(runtimeArtifactRoot, { recursive: true });
+  assert.equal(finalFiles.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 1);
+  assert.equal(finalFiles.filter((name) => name.endsWith("-production.svg.committed.json")).length, 1);
+});
+
+test("startupreconciliatie quarantineert een onderbroken create zonder databasejob", async (context) => {
+  const root = await temporaryRoot(context, "startup-reconcile");
+  reserveImmutableProductionArtifact({ runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0099", bytes: Buffer.from("<svg>onderbroken</svg>"), operationIdentity: "startup-interrupted-operation" });
+  const result = await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 44, productionJobs: [] } });
+  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
+  const files = await readdir(root, { recursive: true });
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 0);
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg")).length, 1);
 });
