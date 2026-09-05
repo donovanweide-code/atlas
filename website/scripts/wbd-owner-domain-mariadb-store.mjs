@@ -39,6 +39,12 @@ function jsonValue(value) {
   return value;
 }
 
+function databaseTimestamp(value) {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) throw new WbdOwnerDomainMariaDbStoreError("Owner-audittijd is ongeldig.", "OWNER_AUDIT_TIMESTAMP_INVALID");
+  return timestamp;
+}
+
 function storedDomainPayload(domain, payload) {
   if (domain !== "audit") return payload;
   const { audit: _audit, ...rest } = payload;
@@ -123,7 +129,7 @@ export class WbdOwnerDomainMariaDbStore {
       for (const { domain, stored, validation } of preparedDomains) await connection.query("INSERT INTO wbd_owner_domain_state (organization_id, domain_key, domain_revision, global_revision, payload_json, payload_sha256, updated_at) VALUES (?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3))", [WBD_OWNER_ORGANIZATION_ID, domain, legacy.revision, JSON.stringify(stored), validation.sha256]);
       for (let ordinal = 0; ordinal < legacy.audit.length; ordinal += 1) {
         const event = legacy.audit[ordinal];
-        await connection.query("INSERT INTO wbd_owner_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [WBD_OWNER_ORGANIZATION_ID, event.id, ordinal, legacy.revision, JSON.stringify(event), sha256WbdOwnerCanonicalJson(event), event.occurredAt]);
+        await connection.query("INSERT INTO wbd_owner_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [WBD_OWNER_ORGANIZATION_ID, event.id, ordinal, legacy.revision, JSON.stringify(event), sha256WbdOwnerCanonicalJson(event), databaseTimestamp(event.occurredAt)]);
       }
       await connection.query("INSERT INTO wbd_owner_domain_reconciliation (organization_id, legacy_revision, contract_version, legacy_sha256, composed_sha256, status, verified_at) VALUES (?, ?, ?, ?, ?, 'MATCH', UTC_TIMESTAMP(3))", [WBD_OWNER_ORGANIZATION_ID, legacy.revision, WBD_OWNER_DOMAIN_CONTRACT_VERSION, legacySha256, composedSha256]);
       await connection.commit();
@@ -174,7 +180,7 @@ export class WbdOwnerDomainMariaDbStore {
       }
       for (let index = 0; index < appendedAudit.length; index += 1) {
         const event = appendedAudit[index];
-        await connection.query("INSERT INTO wbd_owner_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [WBD_OWNER_ORGANIZATION_ID, event.id, base.audit.length + index, nextRevision, JSON.stringify(event), sha256WbdOwnerCanonicalJson(event), event.occurredAt]);
+        await connection.query("INSERT INTO wbd_owner_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [WBD_OWNER_ORGANIZATION_ID, event.id, base.audit.length + index, nextRevision, JSON.stringify(event), sha256WbdOwnerCanonicalJson(event), databaseTimestamp(event.occurredAt)]);
       }
       const metaUpdate = await connection.query("UPDATE wbd_owner_domain_meta SET global_revision = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ?", [nextRevision, WBD_OWNER_ORGANIZATION_ID, base.revision]);
       if (Number(metaUpdate.affectedRows) !== 1) throw new WbdOwnerDomainMariaDbStoreError("WBD-owner global revisionconflict.", "DATABASE_CONCURRENCY_CONFLICT");

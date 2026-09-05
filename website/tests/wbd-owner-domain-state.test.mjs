@@ -18,6 +18,7 @@ class OwnerDomainMemoryPool {
     this.audit = [];
     this.reconciliation = null;
     this.calls = [];
+    this.parameters = [];
   }
   async getConnection() { return new OwnerDomainMemoryConnection(this); }
   async query(sql, params) { return new OwnerDomainMemoryConnection(this).query(sql, params); }
@@ -31,6 +32,7 @@ class OwnerDomainMemoryConnection {
   release() {}
   async query(sql, params = []) {
     this.pool.calls.push(sql.replace(/\s+/gu, " ").trim());
+    this.pool.parameters.push({ sql: sql.replace(/\s+/gu, " ").trim(), params });
     if (sql.includes("FROM wbd_schema_migrations")) return [{ checksum: this.pool.checksum }];
     if (sql.startsWith("SELECT revision, state_json FROM wbd_owner_state")) return [{ revision: this.pool.legacy.revision, state_json: JSON.stringify(this.pool.legacy) }];
     if (sql.startsWith("SELECT revision FROM wbd_owner_state")) return [{ revision: this.pool.legacy.revision }];
@@ -109,6 +111,9 @@ test("offline owner-backfill is hashgelijk en runtime-initialisatie blijft read-
   const repeated = await store.backfillLegacySource();
   assert.equal(repeated.status, "ALREADY_BACKFILLED");
   assert.equal(repeated.globalRevision, legacy.revision);
+  const auditWrites = pool.parameters.filter(({ sql }) => sql.startsWith("INSERT INTO wbd_owner_audit_event"));
+  assert.ok(auditWrites.length > 0);
+  assert.ok(auditWrites.every(({ params }) => params[6] instanceof Date && !Number.isNaN(params[6].getTime())));
 });
 
 test("kleine owner-mutatie schrijft alleen geraakte domeinen en append-only audit", async () => {
@@ -131,6 +136,8 @@ test("kleine owner-mutatie schrijft alleen geraakte domeinen en append-only audi
   const status = await store.storageStatus();
   assert.equal(status.metrics.auditAppends, 1);
   assert.ok(status.metrics.clonedKeys < Object.keys(result.state).length);
+  const appended = pool.parameters.filter(({ sql }) => sql.startsWith("INSERT INTO wbd_owner_audit_event")).at(-1);
+  assert.ok(appended.params[6] instanceof Date);
 });
 
 test("authenticatiepolls zijn cachehits zonder revision-, audit- of legacywrite", async () => {
