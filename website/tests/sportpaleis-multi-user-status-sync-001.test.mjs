@@ -53,7 +53,7 @@ test("client gebruikt lichte revision polling zonder realtime-foundation en besc
   assert.match(source, /addEventListener\("focus"[\s\S]+checkSharedRevision\("focus"\)/u);
   assert.match(source, /revision === state\.revision/u);
   assert.match(source, /sharedSyncFormDirty \|\| hasFocusedEditor\(\)/u);
-  assert.match(source, /state = await api\.bootstrap\(\)/u);
+  assert.match(source, /state = await api\.bootstrap\(bootstrapSurfaceForPath\(\)\)/u);
   assert.match(source, /render\(\{ preserveScroll: true \}\)/u);
   assert.match(source, /deferredSharedRevision/u);
   assert.match(source, /hadDeferredSync[\s\S]+checkSharedRevision\("safe-boundary"\)/u);
