@@ -351,6 +351,7 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   const heartbeatAt = [];
   const heartbeat = setInterval(() => heartbeatAt.push(performance.now()), 20);
   const transactionsBeforeBuild = pool.transactionDurationsMs.length;
+  const recordWritesBeforeBuild = store.metricsSnapshot().recordWrites;
   const first = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
   clearInterval(heartbeat);
   const heartbeatGaps = heartbeatAt.slice(1).map((at, index) => at - heartbeatAt[index]);
@@ -358,6 +359,8 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   assert.ok(heartbeatAt.length >= 10, "de event-loop blijft tijdens de geïsoleerde workerproductie responsief");
   assert.ok(Math.max(0, ...heartbeatGaps) < 500, `event-loopblok tijdens productie is begrensd: ${Math.max(0, ...heartbeatGaps)} ms`);
   assert.ok(buildTransactions.length >= 1 && Math.max(...buildTransactions) < 1_500, `de databaseverbinding omvat niet de zware geometryworker: ${buildTransactions.join(", ")} ms`);
+  assert.ok(store.metricsSnapshot().recordWrites - recordWritesBeforeBuild <= 6, "een nieuwe PlotJob herschrijft geen honderden indexverschoven records");
+  context.diagnostic(`worker heartbeat max=${Math.max(0, ...heartbeatGaps).toFixed(1)}ms; db transaction max=${Math.max(...buildTransactions).toFixed(1)}ms; record writes=${store.metricsSnapshot().recordWrites - recordWritesBeforeBuild}`);
   const retry = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
   assert.equal(first.duplicate, false);
   assert.equal(retry.duplicate, true);

@@ -62,6 +62,44 @@ function recordMap(records, collectionKey) {
   return new Map(records.map((record) => [sportpaleisRecordIdentity(collectionKey, record), record]));
 }
 
+const RECORD_ORDINAL_GAP = 1024;
+
+function recordOrdinalKey(collectionKey, recordId) {
+  return `${collectionKey}:${recordId}`;
+}
+
+function stableRecordOrdinals(collectionKey, previous, next, priorOrdinals) {
+  const previousIds = new Set(previous.map((record) => sportpaleisRecordIdentity(collectionKey, record)));
+  const assigned = new Map(previous.map((record, index) => {
+    const id = sportpaleisRecordIdentity(collectionKey, record);
+    return [id, Number(priorOrdinals.get(recordOrdinalKey(collectionKey, id)) ?? index * RECORD_ORDINAL_GAP)];
+  }));
+  const existingInNext = next.map((record) => sportpaleisRecordIdentity(collectionKey, record)).filter((id) => previousIds.has(id));
+  if (existingInNext.some((id, index) => index > 0 && assigned.get(existingInNext[index - 1]) >= assigned.get(id))) {
+    return new Map(next.map((record, ordinal) => [sportpaleisRecordIdentity(collectionKey, record), ordinal * RECORD_ORDINAL_GAP]));
+  }
+  for (let index = 0; index < next.length;) {
+    const id = sportpaleisRecordIdentity(collectionKey, next[index]);
+    if (assigned.has(id)) { index += 1; continue; }
+    const start = index;
+    while (index < next.length && !assigned.has(sportpaleisRecordIdentity(collectionKey, next[index]))) index += 1;
+    const count = index - start;
+    const leftId = start > 0 ? sportpaleisRecordIdentity(collectionKey, next[start - 1]) : null;
+    const rightId = index < next.length ? sportpaleisRecordIdentity(collectionKey, next[index]) : null;
+    const left = leftId ? assigned.get(leftId) : null;
+    const right = rightId ? assigned.get(rightId) : null;
+    let step = RECORD_ORDINAL_GAP;
+    let first = left === null ? Number(right ?? 0) - count * step : left + step;
+    if (left !== null && right !== null) {
+      step = Math.floor((right - left) / (count + 1));
+      if (step < 1) return new Map(next.map((record, ordinal) => [sportpaleisRecordIdentity(collectionKey, record), ordinal * RECORD_ORDINAL_GAP]));
+      first = left + step;
+    }
+    for (let offset = 0; offset < count; offset += 1) assigned.set(sportpaleisRecordIdentity(collectionKey, next[start + offset]), first + offset * step);
+  }
+  return assigned;
+}
+
 function orderHistoryRows(orders) {
   return orders.flatMap((order) => (order.eventHistory ?? []).map((event, ordinal) => ({ order, event, ordinal })));
 }
@@ -127,6 +165,7 @@ export class SportpaleisDomainMariaDbStore {
     this.migrationFile = path.resolve(migrationFile);
     this.domainCache = new Map();
     this.collectionCache = new Map();
+    this.recordOrdinals = new Map();
     this.domainRevisions = new Map();
     this.globalRevision = null;
     this.schemaVersion = null;
@@ -192,7 +231,10 @@ export class SportpaleisDomainMariaDbStore {
         const sql = "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))";
         const parameters = records.map((sourceRecord, ordinal) => {
           const record = persistedRecord(collectionKey, sourceRecord);
-          return [ORGANIZATION_ID, domain, collectionKey, sportpaleisRecordIdentity(collectionKey, record), ordinal, legacy.revision, encodePayload(record), sha256CanonicalJson(record)];
+          const recordId = sportpaleisRecordIdentity(collectionKey, record);
+          const stableOrdinal = ordinal * RECORD_ORDINAL_GAP;
+          this.recordOrdinals.set(recordOrdinalKey(collectionKey, recordId), stableOrdinal);
+          return [ORGANIZATION_ID, domain, collectionKey, recordId, stableOrdinal, legacy.revision, encodePayload(record), sha256CanonicalJson(record)];
         });
         await insertBatches(connection, sql, parameters);
       }
@@ -288,6 +330,7 @@ export class SportpaleisDomainMariaDbStore {
         }
         if (!grouped.has(row.collection_key)) grouped.set(row.collection_key, []);
         grouped.get(row.collection_key).push(immutableDomain(record));
+        this.recordOrdinals.set(recordOrdinalKey(row.collection_key, row.record_id), Number(row.ordinal));
       }
       if (domain === "orders") {
         const historyRows = await this.pool.query(
@@ -383,6 +426,7 @@ export class SportpaleisDomainMariaDbStore {
       const partitioned = partitionSportpaleisState(finalized.state);
       const nextDomainCache = new Map(this.domainCache);
       const nextDomainRevisions = new Map(this.domainRevisions);
+      const nextRecordOrdinals = new Map(this.recordOrdinals);
       phase = "write-domains";
       for (const domain of finalized.changedDomains) {
         const sourcePayload = partitioned[domain];
@@ -402,10 +446,11 @@ export class SportpaleisDomainMariaDbStore {
         const { scalar: payload, collections } = persistedDomainPayload(domain, sourcePayload);
         for (const [collectionKey, records] of Object.entries(collections)) {
           const priorRecords = current[collectionKey] ?? [];
+          const assignedOrdinals = stableRecordOrdinals(collectionKey, priorRecords, records, nextRecordOrdinals);
           const delta = diffStableRecords(
             priorRecords.map((record) => persistedRecord(collectionKey, record)),
             records.map((record) => persistedRecord(collectionKey, record)),
-            { identity: (record) => sportpaleisRecordIdentity(collectionKey, record), hash: sha256CanonicalJson },
+            { identity: (record) => sportpaleisRecordIdentity(collectionKey, record), hash: sha256CanonicalJson, trackOrdinal: false },
           );
           const deletedIds = delta.deleted;
           if (["orders", "productionJobs"].includes(collectionKey) && deletedIds.length) {
@@ -418,13 +463,16 @@ export class SportpaleisDomainMariaDbStore {
             );
             this.metrics.recordDeletes += 1;
           }
-          for (const { id: recordId, record, ordinal, hash } of delta.changed) {
+          for (const { id: recordId, record, hash } of delta.changed) {
+            const ordinal = assignedOrdinals.get(recordId);
             await connection.query(
               "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE domain_key = VALUES(domain_key), ordinal = VALUES(ordinal), record_revision = record_revision + 1, global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
               [ORGANIZATION_ID, domain, collectionKey, recordId, ordinal, nextRevision, encodePayload(record), hash],
             );
             this.metrics.recordWrites += 1;
           }
+          for (const recordId of deletedIds) nextRecordOrdinals.delete(recordOrdinalKey(collectionKey, recordId));
+          for (const [recordId, ordinal] of assignedOrdinals) nextRecordOrdinals.set(recordOrdinalKey(collectionKey, recordId), ordinal);
         }
         if (domain === "orders") {
           const priorOrders = recordMap(current.orders ?? [], "orders");
@@ -517,6 +565,7 @@ export class SportpaleisDomainMariaDbStore {
       await connection.commit();
       this.domainCache = nextDomainCache;
       this.domainRevisions = nextDomainRevisions;
+      this.recordOrdinals = nextRecordOrdinals;
       this.globalRevision = nextRevision;
       this.snapshot = nextSnapshot;
       return { state: this.snapshot, value: result.value };

@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS sp_workspace_domain_record (
   domain_key VARCHAR(40) NOT NULL,
   collection_key VARCHAR(80) NOT NULL,
   record_id VARCHAR(160) NOT NULL,
-  ordinal INT UNSIGNED NOT NULL,
+  ordinal BIGINT NOT NULL,
   record_revision BIGINT UNSIGNED NOT NULL,
   global_revision BIGINT UNSIGNED NOT NULL,
   record_json LONGTEXT NOT NULL,

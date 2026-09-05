@@ -83,7 +83,7 @@ export function createTopLevelCopyOnWriteDraft(snapshot, { cloneValue = (_key, v
   };
 }
 
-export function diffStableRecords(previous, next, { identity, hash = canonicalJsonSha256 } = {}) {
+export function diffStableRecords(previous, next, { identity, hash = canonicalJsonSha256, trackOrdinal = true } = {}) {
   if (typeof identity !== "function") throw new TypeError("Recordidentity is verplicht.");
   const previousById = new Map(previous.map((record, ordinal) => [identity(record), { record, ordinal }]));
   const nextById = new Map(next.map((record, ordinal) => [identity(record), { record, ordinal }]));
@@ -93,7 +93,7 @@ export function diffStableRecords(previous, next, { identity, hash = canonicalJs
   for (const [id, candidate] of nextById) {
     const prior = previousById.get(id);
     const candidateHash = hash(candidate.record);
-    if (!prior || prior.ordinal !== candidate.ordinal || hash(prior.record) !== candidateHash) changed.push({ id, ...candidate, hash: candidateHash });
+    if (!prior || (trackOrdinal && prior.ordinal !== candidate.ordinal) || hash(prior.record) !== candidateHash) changed.push({ id, ...candidate, hash: candidateHash });
   }
   return Object.freeze({ deleted: Object.freeze(deleted), changed: Object.freeze(changed) });
 }
