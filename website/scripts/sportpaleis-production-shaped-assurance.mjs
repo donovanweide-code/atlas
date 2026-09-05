@@ -176,7 +176,7 @@ async function storeInitialize() {
   const memoryCycles = [];
   let cacheReuse = [];
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    cacheReuse = await Promise.all(Array.from({ length: 40 }, (_, index) => request("/api/sportpaleis/v1/bootstrap", allCookies[index % allCookies.length])));
+    cacheReuse = await Promise.all(allCookies.map((cookie) => request("/api/sportpaleis/v1/bootstrap", cookie)));
     global.gc?.();
     memoryCycles.push(process.memoryUsage().rss);
   }
@@ -194,9 +194,10 @@ async function storeInitialize() {
   const allMs = timings.map(({ ms }) => ms);
   const metricsFor = (entries) => ({ count: entries.length, p50Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.5)), p95Ms: rounded(percentile(entries.map(({ ms }) => ms), 0.95)), maxMs: rounded(Math.max(0, ...entries.map(({ ms }) => ms))) });
   const metrics = { ...metricsFor(timings), eventLoopP95Ms: rounded(loop.percentile(95) / 1e6), eventLoopMaxMs: rounded(loop.max / 1e6) };
+  const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route === "/api/sportpaleis/v1/bootstrap"));
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= 64 * 1024 * 1024;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
-  const thresholdsPassed = metrics.p95Ms <= 1_000 && metrics.maxMs <= 5_000 && metrics.eventLoopMaxMs <= 1_000 && rssHighWater <= 1_073_741_824 && rssRecoveredWithinBudget;
+  const thresholdsPassed = metrics.p95Ms <= 1_000 && metrics.maxMs <= 5_000 && bootstrapMetrics.p95Ms <= 2_000 && bootstrapMetrics.maxMs <= 3_000 && metrics.eventLoopMaxMs <= 1_000 && rssHighWater <= 1_073_741_824 && rssRecoveredWithinBudget;
   const result = {
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
