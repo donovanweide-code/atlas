@@ -22,6 +22,9 @@
     "rssRecoveryBudgetBytes": 536870912,
     "steadyStateRssGrowthBytes": 67108864,
     "databaseConnectionLimit": 8,
+    "databaseTransactionHoldMaxMs": 1500,
+    "productionBuildMaximumConcurrent": 1,
+    "productionBuildMaximumQueued": 4,
     "databaseAcquireTimeouts": 0,
     "httpErrors": 0,
     "serverErrors": 0
@@ -42,6 +45,8 @@
     "largeFreeProduction200Mm",
     "productionIdempotency",
     "artifactIdentity",
+    "productionBuildOffEventLoop",
+    "databaseConnectionReleasedDuringProductionBuild",
     "tenantAndScopeIsolation",
     "rollbackMaterializationProven"
   ]

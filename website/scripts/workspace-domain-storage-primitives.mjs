@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+export const COPY_ON_WRITE_BASE_SNAPSHOT = Symbol.for("wbd.workspace.copy-on-write-base-snapshot");
+
 export function canonicalJsonSha256(value) {
   const active = new WeakSet();
   const normalize = (nested) => {
@@ -33,6 +35,7 @@ export function createTopLevelCopyOnWriteDraft(snapshot, { cloneValue = (_key, v
   const values = new Map();
   const draft = new Proxy({}, {
     get(_target, key) {
+      if (key === COPY_ON_WRITE_BASE_SNAPSHOT) return snapshot;
       if (typeof key === "symbol") return undefined;
       if (values.has(key)) return values.get(key);
       if (!Object.hasOwn(snapshot, key)) return undefined;

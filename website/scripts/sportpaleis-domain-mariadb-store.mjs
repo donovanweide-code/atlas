@@ -114,6 +114,8 @@ function createMetrics() {
     auditAppends: 0, historyWrites: 0, artifactReferenceWrites: 0,
     idempotencyWrites: 0, idempotencyDeletes: 0,
     mutations: 0, unchangedMutations: 0, clonedKeys: 0, cacheHits: 0, cacheMisses: 0,
+    preparedMutations: 0, preparedMutationMsTotal: 0, preparedMutationMsMax: 0,
+    transactionHoldMsTotal: 0, transactionHoldMsMax: 0,
   };
 }
 
@@ -349,6 +351,7 @@ export class SportpaleisDomainMariaDbStore {
 
   async mutate(mutator) {
     const connection = await this.#connection();
+    const transactionStartedAt = performance.now();
     let phase = "begin";
     try {
       await connection.beginTransaction();
@@ -522,8 +525,42 @@ export class SportpaleisDomainMariaDbStore {
       if (cause?.statusCode || cause instanceof SportpaleisMariaDbStoreError) throw cause;
       throw new SportpaleisMariaDbStoreError("Domeintransactie is mislukt.", "DOMAIN_TRANSACTION_FAILED", cause);
     } finally {
+      const transactionHoldMs = performance.now() - transactionStartedAt;
+      this.metrics.transactionHoldMsTotal += transactionHoldMs;
+      this.metrics.transactionHoldMsMax = Math.max(this.metrics.transactionHoldMsMax, transactionHoldMs);
       connection.release();
     }
+  }
+
+  // CPU-heavy command preparation deliberately happens before a database
+  // connection is acquired. The final write still uses mutate(), so its
+  // revision lock and incremental domain/record transaction remain the only
+  // commit boundary. A concurrent writer makes the prepared command stale and
+  // fails closed; callers can retry with the same idempotency identity.
+  async prepareAndCommit(mutator) {
+    const preparationStartedAt = performance.now();
+    await this.#refresh(false);
+    const baseRevision = this.globalRevision;
+    const baseSnapshot = this.snapshot;
+    const lazy = createLazySportpaleisStateDraft(baseSnapshot);
+    const preparedResult = await mutator(lazy.draft);
+    if (preparedResult.unchanged === true) {
+      this.metrics.unchangedMutations += 1;
+      return { state: baseSnapshot, value: preparedResult.value };
+    }
+    const prepared = lazy.finalize();
+    if (prepared.changedKeys.length === 0) return { state: baseSnapshot, value: preparedResult.value };
+    const preparationMs = performance.now() - preparationStartedAt;
+    this.metrics.preparedMutations += 1;
+    this.metrics.preparedMutationMsTotal += preparationMs;
+    this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
+    return this.mutate(async (state) => {
+      if (Number(state.revision) !== Number(baseRevision)) {
+        throw new SportpaleisMariaDbStoreError("De voorbereide productieopdracht is door een gelijktijdige wijziging verouderd; herhaal veilig met dezelfde idempotency key.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
+      }
+      for (const key of prepared.changedKeys) state[key] = prepared.state[key];
+      return { state, value: preparedResult.value };
+    });
   }
 
   async latestBackupStatus() { return { status: "external", strategy: "encrypted-logical-dump-plus-provider-backup" }; }

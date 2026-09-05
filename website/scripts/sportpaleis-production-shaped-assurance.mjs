@@ -11,6 +11,7 @@ import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-stor
 import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
+import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
 const artifactRoot = process.env.CANARY_ARTIFACT_ROOT;
@@ -236,6 +237,7 @@ async function storeInitialize() {
   assert.equal(practiceAfter.productionJobs.length, practiceBefore.productionJobs.length + practiceRuns.length);
   assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length);
   const storeMetricsAfterPractice = store.metricsSnapshot();
+  const productionBuildQueue = productionJobBuildLoad();
   assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 1, "legacy monolith werd na backfill opnieuw geladen");
   assert.ok(storeMetricsAfterPractice.recordWrites > 0 && storeMetricsAfterPractice.domainWrites > 0, "domeinrecordwrites zijn niet gebruikt");
 
@@ -268,7 +270,9 @@ async function storeInitialize() {
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
   const limits = assuranceContract.limits;
-  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000);
+  const productionBuildOffEventLoop = productionBuildQueue.active === 0 && productionBuildQueue.queued === 0 && productionBuildQueue.inFlight === 0 && productionBuildQueue.maximumConcurrent === limits.productionBuildMaximumConcurrent && productionBuildQueue.maximumQueued === limits.productionBuildMaximumQueued;
+  const databaseConnectionReleasedDuringProductionBuild = storeMetricsAfterPractice.preparedMutations >= practiceRuns.length && storeMetricsAfterPractice.transactionHoldMsMax <= limits.databaseTransactionHoldMaxMs;
+  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && databaseConnectionReleasedDuringProductionBuild;
   const result = {
     schemaVersion: 3,
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
@@ -278,8 +282,8 @@ async function storeInitialize() {
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { store: storeMetricsAfterPractice, rollbackProof },
-    practice: { largeFreeProduction: practiceRuns },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
+    practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

@@ -34,6 +34,8 @@ import {
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
 import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
+import { buildProductionJobSnapshotIsolated } from "../src/sportpaleis/production-job-build.mjs";
+import { COPY_ON_WRITE_BASE_SNAPSHOT } from "./workspace-domain-storage-primitives.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
@@ -1557,6 +1559,20 @@ function idempotent(state, key, userId, operation, valueFactory, requestPayload 
   return { duplicate: false, value };
 }
 
+async function idempotentAsync(state, key, userId, operation, valueFactory, requestPayload = undefined) {
+  if (!key || key.length < 12 || key.length > 160) throw Object.assign(new Error("Ongeldige idempotency key."), { statusCode: 400, code: "INVALID_IDEMPOTENCY_KEY" });
+  const identity = `${userId}:${operation}:${key}`;
+  const requestHash = requestPayload === undefined ? null : sha256(JSON.stringify(requestPayload));
+  if (state.idempotency[identity]) {
+    const existingHash = state.idempotency[identity].requestHash ?? null;
+    if (requestHash && existingHash !== requestHash) throw Object.assign(new Error("Deze idempotency key hoort bij een andere immutable opdracht."), { statusCode: 409, code: "IDEMPOTENCY_PAYLOAD_MISMATCH" });
+    return { duplicate: true, value: state.idempotency[identity].value };
+  }
+  const value = await valueFactory();
+  state.idempotency[identity] = { at: iso(), requestHash, value };
+  return { duplicate: false, value };
+}
+
 const FULFILLMENT_TRANSITION_ACTIONS = new Set(["READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"]);
 const TEAMKIT_EXTERNAL_TASK_SEQUENCE = ["READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"];
 
@@ -2639,10 +2655,46 @@ export class SportpaleisPilotService {
     this.bootstrapResponseCache = new Map();
     this.bootstrapResponseCacheBytes = 0;
     this.bootstrapResponsePromises = new Map();
+    this.isolatedProductionBuilds = typeof this.store.prepareAndCommit === "function";
   }
 
   async initialize() {
     await this.store.initialize();
+  }
+
+  async #productionMutation(mutator) {
+    if (this.isolatedProductionBuilds) return this.store.prepareAndCommit(mutator);
+    return this.store.mutate(mutator);
+  }
+
+  async #productionSnapshot(state, orders, jobNumber, createdAt, productionGroup, operationIdentity) {
+    const options = { installedProductionAssetRoot: this.installedProductionAssetRoot };
+    if (!this.isolatedProductionBuilds) {
+      return buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, productionGroup, options);
+    }
+    const source = state[COPY_ON_WRITE_BASE_SNAPSHOT] ?? state;
+    const projectedState = {
+      organizationId: source.organizationId,
+      settings: source.settings,
+      associations: source.associations,
+      articles: source.articles,
+      productionProfiles: source.productionProfiles,
+      productionFonts: source.productionFonts,
+      productionElements: source.productionElements,
+      productionAssetSources: source.productionAssetSources,
+      foilRolls: source.foilRolls,
+    };
+    options.abMirrorAccepted = source.productionJobs?.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS") ?? false;
+    return buildProductionJobSnapshotIsolated({
+      state: projectedState,
+      orders,
+      jobNumber,
+      createdAt,
+      artifactRoot: this.artifactRoot,
+      runtimeArtifactRoot: this.runtimeArtifactRoot,
+      productionGroup,
+      options,
+    }, { operationIdentity });
   }
 
   async reviewManifest(token) {
@@ -3780,8 +3832,8 @@ export class SportpaleisPilotService {
       foilColor: normalizedProductionFoilColor(requestedFoilColor),
       ...(payload.supplement ? { supplement: structuredClone(payload.supplement), efficiencyAnalysisHash: payload.efficiencyAnalysisHash } : {}),
     };
-    const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", () => {
+    const result = await this.#productionMutation(async (state) => {
+      const outcome = await idempotentAsync(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", async () => {
         const orders = selections.map(({ id, expectedRevision }) => {
           const order = state.orders.find((candidate) => candidate.id === id);
           if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
@@ -3853,7 +3905,7 @@ export class SportpaleisPilotService {
         });
         const sequence = state.nextProductionJobSequence;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, currentOrders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, {
+        const productionGroup = {
           installedProductionAssetRoot: this.installedProductionAssetRoot,
           lineRefs: currentGroup.productionLineRefs,
           foilColor: currentGroup.foilColor,
@@ -3862,7 +3914,8 @@ export class SportpaleisPilotService {
           groupLabel: currentGroup.label,
           supplements: currentGroup.supplements ?? [],
           efficiencyEvidence: currentGroup.efficiencyEvidence,
-        });
+        };
+        const snapshot = await this.#productionSnapshot(state, currentOrders, jobNumber, createdAt, productionGroup, `${user.id}:PREPARE_CURRENT_PRODUCTION_GROUP:${idempotencyKey}`);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.nextProductionJobSequence += 1;
@@ -3891,8 +3944,8 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token); await this.#assertCsrf(token, csrfToken); assertRole(user, ["admin", "operator"]);
     const selections = Array.isArray(payload.orders) ? payload.orders : [];
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
-    const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_PRODUCTION_JOB", () => {
+    const result = await this.#productionMutation(async (state) => {
+      const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_PRODUCTION_JOB", async () => {
         let proposal = payload.proposalId ? state.productionProposals.find(({ id }) => id === payload.proposalId) : null;
         if (payload.proposalId && (!proposal || proposal.status !== "OPEN")) throw Object.assign(new Error("Het productievoorstel is niet meer open."), { statusCode: 409, code: "PRODUCTION_PROPOSAL_NOT_OPEN" });
         let proposalGroup = proposal?.groups?.length
@@ -3937,7 +3990,7 @@ export class SportpaleisPilotService {
         }
         const createdAt = iso(); const sequence = state.nextProductionJobSequence; state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label });
+        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: proposalGroup.productionLineRefs, foilColor: proposalGroup.foilColor, sourceChannel: proposalGroup.sourceChannel, groupId: proposalGroup.id, groupLabel: proposalGroup.label }, `${user.id}:CREATE_PRODUCTION_JOB:${idempotencyKey}`);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("Voor deze regels kan nog geen werkelijk vector-productiebestand worden gemaakt. Koppel eerst de juiste gevalideerde contour- of fontbron."), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE" });
         const job = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason: null, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", note: "Het immutable vectorbestand is geometrisch gevalideerd. Een nieuwe fysieke Human Acceptance blijft vereist; Workspace stuurt niets naar Illustrator, WinPlot, Summa of hardware." } });
         state.productionJobs.unshift(job);
@@ -4148,8 +4201,8 @@ export class SportpaleisPilotService {
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator"]);
     const reason = requiredText(payload?.reason, "Reden van afkeuring", 500);
-    const result = await this.store.mutate(async (state) => {
-      const outcome = idempotent(state, idempotencyKey, user.id, `RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}`, () => {
+    const result = await this.#productionMutation(async (state) => {
+      const outcome = await idempotentAsync(state, idempotencyKey, user.id, `RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}`, async () => {
         const rejectedJob = state.productionJobs.find(({ id }) => id === productionJobId);
         if (!rejectedJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
         if (rejectedJob.kind !== "ORIGINAL" || rejectedJob.status !== "REJECTED" || rejectedJob.humanAcceptance?.status !== "FAIL" || !rejectedJob.rejection) throw Object.assign(new Error("Keur de oorspronkelijke job eerst afzonderlijk af voordat een nieuwe productiejob wordt voorbereid."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_ALLOWED" });
@@ -4185,7 +4238,7 @@ export class SportpaleisPilotService {
         const sequence = state.nextProductionJobSequence;
         state.nextProductionJobSequence += 1;
         const jobNumber = `PLOT-${new Date(createdAt).getUTCFullYear()}-${String(sequence).padStart(4, "0")}`;
-        const snapshot = buildProductionJobSnapshot(state, orders, jobNumber, createdAt, this.artifactRoot, this.runtimeArtifactRoot, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label });
+        const snapshot = await this.#productionSnapshot(state, orders, jobNumber, createdAt, { installedProductionAssetRoot: this.installedProductionAssetRoot, lineRefs: group.productionLineRefs, foilColor: group.foilColor, sourceChannel: group.sourceChannel, groupId: group.id, groupLabel: group.label }, `${user.id}:RETRY_REJECTED_PRODUCTION_JOB:${productionJobId}:${idempotencyKey}`);
         if (snapshot.artifact.format === "MANIFEST") throw Object.assign(new Error("De veilige retry leverde geen aantoonbaar nieuw gecorrigeerd vectorartifact op."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_CORRECTED" });
         const retryJob = immutableProductionJob({ id: `production-job-${randomBytes(10).toString("hex")}`, jobNumber, createdAt, initiatedBy: { userId: user.id, name: user.name, role: user.role }, kind: "ORIGINAL", originJobId: null, reason, snapshot, status: "AWAITING_HUMAN_CHECK", proofStatus: "GEOMETRY_VALIDATED", humanAcceptance: { status: "PENDING", sourceProofStatus: rejectedJob.proofStatus, note: `Nieuwe immutable broncorrectie na menselijke afkeuring van ${rejectedJob.jobNumber}; opnieuw fysieke Human Acceptance vereist.` } });
         state.productionJobs.unshift(retryJob);
@@ -9439,7 +9492,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   };
 }
 
-function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined, options = {}) {
+export function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(), artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, productionGroup = undefined, options = {}) {
   const snapshotStartedAt = performance.now();
   const allProductionLines = orders.flatMap((order) => {
     const effectiveLines = productionLinesForOrder(state, order);
@@ -9467,7 +9520,7 @@ function buildProductionJobSnapshot(state, orders, jobNumber, createdAt = iso(),
   const productionArtifact = buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, { persist: options.persistArtifacts !== false, installedProductionAssetRoot: options.installedProductionAssetRoot ?? productionGroup?.installedProductionAssetRoot });
   if (productionArtifact) sourceContours.push(...productionArtifact.sources.map(({ id, version, sourceProofStatus }) => ({ id, version, proofStatus: sourceProofStatus, immutable: true })));
   const firstProfile = orders.flatMap(({ items }) => items).map(({ productionProfileId }) => state.productionProfiles.find(({ id }) => id === productionProfileId)).find(Boolean);
-  const abMirrorAccepted = state.productionJobs.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS");
+  const abMirrorAccepted = options.abMirrorAccepted ?? state.productionJobs?.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS") ?? false;
   const manifest = { jobNumber, orderIds: orders.map(({ id }) => id), productionLines, fontSources, logoSources, layout, orientation: { preMirrored: abMirrorAccepted, manualHorizontalFlipInWinPlot: !abMirrorAccepted }, scale: 1 };
   const manifestHash = sha256(JSON.stringify(manifest)).toUpperCase();
   return {

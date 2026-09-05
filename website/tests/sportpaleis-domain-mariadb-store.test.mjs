@@ -26,6 +26,7 @@ class DomainMemoryPool {
     this.queries = [];
     this.commits = 0;
     this.rollbacks = 0;
+    this.transactionDurationsMs = [];
   }
   async getConnection() { return new DomainMemoryConnection(this); }
   async query(sql, parameters = []) { return new DomainMemoryConnection(this).query(sql, parameters); }
@@ -34,6 +35,7 @@ class DomainMemoryPool {
 class DomainMemoryConnection {
   constructor(pool) { this.pool = pool; }
   async beginTransaction() {
+    this.transactionStartedAt = performance.now();
     this.transactionSnapshot = {
       meta: this.pool.meta ? structuredClone(this.pool.meta) : null,
       legacy: structuredClone(this.pool.legacy),
@@ -41,9 +43,14 @@ class DomainMemoryConnection {
       audit: structuredClone(this.pool.audit), history: structuredClone(this.pool.history), artifacts: structuredClone(this.pool.artifacts), idempotency: structuredClone(this.pool.idempotency),
     };
   }
-  async commit() { this.pool.commits += 1; this.transactionSnapshot = null; }
+  async commit() {
+    this.pool.commits += 1;
+    if (this.transactionStartedAt !== undefined) this.pool.transactionDurationsMs.push(performance.now() - this.transactionStartedAt);
+    this.transactionSnapshot = null;
+  }
   async rollback() {
     this.pool.rollbacks += 1;
+    if (this.transactionStartedAt !== undefined) this.pool.transactionDurationsMs.push(performance.now() - this.transactionStartedAt);
     if (!this.transactionSnapshot) return;
     this.pool.meta = this.transactionSnapshot.meta;
     this.pool.legacy = this.transactionSnapshot.legacy;
@@ -341,7 +348,16 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   const lines = Array.from({ length: 11 }, (_, index) => String(index + 2)).map((content) => ({ id: `domain-free-${content}`, type: "NUMBER", content, previewLabel: content, widthMm: 180, heightMm: 80, quantity: 2, foilColor: "Wit", sourceId: font.id, provenance: "Domeinopslag production fixture" }));
   const order = (await service.createOrder(login.token, login.csrfToken, { orderKind: "CUSTOM", customer: "Domeinfixture", customerEmail: "", customerPhone: "", standardPersonalization: empty, productionLines: lines, items: [{ product: "Vrije opdruk", association: "Vrije bedrukking", size: "", quantity: 22, personalization: "2 t/m 12 ×2", foilColor: "Wit", deviation: true, overrides: empty }] }, "domain-order")).value;
   const proposal = (await service.createProductionProposal(login.token, login.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }] }, "domain-production-proposal")).value;
+  const heartbeatAt = [];
+  const heartbeat = setInterval(() => heartbeatAt.push(performance.now()), 20);
+  const transactionsBeforeBuild = pool.transactionDurationsMs.length;
   const first = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
+  clearInterval(heartbeat);
+  const heartbeatGaps = heartbeatAt.slice(1).map((at, index) => at - heartbeatAt[index]);
+  const buildTransactions = pool.transactionDurationsMs.slice(transactionsBeforeBuild);
+  assert.ok(heartbeatAt.length >= 10, "de event-loop blijft tijdens de geïsoleerde workerproductie responsief");
+  assert.ok(Math.max(0, ...heartbeatGaps) < 500, `event-loopblok tijdens productie is begrensd: ${Math.max(0, ...heartbeatGaps)} ms`);
+  assert.ok(buildTransactions.length >= 1 && Math.max(...buildTransactions) < 1_500, `de databaseverbinding omvat niet de zware geometryworker: ${buildTransactions.join(", ")} ms`);
   const retry = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
   assert.equal(first.duplicate, false);
   assert.equal(retry.duplicate, true);
