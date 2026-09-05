@@ -155,6 +155,19 @@ function changedAuditEvents(previous, next) {
   return next.filter(({ id }) => !previousIds.has(id));
 }
 
+function prepareLegacyBackfill(row) {
+  const legacy = decodeSportpaleisRuntimeState(row?.state_json);
+  if (!legacy || typeof legacy !== "object" || legacy.organizationId !== ORGANIZATION_ID || !Number.isInteger(Number(legacy.schemaVersion))) {
+    throw new SportpaleisMariaDbStoreError("Legacy migratiebron heeft een ongeldige identiteit.", "DATABASE_STATE_INVALID");
+  }
+  if (Number(row.revision) !== Number(legacy.revision)) throw new SportpaleisMariaDbStoreError("Legacy revisie is inconsistent.", "DATABASE_REVISION_MISMATCH");
+  const domains = partitionSportpaleisState(legacy);
+  const legacyHash = sha256CanonicalJson(legacy);
+  const composedHash = sha256CanonicalJson(composeSportpaleisState({ ...domains, audit: { ...domains.audit, audit: legacy.audit } }));
+  if (legacyHash !== composedHash) throw new SportpaleisMariaDbStoreError("Domeinbackfill wijkt af van de migratiebron.", "DOMAIN_BACKFILL_MISMATCH");
+  return Object.freeze({ legacy, domains, legacyHash, composedHash });
+}
+
 function createMetrics() {
   return {
     metaQueries: 0, fullLegacyLoads: 0, domainRowsLoaded: 0, recordRowsLoaded: 0,
@@ -216,6 +229,25 @@ export class SportpaleisDomainMariaDbStore {
   async backfillLegacySource() {
     const migration = await readFile(this.migrationFile, "utf8");
     const checksum = createHash("sha256").update(migration).digest("hex");
+    const [registered, existingMeta, sourceRows] = await Promise.all([
+      this.pool.query("SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ?", [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION]),
+      this.pool.query("SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?", [ORGANIZATION_ID]),
+      this.pool.query("SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ?", [ORGANIZATION_ID]),
+    ]);
+    if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
+    if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+    if (sourceRows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
+    if (existingMeta.length === 1) {
+      if (Number(existingMeta[0].legacy_source_revision) !== Number(sourceRows[0].revision)) throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde na een eerdere backfill.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
+      const reconciliation = await this.pool.query(
+        "SELECT legacy_sha256, composed_sha256, status FROM sp_workspace_domain_reconciliation WHERE organization_id = ? AND legacy_revision = ? AND contract_version = ?",
+        [ORGANIZATION_ID, sourceRows[0].revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION],
+      );
+      if (reconciliation.length !== 1 || reconciliation[0].status !== "MATCH" || reconciliation[0].legacy_sha256 !== reconciliation[0].composed_sha256) throw new SportpaleisMariaDbStoreError("Bestaande backfill mist hashgelijk reconciliatiebewijs.", "DOMAIN_BACKFILL_EVIDENCE_INVALID");
+      return Object.freeze({ status: "ALREADY_BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(existingMeta[0].global_revision), contractVersion: Number(existingMeta[0].contract_version), legacySha256: reconciliation[0].legacy_sha256, composedSha256: reconciliation[0].composed_sha256 });
+    }
+    const prepared = prepareLegacyBackfill(sourceRows[0]);
+    this.metrics.fullLegacyLoads += 1;
     const connection = await this.#connection();
     try {
       await connection.beginTransaction();
@@ -229,9 +261,13 @@ export class SportpaleisDomainMariaDbStore {
         "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
         [ORGANIZATION_ID],
       );
-      const evidence = metaRows.length === 0
-        ? await this.#backfill(connection)
-        : Object.freeze({ status: "ALREADY_BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(metaRows[0].global_revision), contractVersion: Number(metaRows[0].contract_version) });
+      if (metaRows.length !== 0) throw new SportpaleisMariaDbStoreError("Gelijktijdige domeinbackfill gedetecteerd; herhaal de idempotente stap.", "DOMAIN_BACKFILL_CONCURRENT");
+      const lockedSource = await connection.query(
+        "SELECT revision FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE",
+        [ORGANIZATION_ID],
+      );
+      if (lockedSource.length !== 1 || Number(lockedSource[0].revision) !== Number(prepared.legacy.revision)) throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde tussen voorbereiding en commit.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
+      const evidence = await this.#backfill(connection, prepared);
       await connection.commit();
       return evidence;
     } catch (cause) {
@@ -243,20 +279,8 @@ export class SportpaleisDomainMariaDbStore {
     }
   }
 
-  async #backfill(connection) {
-    const rows = await connection.query(
-      "SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE",
-      [ORGANIZATION_ID],
-    );
-    if (rows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
-    const legacy = decodeSportpaleisRuntimeState(rows[0].state_json);
-    if (!legacy || typeof legacy !== "object" || legacy.organizationId !== ORGANIZATION_ID || !Number.isInteger(Number(legacy.schemaVersion))) {
-      throw new SportpaleisMariaDbStoreError("Legacy migratiebron heeft een ongeldige identiteit.", "DATABASE_STATE_INVALID");
-    }
-    if (Number(rows[0].revision) !== Number(legacy.revision)) throw new SportpaleisMariaDbStoreError("Legacy revisie is inconsistent.", "DATABASE_REVISION_MISMATCH");
-    this.metrics.fullLegacyLoads += 1;
-    const domains = partitionSportpaleisState(legacy);
-    const legacyHash = sha256CanonicalJson(legacy);
+  async #backfill(connection, prepared) {
+    const { legacy, domains, legacyHash, composedHash } = prepared;
     await connection.query(
       "INSERT INTO sp_workspace_domain_meta (organization_id, schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'SHADOW', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
       [ORGANIZATION_ID, legacy.schemaVersion, legacy.revision, legacy.revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION],
@@ -300,15 +324,12 @@ export class SportpaleisDomainMariaDbStore {
       ORGANIZATION_ID, idempotencyIdentityHash(identity), identity, legacy.revision, encodePayload(record), sha256CanonicalJson(record),
     ]);
     await insertBatches(connection, idempotencySql, idempotencyParameters);
-    const composed = composeSportpaleisState({ ...domains, audit: { ...domains.audit, audit: legacy.audit } });
-    const composedHash = sha256CanonicalJson(composed);
     await connection.query(
       "INSERT INTO sp_workspace_domain_reconciliation (organization_id, legacy_revision, contract_version, legacy_sha256, composed_sha256, domain_manifest_json, status, compared_at) VALUES (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
       [ORGANIZATION_ID, legacy.revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION, legacyHash, composedHash,
         JSON.stringify(Object.fromEntries(Object.entries(domains).map(([domain, payload]) => [domain, { count: Object.keys(payload).length, sha256: sha256CanonicalJson(payload) }]))),
         legacyHash === composedHash ? "MATCH" : "MISMATCH"],
     );
-    if (legacyHash !== composedHash) throw new SportpaleisMariaDbStoreError("Domeinbackfill wijkt af van de migratiebron.", "DOMAIN_BACKFILL_MISMATCH");
     return Object.freeze({ status: "BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(legacy.revision), contractVersion: SPORTPALEIS_DOMAIN_CONTRACT_VERSION, legacySha256: legacyHash, composedSha256: composedHash });
   }
 

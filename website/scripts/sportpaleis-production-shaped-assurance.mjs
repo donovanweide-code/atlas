@@ -73,6 +73,7 @@ let server;
 let bootstrapRequestsReceived = 0;
 const handlerErrors = [];
 const timings = [];
+let bootstrapFieldBytes = null;
 let loadPhase = "warmup";
 const statuses = [];
 let activeHighWater = 0;
@@ -157,7 +158,10 @@ async function storeInitialize() {
     const response = await fetch(`${origin}${route}`, { ...options, headers: { ...(options.headers ?? {}), cookie } });
     statuses.push(response.status);
     const body = Buffer.from(await response.arrayBuffer());
-    if (route === "/api/sportpaleis/v1/bootstrap" && response.status === 200) JSON.parse(body.toString("utf8"));
+    if (route === "/api/sportpaleis/v1/bootstrap" && response.status === 200) {
+      const parsed = JSON.parse(body.toString("utf8"));
+      bootstrapFieldBytes ??= Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, Buffer.byteLength(JSON.stringify(value))]).sort((left, right) => right[1] - left[1]));
+    }
     timings.push({ route, phase: loadPhase, ms: performance.now() - started, bytes: body.length });
     return response.status;
   };
@@ -301,7 +305,7 @@ async function storeInitialize() {
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
     identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId },
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
-    load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
+    load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])) },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },

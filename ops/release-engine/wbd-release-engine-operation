@@ -53,7 +53,7 @@ else
   require_runner
   operation=${1:-}; shift || true
   case "$operation" in
-    verify-host-context|backup|stage|rollback-set|migrate|switch|restart|rollback)
+    verify-host-context|backup|stage|rollback-set|migrate|data-backfill|switch|restart|rollback)
       unit="wbd-release-engine-op-$(date +%s%N)-$$"
       exec systemd-run --quiet --wait --pipe --collect --service-type=exec \
         --unit="$unit" --setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1 \
@@ -135,6 +135,39 @@ NODE
     contract_hash=$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.contractHash)' "$(plan_file "$release_id")")
     valid_hash "$contract_hash"
     exec /usr/bin/node "/srv/wbd/release-engine/website/scripts/release-engine-migrate-one.mjs" "$release_id" "$contract_hash" "$database" "$migration" "$checksum"
+    ;;
+  data-backfill)
+    release_id=${1:-}; plan_hash=${2:-}; database=${3:-}; adapter=${4:-}
+    valid_id "$release_id"; valid_hash "$plan_hash"; valid_id "$database"; valid_id "$adapter"; verify_plan "$release_id" "$plan_hash"
+    [[ $database == workspace && $adapter == sportpaleis-domain-backfill-v1 ]] || fail DATA_BACKFILL_NOT_ALLOWLISTED
+    node - "$(plan_file "$release_id")" "$database" "$adapter" <<'NODE'
+const fs = require("fs");
+const [file, database, adapter] = process.argv.slice(2);
+const plan = JSON.parse(fs.readFileSync(file, "utf8"));
+const matches = (plan.activation?.preSwitchDataMigrations ?? []).filter((step) => step.database === database && step.adapter === adapter);
+if (matches.length !== 1 || matches[0].idempotent !== true || matches[0].requiresQuiescedService !== true || matches[0].verification !== "canonical-state-sha256-equality") process.exit(49);
+NODE
+    candidate="$WBD_ROOT/releases/$release_id"
+    [[ -f "$candidate/website/scripts/sportpaleis-domain-backfill.mjs" ]] || fail DATA_BACKFILL_RUNNER_MISSING
+    current_before=$(readlink -f "$WBD_ROOT/current")
+    [[ $(basename "$current_before") != "$release_id" ]] || fail DATA_BACKFILL_REQUIRES_PRE_SWITCH_BASELINE
+    restart_baseline_on_error() {
+      systemctl start "$SERVICE" >/dev/null 2>&1 || true
+    }
+    trap restart_baseline_on_error ERR
+    systemctl stop "$SERVICE"
+    set -a; . "$ENV_FILE"; set +a
+    result=$(NODE_ENV=production WBD_RELEASEBROKER_LOCK_HELD=true /usr/bin/node "$candidate/website/scripts/sportpaleis-domain-backfill.mjs")
+    node - "$result" <<'NODE'
+const value = JSON.parse(process.argv[2]);
+const hash = /^[a-f0-9]{64}$/u;
+const pass = value.status === "ALREADY_BACKFILLED"
+  || (value.status === "BACKFILLED" && hash.test(value.legacySha256 ?? "") && value.legacySha256 === value.composedSha256);
+if (!pass || !Number.isSafeInteger(value.globalRevision) || value.globalRevision < 1) process.exit(48);
+NODE
+    [[ $(readlink -f "$WBD_ROOT/current") == "$current_before" ]] || fail DATA_BACKFILL_BASELINE_DRIFT
+    trap - ERR
+    printf '%s\n' "$result"
     ;;
   switch)
     release_id=${1:-}; plan_hash=${2:-}; valid_id "$release_id"; valid_hash "$plan_hash"; verify_plan "$release_id" "$plan_hash"

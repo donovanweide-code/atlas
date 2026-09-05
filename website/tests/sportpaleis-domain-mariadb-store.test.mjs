@@ -38,6 +38,7 @@ class DomainMemoryConnection {
     this.transactionStartedAt = performance.now();
     this.transactionSnapshot = {
       meta: this.pool.meta ? structuredClone(this.pool.meta) : null,
+      reconciliation: this.pool.reconciliation ? structuredClone(this.pool.reconciliation) : null,
       legacy: structuredClone(this.pool.legacy),
       domains: structuredClone(this.pool.domains), records: structuredClone(this.pool.records),
       audit: structuredClone(this.pool.audit), history: structuredClone(this.pool.history), artifacts: structuredClone(this.pool.artifacts), idempotency: structuredClone(this.pool.idempotency),
@@ -53,6 +54,7 @@ class DomainMemoryConnection {
     if (this.transactionStartedAt !== undefined) this.pool.transactionDurationsMs.push(performance.now() - this.transactionStartedAt);
     if (!this.transactionSnapshot) return;
     this.pool.meta = this.transactionSnapshot.meta;
+    this.pool.reconciliation = this.transactionSnapshot.reconciliation;
     this.pool.legacy = this.transactionSnapshot.legacy;
     this.pool.domains = this.transactionSnapshot.domains;
     this.pool.records = this.transactionSnapshot.records;
@@ -71,6 +73,7 @@ class DomainMemoryConnection {
     if (sql.startsWith("SELECT global_revision FROM sp_workspace_domain_meta")) return this.pool.meta ? [{ global_revision: this.pool.meta.global_revision }] : [];
     if (sql.startsWith("SELECT revision, state_json FROM sp_runtime_state")) return [{ ...this.pool.legacy }];
     if (sql.startsWith("SELECT revision FROM sp_runtime_state")) return [{ revision: this.pool.legacy.revision }];
+    if (sql.startsWith("SELECT legacy_sha256, composed_sha256")) return this.pool.reconciliation ? [{ ...this.pool.reconciliation }] : [];
     if (sql.startsWith("INSERT INTO sp_workspace_domain_meta")) {
       this.pool.meta = { schema_version: parameters[1], global_revision: parameters[2], legacy_source_revision: parameters[3], contract_version: parameters[4], cutover_mode: "SHADOW" };
       return { affectedRows: 1 };
@@ -94,7 +97,10 @@ class DomainMemoryConnection {
       this.pool.audit.set(parameters[1], { event_id: parameters[1], ordinal: parameters[2], global_revision: parameters[3], event_json: parameters[4], event_sha256: parameters[5] });
       return { affectedRows: 1 };
     }
-    if (sql.startsWith("INSERT INTO sp_workspace_domain_reconciliation")) return { affectedRows: 1 };
+    if (sql.startsWith("INSERT INTO sp_workspace_domain_reconciliation")) {
+      this.pool.reconciliation = { legacy_sha256: parameters[3], composed_sha256: parameters[4], status: parameters[6] };
+      return { affectedRows: 1 };
+    }
     if (sql.startsWith("INSERT INTO sp_workspace_order_history_event")) {
       this.pool.history.set(`${parameters[1]}:${parameters[2]}`, { order_id: parameters[1], event_id: parameters[2], ordinal: parameters[3], event_json: parameters[6], event_sha256: parameters[7] });
       return { affectedRows: 1 };
@@ -186,6 +192,21 @@ test("additieve backfill is hashgelijk en een kleine mutatie schrijft geen legac
   assert.equal(pool.queries.filter((sql) => sql.startsWith("UPDATE sp_runtime_state")).length, legacyWritesBefore);
   assert.equal((await store.readSnapshot()).preferences.operator.density, "compact");
   assert.equal((await store.readSnapshot()).audit[0].details.largeEvidence.length, 6 * 1024 * 1024);
+});
+
+test("herhaalde offline backfill is hash-idempotent en weigert legacy brondrift", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  const first = await store.backfillLegacySource();
+  const repeated = await store.backfillLegacySource();
+  assert.equal(first.status, "BACKFILLED");
+  assert.equal(repeated.status, "ALREADY_BACKFILLED");
+  assert.equal(repeated.legacySha256, first.legacySha256);
+  assert.equal(repeated.composedSha256, first.composedSha256);
+  pool.legacy.revision += 1;
+  await assert.rejects(store.backfillLegacySource(), ({ code }) => code === "DOMAIN_BACKFILL_SOURCE_DRIFT");
 });
 
 test("auditappend schrijft alleen nieuwe immutable event en geen volledige auditpayload", async () => {

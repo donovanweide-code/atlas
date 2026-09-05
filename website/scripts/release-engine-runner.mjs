@@ -207,6 +207,7 @@ export class WbdReleaseEngine {
       candidate: { releaseId: contract.releaseId, commit: contract.commit, tag: contract.tag },
       codeDiffScope: contract.changeScope,
       migrations: plan.migrations.steps.map(({ database, migrationId, lockRisk }) => ({ database, migrationId, classification: "ADDITIVE", lockRisk })),
+      preSwitchDataMigrations: contract.activation.preSwitchDataMigrations,
       backup: { id: plan.recovery.backupId, checksum: plan.recovery.backupSha256, restoreEvidence: plan.recovery.restoreEvidenceId },
       risk: plan.migrations.risk,
       expectedDowntime: contract.activation.restart.strategy === "single" ? "one-controlled-restart" : "unknown",
@@ -260,6 +261,7 @@ export class WbdReleaseEngine {
     const approvalActor = normalizeAuditActor(approval);
     const unlock = await this.acquireOperationLocks(contract, "activate");
     let switched = false;
+    let serviceQuiesced = false;
     let plan;
     try {
       const current = await this.state(contract);
@@ -288,6 +290,13 @@ export class WbdReleaseEngine {
         const result = await guarded(() => this.platform.runSmoke(contract, smoke, { release: "active-baseline", phase: "post-migration" }), { stage: "ACTIVATING", component: smoke, candidate: contract.releaseId, className: "SMOKE", nextAction: "Stop vóór switch; actieve oude release moet additieve migrations blijven verdragen.", retrySafe: false });
         await this.checkpoint(contract, "old_release_post_migration_smoke_passed", { smoke, result }, `old-smoke-${smoke}-${plan.planHash}`);
       }
+      for (const step of contract.activation.preSwitchDataMigrations) {
+        const result = await guarded(() => this.platform.runPreSwitchDataMigration(contract, step, plan), { stage: "ACTIVATING", component: `data-migration:${step.id}`, candidate: contract.releaseId, className: "MIGRATION", nextAction: "Herstart de ongewijzigde baseline en inspecteer uitsluitend de hash-gebonden backfillstap.", retrySafe: true });
+        serviceQuiesced = true;
+        if (result?.status !== "BACKFILLED" && result?.status !== "ALREADY_BACKFILLED") throw Object.assign(new Error(`Databackfill ${step.id} leverde geen terminale status.`), { code: "DATA_BACKFILL_VERIFY_FAIL" });
+        if (result.status === "BACKFILLED" && (!/^[a-f0-9]{64}$/u.test(result.legacySha256 ?? "") || result.legacySha256 !== result.composedSha256)) throw Object.assign(new Error(`Databackfill ${step.id} is niet canonical hashgelijk.`), { code: "DATA_BACKFILL_HASH_MISMATCH" });
+        await this.checkpoint(contract, "data_migration_applied", { id: step.id, database: step.database, adapter: step.adapter, status: result.status, sourceRevision: result.globalRevision, legacySha256: result.legacySha256 ?? null, composedSha256: result.composedSha256 ?? null }, `data-migration-${step.id}-${plan.planHash}`);
+      }
       await guarded(() => this.platform.atomicSwitch(contract, plan), { stage: "ACTIVATING", component: "atomic-switch", candidate: contract.releaseId, className: "RUNTIME", nextAction: "Verifieer of de broker atomisch naar baseline heeft hersteld; forceer niets.", retrySafe: false });
       switched = true;
       await this.checkpoint(contract, "atomic_switch_completed", { releaseId: contract.releaseId }, `switch-${plan.planHash}`);
@@ -301,6 +310,9 @@ export class WbdReleaseEngine {
         nextAction: switched ? "Automatische rollback uitvoeren en rollback-smokes verifiëren." : "Productie ongewijzigd laten en de concrete pre-switch blocker oplossen.",
       }).diagnostic;
       if (!switched) {
+        if (serviceQuiesced) {
+          await guarded(() => this.platform.restartRollbackTarget(contract, plan), { stage: "ACTIVATING", component: "baseline-service-recovery", candidate: contract.releaseId, className: "RESTART", nextAction: "Herstel de ongewijzigde baseline-service via break-glass wanneer de begrensde restart faalt.", retrySafe: false });
+        }
         const stale = diagnostic.class === "BASELINE_DRIFT";
         if ((await this.state(contract))?.state !== "BLOCKED") {
           await this.transition(contract, "BLOCKED", stale ? "stale_plan_invalidated" : "activation_blocked_before_switch", {
@@ -352,20 +364,32 @@ export class WbdReleaseEngine {
           return this.finishRollback(contract, plan, diagnostic);
         }
         if (active.releaseId === plan.observedBaseline.releaseId && state.state === "ACTIVATING") {
-          for (const step of plan.migrations.steps) {
-            await this.platform.applyMigration(contract, step, plan);
-            const verification = await this.platform.verifyMigration(contract, step, plan);
-            if (!verification.passed) throw new Error(`Resume migrationverificatie faalde voor ${step.migrationId}.`);
+          let serviceQuiesced = false;
+          try {
+            for (const step of plan.migrations.steps) {
+              await this.platform.applyMigration(contract, step, plan);
+              const verification = await this.platform.verifyMigration(contract, step, plan);
+              if (!verification.passed) throw new Error(`Resume migrationverificatie faalde voor ${step.migrationId}.`);
+            }
+            for (const smoke of contract.activation.oldReleasePostMigrationSmokes) {
+              const result = await this.platform.runSmoke(contract, smoke, { release: "active-baseline", phase: "post-migration" });
+              await this.checkpoint(contract, "old_release_post_migration_smoke_passed", { smoke, result }, `old-smoke-${smoke}-${plan.planHash}`);
+            }
+            for (const step of contract.activation.preSwitchDataMigrations) {
+              const result = await this.platform.runPreSwitchDataMigration(contract, step, plan);
+              serviceQuiesced = true;
+              if (!["BACKFILLED", "ALREADY_BACKFILLED"].includes(result?.status) || !/^[a-f0-9]{64}$/u.test(result?.legacySha256 ?? "") || result.legacySha256 !== result.composedSha256) throw new Error(`Resume databackfillverificatie faalde voor ${step.id}.`);
+              await this.checkpoint(contract, "data_migration_applied", { id: step.id, database: step.database, adapter: step.adapter, status: result.status, sourceRevision: result.globalRevision, legacySha256: result.legacySha256, composedSha256: result.composedSha256, resumed: true }, `data-migration-${step.id}-${plan.planHash}`);
+            }
+            await this.platform.atomicSwitch(contract, plan);
+            await this.checkpoint(contract, "atomic_switch_completed", { releaseId: contract.releaseId, resumed: true }, `switch-${plan.planHash}`);
+            await this.platform.restartService(contract, plan);
+            await this.checkpoint(contract, "planned_restart_completed", { service: contract.activation.restart.service, count: 1, resumed: true }, `restart-${plan.planHash}`);
+            return this.finishVerification(contract, plan);
+          } catch (error) {
+            if (serviceQuiesced) await this.platform.restartRollbackTarget(contract, plan);
+            throw error;
           }
-          for (const smoke of contract.activation.oldReleasePostMigrationSmokes) {
-            const result = await this.platform.runSmoke(contract, smoke, { release: "active-baseline", phase: "post-migration" });
-            await this.checkpoint(contract, "old_release_post_migration_smoke_passed", { smoke, result }, `old-smoke-${smoke}-${plan.planHash}`);
-          }
-          await this.platform.atomicSwitch(contract, plan);
-          await this.checkpoint(contract, "atomic_switch_completed", { releaseId: contract.releaseId, resumed: true }, `switch-${plan.planHash}`);
-          await this.platform.restartService(contract, plan);
-          await this.checkpoint(contract, "planned_restart_completed", { service: contract.activation.restart.service, count: 1, resumed: true }, `restart-${plan.planHash}`);
-          return this.finishVerification(contract, plan);
         }
         throw Object.assign(new Error("Actieve release komt niet overeen met candidate of locked baseline."), { code: "BASELINE_DRIFT" });
       } finally { await unlock(); }

@@ -119,6 +119,15 @@ test("release contract rejects arbitrary switch/restart operations and unsafe pa
   assert.throws(() => contract({ artifact: { ...rawContract.artifact, path: "../escape.tar.gz" } }), /onveilig pad/);
 });
 
+test("pre-switch databackfill is allowlisted, database-bound, quiesced and hash-verifying", () => {
+  const valid = { id: "sportpaleis-domain-backfill", database: "workspace", adapter: "sportpaleis-domain-backfill-v1", idempotent: true, requiresQuiescedService: true, verification: "canonical-state-sha256-equality" };
+  const value = contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [valid] } });
+  assert.deepEqual(value.activation.preSwitchDataMigrations, [valid]);
+  assert.throws(() => contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [{ ...valid, adapter: "arbitrary-command" }] } }), /niet geallowlist/u);
+  assert.throws(() => contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [{ ...valid, database: "unknown" }] } }), /ontbreekt in databases/u);
+  assert.throws(() => contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [{ ...valid, requiresQuiescedService: false }] } }), /quiesce/u);
+});
+
 test("schema inspector SQL is pure read-only and status cannot create the ledger", () => {
   const queries = createPureSchemaInspectionQueries("wbd_workspace", ["wbd_mail_control_state"], "sportpaleis-runtime-state");
   assert.equal(assertPureReadOnlyInspectionQueries(queries), true);
@@ -287,6 +296,32 @@ test("happy prepare ends at one compact AWAITING_HUMAN_GO boundary", async () =>
   assert.equal(summary.featureExposure.default, "OFF");
   assert.ok(result.platform.calls.indexOf("environmentUnlock:prepare") < result.platform.calls.indexOf("stageArtifact"));
   assert.ok(result.platform.calls.indexOf("stageArtifact") < result.platform.calls.indexOf("environmentLock:prepare-finalize"));
+});
+
+test("activation runs the immutable databackfill after additive migrations and before switch", async () => {
+  const step = { id: "sportpaleis-domain-backfill", database: "workspace", adapter: "sportpaleis-domain-backfill-v1", idempotent: true, requiresQuiescedService: true, verification: "canonical-state-sha256-equality" };
+  const releaseContract = contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [step] } });
+  const platform = new InMemoryReleasePlatform({ contract: releaseContract, now: fixedNow.toISOString() });
+  const engine = new WbdReleaseEngine({ stateStore: new InMemoryReleaseStateStore(), platform, clock: () => fixedNow });
+  const plan = await engine.inspectAndPrepare(releaseContract);
+  const result = await engine.approveAndActivate(releaseContract, { decision: "GO", releaseId: releaseContract.releaseId, planHash: plan.planHash, actorId: "donovan_van_de_weide" });
+  assert.equal(result.state, "LIVE");
+  const dataIndex = platform.calls.indexOf("dataBackfill:sportpaleis-domain-backfill");
+  assert.ok(dataIndex > platform.calls.findLastIndex((call) => call.startsWith("smoke:")) || dataIndex > platform.calls.findLastIndex((call) => call.startsWith("applyMigration:")));
+  assert.ok(dataIndex < platform.calls.indexOf("atomicSwitch"));
+  const event = (await engine.events(releaseContract)).find(({ type }) => type === "data_migration_applied");
+  assert.equal(event.details.legacySha256, "d".repeat(64));
+});
+
+test("pre-switch failure after quiesced backfill restarts the unchanged baseline", async () => {
+  const step = { id: "sportpaleis-domain-backfill", database: "workspace", adapter: "sportpaleis-domain-backfill-v1", idempotent: true, requiresQuiescedService: true, verification: "canonical-state-sha256-equality" };
+  const releaseContract = contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [step] } });
+  const platform = new InMemoryReleasePlatform({ contract: releaseContract, now: fixedNow.toISOString() }).fail("atomicSwitch", Object.assign(new Error("switch blocked"), { code: "SWITCH_FAIL" }));
+  const engine = new WbdReleaseEngine({ stateStore: new InMemoryReleaseStateStore(), platform, clock: () => fixedNow });
+  const plan = await engine.inspectAndPrepare(releaseContract);
+  await assert.rejects(engine.approveAndActivate(releaseContract, { decision: "GO", releaseId: releaseContract.releaseId, planHash: plan.planHash, actorId: "donovan_van_de_weide" }));
+  assert.equal(platform.current.releaseId, releaseContract.expectedBaseline.releaseId);
+  assert.equal(platform.restartCount, 1);
 });
 
 test("resolved prepare diagnostics remain in audit but not as current Owner blocker", async () => {
@@ -522,6 +557,15 @@ test("rollback restart bewaart authorized plan identity en scheidt de runtime ta
     { operation: "restart", args: [value.releaseId, plan.planHash, value.activation.restart.service, value.releaseId] },
     { operation: "restart", args: [value.releaseId, plan.planHash, value.activation.restart.service, value.rollback.targetReleaseId] },
   ]);
+});
+
+test("Linux platform maps the locked pre-switch backfill to one broker operation", async () => {
+  const calls = [];
+  const platform = new LinuxReleasePlatform({ brokerImpl: async (operation, args) => { calls.push({ operation, args }); return { status: "BACKFILLED" }; } });
+  const value = contract();
+  const plan = { planHash: "9".repeat(64) };
+  await platform.runPreSwitchDataMigration(value, { database: "workspace", adapter: "sportpaleis-domain-backfill-v1" }, plan);
+  assert.deepEqual(calls, [{ operation: "data-backfill", args: [value.releaseId, plan.planHash, "workspace", "sportpaleis-domain-backfill-v1"] }]);
 });
 
 test("production post-migration verifier uses only the privileged read-only inspector", async () => {
@@ -814,7 +858,7 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.match(platform, /spawn\("\/usr\/bin\/flock", \["--no-fork", "--nonblock", "--exclusive"/u);
   assert.match(await readFile(new URL("../scripts/release-engine-runner.mjs", import.meta.url), "utf8"), /try \{ await releaseApplication\(\); \}[\s\S]*finally \{ await releaseEnvironmentLock\(\); \}/u);
   assert.match(installation, /traverse-only ACL \(`--x`\)[\s\S]*do not grant directory listing/u);
-  assert.match(broker, /verify-host-context\|backup\|stage\|rollback-set\|migrate\|switch\|restart\|rollback/u);
+  assert.match(broker, /verify-host-context\|backup\|stage\|rollback-set\|migrate\|data-backfill\|switch\|restart\|rollback/u);
   assert.match(broker, /systemd-run --quiet --wait --pipe --collect --service-type=exec/u);
   assert.match(broker, /--setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1/u);
   assert.match(broker, /DELEGATED_CALLER_INVALID/u);

@@ -40,6 +40,7 @@ const allowedSwitchStrategies = new Set(["atomic-symlink"]);
 const allowedRestartStrategies = new Set(["single"]);
 const allowedMigrationClassifications = new Set(["ADDITIVE", "DESTRUCTIVE"]);
 const allowedFeatureDefaults = new Set(["OFF", "ON"]);
+const allowedPreSwitchDataMigrationAdapters = new Set(["sportpaleis-domain-backfill-v1"]);
 
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -194,6 +195,22 @@ export function validateReleaseContract(input) {
     });
   });
   unique(databases.map((database) => database.id), "databases");
+  const databaseIds = new Set(databases.map(({ id }) => id));
+  const preSwitchDataMigrations = requireArray(input.activation?.preSwitchDataMigrations ?? [], "activation.preSwitchDataMigrations").map((step, index) => {
+    const name = `activation.preSwitchDataMigrations[${index}]`;
+    const adapter = requireString(step?.adapter, `${name}.adapter`, idPattern);
+    if (!allowedPreSwitchDataMigrationAdapters.has(adapter)) throw new Error(`${name}.adapter is niet geallowlist.`);
+    const database = requireString(step?.database, `${name}.database`, idPattern);
+    if (!databaseIds.has(database)) throw new Error(`${name}.database ontbreekt in databases.`);
+    if (step?.idempotent !== true || step?.requiresQuiescedService !== true || step?.verification !== "canonical-state-sha256-equality") {
+      throw new Error(`${name} mist de verplichte idempotency-, quiesce- of hashverificatiegrens.`);
+    }
+    return Object.freeze({
+      id: requireString(step?.id, `${name}.id`, idPattern), database, adapter,
+      idempotent: true, requiresQuiescedService: true, verification: "canonical-state-sha256-equality",
+    });
+  });
+  unique(preSwitchDataMigrations.map(({ id }) => id), "activation.preSwitchDataMigrations");
 
   const switchStrategy = requireString(input.activation?.switchStrategy, "activation.switchStrategy");
   const restartStrategy = requireString(input.activation?.restart?.strategy, "activation.restart.strategy");
@@ -245,6 +262,7 @@ export function validateReleaseContract(input) {
     activation: Object.freeze({
       switchStrategy,
       restart: Object.freeze({ strategy: restartStrategy, service: requireString(input.activation?.restart?.service, "activation.restart.service", idPattern) }),
+      preSwitchDataMigrations,
       readinessChecks: requireArray(input.activation?.readinessChecks, "activation.readinessChecks").map((id) => requireString(id, "readiness adapter", idPattern)),
       smokeSuite: requireArray(input.activation?.smokeSuite, "activation.smokeSuite").map((id) => requireString(id, "smoke adapter", idPattern)),
       oldReleasePostMigrationSmokes: requireArray(input.activation?.oldReleasePostMigrationSmokes ?? [], "activation.oldReleasePostMigrationSmokes").map((id) => requireString(id, "old release smoke adapter", idPattern)),

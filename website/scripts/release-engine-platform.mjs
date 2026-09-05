@@ -228,7 +228,7 @@ export class LinuxReleasePlatform {
   }
 
   async #broker(operation, args = []) {
-    const allowed = new Set(["inspect-current", "inspect-env", "inspect-db", "inspect-recovery", "push-counters", "backup", "stage", "rollback-set", "migrate", "switch", "restart", "rollback", "smoke", "evidence"]);
+    const allowed = new Set(["inspect-current", "inspect-env", "inspect-db", "inspect-recovery", "push-counters", "backup", "stage", "rollback-set", "migrate", "data-backfill", "switch", "restart", "rollback", "smoke", "evidence"]);
     if (!allowed.has(operation) || args.some((argument) => typeof argument !== "string" || argument.includes("\0") || argument.includes("\n"))) throw new Error("Niet-geallowliste brokeroperatie geweigerd.");
     if (this.brokerImpl) return this.brokerImpl(operation, [...args]);
     try {
@@ -296,6 +296,7 @@ export class LinuxReleasePlatform {
   }
 
   async applyMigration(contract, step, plan) { return this.#broker("migrate", [contract.releaseId, plan.planHash, step.database, step.migrationId, step.checksum]); }
+  async runPreSwitchDataMigration(contract, step, plan) { return this.#broker("data-backfill", [contract.releaseId, plan.planHash, step.database, step.adapter]); }
   async verifyMigration(contract, step) {
     const database = contract.databases.find((item) => item.id === step.database);
     if (!database) throw Object.assign(new Error(`Databasecontract ${step.database} ontbreekt.`), { code: "DATABASE_CONTRACT_MISSING" });
@@ -417,6 +418,10 @@ export class InMemoryReleasePlatform {
       if (index >= 0) actual.objects[index] = structuredClone(object); else actual.objects.push(structuredClone(object));
     }
     actual.ledger.push({ id: migration.id, name: path.basename(migration.file), checksum: migration.checksum, appliedAt: this.now });
+  }
+  async runPreSwitchDataMigration(_contract, step) {
+    this.maybeFail(`dataBackfill:${step.id}`);
+    return { status: "BACKFILLED", globalRevision: 1, legacySha256: "d".repeat(64), composedSha256: "d".repeat(64) };
   }
   async verifyMigration(_contract, step) { this.maybeFail(`verifyMigration:${step.migrationId}`); const actual = this.databases.get(step.database); return { passed: actual.ledger.some((entry) => entry.id === step.migrationId && entry.checksum === step.checksum), evidence: { readOnly: true } }; }
   async runSmoke(_contract, smoke, context) { this.maybeFail(`smoke:${smoke}:${context.phase}`); return { passed: true, smoke, context }; }

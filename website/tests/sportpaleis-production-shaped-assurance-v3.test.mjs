@@ -38,4 +38,5 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /materializeLegacyRollbackState/u);
   assert.match(assurance, /largeFreeProductionHeightsMm/u);
   assert.match(assurance, /recordWrites/u);
+  assert.match(assurance, /bootstrapFieldBytes/u);
 });
