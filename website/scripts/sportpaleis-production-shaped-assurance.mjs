@@ -40,7 +40,7 @@ assert.equal(backfillEvidence.legacySha256, backfillEvidence.composedSha256, "of
 
 const sha = (value) => createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
 const assuranceEntrypointSha256 = sha(await readFile(fileURLToPath(import.meta.url)));
-const hashJson = (value) => sha(JSON.stringify(value));
+const hashJson = (value) => sha256CanonicalJson(value);
 // LIVE has three customer seats. The temporary review principal is explicitly
 // outside those seats, so four simultaneous full bootstraps are the hard
 // production-shaped upper bound. Poll traffic remains concurrent around them.
