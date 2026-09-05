@@ -139,7 +139,7 @@ NODE
   data-backfill)
     release_id=${1:-}; plan_hash=${2:-}; database=${3:-}; adapter=${4:-}
     valid_id "$release_id"; valid_hash "$plan_hash"; valid_id "$database"; valid_id "$adapter"; verify_plan "$release_id" "$plan_hash"
-    [[ $database == workspace && $adapter == sportpaleis-domain-backfill-v1 ]] || fail DATA_BACKFILL_NOT_ALLOWLISTED
+    [[ $database == workspace && ( $adapter == sportpaleis-domain-backfill-v1 || $adapter == wbd-owner-domain-backfill-v1 ) ]] || fail DATA_BACKFILL_NOT_ALLOWLISTED
     node - "$(plan_file "$release_id")" "$database" "$adapter" <<'NODE'
 const fs = require("fs");
 const [file, database, adapter] = process.argv.slice(2);
@@ -148,7 +148,12 @@ const matches = (plan.activation?.preSwitchDataMigrations ?? []).filter((step) =
 if (matches.length !== 1 || matches[0].idempotent !== true || matches[0].requiresQuiescedService !== true || matches[0].verification !== "canonical-state-sha256-equality") process.exit(49);
 NODE
     candidate="$WBD_ROOT/releases/$release_id"
-    [[ -f "$candidate/website/scripts/sportpaleis-domain-backfill.mjs" ]] || fail DATA_BACKFILL_RUNNER_MISSING
+    case "$adapter" in
+      sportpaleis-domain-backfill-v1) runner="$candidate/website/scripts/sportpaleis-domain-backfill.mjs" ;;
+      wbd-owner-domain-backfill-v1) runner="$candidate/website/scripts/wbd-owner-domain-backfill.mjs" ;;
+      *) fail DATA_BACKFILL_NOT_ALLOWLISTED ;;
+    esac
+    [[ -f "$runner" ]] || fail DATA_BACKFILL_RUNNER_MISSING
     current_before=$(readlink -f "$WBD_ROOT/current")
     [[ $(basename "$current_before") != "$release_id" ]] || fail DATA_BACKFILL_REQUIRES_PRE_SWITCH_BASELINE
     restart_baseline_on_error() {
@@ -157,7 +162,7 @@ NODE
     trap restart_baseline_on_error ERR
     systemctl stop "$SERVICE"
     set -a; . "$ENV_FILE"; set +a
-    result=$(NODE_ENV=production WBD_RELEASEBROKER_LOCK_HELD=true /usr/bin/node "$candidate/website/scripts/sportpaleis-domain-backfill.mjs")
+    result=$(NODE_ENV=production WBD_RELEASEBROKER_LOCK_HELD=true /usr/bin/node "$runner")
     node - "$result" <<'NODE'
 const value = JSON.parse(process.argv[2]);
 const hash = /^[a-f0-9]{64}$/u;

@@ -40,7 +40,7 @@ usage() {
   cat <<'EOF'
 Gebruik:
   spw-immutable-release.sh inspect
-  spw-immutable-release.sh prepare --artifact FILE --manifest FILE --expected-current RELEASE_ID --assurance-evidence FILE
+  spw-immutable-release.sh prepare --artifact FILE --manifest FILE --expected-current RELEASE_ID --assurance-evidence FILE [--owner-assurance-evidence FILE]
   spw-immutable-release.sh switch --plan FILE --human-go RELEASE_ID
 
 prepare bouwt een actuele rollbackset en staged de kandidaat, maar wijzigt
@@ -152,6 +152,16 @@ process.stdout.write(String(value));
 NODE
 }
 
+manifest_optional_field() {
+  node - "$1" "$2" <<'NODE'
+const fs = require("fs");
+const [file, path] = process.argv.slice(2);
+let value = JSON.parse(fs.readFileSync(file, "utf8"));
+for (const segment of path.split(".")) value = value?.[segment];
+if (value !== undefined && value !== null) process.stdout.write(String(value));
+NODE
+}
+
 normalize_plan_path() {
   if [[ "$TEST_MODE" == "1" ]] && command -v cygpath >/dev/null 2>&1; then
     cygpath -u "$1"
@@ -211,6 +221,42 @@ const body = fs.readFileSync(file);
 process.stdout.write(crypto.createHash("sha256").update(body).digest("hex"));
 NODE
   )"; then rm -f -- "$contract_tmp"; fail "production-shaped assurance-evidence faalt de versioned brokergrens."; fi
+  rm -f -- "$contract_tmp"
+  printf '%s' "$verified_hash"
+}
+
+verify_owner_domain_assurance() {
+  local evidence="$1" manifest="$2" artifact="$3" artifact_hash release_id commit assurance_hash contract_hash contract_entry contract_tmp verified_hash
+  [[ -n "$evidence" && -f "$evidence" ]] || fail "verplichte WBD Owner domeinassurance-evidence ontbreekt."
+  release_id="$(manifest_field "$manifest" releaseId)"
+  commit="$(manifest_field "$manifest" commit)"
+  artifact_hash="$(manifest_field "$manifest" artifactSha256 | tr '[:upper:]' '[:lower:]')"
+  assurance_hash="$(manifest_field "$manifest" ownerDomainAssurance.sha256 | tr '[:upper:]' '[:lower:]')"
+  contract_hash="$(manifest_field "$manifest" ownerDomainAssurance.contractSha256 | tr '[:upper:]' '[:lower:]')"
+  contract_entry="$(manifest_field "$manifest" ownerDomainAssurance.contract)"
+  [[ "$contract_entry" == "app/config/wbd-owner-domain-assurance-v1.json" ]] || fail "WBD Owner assurancecontractpad is niet geallowlist."
+  contract_tmp="$(mktemp)"
+  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp"; then rm -f -- "$contract_tmp"; fail "WBD Owner assurancecontract ontbreekt uit artifact."; fi
+  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" ]] || { rm -f -- "$contract_tmp"; fail "WBD Owner assurancecontracthash wijkt af."; }
+  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile] = process.argv.slice(2);
+const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
+const contract = JSON.parse(fs.readFileSync(contractFile, "utf8"));
+if (evidence.schemaVersion !== 1 || evidence.status !== "PASS" || evidence.releaseId !== releaseId || evidence.contractId !== contract.contractId) throw new Error("WBD Owner assurance is niet PASS voor deze release");
+if (evidence.identity?.candidateCommit !== commit || evidence.identity?.candidateArtifactSha256 !== artifactSha256) throw new Error("WBD Owner candidatebinding wijkt af");
+if (!/^[a-f0-9]{64}$/u.test(String(evidence.identity?.restoreBackupSha256 ?? ""))) throw new Error("WBD Owner restorebinding ontbreekt");
+if (evidence.identity?.assuranceEntrypointSha256 !== assuranceSha256 || evidence.identity?.assuranceContractSha256 !== contractSha256) throw new Error("WBD Owner assuranceversie wijkt af");
+if (evidence.identity?.tenant !== "we-build-and-design" || evidence.identity?.accessScope !== "owner") throw new Error("WBD Owner tenant- of scopebinding wijkt af");
+if (!contract.requiredInvariants.every((key) => evidence.invariants?.[key] === true) || !Object.values(evidence.invariants ?? {}).every((value) => value === true)) throw new Error("WBD Owner assurance-invariant is niet groen");
+const limits = contract.limits;
+const metrics = evidence.metrics ?? {};
+if (metrics.httpErrors !== limits.httpErrors || metrics.serverErrors !== limits.serverErrors || metrics.p95Ms > limits.allRoutesP95Ms || metrics.maxMs > limits.allRoutesMaxMs || metrics.eventLoopP95Ms > limits.eventLoopP95Ms || metrics.eventLoopMaxMs > limits.eventLoopMaxMs || metrics.rssGrowthBytes > limits.rssGrowthBytes || metrics.transactionHoldMaxMs > limits.databaseTransactionHoldMaxMs) throw new Error("WBD Owner performancegrens is overschreden");
+if (contract.minimumLoad?.sessionPolls < 100 || contract.minimumLoad?.concurrentReadRounds < 12 || contract.minimumLoad?.concurrentRoutes < 7 || limits.eventLoopMaxMs > 750 || limits.rssGrowthBytes > 268435456) throw new Error("WBD Owner assurancecontract versoepelt een harde grens");
+process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"));
+NODE
+  )"; then rm -f -- "$contract_tmp"; fail "WBD Owner assurance-evidence faalt de versioned brokergrens."; fi
   rm -f -- "$contract_tmp"
   printf '%s' "$verified_hash"
 }
@@ -345,17 +391,18 @@ write_plan() {
   local plan="$1" release_id="$2" commit="$3" tag="$4" artifact_hash="$5"
   local previous_path="$6" previous_id="$7" current_manifest_hash="$8" env_hash="$9"
   local backup_info="${10}" rollback_info="${11}" candidate_path="${12}" assurance_path="${13:-}" assurance_hash="${14:-}"
+  local owner_assurance_path="${15:-}" owner_assurance_hash="${16:-}"
   local backup_path backup_hash backup_age rollback rollback_hash env_copy env_copy_hash
   IFS='|' read -r backup_path backup_hash backup_age <<<"$backup_info"
   IFS='|' read -r rollback rollback_hash env_copy env_copy_hash <<<"$rollback_info"
   node - "$plan.tmp" "$release_id" "$commit" "$tag" "$artifact_hash" "$candidate_path" \
     "$previous_path" "$previous_id" "$current_manifest_hash" "$env_hash" \
-    "$backup_path" "$backup_hash" "$backup_age" "$rollback" "$rollback_hash" "$env_copy" "$env_copy_hash" "$assurance_path" "$assurance_hash" <<'NODE'
+    "$backup_path" "$backup_hash" "$backup_age" "$rollback" "$rollback_hash" "$env_copy" "$env_copy_hash" "$assurance_path" "$assurance_hash" "$owner_assurance_path" "$owner_assurance_hash" <<'NODE'
 const fs = require("fs");
 const [out, releaseId, commit, tag, artifactSha256, candidatePath, previousPath, previousReleaseId,
   currentManifestSha256, productionEnvSha256, backupPath, backupSha256, backupAgeSeconds,
   rollbackArtifact, rollbackSha256, environmentSnapshot, environmentSnapshotSha256,
-  assuranceEvidence, assuranceEvidenceSha256] = process.argv.slice(2);
+  assuranceEvidence, assuranceEvidenceSha256, ownerAssuranceEvidence, ownerAssuranceEvidenceSha256] = process.argv.slice(2);
 fs.writeFileSync(out, `${JSON.stringify({
   schemaVersion: 1,
   releaseId, commit, tag, artifactSha256, candidatePath,
@@ -364,6 +411,7 @@ fs.writeFileSync(out, `${JSON.stringify({
   backup: { path: backupPath, sha256: backupSha256, ageSecondsAtPreparation: Number(backupAgeSeconds) },
   rollback: { artifact: rollbackArtifact, sha256: rollbackSha256, environmentSnapshot, environmentSnapshotSha256 },
   productionShapedAssurance: { evidence: assuranceEvidence, sha256: assuranceEvidenceSha256, required: true },
+  ownerDomainAssurance: { evidence: ownerAssuranceEvidence, sha256: ownerAssuranceEvidenceSha256, required: Boolean(ownerAssuranceEvidence) },
   preparedAt: new Date().toISOString(),
   switchAuthorized: false,
   databaseRestoreAutomatic: false,
@@ -633,13 +681,14 @@ command_inspect() {
 
 command_prepare() {
   require_production_boundary
-  local artifact="" manifest="" expected_current="" assurance_evidence=""
+  local artifact="" manifest="" expected_current="" assurance_evidence="" owner_assurance_evidence=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --artifact) artifact="$2"; shift 2;;
       --manifest) manifest="$2"; shift 2;;
       --expected-current) expected_current="$2"; shift 2;;
       --assurance-evidence) assurance_evidence="$2"; shift 2;;
+      --owner-assurance-evidence) owner_assurance_evidence="$2"; shift 2;;
       *) fail "onbekend prepare-argument: $1";;
     esac
   done
@@ -651,6 +700,11 @@ command_prepare() {
   verify_artifact_layout_contract "$artifact"
   local assurance_source_hash assurance_copy assurance_copy_hash
   assurance_source_hash="$(verify_production_shaped_assurance "$assurance_evidence" "$manifest" "$artifact")"
+  local owner_assurance_required owner_assurance_source_hash="" owner_assurance_copy="" owner_assurance_copy_hash=""
+  owner_assurance_required="$(manifest_optional_field "$manifest" deployability.ownerDomainAssuranceRequired)"
+  if [[ "$owner_assurance_required" == "true" ]]; then
+    owner_assurance_source_hash="$(verify_owner_domain_assurance "$owner_assurance_evidence" "$manifest" "$artifact")"
+  fi
 
   local release_id commit tag artifact_hash candidate_path stage previous_path previous_id
   local backup_info rollback_info plan current_manifest_hash env_hash
@@ -692,10 +746,19 @@ command_prepare() {
   chmod 0640 "$assurance_copy"
   assurance_copy_hash="$(sha256_file "$assurance_copy")"
   [[ "$assurance_copy_hash" == "$assurance_source_hash" ]] || fail "assurance-evidence wijzigde tijdens prepare."
+  if [[ "$owner_assurance_required" == "true" ]]; then
+    owner_assurance_copy="$EVIDENCE_DIR/$release_id/predeploy-owner-domain-assurance.json"
+    [[ ! -e "$owner_assurance_copy" ]] || fail "immutable WBD Owner assurance-evidence bestaat al."
+    cp "$owner_assurance_evidence" "$owner_assurance_copy.tmp"
+    mv "$owner_assurance_copy.tmp" "$owner_assurance_copy"
+    chmod 0640 "$owner_assurance_copy"
+    owner_assurance_copy_hash="$(sha256_file "$owner_assurance_copy")"
+    [[ "$owner_assurance_copy_hash" == "$owner_assurance_source_hash" ]] || fail "WBD Owner assurance-evidence wijzigde tijdens prepare."
+  fi
 
   rollback_info="$(create_rollback_set "$release_id" "$previous_path")"
   write_plan "$plan" "$release_id" "$commit" "$tag" "$artifact_hash" "$previous_path" "$previous_id" \
-    "$current_manifest_hash" "$env_hash" "$backup_info" "$rollback_info" "$candidate_path" "$assurance_copy" "$assurance_copy_hash"
+    "$current_manifest_hash" "$env_hash" "$backup_info" "$rollback_info" "$candidate_path" "$assurance_copy" "$assurance_copy_hash" "$owner_assurance_copy" "$owner_assurance_copy_hash"
   verify_plan "$plan"
   verify_current_consistency
   [[ "$(current_release_id)" == "$expected_current" ]] || fail "prepare wijzigde onverwacht de actieve release."
@@ -723,7 +786,7 @@ command_switch() {
   verify_plan "$plan"
   local release_id candidate_path previous_path previous_id expected_env_hash expected_manifest_hash
   local rollback rollback_hash env_snapshot env_snapshot_hash
-  local assurance_evidence assurance_hash
+  local assurance_evidence assurance_hash owner_assurance_evidence owner_assurance_hash owner_assurance_required
   release_id="$(manifest_field "$plan" releaseId)"
   validate_release_id "$release_id"
   SWITCH_EVIDENCE_RELEASE="$release_id"
@@ -745,6 +808,10 @@ command_switch() {
   env_snapshot_hash="$(manifest_field "$plan" rollback.environmentSnapshotSha256)"
   assurance_evidence="$(normalize_plan_path "$(manifest_field "$plan" productionShapedAssurance.evidence)")"
   assurance_hash="$(manifest_field "$plan" productionShapedAssurance.sha256)"
+  owner_assurance_required="$(manifest_optional_field "$plan" ownerDomainAssurance.required)"
+  owner_assurance_evidence="$(manifest_optional_field "$plan" ownerDomainAssurance.evidence)"
+  owner_assurance_hash="$(manifest_optional_field "$plan" ownerDomainAssurance.sha256)"
+  if [[ "$owner_assurance_required" == "true" ]]; then owner_assurance_evidence="$(normalize_plan_path "$owner_assurance_evidence")"; fi
   local actual_current
   set_switch_gate CORE_PREFLIGHT CURRENT_RELEASE "Actieve release wijkt af van het deployplan."
   actual_current="$(current_release_path)"
@@ -759,6 +826,10 @@ command_switch() {
   [[ "$(sha256_file "$env_snapshot")" == "$env_snapshot_hash" ]] || fail "rollback-envsnapshot is gewijzigd."
   set_switch_gate CORE_PREFLIGHT PRODUCTION_SHAPED_ASSURANCE "Production-shaped assurance-evidence ontbreekt of is gewijzigd."
   [[ -f "$assurance_evidence" && "$(sha256_file "$assurance_evidence")" == "$assurance_hash" ]] || fail "production-shaped assurance-evidence is gewijzigd."
+  if [[ "$owner_assurance_required" == "true" ]]; then
+    set_switch_gate CORE_PREFLIGHT OWNER_DOMAIN_ASSURANCE "WBD Owner domeinassurance-evidence ontbreekt of is gewijzigd."
+    [[ -f "$owner_assurance_evidence" && "$(sha256_file "$owner_assurance_evidence")" == "$owner_assurance_hash" ]] || fail "WBD Owner assurance-evidence is gewijzigd."
+  fi
   set_switch_gate CORE_PREFLIGHT BACKUP_FRESHNESS "Actuele backup of backupchecksum voldoet niet."
   verify_backup >/dev/null
   set_switch_gate CORE_PREFLIGHT CURRENT_CONSISTENCY "Actieve symlink en RELEASE_ID zijn niet consistent."

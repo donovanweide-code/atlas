@@ -65,17 +65,23 @@ required.
 ## Owner Workspace impact
 
 Owner Workspace does **not** import Sportpaleis state or use `sp_runtime_state`.
-It does, however, independently implement the same failure-prone persistence
-pattern in `WbdOwnerMariaDbStore`: every `read()` selects and validates the complete
-`wbd_owner_state.state_json`; every `mutate()` locks, parses, validates, clones,
-validates and rewrites that complete value. Therefore the defect class is shared,
-not the tenant data.
+Its R2.26.38 path did independently implement the same failure-prone persistence
+pattern in `WbdOwnerMariaDbStore`: every read and mutation parsed, validated,
+cloned and rewrote the complete `wbd_owner_state.state_json`. The defect class was
+therefore shared, not the tenant data.
 
-The generic partition/hash/record/revision concepts are reusable, but Owner needs a
-separate candidate, domain map, backfill, shadow comparison and assurance contract.
-No Owner data migration or cutover is part of the Sportpaleis release. Mail's newer
-message/thread/audit tables already demonstrate a separate hot-data boundary and
-must not be folded back into an Owner state blob.
+The reusable copy-on-write, canonical-hash, domain-revision and offline-backfill
+primitives now underpin a separate forward-only Owner candidate. Owner data is
+partitioned into identity/access, capabilities, Product Truth, Control Plane,
+Atlas, promotion, append-only audit and platform metadata. Routine reads perform
+one revision lookup and reuse an immutable snapshot; mutations prepare outside the
+transaction and write only touched domains plus the small platform revision.
+`wbd_owner_state` remains immutable migration and rollback evidence.
+
+No Owner production data migration or cutover is part of the Sportpaleis release.
+The additive Owner migration and its hash-equal backfill require their own release,
+broker plan, canary and rollback proof. Mail's message/thread/audit tables remain a
+separate boundary and are not folded into an Owner state blob.
 
 ## Measured structural candidate
 

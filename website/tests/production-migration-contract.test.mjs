@@ -10,7 +10,16 @@ test("workspace-migratieversies zijn uniek en de domeinsplitsing volgt mailmigra
   const versions = names.map((name) => Number(name.slice(0, 3)));
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(names.includes("007-sportpaleis-domain-state.sql"));
+  assert.ok(names.includes("008-wbd-owner-domain-state.sql"));
   assert.equal(names.some((name) => name === "003-sportpaleis-domain-state.sql"), false);
+});
+
+test("Owner-domeinmigratie is additief en bewaart de legacybron", async () => {
+  const sql = await readFile(new URL("../sportpaleis-server/production-migrations/workspace/008-wbd-owner-domain-state.sql", import.meta.url), "utf8");
+  const statements = splitMigrationStatements(sql);
+  assert.equal(statements.length, 4);
+  assert.ok(statements.every((statement) => statement.startsWith("CREATE TABLE IF NOT EXISTS")));
+  assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM|UPDATE wbd_owner_state/iu);
 });
 
 test("multi-statement domeinmigratie wordt veilig per statement uitgevoerd", async () => {

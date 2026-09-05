@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "contractId": "WBD_OWNER_DOMAIN_ASSURANCE_V1",
+  "minimumLoad": {
+    "sessionPolls": 100,
+    "concurrentReadRounds": 12,
+    "concurrentRoutes": 7
+  },
+  "limits": {
+    "allRoutesP95Ms": 750,
+    "allRoutesMaxMs": 2000,
+    "eventLoopP95Ms": 75,
+    "eventLoopMaxMs": 750,
+    "rssGrowthBytes": 268435456,
+    "databaseTransactionHoldMaxMs": 1000,
+    "httpErrors": 0,
+    "serverErrors": 0
+  },
+  "requiredInvariants": [
+    "hashEqualBackfill",
+    "runtimeInitializationReadOnly",
+    "authenticatedRoutes",
+    "sessionPollsReadOnly",
+    "legacyStateWriteStable",
+    "domainWritesIncremental",
+    "cacheInvalidationExact",
+    "interruptedMutationAtomic",
+    "tenantIsolation",
+    "auditAppendOnly",
+    "ownerSurfacesPresent"
+  ]
+}

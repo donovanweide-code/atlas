@@ -26,7 +26,8 @@
     "mail:smtp:sportpaleis:controlled": "node scripts/sportpaleis-controlled-smtp-validation.mjs",
     "generate:sportpaleis:prepilot-winplot": "node --experimental-strip-types scripts/generate-sportpaleis-prepilot-winplot-acceptance.mjs",
     "generate:sportpaleis:production-gap-matrix": "node scripts/generate-sportpaleis-production-gap-matrix.mjs",
-    "assure:sportpaleis:production-shaped": "node --expose-gc scripts/sportpaleis-production-shaped-assurance.mjs"
+    "assure:sportpaleis:production-shaped": "node --expose-gc scripts/sportpaleis-production-shaped-assurance.mjs",
+    "assure:wbd-owner:domains": "node --expose-gc scripts/wbd-owner-domain-assurance.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -27,7 +27,7 @@ import {
   createInitialWbdOwnerState,
   createWbdOwnerRequestHandler,
 } from "./wbd-owner-foundation.mjs";
-import { WbdOwnerMariaDbStore } from "./wbd-owner-mariadb-store.mjs";
+import { WbdOwnerDomainMariaDbStore } from "./wbd-owner-domain-mariadb-store.mjs";
 import { MemoryWbdMailStore, WbdMailControlService } from "./wbd-mail-control.mjs";
 import { WbdMailMariaDbStore } from "./wbd-mail-mariadb-store.mjs";
 import { WbdImapMailboxConnector, WbdMailConnectorScheduler, parseWbdImapConfiguration } from "./wbd-imap-connector.mjs";
@@ -406,7 +406,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           return createInitialWbdOwnerState({ passwordRecord: await createWorkspacePasswordRecord(seedPassword) });
         };
         const store = options.wbdOwnerStore ?? (config.nodeEnv === "production"
-          ? new WbdOwnerMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace, bootstrap })
+          ? new WbdOwnerDomainMariaDbStore({ database: productionDatabaseCredentialsFromEnvironment(process.env).workspace })
           : new WbdOwnerFileStore({ filePath: process.env.WBD_OWNER_DATA_FILE ?? path.join(websiteRoot, "data", "wbd-owner", `${config.appEnv}-state.json`), bootstrap }));
         activeWbdOwnerStore = store;
         const mailStore = options.wbdMailStore ?? (options.wbdOwnerStore

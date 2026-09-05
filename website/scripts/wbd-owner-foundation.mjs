@@ -58,6 +58,7 @@ const ORGANIZATION_ID = "we-build-and-design";
 
 const iso = (date = new Date()) => date.toISOString();
 const sha256 = (value) => createHash("sha256").update(String(value)).digest("hex");
+const csrfTokenForSession = (token) => sha256(`wbd-owner-csrf-v1:${token}`);
 
 function error(message, statusCode, code) {
   return Object.assign(new Error(message), { statusCode, code });
@@ -75,7 +76,6 @@ function publicOwner(owner) {
 
 function appendAudit(state, actorId, action, subject, now = new Date()) {
   state.audit.push({ id: randomBytes(12).toString("hex"), actorId, action, subject, occurredAt: iso(now) });
-  if (state.audit.length > 1_000) state.audit.splice(0, state.audit.length - 1_000);
 }
 
 export function createInitialWbdOwnerState({ passwordRecord, now = new Date() }) {
@@ -266,7 +266,7 @@ export class WbdOwnerService {
     const normalizedDeviceMode = deviceMode === "PERSONAL" ? "PERSONAL" : "SHARED";
     const ttlMs = normalizedDeviceMode === "PERSONAL" ? PERSONAL_SESSION_TTL_MS : this.sessionTtlMs;
     const token = randomBytes(32).toString("base64url");
-    const csrfToken = randomBytes(24).toString("base64url");
+    const csrfToken = csrfTokenForSession(token);
     const session = {
       idHash: sha256(token),
       userId: state.owner.id,
@@ -298,16 +298,9 @@ export class WbdOwnerService {
   }
 
   async issueSessionView(token, now = new Date()) {
-    const { session } = await this.authenticate(token, now);
-    const csrfToken = randomBytes(24).toString("base64url");
-    const result = await this.store.mutate(async (state) => {
-      const active = state.sessions.find(({ idHash }) => idHash === session.idHash);
-      if (!active || new Date(active.expiresAt).getTime() <= now.getTime()) throw error("Sessie is verlopen.", 401, "SESSION_EXPIRED");
-      active.csrfHash = sha256(csrfToken);
-      active.lastSeenAt = iso(now);
-      return { state, value: undefined };
-    });
-    return { owner: publicOwner(result.state.owner), csrfToken, expiresAt: session.expiresAt, releaseId: this.releaseId };
+    const { state, session } = await this.authenticate(token, now);
+    const csrfToken = csrfTokenForSession(token);
+    return { owner: publicOwner(state.owner), csrfToken, expiresAt: session.expiresAt, releaseId: this.releaseId };
   }
 
   async logout(token, csrfToken, now = new Date()) {
@@ -606,7 +599,9 @@ export class WbdOwnerService {
 
   async #assertCsrf(token, csrfToken, now) {
     const { session } = await this.authenticate(token, now);
-    if (!csrfToken || !safeEqualHex(session.csrfHash, sha256(csrfToken))) throw error("Ongeldige requestbeveiliging.", 403, "CSRF_INVALID");
+    const presentedHash = sha256(csrfToken ?? "");
+    const deterministicHash = sha256(csrfTokenForSession(token));
+    if (!csrfToken || (!safeEqualHex(session.csrfHash, presentedHash) && !safeEqualHex(deterministicHash, presentedHash))) throw error("Ongeldige requestbeveiliging.", 403, "CSRF_INVALID");
   }
 }
 

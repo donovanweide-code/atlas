@@ -40,7 +40,7 @@ const allowedSwitchStrategies = new Set(["atomic-symlink"]);
 const allowedRestartStrategies = new Set(["single"]);
 const allowedMigrationClassifications = new Set(["ADDITIVE", "DESTRUCTIVE"]);
 const allowedFeatureDefaults = new Set(["OFF", "ON"]);
-const allowedPreSwitchDataMigrationAdapters = new Set(["sportpaleis-domain-backfill-v1"]);
+const allowedPreSwitchDataMigrationAdapters = new Set(["sportpaleis-domain-backfill-v1", "wbd-owner-domain-backfill-v1"]);
 
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;

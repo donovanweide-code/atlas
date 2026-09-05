@@ -128,6 +128,12 @@ test("pre-switch databackfill is allowlisted, database-bound, quiesced and hash-
   assert.throws(() => contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [{ ...valid, requiresQuiescedService: false }] } }), /quiesce/u);
 });
 
+test("afzonderlijke Owner-domeinbackfill gebruikt dezelfde begrensde brokergrens", () => {
+  const valid = { id: "wbd-owner-domain-backfill", database: "workspace", adapter: "wbd-owner-domain-backfill-v1", idempotent: true, requiresQuiescedService: true, verification: "canonical-state-sha256-equality" };
+  const value = contract({ activation: { ...rawContract.activation, preSwitchDataMigrations: [valid] } });
+  assert.deepEqual(value.activation.preSwitchDataMigrations, [valid]);
+});
+
 test("schema inspector SQL is pure read-only and status cannot create the ledger", () => {
   const queries = createPureSchemaInspectionQueries("wbd_workspace", ["wbd_mail_control_state"], "sportpaleis-runtime-state");
   assert.equal(assertPureReadOnlyInspectionQueries(queries), true);
