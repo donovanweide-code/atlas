@@ -10,6 +10,7 @@ test("V3-drempels zijn zwaarder dan of gelijk aan de falende R2.26.45-gate", asy
   assert.ok(contract.minimumLoad.concurrentFullBootstraps >= 4);
   assert.ok(contract.minimumLoad.libraryPreviews >= 300);
   assert.ok(contract.minimumLoad.revisionPolls >= 100);
+  assert.deepEqual(contract.minimumLoad.bootstrapSurfaces, ["overview", "orders", "production", "library", "teamwear", "admin"]);
   assert.deepEqual(contract.minimumLoad.largeFreeProductionHeightsMm, [80, 200]);
   assert.equal(contract.minimumLoad.quantityPerValue, 2);
   assert.ok(contract.limits.eventLoopMaxMs <= 1000);
@@ -17,7 +18,9 @@ test("V3-drempels zijn zwaarder dan of gelijk aan de falende R2.26.45-gate", asy
   assert.ok(contract.limits.rssHighWaterBytes <= 1073741824);
   assert.ok(contract.limits.steadyStateRssGrowthBytes <= 67108864);
   assert.equal(contract.limits.databaseAcquireTimeouts, 0);
-  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "productionIdempotency", "rollbackMaterializationProven", "domainRecordWritesIncremental"]) assert.ok(contract.requiredInvariants.includes(required));
+  assert.ok(contract.limits.bootstrapSurfaceMaxBytes.production < 6_534_299, "productionbootstrap blijft onder de gemeten monolithische nulmeting");
+  assert.ok(contract.limits.bootstrapSurfaceMaxBytes.library < contract.limits.bootstrapSurfaceMaxBytes.production);
+  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "productionIdempotency", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads"]) assert.ok(contract.requiredInvariants.includes(required));
 });
 
 test("releaseartifact en broker binden dezelfde immutable gatecode en het drempelcontract", async () => {
@@ -39,4 +42,5 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /largeFreeProductionHeightsMm/u);
   assert.match(assurance, /recordWrites/u);
   assert.match(assurance, /bootstrapFieldBytes/u);
+  assert.match(assurance, /scopedBootstrapPayloads/u);
 });
