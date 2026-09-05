@@ -1,12 +1,10 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import mariadb from "mariadb";
 
-import { encodeSportpaleisRuntimeState } from "./sportpaleis-mariadb-store.mjs";
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { productionDatabaseCredentialsFromEnvironment } from "./workspace-runtime-config.mjs";
-import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
+import { encodeLegacyRollbackStateIsolated } from "./workspace-legacy-state-encode.mjs";
 
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
 
@@ -20,9 +18,8 @@ export async function materializeLegacyRollbackState({ database, expectedGlobalR
     await store.initialize();
     const snapshot = await store.readSnapshot();
     if (expectedGlobalRevision != null && Number(snapshot.revision) !== Number(expectedGlobalRevision)) throw new Error("Rollbackbridge weigerde revision-drift.");
-    const snapshotHash = sha256CanonicalJson(snapshot);
-    if (expectedDomainHash && snapshotHash !== expectedDomainHash) throw new Error("Rollbackbridge weigerde domeinhash-drift.");
-    const encoded = encodeSportpaleisRuntimeState(snapshot);
+    const encoded = await encodeLegacyRollbackStateIsolated(snapshot);
+    if (expectedDomainHash && encoded.stateSha256 !== expectedDomainHash) throw new Error("Rollbackbridge weigerde domeinhash-drift.");
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
@@ -39,8 +36,8 @@ export async function materializeLegacyRollbackState({ database, expectedGlobalR
       return Object.freeze({
         organizationId: ORGANIZATION_ID,
         revision: snapshot.revision,
-        stateSha256: snapshotHash,
-        encodedSha256: createHash("sha256").update(encoded.serialized).digest("hex"),
+        stateSha256: encoded.stateSha256,
+        encodedSha256: encoded.encodedSha256,
         encoding: encoded.encoding,
         rollbackConsumer: "R2.26.38_COMPATIBLE",
       });
