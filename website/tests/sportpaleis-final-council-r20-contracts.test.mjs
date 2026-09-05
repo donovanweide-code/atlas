@@ -106,7 +106,11 @@ test("Bibliotheek-IA scheidt actieve controle, ingerichte assets en technisch be
   const ready = library.indexOf("Ingericht");
   const all = library.indexOf("Alles");
   assert.ok(review >= 0 && review < ready && ready < all, "de primaire bibliotheekstatussen staan in taakvolgorde");
+  assert.match(workspaceSource, /const decision = executableProductionAssetDecision\(asset\)/u);
+  assert.match(workspaceSource, /const attention = !archived && !lifecycleReview && !decision\.allowed/u);
   assert.match(workspaceSource, /data-managed-asset-state="\$\{review \? "review" : "ready"\}"/u);
+  assert.match(workspaceSource, /data-asset-executability-attention/u);
+  assert.match(workspaceSource, /const image = decision\.allowed/u);
   assert.match(workspaceSource, /production-assets\/\$\{encodeURIComponent\(asset\.id\)\}\/numbers\/34\.svg/u);
   assert.match(workspaceSource, /Voorraad en geavanceerd beheer/u);
   assert.doesNotMatch(library, /teamwear-review-fixtures|fixture-Nike|fixture-adidas/u);
