@@ -14,6 +14,7 @@ import {
   assertIncrementalSportpaleisState,
   composeSportpaleisState,
   createLazySportpaleisStateDraft,
+  createPreparedSportpaleisStateDraft,
   detachSportpaleisRecordCollections,
   immutableDomain,
   partitionSportpaleisState,
@@ -100,13 +101,22 @@ function stableRecordOrdinals(collectionKey, previous, next, priorOrdinals) {
   return assigned;
 }
 
+function immutableChangedRecordCollection(collectionKey, previous, next) {
+  const priorById = new Map(previous.map((record) => [sportpaleisRecordIdentity(collectionKey, record), record]));
+  return Object.freeze(next.map((record) => priorById.get(sportpaleisRecordIdentity(collectionKey, record)) === record ? record : immutableDomain(record)));
+}
+
 function orderHistoryRows(orders) {
   return orders.flatMap((order) => (order.eventHistory ?? []).map((event, ordinal) => ({ order, event, ordinal })));
 }
 
+const persistedOrderRecords = new WeakMap();
+
 function persistedRecord(collectionKey, record) {
   if (collectionKey !== "orders") return record;
+  if (persistedOrderRecords.has(record)) return persistedOrderRecords.get(record);
   const { eventHistory: _eventHistory, ...order } = record;
+  persistedOrderRecords.set(record, order);
   return order;
 }
 
@@ -139,6 +149,7 @@ function changedAuditEvents(previous, next) {
   if (previous.some(({ id }) => !nextIds.has(id))) throw Object.assign(new Error("Immutable auditregels mogen niet worden verwijderd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
   for (const event of previous) {
     const candidate = nextById.get(event.id);
+    if (candidate === event) continue;
     if (sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) throw Object.assign(new Error("Immutable auditregels mogen niet worden gewijzigd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
   }
   return next.filter(({ id }) => !previousIds.has(id));
@@ -392,7 +403,7 @@ export class SportpaleisDomainMariaDbStore {
     this.schemaVersion = Number(meta[0].schema_version);
   }
 
-  async mutate(mutator) {
+  async mutate(mutator, preparedCommand = null) {
     const connection = await this.#connection();
     const transactionStartedAt = performance.now();
     let phase = "begin";
@@ -408,15 +419,23 @@ export class SportpaleisDomainMariaDbStore {
         throw new SportpaleisMariaDbStoreError("De lokale domeinsnapshot is verouderd; herhaal veilig na refresh.", "DOMAIN_SNAPSHOT_STALE");
       }
       const current = this.snapshot;
-      const lazy = createLazySportpaleisStateDraft(current);
-      phase = "mutator";
-      const result = await mutator(lazy.draft);
-      if (result.unchanged === true) {
-        this.metrics.unchangedMutations += 1;
-        await connection.rollback();
-        return { state: current, value: result.value };
+      let result;
+      let finalized;
+      if (preparedCommand) {
+        if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw new SportpaleisMariaDbStoreError("De voorbereide productieopdracht is verouderd.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
+        result = { value: preparedCommand.value };
+        finalized = preparedCommand.finalized;
+      } else {
+        const lazy = createLazySportpaleisStateDraft(current);
+        phase = "mutator";
+        result = await mutator(lazy.draft);
+        if (result.unchanged === true) {
+          this.metrics.unchangedMutations += 1;
+          await connection.rollback();
+          return { state: current, value: result.value };
+        }
+        finalized = lazy.finalize();
       }
-      const finalized = lazy.finalize();
       this.metrics.mutations += 1;
       this.metrics.clonedKeys += finalized.clonedKeys.length;
       const nextRevision = this.globalRevision + 1;
@@ -478,6 +497,7 @@ export class SportpaleisDomainMariaDbStore {
           const priorOrders = recordMap(current.orders ?? [], "orders");
           for (const order of finalized.state.orders ?? []) {
             const prior = priorOrders.get(order.id);
+            if (prior === order) continue;
             if (prior && sha256CanonicalJson(prior) === sha256CanonicalJson(order)) continue;
             const priorEvents = new Map((prior?.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), event]));
             const nextEvents = new Map((order.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), { event, ordinal }]));
@@ -500,6 +520,7 @@ export class SportpaleisDomainMariaDbStore {
         if (domain === "artifacts") {
           const priorJobs = recordMap(current.productionJobs ?? [], "productionJobs");
           for (const job of finalized.state.productionJobs ?? []) {
+            if (priorJobs.get(job.id) === job) continue;
             const reference = artifactReference(job);
             if (!reference) continue;
             const priorReference = artifactReference(priorJobs.get(job.id));
@@ -526,6 +547,7 @@ export class SportpaleisDomainMariaDbStore {
             this.metrics.idempotencyDeletes += 1;
           }
           for (const [identity, record] of Object.entries(next)) {
+            if (previous[identity] === record) continue;
             if (Object.hasOwn(previous, identity) && sha256CanonicalJson(previous[identity]) === sha256CanonicalJson(record)) continue;
             await connection.query(
               "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
@@ -543,7 +565,7 @@ export class SportpaleisDomainMariaDbStore {
         this.metrics.domainWrites += 1;
         const complete = { ...immutableDomain(payload) };
         for (const key of SPORTPALEIS_STATE_DOMAINS[domain]) {
-          if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) complete[key] = immutableDomain(sourcePayload[key] ?? []);
+          if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) complete[key] = immutableChangedRecordCollection(key, current[key] ?? [], sourcePayload[key] ?? []);
         }
         if (domain === "platform") complete.idempotency = immutableDomain(sourcePayload.idempotency ?? {});
         if (domain === "audit") {
@@ -591,7 +613,7 @@ export class SportpaleisDomainMariaDbStore {
     await this.#refresh(false);
     const baseRevision = this.globalRevision;
     const baseSnapshot = this.snapshot;
-    const lazy = createLazySportpaleisStateDraft(baseSnapshot);
+    const lazy = createPreparedSportpaleisStateDraft(baseSnapshot);
     const preparedResult = await mutator(lazy.draft);
     if (preparedResult.unchanged === true) {
       this.metrics.unchangedMutations += 1;
@@ -603,13 +625,7 @@ export class SportpaleisDomainMariaDbStore {
     this.metrics.preparedMutations += 1;
     this.metrics.preparedMutationMsTotal += preparationMs;
     this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
-    return this.mutate(async (state) => {
-      if (Number(state.revision) !== Number(baseRevision)) {
-        throw new SportpaleisMariaDbStoreError("De voorbereide productieopdracht is door een gelijktijdige wijziging verouderd; herhaal veilig met dezelfde idempotency key.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
-      }
-      for (const key of prepared.changedKeys) state[key] = prepared.state[key];
-      return { state, value: preparedResult.value };
-    });
+    return this.mutate(null, { baseRevision, finalized: prepared, value: preparedResult.value });
   }
 
   async latestBackupStatus() { return { status: "external", strategy: "encrypted-logical-dump-plus-provider-backup" }; }

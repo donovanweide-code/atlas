@@ -1573,6 +1573,15 @@ async function idempotentAsync(state, key, userId, operation, valueFactory, requ
   return { duplicate: false, value };
 }
 
+function mutableStateRecord(state, collectionKey, predicate, missingMessage = "Record niet gevonden.") {
+  const collection = state[collectionKey];
+  const index = collection.findIndex(predicate);
+  if (index < 0) throw Object.assign(new Error(missingMessage), { statusCode: 404, code: "RECORD_NOT_FOUND" });
+  const record = structuredClone(collection[index]);
+  collection[index] = record;
+  return record;
+}
+
 const FULFILLMENT_TRANSITION_ACTIONS = new Set(["READY_FOR_PICKUP", "PICKED_UP", "DELIVERED"]);
 const TEAMKIT_EXTERNAL_TASK_SEQUENCE = ["READY_TO_SEND", "SENT", "CONFIRMED", "RETURNED", "READY", "COMPLETED"];
 
@@ -3767,7 +3776,7 @@ export class SportpaleisPilotService {
     const result = await this.store.mutate(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, "CREATE_PRODUCTION_PROPOSAL", () => {
         const orders = selections.map(({ id, expectedRevision }) => {
-          const order = state.orders.find((candidate) => candidate.id === id);
+          const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, `${id}: order niet gevonden.`);
           if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           const blocker = productionProposalBlockReason(order, state);
@@ -3856,7 +3865,9 @@ export class SportpaleisPilotService {
         const createdAt = iso();
         let proposal;
         if (mergeTarget) {
-          proposal = mergeTarget.proposal;
+          proposal = mutableStateRecord(state, "productionProposals", ({ id }) => id === mergeTarget.proposal.id, "Productievoorstel niet gevonden.");
+          mergeTarget.proposal = proposal;
+          mergeTarget.group = proposal.groups.find(({ id }) => id === mergeTarget.group.id);
           const proposalOrderIds = new Set(proposal.orders.map(({ id }) => id));
           for (const order of orders) if (!proposalOrderIds.has(order.id)) {
             proposal.orders.push({ id: order.id, expectedRevision: order.revision });
@@ -3946,7 +3957,7 @@ export class SportpaleisPilotService {
     if (selections.length < 1 || selections.length > 40) throw Object.assign(new Error("Selecteer 1 tot 40 gecontroleerde orders."), { statusCode: 400, code: "VALIDATION_ERROR" });
     const result = await this.#productionMutation(async (state) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_PRODUCTION_JOB", async () => {
-        let proposal = payload.proposalId ? state.productionProposals.find(({ id }) => id === payload.proposalId) : null;
+        let proposal = payload.proposalId ? mutableStateRecord(state, "productionProposals", ({ id }) => id === payload.proposalId, "Productievoorstel niet gevonden.") : null;
         if (payload.proposalId && (!proposal || proposal.status !== "OPEN")) throw Object.assign(new Error("Het productievoorstel is niet meer open."), { statusCode: 409, code: "PRODUCTION_PROPOSAL_NOT_OPEN" });
         let proposalGroup = proposal?.groups?.length
           ? proposal.groups.find(({ id }) => id === payload.proposalGroupId) ?? (proposal.groups.length === 1 && !payload.proposalGroupId ? proposal.groups[0] : null)
@@ -3961,7 +3972,7 @@ export class SportpaleisPilotService {
           if (submitted.length !== expected.length || submitted.some((id, index) => id !== expected[index])) throw Object.assign(new Error("Human GO moet exact de opgeslagen productiegroep gebruiken."), { statusCode: 409, code: "PRODUCTION_GROUP_SELECTION_MISMATCH" });
         }
         const orders = expectedSelections.map(({ id, expectedRevision }) => {
-          const order = state.orders.find((candidate) => candidate.id === id);
+          const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, "Order niet gevonden.");
           if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
           if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden geproduceerd."), { statusCode: 409, code: "ORDER_DELETED" });
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
@@ -4207,10 +4218,11 @@ export class SportpaleisPilotService {
         if (!rejectedJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
         if (rejectedJob.kind !== "ORIGINAL" || rejectedJob.status !== "REJECTED" || rejectedJob.humanAcceptance?.status !== "FAIL" || !rejectedJob.rejection) throw Object.assign(new Error("Keur de oorspronkelijke job eerst afzonderlijk af voordat een nieuwe productiejob wordt voorbereid."), { statusCode: 409, code: "PRODUCTION_REJECTION_RETRY_NOT_ALLOWED" });
         if (!rejectedJob.snapshotHash || sha256(JSON.stringify(rejectedJob.snapshot)) !== rejectedJob.snapshotHash) throw Object.assign(new Error("Het immutable snapshot van de afgekeurde job wijkt af; retry blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECTION_SNAPSHOT_INTEGRITY_FAILED" });
-        const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === rejectedJob.id));
+        const proposalMatch = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === rejectedJob.id));
+        const proposal = proposalMatch ? mutableStateRecord(state, "productionProposals", ({ id }) => id === proposalMatch.id, "Productievoorstel niet gevonden.") : null;
         const group = proposal?.groups?.find(({ productionJobId: id }) => id === rejectedJob.id);
         if (!proposal || !group) throw Object.assign(new Error("De afgekeurde job mist de exacte productiegroepkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
-        const orders = group.orders.map(({ id }) => state.orders.find((order) => order.id === id));
+        const orders = group.orders.map(({ id }) => mutableStateRecord(state, "orders", (order) => order.id === id, "Een gekoppelde bronorder ontbreekt."));
         if (orders.some((order) => !order)) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
         if (orders.some((order) => (order.eventHistory ?? []).some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details?.productionJobId === rejectedJob.id))) throw Object.assign(new Error("Deze job is al als fysiek Bedrukt vastgelegd en kan niet via broncorrectie worden herschreven."), { statusCode: 409, code: "PRODUCTION_REJECTION_AFTER_PRINT_FORBIDDEN" });
         const corrections = orders.map((order) => ({ order, ...reprojectRejectedProductionExecution(state, order, user, rejectedJob, reason) }));

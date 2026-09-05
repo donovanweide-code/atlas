@@ -119,6 +119,24 @@ function cloneForDraft(key, value) {
   return structuredClone(value);
 }
 
+function cloneForPreparedDraft(key, value) {
+  if ((key === "audit" || SPORTPALEIS_RECORD_COLLECTIONS.has(key)) && Array.isArray(value)) return [...value];
+  if (key === "idempotency" && value && typeof value === "object" && !Array.isArray(value)) return { ...value };
+  return structuredClone(value);
+}
+
+function preparedValueChanged(key, value, previous) {
+  if ((key === "audit" || SPORTPALEIS_RECORD_COLLECTIONS.has(key)) && Array.isArray(value) && Array.isArray(previous)) {
+    return value.length !== previous.length || value.some((record, index) => record !== previous[index]);
+  }
+  if (key === "idempotency" && value && previous && typeof value === "object" && typeof previous === "object") {
+    const keys = Object.keys(value);
+    const previousKeys = Object.keys(previous);
+    return keys.length !== previousKeys.length || keys.some((identity) => value[identity] !== previous[identity]);
+  }
+  return sha256CanonicalJson(value) !== sha256CanonicalJson(previous);
+}
+
 // Existing service mutations receive a state-shaped object, but only top-level
 // domains that they actually touch are cloned. This is the compatibility seam
 // used while service commands are moved to explicit domain repositories.
@@ -127,6 +145,15 @@ export function createLazySportpaleisStateDraft(snapshot) {
     cloneValue: cloneForDraft,
     domainForKey: sportpaleisDomainForStateKey,
     hash: sha256CanonicalJson,
+  });
+}
+
+export function createPreparedSportpaleisStateDraft(snapshot) {
+  return createTopLevelCopyOnWriteDraft(snapshot, {
+    cloneValue: cloneForPreparedDraft,
+    domainForKey: sportpaleisDomainForStateKey,
+    hash: sha256CanonicalJson,
+    changedValue: preparedValueChanged,
   });
 }
 
@@ -158,6 +185,7 @@ export function assertIncrementalSportpaleisState(state, changedKeys) {
       if (!Array.isArray(value)) throw new TypeError(`${key} moet een array zijn.`);
       const ids = value.filter((record) => record && typeof record === "object" && typeof record.id === "string").map(({ id }) => id);
       if (new Set(ids).size !== ids.length) throw new Error(`${key} bevat dubbele identities.`);
+      continue;
     }
     const domain = sportpaleisDomainForStateKey(key);
     if (!Object.hasOwn(SPORTPALEIS_STATE_DOMAINS, domain)) throw new Error(`${key} heeft geen geldige domeinbinding.`);

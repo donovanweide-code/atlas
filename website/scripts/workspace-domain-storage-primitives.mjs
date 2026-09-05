@@ -28,7 +28,7 @@ export function immutableSnapshot(value) {
   return deepFreeze(structuredClone(value));
 }
 
-export function createTopLevelCopyOnWriteDraft(snapshot, { cloneValue = (_key, value) => structuredClone(value), domainForKey, hash = canonicalJsonSha256 } = {}) {
+export function createTopLevelCopyOnWriteDraft(snapshot, { cloneValue = (_key, value) => structuredClone(value), domainForKey, hash = canonicalJsonSha256, changedValue = null } = {}) {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) throw new TypeError("State-snapshot moet een object zijn.");
   if (typeof domainForKey !== "function") throw new TypeError("domainForKey is verplicht.");
   const touched = new Set();
@@ -71,7 +71,7 @@ export function createTopLevelCopyOnWriteDraft(snapshot, { cloneValue = (_key, v
       for (const key of touched) {
         const value = values.get(key);
         if (value === undefined) delete next[key]; else next[key] = value;
-        if (hash(value) !== hash(snapshot[key])) changedKeys.push(key);
+        if (changedValue ? changedValue(key, value, snapshot[key]) : hash(value) !== hash(snapshot[key])) changedKeys.push(key);
       }
       return {
         state: next,
@@ -92,6 +92,7 @@ export function diffStableRecords(previous, next, { identity, hash = canonicalJs
   const changed = [];
   for (const [id, candidate] of nextById) {
     const prior = previousById.get(id);
+    if (prior?.record === candidate.record && (!trackOrdinal || prior.ordinal === candidate.ordinal)) continue;
     const candidateHash = hash(candidate.record);
     if (!prior || (trackOrdinal && prior.ordinal !== candidate.ordinal) || hash(prior.record) !== candidateHash) changed.push({ id, ...candidate, hash: candidateHash });
   }
