@@ -5,13 +5,14 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import mariadb from "mariadb";
 
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, reserveImmutableProductionArtifact, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
-import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
+import { buildProductionJobSnapshotIsolated, productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 import { inspectProductionAssetSvg } from "../src/sportpaleis/production-assets-svg.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
@@ -340,6 +341,19 @@ async function storeInitialize() {
   const originalProposalHashes = new Map(practiceBefore.productionProposals.map((proposal) => [proposal.id, sha256CanonicalJson(proposal)]));
   const font = practiceBefore.productionFonts.find(({ name, status }) => name === "Spain Euro 2016" && status === "TECHNICALLY_VALID");
   assert.ok(font, "authoritative Spain Euro 2016 ontbreekt in de production-shaped restore");
+  const workerCrashArtifactsBefore = await productionArtifactInventory();
+  await assert.rejects(
+    buildProductionJobSnapshotIsolated({}, {
+      operationIdentity: `assurance-worker-crash-${candidateCommit}`,
+      workerFactory: () => new Worker("process.exit(23)", { eval: true }),
+    }),
+    (error) => error?.code === "PRODUCTION_JOB_BUILD_FAILED" && error?.statusCode === 503,
+    "een workercrash moet fail-closed als herstelbare productiebouwfout eindigen",
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(productionJobBuildLoad(), { active: 0, queued: 0, inFlight: 0, maximumConcurrent: 1, maximumQueued: 4 }, "workercrash liet queue- of in-flightstate achter");
+  assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "workercrash liet een zichtbaar of gequarantaineerd orphanartifact achter");
+  const workerCrashRecoveredWithoutOrphan = true;
   const createControlledSourceOrder = async (source, key) => {
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
       orderKind: "CUSTOM", source,
@@ -539,7 +553,7 @@ async function storeInitialize() {
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

@@ -34,7 +34,14 @@ function drainBuildQueue() {
   }
 }
 
-function runBuildWorker(input, timeoutMs) {
+function defaultWorkerFactory(input) {
+  return new Worker(new URL("./production-job-build-worker.mjs", import.meta.url), {
+    workerData: input,
+    resourceLimits: { maxOldGenerationSizeMb: 768, maxYoungGenerationSizeMb: 128, stackSizeMb: 8 },
+  });
+}
+
+function runBuildWorker(input, timeoutMs, workerFactory) {
   return new Promise((resolve, reject) => {
     let worker;
     let timer;
@@ -46,10 +53,7 @@ function runBuildWorker(input, timeoutMs) {
       callback(value);
     };
     try {
-      worker = new Worker(new URL("./production-job-build-worker.mjs", import.meta.url), {
-        workerData: input,
-        resourceLimits: { maxOldGenerationSizeMb: 768, maxYoungGenerationSizeMb: 128, stackSizeMb: 8 },
-      });
+      worker = workerFactory(input);
     } catch (cause) {
       finish(reject, buildError({
         message: "De geïsoleerde productieopbouw kon niet starten; er is niets geregistreerd.",
@@ -91,6 +95,7 @@ export function buildProductionJobSnapshotIsolated(input, {
   operationIdentity,
   timeoutMs = DEFAULT_BUILD_TIMEOUT_MS,
   queueTimeoutMs = DEFAULT_QUEUE_TIMEOUT_MS,
+  workerFactory = defaultWorkerFactory,
 } = {}) {
   const identity = String(operationIdentity ?? "").trim();
   if (!identity) return Promise.reject(buildError({ message: "Productieopbouw mist een idempotente operation identity.", code: "PRODUCTION_JOB_BUILD_IDENTITY_REQUIRED", statusCode: 400 }));
@@ -106,7 +111,7 @@ export function buildProductionJobSnapshotIsolated(input, {
     let queueTimer;
     const start = () => {
       clearTimeout(queueTimer);
-      runBuildWorker(input, timeoutMs).then(resolve, reject).finally(() => {
+      runBuildWorker(input, timeoutMs, workerFactory).then(resolve, reject).finally(() => {
         activeBuilds -= 1;
         inFlightBuilds.delete(identity);
         drainBuildQueue();

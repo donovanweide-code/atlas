@@ -69,6 +69,7 @@
     "largeFreeProduction80Mm",
     "largeFreeProduction200Mm",
     "sameColorSourceConcurrency",
+    "workerCrashRecoveredWithoutOrphan",
     "productionIdempotency",
     "artifactIdentity",
     "productionArtifactReconciliation",
