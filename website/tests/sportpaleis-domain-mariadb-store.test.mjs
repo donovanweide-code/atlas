@@ -458,6 +458,37 @@ test("append-only ordercommand behoudt frozen records en vermijdt volledige coll
   assert.deepEqual(reloaded.audit.map(({ id }) => id), after.audit.map(({ id }) => id), "restart wijzigde de append-only auditvolgorde");
 });
 
+test("recordmutatie vervangt alleen het gekozen record en behoudt de overige immutable identities", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
+  await store.initialize();
+  await store.mutateAppendOnly(async (state) => {
+    state.orders.unshift({ id: "SP-RECORD-2", revision: 1, customer: "blijft identiek", eventHistory: [] });
+    state.orders.unshift({ id: "SP-RECORD-1", revision: 1, customer: "wijzigt", eventHistory: [] });
+    return { state, value: null };
+  });
+  const before = await store.readSnapshot();
+  const untouched = before.orders.find(({ id }) => id === "SP-RECORD-2");
+  const writesBefore = store.metricsSnapshot().recordWrites;
+  await store.mutateRecords(async (state) => {
+    const index = state.orders.findIndex(({ id }) => id === "SP-RECORD-1");
+    const changed = structuredClone(state.orders[index]);
+    changed.customer = "gericht gewijzigd";
+    changed.revision += 1;
+    state.orders[index] = changed;
+    state.audit.unshift({ id: "audit-record-mutation", at: "2026-09-05T06:02:00.000Z", userId: "fixture", action: "Gerichte recordmutatie", subject: changed.id, details: {} });
+    return { state, value: changed.id };
+  });
+  const after = await store.readSnapshot();
+  assert.equal(after.orders.find(({ id }) => id === "SP-RECORD-1").customer, "gericht gewijzigd");
+  assert.equal(after.orders.find(({ id }) => id === "SP-RECORD-2"), untouched, "ongewijzigd record verloor zijn cached identity");
+  assert.equal(store.metricsSnapshot().recordWrites - writesBefore, 1, "recordmutatie schreef meer dan het gekozen orderrecord");
+  assert.equal(after.audit[0].id, "audit-record-mutation");
+});
+
 test("mutationlane geeft concrete retrybare backpressure zonder een drieëndertigste draft te starten", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import mariadb from "mariadb";
 
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
-import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
+import { materializeLegacyRollbackStateIsolated } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, reserveImmutableProductionArtifactAsync, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
 import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, PRODUCTION_BUILD_ISOLATION_KIND, productionJobBuildLoad, projectProductionJobBuildInput, recycleProductionJobBuildIsolation } from "../src/sportpaleis/production-job-build.mjs";
@@ -829,7 +829,10 @@ async function storeInitialize() {
   const rssEndBytes = process.memoryUsage().rss;
   await enterLoadPhase("rollback-materialization");
   const rollbackSource = await store.readSnapshot();
-  const rollbackProof = await materializeLegacyRollbackState({ pool, expectedGlobalRevision: rollbackSource.revision });
+  const rollbackProof = await materializeLegacyRollbackStateIsolated({
+    database: { socketPath: "/run/mysqld/mysqld.sock", name: database, user: "root" },
+    expectedGlobalRevision: rollbackSource.revision,
+  });
   assert.match(rollbackProof.stateSha256, /^[a-f0-9]{64}$/u, "rollbackmaterialisatie mist de domeinhash");
   const restartedStore = new SportpaleisDomainMariaDbStore({ pool });
   await restartedStore.initialize();

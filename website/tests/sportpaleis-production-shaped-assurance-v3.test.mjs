@@ -56,6 +56,7 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(externalManifestSource, /immutableFixtureManifest: immutableFixtureManifest\.path/u);
   assert.match(externalManifestSource, /immutableFixtureManifestSha256: immutableFixtureManifest\.sha256/u);
   assert.match(builder, /sportpaleis-domain-rollback-bridge\.mjs/u);
+  assert.match(builder, /sportpaleis-domain-rollback-child\.mjs/u);
   assert.match(builder, /sportpaleis-domain-backfill\.mjs/u);
   assert.match(builder, /workspace-legacy-state-encode-worker\.mjs/u);
   assert.match(productionBuild, /new URL\("\.\/production-job-build-child\.mjs", import\.meta\.url\)/u);
@@ -67,7 +68,7 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(broker, /bootstrapSurfaceMaxBytes/u);
   assert.match(broker, /eventLoopP95Ms > 100/u);
   assert.match(broker, /website\/scripts\/sportpaleis-domain-rollback-bridge\.mjs/u);
-  assert.match(assurance, /materializeLegacyRollbackState/u);
+  assert.match(assurance, /materializeLegacyRollbackStateIsolated/u);
   assert.match(assurance, /largeFreeProductionHeightsMm/u);
   assert.match(assurance, /recordWrites/u);
   assert.match(assurance, /bootstrapFieldBytes/u);

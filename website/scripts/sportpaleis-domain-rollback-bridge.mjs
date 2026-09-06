@@ -1,3 +1,5 @@
+import { fork } from "node:child_process";
+import { constants as osConstants, setPriority } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import mariadb from "mariadb";
@@ -7,6 +9,49 @@ import { productionDatabaseCredentialsFromEnvironment } from "./workspace-runtim
 import { encodeLegacyRollbackStateIsolated } from "./workspace-legacy-state-encode.mjs";
 
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
+const ISOLATED_ROLLBACK_TIMEOUT_MS = 60_000;
+
+export function materializeLegacyRollbackStateIsolated({ database, expectedGlobalRevision, expectedDomainHash }, { timeoutMs = ISOLATED_ROLLBACK_TIMEOUT_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = fork(new URL("./sportpaleis-domain-rollback-child.mjs", import.meta.url), [], {
+      serialization: "advanced",
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      windowsHide: true,
+      execArgv: ["--max-old-space-size=768", "--max-semi-space-size=64"],
+    });
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.off("message", onMessage);
+      child.off("error", onError);
+      child.off("exit", onExit);
+      if (child.connected) child.disconnect();
+      child.kill();
+      callback(value);
+    };
+    const failure = (message, code = "LEGACY_ROLLBACK_ISOLATION_FAILED") => Object.assign(new Error(message), { code });
+    const onMessage = (message) => message?.ok
+      ? finish(resolve, message.result)
+      : finish(reject, failure(message?.error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", message?.error?.code));
+    const onError = () => finish(reject, failure("De geïsoleerde rollbackmaterialisatie kon niet worden uitgevoerd."));
+    const onExit = (code) => finish(reject, failure(code === 0
+      ? "De geïsoleerde rollbackmaterialisatie gaf geen resultaat."
+      : "De geïsoleerde rollbackmaterialisatie stopte onverwacht."));
+    const timer = setTimeout(() => finish(reject, failure("De geïsoleerde rollbackmaterialisatie duurde te lang.", "LEGACY_ROLLBACK_ISOLATION_TIMEOUT")), Math.max(1_000, Number(timeoutMs) || ISOLATED_ROLLBACK_TIMEOUT_MS));
+    timer.unref?.();
+    child.on("message", onMessage);
+    child.once("error", onError);
+    child.once("exit", onExit);
+    try {
+      setPriority(child.pid, osConstants.priority.PRIORITY_LOW);
+      child.send({ database, expectedGlobalRevision, expectedDomainHash });
+    } catch {
+      onError();
+    }
+  });
+}
 
 // Offline compatibility bridge only. The releasebroker must stop application
 // writes and hold its deployment lock before invoking this operation.

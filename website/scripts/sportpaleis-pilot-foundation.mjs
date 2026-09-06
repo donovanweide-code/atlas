@@ -4211,31 +4211,37 @@ export class SportpaleisPilotService {
   }
 
   async #rejectProductionJobWithActor(user, productionJobId, reason, { expectedJobNumber = null, expectedHeightsMm = null, humanGoReference = null } = {}) {
-    const result = await this.store.mutate(async (state) => {
+    const mutateRecords = typeof this.store.mutateRecords === "function"
+      ? this.store.mutateRecords.bind(this.store)
+      : this.store.mutate.bind(this.store);
+    const result = await mutateRecords(async (state) => {
       const activeActor = state.users.find(({ id, status, role }) => id === user.id && status === "Actief" && role === user.role);
       if (!activeActor || !["admin", "operator"].includes(activeActor.role)) throw Object.assign(new Error("De afkeuractor is niet langer bevoegd."), { statusCode: 403, code: "PRODUCTION_REJECT_ONLY_ACTOR_INACTIVE" });
-      const job = state.productionJobs.find(({ id }) => id === productionJobId);
-      if (!job) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
-      if (expectedJobNumber && job.jobNumber !== expectedJobNumber) throw Object.assign(new Error("De productiejobidentiteit wijkt af van de geautoriseerde reconciliatie."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_JOB_IDENTITY_MISMATCH" });
+      const currentJob = state.productionJobs.find(({ id }) => id === productionJobId);
+      if (!currentJob) throw Object.assign(new Error("Productiejob niet gevonden."), { statusCode: 404, code: "PRODUCTION_JOB_NOT_FOUND" });
+      if (expectedJobNumber && currentJob.jobNumber !== expectedJobNumber) throw Object.assign(new Error("De productiejobidentiteit wijkt af van de geautoriseerde reconciliatie."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_JOB_IDENTITY_MISMATCH" });
       if (expectedHeightsMm) {
-        const actualHeights = [...new Set((job.snapshot?.productionLines ?? []).map(({ heightMm }) => Number(heightMm)))].sort((a, b) => a - b);
+        const actualHeights = [...new Set((currentJob.snapshot?.productionLines ?? []).map(({ heightMm }) => Number(heightMm)))].sort((a, b) => a - b);
         const expectedHeights = [...new Set(expectedHeightsMm.map(Number))].sort((a, b) => a - b);
         if (JSON.stringify(actualHeights) !== JSON.stringify(expectedHeights)) throw Object.assign(new Error("De productiejobmaten wijken af van de geautoriseerde reconciliatie."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_HEIGHT_MISMATCH" });
       }
-      if (job.status === "REJECTED") {
-        if (job.rejection?.reason !== reason) throw Object.assign(new Error("Deze productiejob is al met een andere immutable reden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECTION_REASON_CONFLICT" });
-        return { state, value: { duplicate: true, value: structuredClone(job) } };
+      if (currentJob.status === "REJECTED") {
+        if (currentJob.rejection?.reason !== reason) throw Object.assign(new Error("Deze productiejob is al met een andere immutable reden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECTION_REASON_CONFLICT" });
+        return { state, value: { duplicate: true, value: structuredClone(currentJob) } };
       }
-      if (job.kind !== "ORIGINAL" || job.status !== "AWAITING_HUMAN_CHECK" || job.humanAcceptance?.status !== "PENDING") throw Object.assign(new Error("Alleen een oorspronkelijke job die nog op menselijke controle wacht kan worden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_NOT_ALLOWED" });
-      if (!job.snapshotHash || sha256(JSON.stringify(job.snapshot)) !== job.snapshotHash || !job.snapshot?.artifact?.sha256) throw Object.assign(new Error("Het immutable snapshot of artifactbewijs wijkt af; afkeuren blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_INTEGRITY_FAILED" });
-      const proposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === job.id));
-      const group = proposal?.groups?.find(({ productionJobId: id }) => id === job.id);
-      if (!proposal || !group) throw Object.assign(new Error("De af te keuren job mist de exacte productiegroepkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
-      const orders = group.orders.map(({ id }) => state.orders.find((order) => order.id === id));
-      if (orders.some((order) => !order)) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
-      const physicalCompletion = orders.some((order) => (order.eventHistory ?? []).some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details?.productionJobId === job.id)
-        || (order.productionCompletionEvidence?.productionJobs ?? []).some(({ id }) => id === job.id));
+      if (currentJob.kind !== "ORIGINAL" || currentJob.status !== "AWAITING_HUMAN_CHECK" || currentJob.humanAcceptance?.status !== "PENDING") throw Object.assign(new Error("Alleen een oorspronkelijke job die nog op menselijke controle wacht kan worden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_NOT_ALLOWED" });
+      if (!currentJob.snapshotHash || sha256(JSON.stringify(currentJob.snapshot)) !== currentJob.snapshotHash || !currentJob.snapshot?.artifact?.sha256) throw Object.assign(new Error("Het immutable snapshot of artifactbewijs wijkt af; afkeuren blijft fail-closed."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_INTEGRITY_FAILED" });
+      const currentProposal = state.productionProposals.find(({ groups }) => groups?.some(({ productionJobId: id }) => id === currentJob.id));
+      const currentGroup = currentProposal?.groups?.find(({ productionJobId: id }) => id === currentJob.id);
+      if (!currentProposal || !currentGroup) throw Object.assign(new Error("De af te keuren job mist de exacte productiegroepkoppeling."), { statusCode: 409, code: "PRODUCTION_GROUP_LINK_MISSING" });
+      const currentOrders = currentGroup.orders.map(({ id }) => state.orders.find((order) => order.id === id));
+      if (currentOrders.some((order) => !order)) throw Object.assign(new Error("Een gekoppelde bronorder ontbreekt."), { statusCode: 409, code: "PRODUCTION_ORDER_LINK_MISSING" });
+      const physicalCompletion = currentOrders.some((order) => (order.eventHistory ?? []).some(({ type, details }) => type === "PRODUCTION_GROUP_PRINTED" && details?.productionJobId === currentJob.id)
+        || (order.productionCompletionEvidence?.productionJobs ?? []).some(({ id }) => id === currentJob.id));
       if (physicalCompletion) throw Object.assign(new Error("Deze job heeft al fysiek completionbewijs en kan niet worden afgekeurd."), { statusCode: 409, code: "PRODUCTION_REJECT_ONLY_AFTER_COMPLETION_FORBIDDEN" });
+      const job = mutableStateRecord(state, "productionJobs", ({ id }) => id === currentJob.id, "Productiejob niet gevonden.");
+      mutableStateRecord(state, "productionProposals", ({ id }) => id === currentProposal.id, "Productievoorstel niet gevonden.");
+      const orders = currentOrders.map(({ id }) => mutableStateRecord(state, "orders", (order) => order.id === id, "Een gekoppelde bronorder ontbreekt."));
       const rejectedAt = iso();
       const actor = { userId: user.id, name: user.name, role: user.role };
       job.status = "REJECTED";
@@ -4892,10 +4898,12 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator"]);
-    const result = await this.store.mutate(async (state) => {
+    const mutateRecords = typeof this.store.mutateRecords === "function"
+      ? this.store.mutateRecords.bind(this.store)
+      : this.store.mutate.bind(this.store);
+    const result = await mutateRecords(async (state) => {
       const outcome = idempotent(state, idempotencyKey, user.id, `ADVANCE_ORDER:${orderId}`, () => {
-        const order = state.orders.find(({ id }) => id === orderId);
-        if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+        const order = mutableStateRecord(state, "orders", ({ id }) => id === orderId, "Order niet gevonden.");
         if (order.deletion?.status === "DELETED") throw Object.assign(new Error("Een verwijderde order kan niet worden gewijzigd."), { statusCode: 409, code: "ORDER_DELETED" });
         if (order.revision !== expectedRevision) {
           throw Object.assign(new Error("Order is intussen door iemand anders gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });

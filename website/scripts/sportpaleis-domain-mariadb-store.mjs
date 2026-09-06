@@ -658,6 +658,22 @@ export class SportpaleisDomainMariaDbStore {
     });
   }
 
+  // Existing records are immutable in the cached snapshot. Commands that
+  // replace only explicitly selected records use a shallow collection draft
+  // and clone those records themselves. This preserves the serialized
+  // mutation lane while avoiding a deep clone of every order, PlotJob or
+  // proposal for a one-record lifecycle transition.
+  async mutateRecords(mutator) {
+    return this.#enqueueMutation(async () => {
+      const prepared = await this.#prepareMutationCommand(mutator, {
+        refresh: false,
+        draftFactory: createPreparedSportpaleisStateDraft,
+      });
+      if (prepared.completed) return prepared.completed;
+      return this.#commitPreparedCommand(prepared.command);
+    });
+  }
+
   async #commitPreparedCommand(preparedCommand) {
     const connection = await this.#connection();
     const transactionStartedAt = performance.now();
