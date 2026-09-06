@@ -155,6 +155,109 @@ function changedAuditEvents(previous, next) {
   return next.filter(({ id }) => !previousIds.has(id));
 }
 
+function prepareMutationPersistence({ current, finalized, globalRevision, schemaVersion, domainCache, domainRevisions, recordOrdinals }) {
+  const nextRevision = Number(globalRevision) + 1;
+  finalized.state.revision = nextRevision;
+  if (finalized.state.organizationId !== ORGANIZATION_ID || Number(finalized.state.schemaVersion) !== Number(schemaVersion)) {
+    throw new SportpaleisMariaDbStoreError("Immutable state-identiteit is gewijzigd.", "DOMAIN_IDENTITY_VIOLATION");
+  }
+  assertIncrementalSportpaleisState(finalized.state, finalized.changedKeys);
+  const partitioned = partitionSportpaleisState(finalized.state);
+  const nextDomainCache = new Map(domainCache);
+  const nextDomainRevisions = new Map(domainRevisions);
+  const nextRecordOrdinals = new Map(recordOrdinals);
+  const domains = [];
+  for (const domain of finalized.changedDomains) {
+    const sourcePayload = partitioned[domain];
+    const auditAdditions = domain === "audit"
+      ? changedAuditEvents(current.audit, finalized.state.audit).map((event) => ({ id: event.id, json: encodePayload(event), sha256: sha256CanonicalJson(event) }))
+      : [];
+    const { scalar: payload, collections } = persistedDomainPayload(domain, sourcePayload);
+    const collectionPlans = [];
+    for (const [collectionKey, records] of Object.entries(collections)) {
+      const priorRecords = current[collectionKey] ?? [];
+      const assignedOrdinals = stableRecordOrdinals(collectionKey, priorRecords, records, nextRecordOrdinals);
+      const delta = diffStableRecords(
+        priorRecords.map((record) => persistedRecord(collectionKey, record)),
+        records.map((record) => persistedRecord(collectionKey, record)),
+        { identity: (record) => sportpaleisRecordIdentity(collectionKey, record), hash: sha256CanonicalJson, trackOrdinal: false },
+      );
+      if (["orders", "productionJobs"].includes(collectionKey) && delta.deleted.length) {
+        throw new SportpaleisMariaDbStoreError(`${collectionKey} mag geen immutable records fysiek verwijderen.`, "DOMAIN_RECORD_IMMUTABILITY_VIOLATION");
+      }
+      const changed = delta.changed.map(({ id: recordId, record, hash }) => ({ recordId, ordinal: assignedOrdinals.get(recordId), json: encodePayload(record), hash }));
+      collectionPlans.push({ collectionKey, deleted: delta.deleted, changed });
+      for (const recordId of delta.deleted) nextRecordOrdinals.delete(recordOrdinalKey(collectionKey, recordId));
+      for (const [recordId, ordinal] of assignedOrdinals) nextRecordOrdinals.set(recordOrdinalKey(collectionKey, recordId), ordinal);
+    }
+    const historyAdditions = [];
+    if (domain === "orders") {
+      const priorOrders = recordMap(current.orders ?? [], "orders");
+      for (const order of finalized.state.orders ?? []) {
+        const prior = priorOrders.get(order.id);
+        if (prior === order) continue;
+        if (prior && sha256CanonicalJson(prior) === sha256CanonicalJson(order)) continue;
+        const priorEvents = new Map((prior?.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), event]));
+        const nextEvents = new Map((order.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), { event, ordinal }]));
+        for (const [eventId, event] of priorEvents) {
+          const candidate = nextEvents.get(eventId)?.event;
+          if (!candidate || sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) {
+            throw new SportpaleisMariaDbStoreError(`Orderhistorie ${order.id}/${eventId} is niet append-only.`, "ORDER_HISTORY_IMMUTABILITY_VIOLATION");
+          }
+        }
+        for (const [eventId, { event, ordinal }] of nextEvents) if (!priorEvents.has(eventId)) {
+          historyAdditions.push({ orderId: order.id, eventId, ordinal, orderRevision: Number(order.revision ?? 1), json: encodePayload(event), sha256: sha256CanonicalJson(event) });
+        }
+      }
+    }
+    const artifactReferences = [];
+    if (domain === "artifacts") {
+      const priorJobs = recordMap(current.productionJobs ?? [], "productionJobs");
+      for (const job of finalized.state.productionJobs ?? []) {
+        if (priorJobs.get(job.id) === job) continue;
+        const reference = artifactReference(job);
+        if (!reference) continue;
+        const priorReference = artifactReference(priorJobs.get(job.id));
+        if (priorReference && sha256CanonicalJson(priorReference) !== sha256CanonicalJson(reference)) {
+          throw new SportpaleisMariaDbStoreError(`Immutable artifactreferentie van ${job.id} is gewijzigd.`, "ARTIFACT_REFERENCE_IMMUTABILITY_VIOLATION");
+        }
+        if (!priorReference) artifactReferences.push(reference);
+      }
+    }
+    const idempotency = { deleted: [], changed: [] };
+    if (domain === "platform" && finalized.changedKeys.includes("idempotency")) {
+      const previous = current.idempotency ?? {};
+      const next = finalized.state.idempotency ?? {};
+      for (const identity of Object.keys(previous)) if (!Object.hasOwn(next, identity)) idempotency.deleted.push({ identity, identityHash: idempotencyIdentityHash(identity) });
+      for (const [identity, record] of Object.entries(next)) {
+        if (previous[identity] === record) continue;
+        if (Object.hasOwn(previous, identity) && sha256CanonicalJson(previous[identity]) === sha256CanonicalJson(record)) continue;
+        idempotency.changed.push({ identity, identityHash: idempotencyIdentityHash(identity), json: encodePayload(record), sha256: sha256CanonicalJson(record) });
+      }
+    }
+    const evidence = assertSportpaleisDomainPayload(domain, payload);
+    const complete = { ...immutableDomain(payload) };
+    for (const key of SPORTPALEIS_STATE_DOMAINS[domain]) {
+      if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) complete[key] = immutableChangedRecordCollection(key, current[key] ?? [], sourcePayload[key] ?? []);
+    }
+    if (domain === "platform") complete.idempotency = immutableDomain(sourcePayload.idempotency ?? {});
+    if (domain === "audit") {
+      const priorEvents = new Map(current.audit.map((event) => [event.id, event]));
+      complete.audit = Object.freeze(finalized.state.audit.map((event) => priorEvents.get(event.id) ?? immutableDomain(event)));
+    }
+    nextDomainCache.set(domain, Object.freeze(complete));
+    nextDomainRevisions.set(domain, Number(nextDomainRevisions.get(domain) ?? 0) + 1);
+    domains.push({ domain, auditAdditions, collectionPlans, historyAdditions, artifactReferences, idempotency, payloadJson: encodePayload(payload), payloadSha256: evidence.sha256, priorDomainRevision: domainRevisions.get(domain) });
+  }
+  const composed = composeSportpaleisState(Object.fromEntries(nextDomainCache));
+  composed.revision = nextRevision;
+  return {
+    baseRevision: Number(globalRevision), nextRevision, domains,
+    nextDomainCache, nextDomainRevisions, nextRecordOrdinals,
+    nextSnapshot: Object.freeze(composed), clonedKeys: finalized.clonedKeys.length,
+  };
+}
+
 function prepareLegacyBackfill(row) {
   const legacy = decodeSportpaleisRuntimeState(row?.state_json);
   if (!legacy || typeof legacy !== "object" || legacy.organizationId !== ORGANIZATION_ID || !Number.isInteger(Number(legacy.schemaVersion))) {
@@ -472,11 +575,12 @@ export class SportpaleisDomainMariaDbStore {
       }
       const current = this.snapshot;
       let result;
-      let finalized;
+      let persistence;
       if (preparedCommand) {
         if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw new SportpaleisMariaDbStoreError("De voorbereide productieopdracht is verouderd.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
         result = { value: preparedCommand.value };
-        finalized = preparedCommand.finalized;
+        persistence = preparedCommand.persistence;
+        if (!persistence || Number(persistence.baseRevision) !== Number(this.globalRevision)) throw new SportpaleisMariaDbStoreError("De voorbereide persistentieopdracht is verouderd.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
       } else {
         const lazy = createLazySportpaleisStateDraft(current);
         phase = "mutator";
@@ -486,162 +590,86 @@ export class SportpaleisDomainMariaDbStore {
           await connection.rollback();
           return { state: current, value: result.value };
         }
-        finalized = lazy.finalize();
+        persistence = prepareMutationPersistence({ current, finalized: lazy.finalize(), globalRevision: this.globalRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
       }
       this.metrics.mutations += 1;
-      this.metrics.clonedKeys += finalized.clonedKeys.length;
-      const nextRevision = this.globalRevision + 1;
-      finalized.state.revision = nextRevision;
-      if (finalized.state.organizationId !== ORGANIZATION_ID || Number(finalized.state.schemaVersion) !== this.schemaVersion) throw new SportpaleisMariaDbStoreError("Immutable state-identiteit is gewijzigd.", "DOMAIN_IDENTITY_VIOLATION");
-      assertIncrementalSportpaleisState(finalized.state, finalized.changedKeys);
-      const partitioned = partitionSportpaleisState(finalized.state);
-      const nextDomainCache = new Map(this.domainCache);
-      const nextDomainRevisions = new Map(this.domainRevisions);
-      const nextRecordOrdinals = new Map(this.recordOrdinals);
+      this.metrics.clonedKeys += persistence.clonedKeys;
+      const { nextRevision } = persistence;
       phase = "write-domains";
-      for (const domain of finalized.changedDomains) {
-        const sourcePayload = partitioned[domain];
-        if (domain === "audit") {
-          const additions = changedAuditEvents(current.audit, finalized.state.audit);
+      for (const domainPlan of persistence.domains) {
+        const { domain } = domainPlan;
+        if (domainPlan.auditAdditions.length) {
           const minimum = await connection.query("SELECT COALESCE(MIN(ordinal), 0) AS minimum_ordinal FROM sp_workspace_audit_event WHERE organization_id = ?", [ORGANIZATION_ID]);
-          let ordinal = Number(minimum[0].minimum_ordinal) - additions.length;
-          for (const event of additions) {
+          let ordinal = Number(minimum[0].minimum_ordinal) - domainPlan.auditAdditions.length;
+          for (const event of domainPlan.auditAdditions) {
             await connection.query(
               "INSERT INTO sp_workspace_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
-              [ORGANIZATION_ID, event.id, ordinal, nextRevision, encodePayload(event), sha256CanonicalJson(event)],
+              [ORGANIZATION_ID, event.id, ordinal, nextRevision, event.json, event.sha256],
             );
             this.metrics.auditAppends += 1;
             ordinal += 1;
           }
         }
-        const { scalar: payload, collections } = persistedDomainPayload(domain, sourcePayload);
-        for (const [collectionKey, records] of Object.entries(collections)) {
-          const priorRecords = current[collectionKey] ?? [];
-          const assignedOrdinals = stableRecordOrdinals(collectionKey, priorRecords, records, nextRecordOrdinals);
-          const delta = diffStableRecords(
-            priorRecords.map((record) => persistedRecord(collectionKey, record)),
-            records.map((record) => persistedRecord(collectionKey, record)),
-            { identity: (record) => sportpaleisRecordIdentity(collectionKey, record), hash: sha256CanonicalJson, trackOrdinal: false },
-          );
-          const deletedIds = delta.deleted;
-          if (["orders", "productionJobs"].includes(collectionKey) && deletedIds.length) {
-            throw new SportpaleisMariaDbStoreError(`${collectionKey} mag geen immutable records fysiek verwijderen.`, "DOMAIN_RECORD_IMMUTABILITY_VIOLATION");
-          }
-          for (const recordId of deletedIds) {
+        for (const collectionPlan of domainPlan.collectionPlans) {
+          for (const recordId of collectionPlan.deleted) {
             await connection.query(
               "DELETE FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = ? AND record_id = ?",
-              [ORGANIZATION_ID, collectionKey, recordId],
+              [ORGANIZATION_ID, collectionPlan.collectionKey, recordId],
             );
             this.metrics.recordDeletes += 1;
           }
-          for (const { id: recordId, record, hash } of delta.changed) {
-            const ordinal = assignedOrdinals.get(recordId);
+          for (const record of collectionPlan.changed) {
             await connection.query(
               "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE domain_key = VALUES(domain_key), ordinal = VALUES(ordinal), record_revision = record_revision + 1, global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
-              [ORGANIZATION_ID, domain, collectionKey, recordId, ordinal, nextRevision, encodePayload(record), hash],
+              [ORGANIZATION_ID, domain, collectionPlan.collectionKey, record.recordId, record.ordinal, nextRevision, record.json, record.hash],
             );
             this.metrics.recordWrites += 1;
           }
-          for (const recordId of deletedIds) nextRecordOrdinals.delete(recordOrdinalKey(collectionKey, recordId));
-          for (const [recordId, ordinal] of assignedOrdinals) nextRecordOrdinals.set(recordOrdinalKey(collectionKey, recordId), ordinal);
         }
-        if (domain === "orders") {
-          const priorOrders = recordMap(current.orders ?? [], "orders");
-          for (const order of finalized.state.orders ?? []) {
-            const prior = priorOrders.get(order.id);
-            if (prior === order) continue;
-            if (prior && sha256CanonicalJson(prior) === sha256CanonicalJson(order)) continue;
-            const priorEvents = new Map((prior?.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), event]));
-            const nextEvents = new Map((order.eventHistory ?? []).map((event, ordinal) => [event.id ?? sha256CanonicalJson({ orderId: order.id, ordinal, event }), { event, ordinal }]));
-            for (const [eventId, event] of priorEvents) {
-              const candidate = nextEvents.get(eventId)?.event;
-              if (!candidate || sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) {
-                throw new SportpaleisMariaDbStoreError(`Orderhistorie ${order.id}/${eventId} is niet append-only.`, "ORDER_HISTORY_IMMUTABILITY_VIOLATION");
-              }
-            }
-            for (const [eventId, { event, ordinal }] of nextEvents) {
-              if (priorEvents.has(eventId)) continue;
-              await connection.query(
-                "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
-                [ORGANIZATION_ID, order.id, eventId, ordinal, Number(order.revision ?? 1), nextRevision, encodePayload(event), sha256CanonicalJson(event)],
-              );
-              this.metrics.historyWrites += 1;
-            }
-          }
+        for (const event of domainPlan.historyAdditions) {
+          await connection.query(
+            "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+            [ORGANIZATION_ID, event.orderId, event.eventId, event.ordinal, event.orderRevision, nextRevision, event.json, event.sha256],
+          );
+          this.metrics.historyWrites += 1;
         }
-        if (domain === "artifacts") {
-          const priorJobs = recordMap(current.productionJobs ?? [], "productionJobs");
-          for (const job of finalized.state.productionJobs ?? []) {
-            if (priorJobs.get(job.id) === job) continue;
-            const reference = artifactReference(job);
-            if (!reference) continue;
-            const priorReference = artifactReference(priorJobs.get(job.id));
-            if (priorReference && sha256CanonicalJson(priorReference) !== sha256CanonicalJson(reference)) {
-              throw new SportpaleisMariaDbStoreError(`Immutable artifactreferentie van ${job.id} is gewijzigd.`, "ARTIFACT_REFERENCE_IMMUTABILITY_VIOLATION");
-            }
-            if (priorReference) continue;
-            await connection.query(
-              "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
-              [ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, nextRevision],
-            );
-            this.metrics.artifactReferenceWrites += 1;
-          }
+        for (const reference of domainPlan.artifactReferences) {
+          await connection.query(
+            "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+            [ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, nextRevision],
+          );
+          this.metrics.artifactReferenceWrites += 1;
         }
-        if (domain === "platform" && finalized.changedKeys.includes("idempotency")) {
-          const previous = current.idempotency ?? {};
-          const next = finalized.state.idempotency ?? {};
-          for (const identity of Object.keys(previous)) {
-            if (Object.hasOwn(next, identity)) continue;
-            await connection.query(
-              "DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_sha256 = ? AND identity_key = ?",
-              [ORGANIZATION_ID, idempotencyIdentityHash(identity), identity],
-            );
-            this.metrics.idempotencyDeletes += 1;
-          }
-          for (const [identity, record] of Object.entries(next)) {
-            if (previous[identity] === record) continue;
-            if (Object.hasOwn(previous, identity) && sha256CanonicalJson(previous[identity]) === sha256CanonicalJson(record)) continue;
-            await connection.query(
-              "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
-              [ORGANIZATION_ID, idempotencyIdentityHash(identity), identity, nextRevision, encodePayload(record), sha256CanonicalJson(record)],
-            );
-            this.metrics.idempotencyWrites += 1;
-          }
+        for (const record of domainPlan.idempotency.deleted) {
+          await connection.query("DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_sha256 = ? AND identity_key = ?", [ORGANIZATION_ID, record.identityHash, record.identity]);
+          this.metrics.idempotencyDeletes += 1;
         }
-        const evidence = assertSportpaleisDomainPayload(domain, payload);
+        for (const record of domainPlan.idempotency.changed) {
+          await connection.query(
+            "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
+            [ORGANIZATION_ID, record.identityHash, record.identity, nextRevision, record.json, record.sha256],
+          );
+          this.metrics.idempotencyWrites += 1;
+        }
         const update = await connection.query(
           "UPDATE sp_workspace_domain_state SET domain_revision = domain_revision + 1, global_revision = ?, payload_json = ?, payload_sha256 = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND domain_key = ? AND domain_revision = ?",
-          [nextRevision, encodePayload(payload), evidence.sha256, ORGANIZATION_ID, domain, this.domainRevisions.get(domain)],
+          [nextRevision, domainPlan.payloadJson, domainPlan.payloadSha256, ORGANIZATION_ID, domain, domainPlan.priorDomainRevision],
         );
         if (Number(update.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError(`Gelijktijdige wijziging in domein ${domain}.`, "DOMAIN_CONCURRENCY_CONFLICT");
         this.metrics.domainWrites += 1;
-        const complete = { ...immutableDomain(payload) };
-        for (const key of SPORTPALEIS_STATE_DOMAINS[domain]) {
-          if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) complete[key] = immutableChangedRecordCollection(key, current[key] ?? [], sourcePayload[key] ?? []);
-        }
-        if (domain === "platform") complete.idempotency = immutableDomain(sourcePayload.idempotency ?? {});
-        if (domain === "audit") {
-          const priorEvents = new Map(current.audit.map((event) => [event.id, event]));
-          complete.audit = Object.freeze(finalized.state.audit.map((event) => priorEvents.get(event.id) ?? immutableDomain(event)));
-        }
-        nextDomainCache.set(domain, Object.freeze(complete));
-        nextDomainRevisions.set(domain, Number(nextDomainRevisions.get(domain) ?? 0) + 1);
       }
       const metaUpdate = await connection.query(
         "UPDATE sp_workspace_domain_meta SET global_revision = ?, schema_version = ?, cutover_mode = 'DOMAIN_READS', updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ?",
         [nextRevision, this.schemaVersion, ORGANIZATION_ID, this.globalRevision],
       );
       if (Number(metaUpdate.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
-      const composed = composeSportpaleisState(Object.fromEntries(nextDomainCache));
-      composed.revision = nextRevision;
-      const nextSnapshot = Object.freeze(composed);
       phase = "commit";
       await connection.commit();
-      this.domainCache = nextDomainCache;
-      this.domainRevisions = nextDomainRevisions;
-      this.recordOrdinals = nextRecordOrdinals;
+      this.domainCache = persistence.nextDomainCache;
+      this.domainRevisions = persistence.nextDomainRevisions;
+      this.recordOrdinals = persistence.nextRecordOrdinals;
       this.globalRevision = nextRevision;
-      this.snapshot = nextSnapshot;
+      this.snapshot = persistence.nextSnapshot;
       return { state: this.snapshot, value: result.value };
     } catch (cause) {
       await connection.rollback().catch(() => undefined);
@@ -673,11 +701,12 @@ export class SportpaleisDomainMariaDbStore {
     }
     const prepared = lazy.finalize();
     if (prepared.changedKeys.length === 0) return { state: baseSnapshot, value: preparedResult.value };
+    const persistence = prepareMutationPersistence({ current: baseSnapshot, finalized: prepared, globalRevision: baseRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
     const preparationMs = performance.now() - preparationStartedAt;
     this.metrics.preparedMutations += 1;
     this.metrics.preparedMutationMsTotal += preparationMs;
     this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
-    return this.mutate(null, { baseRevision, finalized: prepared, value: preparedResult.value });
+    return this.mutate(null, { baseRevision, persistence, value: preparedResult.value });
   }
 
   async latestBackupStatus() { return { status: "external", strategy: "encrypted-logical-dump-plus-provider-backup" }; }

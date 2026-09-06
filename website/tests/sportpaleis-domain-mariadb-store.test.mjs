@@ -323,6 +323,67 @@ test("gelijktijdige stores blokkeren stale writes en kunnen daarna veilig refres
   assert.equal((await first.read()).preferences.store.density, "comfortable");
 });
 
+test("prepared persistence faalt zonder writes bij revisiondrift en commit een idempotente retry exact eenmaal", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const first = new SportpaleisDomainMariaDbStore({ pool });
+  const second = new SportpaleisDomainMariaDbStore({ pool });
+  await first.backfillLegacySource();
+  await first.initialize();
+  await second.initialize();
+  let releasePreparation;
+  let markPreparationStarted;
+  const preparationPaused = new Promise((resolve) => { releasePreparation = resolve; });
+  const preparationStarted = new Promise((resolve) => { markPreparationStarted = resolve; });
+  const identity = "prepared-persistence-race";
+  const applyPreparedMutation = async (state) => {
+    if (state.idempotency[identity]) return { state, value: state.idempotency[identity], unchanged: true };
+    state.preferences.prepared = { density: "compact" };
+    state.idempotency[identity] = { status: "SUCCEEDED", value: { density: "compact" } };
+    return { state, value: state.idempotency[identity] };
+  };
+  const stale = first.prepareAndCommit(async (state) => {
+    const result = await applyPreparedMutation(state);
+    markPreparationStarted();
+    await preparationPaused;
+    return result;
+  });
+  await preparationStarted;
+  await second.mutate(async (state) => {
+    state.preferences.concurrent = { density: "comfortable" };
+    return { state, value: null };
+  });
+  const afterConcurrentCommit = {
+    revision: pool.meta.global_revision,
+    commits: pool.commits,
+    records: structuredClone(pool.records),
+    audit: structuredClone(pool.audit),
+    history: structuredClone(pool.history),
+    artifacts: structuredClone(pool.artifacts),
+    idempotency: structuredClone(pool.idempotency),
+  };
+  releasePreparation();
+  await assert.rejects(stale, ({ code }) => code === "DOMAIN_SNAPSHOT_STALE" || code === "DOMAIN_PREPARED_SNAPSHOT_STALE");
+  assert.equal(pool.meta.global_revision, afterConcurrentCommit.revision);
+  assert.equal(pool.commits, afterConcurrentCommit.commits);
+  assert.deepEqual(pool.records, afterConcurrentCommit.records);
+  assert.deepEqual(pool.audit, afterConcurrentCommit.audit);
+  assert.deepEqual(pool.history, afterConcurrentCommit.history);
+  assert.deepEqual(pool.artifacts, afterConcurrentCommit.artifacts);
+  assert.deepEqual(pool.idempotency, afterConcurrentCommit.idempotency);
+  await first.read();
+  const retried = await first.prepareAndCommit(applyPreparedMutation);
+  assert.equal(retried.value.status, "SUCCEEDED");
+  assert.equal(pool.meta.global_revision, afterConcurrentCommit.revision + 1);
+  assert.equal(pool.commits, afterConcurrentCommit.commits + 1);
+  assert.equal(pool.idempotency.size, afterConcurrentCommit.idempotency.size + 1);
+  const repeated = await first.prepareAndCommit(applyPreparedMutation);
+  assert.deepEqual(repeated.value, retried.value);
+  assert.equal(pool.meta.global_revision, afterConcurrentCommit.revision + 1);
+  assert.equal(pool.commits, afterConcurrentCommit.commits + 1);
+});
+
 test("historie en artifactreferentie zijn immutable en een fout rolt recordwrites terug", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
