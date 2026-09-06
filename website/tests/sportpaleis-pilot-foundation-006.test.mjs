@@ -71,6 +71,15 @@ test("Pilot Foundation 006 — auth, rollen, gedeelde data, concurrency en herst
     assert.ok(adminView.users.every(({ seatType }) => seatType === "customer"));
   });
 
+  await context.test("historische auditafwijking blokkeert de operator-bootstrap niet", async () => {
+    await store.mutate(async (state) => {
+      state.audit.unshift({ id: "audit-legacy-wrong-schema", at: "2026-08-07T09:59:00.000Z", actorId: "legacy", action: "Historische afwijking", targetId: "legacy", details: {} });
+      return { state, value: null };
+    });
+    const operatorView = await service.bootstrap(patrick.token, "orders");
+    assert.equal(operatorView.audit.some(({ id }) => id === "audit-legacy-wrong-schema"), false);
+  });
+
   await context.test("operator krijgt server-side 403 op adminactie", async () => {
     await assert.rejects(
       service.requestUsers(patrick.token, patrick.csrfToken, { quantity: 1 }, "operator-admin-attempt-0001"),

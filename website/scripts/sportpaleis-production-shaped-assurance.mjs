@@ -352,7 +352,7 @@ async function storeInitialize() {
   const mutationLaneAuditBefore = mutationLaneBefore.audit.length;
   const mutationLaneOperation = (index, kind) => async (state) => {
     state.preferences[`assurance-lane-${index}`] = { density: index % 2 ? "compact" : "comfortable", kind };
-    state.audit.push({ id: `audit-assurance-lane-${candidateCommit.slice(0, 12)}-${index}`, at: new Date(Date.UTC(2026, 8, 6, 8, 0, index)).toISOString(), actorId: normalUser.id, action: "MUTATION_LANE_ASSURANCE", targetId: `assurance-lane-${index}`, details: { kind } });
+    state.audit.unshift({ id: `audit-assurance-lane-${candidateCommit.slice(0, 12)}-${index}`, at: new Date(Date.UTC(2026, 8, 6, 8, 0, index)).toISOString(), userId: normalUser.id, action: "MUTATION_LANE_ASSURANCE", subject: `assurance-lane-${index}`, details: { kind } });
     return { state, value: { index, kind } };
   };
   const ordinaryMutationLane = Array.from({ length: mutationLaneCount }, (_, index) => store.mutate(mutationLaneOperation(index, "ordinary")));

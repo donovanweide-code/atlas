@@ -232,6 +232,10 @@ test("auditappend schrijft alleen nieuwe immutable event en geen volledige audit
   assert.equal(pool.audit.size, before + 1);
   assert.equal(pool.domains.get("audit").payload_json.includes("largeEvidence"), false);
   assert.equal((await store.readSnapshot()).audit[0].id, "audit-incremental");
+  await assert.rejects(store.mutate(async (state) => {
+    state.audit.reverse();
+    return { state, value: null };
+  }), ({ code }) => code === "AUDIT_IMMUTABILITY_VIOLATION", "bestaande auditevidence kon via een algemene mutatie worden herschikt");
 });
 
 test("auth, bootstrap en honderd polls blijven read-only op de domeinopslag", async () => {
@@ -421,6 +425,10 @@ test("append-only ordercommand behoudt frozen records en vermijdt volledige coll
     state.audit.splice(1, 0, { id: "audit-interspersed", at: "2026-09-05T06:00:30.000Z", userId: "fixture", action: "Niet toegestaan", subject: "fixture", details: {} });
     return { state, value: null };
   }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een nieuwe auditregel kon tussen bestaande evidence worden geïnterpoleerd");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.audit.unshift({ id: "audit-wrong-schema", at: "2026-09-05T06:01:00.000Z", actorId: "fixture", action: "Verkeerd schema", targetId: "fixture", details: {} });
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_AUDIT_EVENT_INVALID", "een Owner-auditvorm kon in de Sportpaleis-audit worden vastgelegd");
   const existingIdentity = Object.keys(before.idempotency)[0];
   assert.ok(existingIdentity, "fixture mist bestaand idempotencyrecord voor overwrite-regressie");
   await assert.rejects(store.mutateAppendOnly(async (state) => {

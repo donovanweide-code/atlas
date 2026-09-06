@@ -163,7 +163,22 @@ function changedAuditEvents(previous, next) {
     if (candidate === event) continue;
     if (sha256CanonicalJson(candidate) !== sha256CanonicalJson(event)) throw Object.assign(new Error("Immutable auditregels mogen niet worden gewijzigd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
   }
-  return next.filter(({ id }) => !previousIds.has(id));
+  const additions = next.filter(({ id }) => !previousIds.has(id));
+  const prefixLength = next.length - previous.length;
+  if (prefixLength < 0 || previous.some((event, index) => next[prefixLength + index] !== event)) {
+    throw Object.assign(new Error("Immutable auditregels mogen niet worden herschikt of geïnterpoleerd."), { code: "AUDIT_IMMUTABILITY_VIOLATION" });
+  }
+  for (const event of additions) {
+    const required = ["id", "at", "userId", "action", "subject"];
+    const invalidField = required.find((field) => typeof event?.[field] !== "string" || !event[field].trim());
+    if (invalidField) {
+      throw Object.assign(new Error(`Nieuwe auditregel mist een geldige ${invalidField}.`), { code: "DOMAIN_AUDIT_EVENT_INVALID" });
+    }
+    if (!event.details || typeof event.details !== "object" || Array.isArray(event.details)) {
+      throw Object.assign(new Error("Nieuwe auditregel mist geldige details."), { code: "DOMAIN_AUDIT_EVENT_INVALID" });
+    }
+  }
+  return additions;
 }
 
 function assertAppendOnlyDraft(current, finalized, allowedScalarKeys) {
