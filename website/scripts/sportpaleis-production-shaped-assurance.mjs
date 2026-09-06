@@ -406,13 +406,14 @@ async function storeInitialize() {
   const parentFaultPrepared = await productionArtifactInventory();
   assert.ok(parentFaultPrepared.visible.some((entry) => entry.endsWith("PLOT-9999-9997-production.svg")), "fault-injection bereikte de final-link niet");
   assert.ok(parentFaultPrepared.visible.some((entry) => entry.endsWith("PLOT-9999-9997-production.svg.reservation.json")), "evidence bestond niet vóór de final-link");
-  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: 1, committed: 0, quarantined: 1 }, "parentcrash werd niet begrensd gereconcilieerd");
+  const committedPracticeArtifacts = assuranceContract.minimumLoad.largeFreeProductionHeightsMm.length;
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: committedPracticeArtifacts + 1, committed: committedPracticeArtifacts, quarantined: 1 }, "parentcrash werd niet begrensd gereconcilieerd");
   const parentFaultReconciled = await productionArtifactInventory();
   assert.deepEqual(parentFaultReconciled.visible, workerCrashArtifactsBefore.visible, "parentcrash liet een zichtbare orphan achter");
   assert.ok(parentFaultReconciled.quarantine.length > workerCrashArtifactsBefore.quarantine.length, "parentcrash behield geen immutable quarantine-evidence");
   const parentRetry = await reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9997", bytes: parentFaultBytes, operationIdentity: parentFaultOperation });
   assert.equal(parentRetry.reused, false, "retry na gereconcilieerde parentcrash adopteerde ten onrechte een zichtbare final");
-  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: 1, committed: 0, quarantined: 1 }, "retryevidence werd niet opnieuw zonder duplicaat gereconcilieerd");
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: committedPracticeArtifacts + 1, committed: committedPracticeArtifacts, quarantined: 1 }, "retryevidence werd niet opnieuw zonder duplicaat gereconcilieerd");
   assert.deepEqual((await productionArtifactInventory()).visible, workerCrashArtifactsBefore.visible, "retry na parentcrash liet een zichtbare orphan achter");
   const parentReservationCrashRecoveredWithoutOrphan = true;
   const raceKeys = ["assurance-channel-store-job", "assurance-channel-webshop-job"];
