@@ -1,5 +1,5 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
-import { link, mkdir, open, readFile, rename, stat, unlink, writeFile, readdir } from "node:fs/promises";
+import { link, mkdir, open, readFile, rename, rmdir, stat, unlink, writeFile, readdir } from "node:fs/promises";
 import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -9598,6 +9598,16 @@ async function moveCreateOnly(source, destination) {
   }
 }
 
+async function pruneEmptyProductionArtifactDirectories(runtimeArtifactRoot, artifactPath) {
+  const artifact = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifactPath);
+  const hashDirectory = path.dirname(artifact);
+  const jobDirectory = path.dirname(hashDirectory);
+  for (const directory of [hashDirectory, jobDirectory]) {
+    try { await rmdir(directory); }
+    catch (error) { if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes(error?.code)) throw error; }
+  }
+}
+
 async function quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts, state, reason }) {
   const committed = committedArtifactReferenceSet(state);
   for (const artifact of artifacts) {
@@ -9610,6 +9620,7 @@ async function quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, a
     await moveCreateOnly(source, destination);
     await moveCreateOnly(`${source}.reservation.json`, `${destination}.reservation.json`);
     await writeCreateOnlyEvidence(path.join(quarantineDirectory, "quarantine.json"), { schemaVersion: 1, status: "QUARANTINED_UNCOMMITTED", jobNumber: artifact.jobNumber, artifactSha256: String(artifact.sha256).toUpperCase(), sourcePath: artifact.path, operationIdentityHash: artifact.operationIdentityHash, reason: String(reason), businessStateMutated: false, immutableEvidencePreserved: true });
+    await pruneEmptyProductionArtifactDirectories(runtimeArtifactRoot, artifact.path);
   }
 }
 
@@ -9657,6 +9668,7 @@ export async function reconcileProductionArtifactStorage({ runtimeArtifactRoot, 
     const destination = path.join(quarantineDirectory, `${path.basename(source)}.interrupted`);
     if (await moveCreateOnly(source, destination)) {
       await writeCreateOnlyEvidence(`${destination}.quarantine.json`, { schemaVersion: 1, status: "QUARANTINED_INTERRUPTED_PENDING", jobNumber, artifactSha256: hashDirectory.toUpperCase(), sourcePath: path.join("outputs", "sportpaleis-plotjobs", normalized).replaceAll(path.sep, "/"), reason: "STARTUP_PENDING_RECONCILIATION", businessStateMutated: false, immutableEvidencePreserved: true });
+      await pruneEmptyProductionArtifactDirectories(runtimeArtifactRoot, path.join("outputs", "sportpaleis-plotjobs", normalized));
       quarantined += 1;
     }
   }
