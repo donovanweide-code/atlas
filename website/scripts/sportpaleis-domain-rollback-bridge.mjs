@@ -11,51 +11,78 @@ import { encodeLegacyRollbackStateIsolated } from "./workspace-legacy-state-enco
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
 const ISOLATED_ROLLBACK_TIMEOUT_MS = 60_000;
 
-export function materializeLegacyRollbackStateIsolated({ database, expectedGlobalRevision, expectedDomainHash }, { timeoutMs = ISOLATED_ROLLBACK_TIMEOUT_MS } = {}) {
+export function runRollbackOperationIsolated({ moduleUrl, payload, operation }, { timeoutMs = ISOLATED_ROLLBACK_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const child = fork(new URL("./sportpaleis-domain-rollback-child.mjs", import.meta.url), [], {
+    const child = fork(moduleUrl, [], {
       serialization: "advanced",
       stdio: ["ignore", "ignore", "ignore", "ipc"],
       windowsHide: true,
       execArgv: ["--max-old-space-size=768", "--max-semi-space-size=64"],
     });
     let settled = false;
+    let terminating = false;
     let response = null;
-    const finish = (callback, value, { terminate = false } = {}) => {
+    const finish = (callback, value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       child.off("message", onMessage);
       child.off("error", onError);
       child.off("exit", onExit);
-      if (terminate) {
-        if (child.connected) child.disconnect();
-        child.kill();
-      }
       callback(value);
     };
-    const failure = (message, code = "LEGACY_ROLLBACK_ISOLATION_FAILED") => Object.assign(new Error(message), { code });
+    const failure = (message, code = "LEGACY_ROLLBACK_ISOLATION_FAILED", exitConfirmed = false) => Object.assign(new Error(message), { code, childPid: child.pid ?? null, isolatedProcessExitConfirmed: exitConfirmed });
+    const terminateAfterExit = (error) => {
+      if (settled || terminating) return;
+      terminating = true;
+      clearTimeout(timer);
+      child.off("message", onMessage);
+      child.off("error", onError);
+      child.off("exit", onExit);
+      child.once("exit", () => {
+        terminating = false;
+        finish(reject, Object.assign(error, { isolatedProcessExitConfirmed: true }));
+      });
+      if (child.connected) child.disconnect();
+      if (!child.kill() && child.exitCode != null) finish(reject, Object.assign(error, { isolatedProcessExitConfirmed: true }));
+    };
     const onMessage = (message) => { response = message; };
-    const onError = () => finish(reject, failure("De geïsoleerde rollbackmaterialisatie kon niet worden uitgevoerd."), { terminate: true });
+    const onError = () => finish(reject, failure(`De geïsoleerde rollback${operation} kon niet worden uitgevoerd.`));
     const onExit = (code) => {
-      if (code !== 0) return finish(reject, failure("De geïsoleerde rollbackmaterialisatie stopte onverwacht."));
-      if (!response) return finish(reject, failure("De geïsoleerde rollbackmaterialisatie gaf geen resultaat."));
+      if (code !== 0) return finish(reject, failure(`De geïsoleerde rollback${operation} stopte onverwacht.`, "LEGACY_ROLLBACK_ISOLATION_FAILED", true));
+      if (!response) return finish(reject, failure(`De geïsoleerde rollback${operation} gaf geen resultaat.`, "LEGACY_ROLLBACK_ISOLATION_FAILED", true));
       return response.ok
         ? finish(resolve, Object.freeze({ ...response.result, isolatedProcessExitConfirmed: true }))
-        : finish(reject, failure(response?.error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", response?.error?.code));
+        : finish(reject, failure(response?.error?.message ?? `De geïsoleerde rollback${operation} is mislukt.`, response?.error?.code, true));
     };
-    const timer = setTimeout(() => finish(reject, failure("De geïsoleerde rollbackmaterialisatie duurde te lang.", "LEGACY_ROLLBACK_ISOLATION_TIMEOUT"), { terminate: true }), Math.max(1_000, Number(timeoutMs) || ISOLATED_ROLLBACK_TIMEOUT_MS));
+    const timer = setTimeout(() => terminateAfterExit(failure(`De geïsoleerde rollback${operation} duurde te lang.`, "LEGACY_ROLLBACK_ISOLATION_TIMEOUT")), Math.max(1_000, Number(timeoutMs) || ISOLATED_ROLLBACK_TIMEOUT_MS));
     timer.unref?.();
     child.on("message", onMessage);
     child.once("error", onError);
     child.once("exit", onExit);
     try {
       setPriority(child.pid, osConstants.priority.PRIORITY_LOW);
-      child.send({ database, expectedGlobalRevision, expectedDomainHash });
+      child.send(payload);
     } catch {
       onError();
     }
   });
+}
+
+export function materializeLegacyRollbackStateIsolated({ database, expectedGlobalRevision, expectedDomainHash }, options = {}) {
+  return runRollbackOperationIsolated({
+    moduleUrl: new URL("./sportpaleis-domain-rollback-child.mjs", import.meta.url),
+    payload: { database, expectedGlobalRevision, expectedDomainHash },
+    operation: "materialisatie",
+  }, options);
+}
+
+export function verifyLegacyRollbackStateIsolated({ database, organizationId = ORGANIZATION_ID, expectedSchemaVersion, expectedGlobalRevision, expectedDomainHash, expectedEncodedHash }, options = {}) {
+  return runRollbackOperationIsolated({
+    moduleUrl: new URL("./sportpaleis-domain-rollback-verifier-child.mjs", import.meta.url),
+    payload: { database, organizationId, expectedSchemaVersion, expectedGlobalRevision, expectedDomainHash, expectedEncodedHash },
+    operation: "verificatie",
+  }, options);
 }
 
 // Offline compatibility bridge only. The releasebroker must stop application
