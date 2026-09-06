@@ -30,8 +30,9 @@ process.on("message", async ({ type, requestId, input, maxOutputBytes, assurance
   const cpuStart = process.cpuUsage();
   try {
     if (allowAssuranceFault && input.assuranceFault === "FAST_FAILURE") throw Object.assign(new Error("assurance fast failure"), { code: "ASSURANCE_FAST_FAILURE", statusCode: 409 });
-    const snapshot = allowAssuranceFault && input.assuranceFault === "OVERSIZED_OUTPUT"
-      ? { artifactPayload: "x".repeat(Number(maxOutputBytes) + 1) }
+    const oversizedOutputFault = allowAssuranceFault && input.assuranceFault === "OVERSIZED_OUTPUT";
+    const snapshot = oversizedOutputFault
+      ? {}
       : (await productionBuilder())(
         input.state,
         input.orders,
@@ -42,7 +43,13 @@ process.on("message", async ({ type, requestId, input, maxOutputBytes, assurance
         input.productionGroup,
         input.options,
       );
-    const outputBytes = Buffer.byteLength(JSON.stringify(snapshot));
+    // Exercise the exact output-boundary without allocating and serializing an
+    // 8-MB test payload. Under a fully parallel repository run that synthetic
+    // allocation could itself starve the child until the unrelated build
+    // timeout won, making the permanent release gate scheduling-dependent.
+    const outputBytes = oversizedOutputFault
+      ? Number(maxOutputBytes) + 1
+      : Buffer.byteLength(JSON.stringify(snapshot));
     if (outputBytes > Number(maxOutputBytes)) throw Object.assign(new Error("De productieopbouw overschrijdt de begrensde resultaatgrootte."), { code: "PRODUCTION_JOB_BUILD_OUTPUT_TOO_LARGE", statusCode: 413 });
     buildCount += 1;
     if (allowAssuranceFault && input.assuranceFault === "EXIT_AFTER_BUILD_BEFORE_MESSAGE") {

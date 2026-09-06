@@ -520,7 +520,7 @@ async function storeInitialize() {
   })();
   global.gc?.();
 
-  await enterLoadPhase("large-free-production");
+  await enterLoadPhase("large-free-preflight");
   const practiceBefore = await store.readSnapshot();
   const originalOrderHashes = new Map(practiceBefore.orders.map((order) => [order.id, sha256CanonicalJson(order)]));
   const originalJobHashes = new Map(practiceBefore.productionJobs.map((job) => [job.id, sha256CanonicalJson(job)]));
@@ -550,6 +550,7 @@ async function storeInitialize() {
   assert.equal(productionWorkerReachability.visualSourceDocumentsTransported, 0, "visuele intakebytes lekken naar de geometryworker");
   assert.ok(productionWorkerReachability.supplementInputBytes <= MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES && productionWorkerReachability.visualInputBytes <= MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, "production-shaped workerreachability overschrijdt de runtimegrens");
   const runCrashAndChannelRace = async () => {
+  await enterLoadPhase("production-crash-race-setup");
   const createControlledSourceOrder = async (source, key) => {
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
       orderKind: "CUSTOM", source,
@@ -585,6 +586,7 @@ async function storeInitialize() {
   const workerCrashStateBefore = await store.readSnapshot();
   process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED = "1";
   try {
+    await enterLoadPhase("production-worker-crash");
     await assert.rejects(
       buildProductionJobSnapshotIsolated(crashInput, { operationIdentity: crashOperationIdentity }),
       (error) => error?.code === "PRODUCTION_JOB_BUILD_FAILED" && error?.statusCode === 503,
@@ -602,12 +604,14 @@ async function storeInitialize() {
   assert.deepEqual(workerCrashStateAfter.orders.map(sha256CanonicalJson), workerCrashStateBefore.orders.map(sha256CanonicalJson), "workercrash wijzigde orders");
   assert.deepEqual(workerCrashStateAfter.productionJobs.map(sha256CanonicalJson), workerCrashStateBefore.productionJobs.map(sha256CanonicalJson), "workercrash wijzigde PlotJobs");
   assert.deepEqual(workerCrashStateAfter.productionProposals.map(sha256CanonicalJson), workerCrashStateBefore.productionProposals.map(sha256CanonicalJson), "workercrash wijzigde voorstellen");
+  await enterLoadPhase("production-worker-crash-retry");
   const workerCrashRetry = await buildProductionJobSnapshotIsolated({ ...crashInput, assuranceFault: undefined }, { operationIdentity: crashOperationIdentity });
   assert.equal(workerCrashRetry.artifact?.format, "SVG", "retry na workercrash leverde geen deterministische SVG-snapshot");
   assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "dry-buildretry reserveerde ten onrechte vóór parent-side commitgrens");
   const workerCrashRecoveredWithoutOrphan = true;
   const parentFaultOperation = `assurance-parent-reservation-crash-${candidateCommit}`;
   const parentFaultBytes = Buffer.from(workerCrashRetry.artifactPayload, "utf8");
+  await enterLoadPhase("production-parent-reservation-crash");
   await assert.rejects(
     reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9997", bytes: parentFaultBytes, operationIdentity: parentFaultOperation, faultInjector: (point) => {
       if (point === "AFTER_FINAL_BEFORE_RETURN") throw Object.assign(new Error("assurance parent reservation crash"), { code: "ASSURANCE_PARENT_RESERVATION_CRASH" });
@@ -622,6 +626,7 @@ async function storeInitialize() {
   const parentFaultReconciled = await productionArtifactInventory();
   assert.deepEqual(parentFaultReconciled.visible, workerCrashArtifactsBefore.visible, "parentcrash liet een zichtbare orphan achter");
   assert.ok(parentFaultReconciled.quarantine.length > workerCrashArtifactsBefore.quarantine.length, "parentcrash behield geen immutable quarantine-evidence");
+  await enterLoadPhase("production-parent-reservation-retry");
   const parentRetry = await reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9997", bytes: parentFaultBytes, operationIdentity: parentFaultOperation });
   assert.equal(parentRetry.reused, false, "retry na gereconcilieerde parentcrash adopteerde ten onrechte een zichtbare final");
   assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: committedPracticeArtifacts + 1, committed: committedPracticeArtifacts, quarantined: 1 }, "retryevidence werd niet opnieuw zonder duplicaat gereconcilieerd");
@@ -634,6 +639,7 @@ async function storeInitialize() {
     idempotency: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_key IN (?, ?)", [practiceBefore.organizationId, ...raceKeys.map((key) => `${normalUser.id}:CREATE_PRODUCTION_JOB:${key}`)]))[0].count),
   };
   const raceArtifactsBefore = await productionArtifactInventory();
+  await enterLoadPhase("production-same-color-race");
   const raceOutcomes = await Promise.allSettled(channelProposal.groups.map((group, index) => service.createProductionJob(
     normalToken,
     normalSession.csrf,
@@ -701,6 +707,7 @@ async function storeInitialize() {
   const practiceRuns = [];
   let productionPreparationConcurrency = null;
   for (const heightMm of assuranceContract.minimumLoad.largeFreeProductionHeightsMm) {
+    await enterLoadPhase(`large-free-${heightMm}-setup`);
     const operationPrefix = `assurance-${candidateCommit.slice(0, 12)}-${heightMm}`;
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
       orderKind: "CUSTOM", customer: `Geïsoleerde assurancefixture ${heightMm} mm`, customerEmail: "", customerPhone: "",
@@ -712,6 +719,7 @@ async function storeInitialize() {
     const productionPayload = { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders };
     const productionArtifactsBefore = heightMm === 80 ? await productionArtifactInventory() : null;
     const productionStateBefore = heightMm === 80 ? await store.readSnapshot() : null;
+    await enterLoadPhase(`large-free-${heightMm}-build`);
     const firstPromise = service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
     if (heightMm === 80) {
       const workerDeadline = performance.now() + 5_000;
@@ -721,6 +729,7 @@ async function storeInitialize() {
       const responseReady = new Promise((resolve) => { delayedMutationResponseReady = resolve; });
       const responseLossAbort = new AbortController();
       const ordinaryMutationStartedAt = performance.now();
+      await enterLoadPhase("large-free-80-concurrent-mutation");
       const responseLostRequest = fetch(`${origin}/api/sportpaleis/v1/orders`, { method: "POST", signal: responseLossAbort.signal, headers: { cookie: customerCookies[customerSessions.indexOf(normalSession)], "content-type": "application/json", "x-csrf-token": normalSession.csrf, "idempotency-key": `${operationPrefix}-concurrent-order`, "x-assurance-delay-response": "1" }, body: JSON.stringify(concurrentOrderPayload) });
       await responseReady;
       const ordinaryMutationWallMs = performance.now() - ordinaryMutationStartedAt;
@@ -734,6 +743,7 @@ async function storeInitialize() {
       productionPreparationConcurrency = { ordinaryMutationWallMs: rounded(ordinaryMutationWallMs), productionStillActiveAfterMutation: true, concurrentOrderId: recoveredOrder.value.id, responseLostHistoryLength, httpResponseAbortedAfterServerCommit: true, responseLossRetryDuplicate: true };
     }
     const first = await firstPromise;
+    await enterLoadPhase(`large-free-${heightMm}-verify`);
     const wallMs = performance.now() - started;
     const retry = await service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
     assert.equal(first.duplicate, false, `${heightMm} mm eerste productie-intentie is niet nieuw`);
@@ -763,6 +773,7 @@ async function storeInitialize() {
       productionPreparationConcurrency = { ...productionPreparationConcurrency, plotJobDelta: 1, visibleSvgDelta: 1, concurrentOrderDelta: 1, concurrentOrderIdempotencyRecords: 1, concurrentOrderHistoryStable: true, quarantinedAttemptPreserved: true };
     }
     const beforeFixtureReject = await store.readSnapshot();
+    await enterLoadPhase(`large-free-${heightMm}-reject`);
     const rejected = await service.rejectProductionJob(normalToken, normalSession.csrf, first.value.id, { reason: "ASSURANCE_FIXTURE_HEIGHT_SEQUENCE_RELEASE" });
     assert.equal(rejected.duplicate, false, `${heightMm} mm assurancefixture werd niet exact eenmaal reject-only afgesloten`);
     assert.equal(rejected.value.status, "REJECTED", `${heightMm} mm assurancefixture bleef de volgende fysieke stap blokkeren`);
