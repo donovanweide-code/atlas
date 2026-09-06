@@ -169,19 +169,23 @@ function changedAuditEvents(previous, next) {
 function assertAppendOnlyDraft(current, finalized, allowedScalarKeys) {
   for (const key of finalized.changedKeys) {
     if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) {
-      const nextById = new Map((finalized.state[key] ?? []).map((record) => [sportpaleisRecordIdentity(key, record), record]));
-      for (const record of current[key] ?? []) {
-        const identity = sportpaleisRecordIdentity(key, record);
-        if (nextById.get(identity) !== record) {
-          throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde of verwijderde ${key}/${identity}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
-        }
+      const previous = current[key] ?? [];
+      const previousIds = new Set(previous.map((record) => sportpaleisRecordIdentity(key, record)));
+      const retained = (finalized.state[key] ?? []).filter((record) => previousIds.has(sportpaleisRecordIdentity(key, record)));
+      if (retained.length !== previous.length || retained.some((record, index) => record !== previous[index])) {
+        throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde, verwijderde of herschikte bestaande ${key}-records.`, "DOMAIN_APPEND_ONLY_VIOLATION");
       }
       continue;
     }
     if (key === "audit") {
-      const nextById = new Map((finalized.state.audit ?? []).map((event) => [event.id, event]));
-      for (const event of current.audit ?? []) if (nextById.get(event.id) !== event) {
-        throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde of verwijderde audit/${event.id}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
+      const previous = current.audit ?? [];
+      const next = finalized.state.audit ?? [];
+      const prefixLength = next.length - previous.length;
+      const previousIds = new Set(previous.map(({ id }) => id));
+      if (prefixLength < 0
+        || next.slice(0, Math.max(0, prefixLength)).some(({ id }) => previousIds.has(id))
+        || previous.some((event, index) => next[prefixLength + index] !== event)) {
+        throw new SportpaleisMariaDbStoreError("Append-only command wijzigde, verwijderde, herschikte of interpoleerde bestaande auditregels.", "DOMAIN_APPEND_ONLY_VIOLATION");
       }
       continue;
     }

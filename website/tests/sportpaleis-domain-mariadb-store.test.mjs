@@ -389,6 +389,7 @@ test("append-only ordercommand behoudt frozen records en vermijdt volledige coll
   await store.backfillLegacySource();
   await store.initialize();
   await store.mutate(async (state) => {
+    state.orders.unshift({ id: "SP-2026-append-seed-older", revision: 1, customer: "ook ongewijzigd", eventHistory: [] });
     state.orders.unshift({ id: "SP-2026-append-seed", revision: 1, customer: "ongewijzigd", eventHistory: [] });
     state.idempotency["append-only-existing"] = { status: "SUCCEEDED" };
     return { state, value: null };
@@ -407,6 +408,19 @@ test("append-only ordercommand behoudt frozen records en vermijdt volledige coll
     state.orders = state.orders.slice(1);
     return { state, value: null };
   }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een bestaand orderrecord kon via de append-only grens worden verwijderd");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.orders.reverse();
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "bestaande orderrecords konden worden herschikt");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    const newest = state.audit.shift();
+    state.audit.push(newest);
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "bestaande auditregels konden worden herschikt");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.audit.splice(1, 0, { id: "audit-interspersed", at: "2026-09-05T06:00:30.000Z", userId: "fixture", action: "Niet toegestaan", subject: "fixture", details: {} });
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een nieuwe auditregel kon tussen bestaande evidence worden geïnterpoleerd");
   const existingIdentity = Object.keys(before.idempotency)[0];
   assert.ok(existingIdentity, "fixture mist bestaand idempotencyrecord voor overwrite-regressie");
   await assert.rejects(store.mutateAppendOnly(async (state) => {
@@ -429,6 +443,11 @@ test("append-only ordercommand behoudt frozen records en vermijdt volledige coll
   assert.equal(after.idempotency["append-only-order"].status, "SUCCEEDED");
   assert.equal(after.audit[0].id, "audit-append-only");
   assert.equal(store.metricsSnapshot().transactionPhaseMsMax.prepareInsideTransaction, 0);
+  const restarted = new SportpaleisDomainMariaDbStore({ pool });
+  await restarted.initialize();
+  const reloaded = await restarted.readSnapshot();
+  assert.deepEqual(reloaded.orders.map(({ id }) => id), after.orders.map(({ id }) => id), "restart wijzigde de append-only ordervolgorde");
+  assert.deepEqual(reloaded.audit.map(({ id }) => id), after.audit.map(({ id }) => id), "restart wijzigde de append-only auditvolgorde");
 });
 
 test("mutationlane geeft concrete retrybare backpressure zonder een drieëndertigste draft te starten", async () => {
