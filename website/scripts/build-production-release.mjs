@@ -207,6 +207,7 @@ async function main() {
     [path.join(websiteRoot, "scripts", "sportpaleis-production-shaped-assurance.mjs"), "app/scripts/sportpaleis-production-shaped-assurance.mjs"],
     [path.join(websiteRoot, "scripts", "sportpaleis-domain-rollback-bridge.mjs"), "app/scripts/sportpaleis-domain-rollback-bridge.mjs"],
     [path.join(websiteRoot, "scripts", "sportpaleis-domain-rollback-child.mjs"), "app/scripts/sportpaleis-domain-rollback-child.mjs"],
+    [path.join(websiteRoot, "scripts", "sportpaleis-domain-rollback-verifier-child.mjs"), "app/scripts/sportpaleis-domain-rollback-verifier-child.mjs"],
     [path.join(websiteRoot, "scripts", "sportpaleis-domain-backfill.mjs"), "app/scripts/sportpaleis-domain-backfill.mjs"],
     [path.join(websiteRoot, "scripts", "wbd-owner-domain-backfill.mjs"), "app/scripts/wbd-owner-domain-backfill.mjs"],
     [path.join(websiteRoot, "scripts", "wbd-owner-domain-assurance.mjs"), "app/scripts/wbd-owner-domain-assurance.mjs"],
