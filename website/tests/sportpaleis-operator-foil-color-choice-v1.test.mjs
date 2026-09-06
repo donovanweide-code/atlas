@@ -37,11 +37,11 @@ async function fixture(context, key, { secondaryColor = "Blauw" } = {}) {
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, `color-choice-${key}-proposal`)).value;
   const byColor = (color) => proposal.groups.find(({ foilColor }) => foilColor === color);
   assert.ok(byColor("Wit") && byColor(secondaryColor));
-  return { service, admin, operator, controlled, proposal, white: byColor("Wit"), blue: byColor(secondaryColor) };
+  return { store, service, admin, operator, controlled, proposal, white: byColor("Wit"), blue: byColor(secondaryColor) };
 }
 
 test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en rondt alleen gekozen kleur af", async (context) => {
-  const { service, admin, operator, controlled, proposal, white, blue } = await fixture(context, "white-first");
+  const { store, service, admin, operator, controlled, proposal, white, blue } = await fixture(context, "white-first");
   const whiteJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: white.id, orders: white.orders }, "color-choice-white-job")).value;
   assert.equal(whiteJob.snapshot.productionGroup.foilColor, "Wit");
 
@@ -70,7 +70,7 @@ test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en ron
   await service.completeProductionJob(admin.token, admin.csrfToken, blueJob.id, "color-choice-blue-printed");
   state = await service.bootstrap(admin.token);
   assert.equal(state.orders.find(({ id }) => id === controlled.id).productionClosure.status, "ELIGIBLE", "alle kleuren Bedrukt maakt uitsluitend Gereed-eligible");
-  const choiceAudit = state.audit.find(({ details }) => details?.productionGroupId === white.id && details?.foilColor === "Wit" && details?.physicalStepSelectedBy);
+  const choiceAudit = (await store.read()).audit.find(({ details }) => details?.productionGroupId === white.id && details?.foilColor === "Wit" && details?.physicalStepSelectedBy);
   assert.ok(choiceAudit);
   assert.equal(choiceAudit.details.physicalStepSelectedBy, "Kevin");
 

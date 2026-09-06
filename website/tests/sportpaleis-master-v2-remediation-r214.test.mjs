@@ -147,14 +147,23 @@ test("mailresultaat voor een oude ontvanger/revision wordt auditable stale en no
 
 test("audittrail wordt niet stil op 2000 regels afgekapt", async (context) => {
   const { store, service, admin } = await fixture(context);
-  await store.mutate(async (state) => { state.audit = Array.from({ length: 2_105 }, (_, index) => ({ id: `audit-r214-${index}`, at: "2026-08-30T10:00:00.000Z", userId: admin.user.id, action: "Historische audit", subject: String(index), details: {} })); return { state, value: null }; });
+  const historicalIds = Array.from({ length: 2_105 }, (_, index) => `audit-r214-${index}`);
+  await store.mutate(async (state) => { state.audit = historicalIds.map((id, index) => ({ id, at: "2026-08-30T10:00:00.000Z", userId: admin.user.id, action: "Historische audit", subject: String(index), details: {} })); return { state, value: null }; });
   await service.savePreferences(admin.token, admin.csrfToken, { view: "compact", density: "compact", optionalPanels: { recent: false, shortcuts: true }, panelOrder: ["production", "attention", "shortcuts", "recent"], orderColumns: ["customer", "foilColors", "articles", "status"], orderDensity: "compact", productionPanels: ["batch", "fallback", "guidance"] });
-  assert.equal((await store.read()).audit.length, 2_106);
+  const audit = (await store.read()).audit;
+  assert.equal(audit.length, 2_107);
+  const ids = new Set(audit.map(({ id }) => id));
+  assert.ok(historicalIds.every((id) => ids.has(id)), "alle 2105 immutable historische events blijven byte-identificeerbaar aanwezig");
+  const additions = audit.filter(({ id }) => !historicalIds.includes(id));
+  assert.equal(additions.length, 2);
+  assert.deepEqual(additions.map(({ action }) => action).sort(), ["Pioneers nummerglyphs voor Rug, Borst en Short verenigd", "Voorkeuren opgeslagen"].sort());
+  assert.equal(additions.find(({ action }) => action === "Pioneers nummerglyphs voor Rug, Borst en Short verenigd").id, "audit-spw-pioneers-unified-number-glyphs-20260903");
+  assert.equal(additions.find(({ action }) => action === "Voorkeuren opgeslagen").userId, admin.user.id);
 });
 
 test("R2.14 behoudt de R2.12 datastoreversie en additive provenance blijft serializeerbaar", () => {
   const state = createSportpaleisProductionBootstrap();
-  assert.equal(state.schemaVersion, 13);
+  assert.equal(state.schemaVersion, 18);
   state.audit.unshift({
     id: "audit-r214-parent-compat",
     at: "2026-08-30T10:00:00.000Z",
@@ -164,7 +173,7 @@ test("R2.14 behoudt de R2.12 datastoreversie en additive provenance blijft seria
     details: { recipientHash: "recipient", contextHash: "context", productionRuleHashes: ["rule"] },
   });
   const restored = JSON.parse(JSON.stringify(state));
-  assert.equal(restored.schemaVersion, 13);
+  assert.equal(restored.schemaVersion, 18);
   assert.deepEqual(restored.audit[0].details.productionRuleHashes, ["rule"]);
 });
 

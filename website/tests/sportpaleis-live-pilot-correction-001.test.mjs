@@ -73,13 +73,16 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" },
       items: [{ articleId: "sp-live-137294", size: "164", quantity: 1, deviation: false, overrides: empty }],
     }, "correction-001-junior-164")).value;
-    assert.deepEqual(valid.items[0].backNumberProduction, { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "VALIDATED", source: association.juniorValidationNote });
+    assert.equal(valid.items[0].backNumberProduction.sizeClass, "JUNIOR");
+    assert.equal(valid.items[0].backNumberProduction.physicalHeightMm, 200);
+    assert.equal(valid.items[0].backNumberProduction.status, "SOURCE_CONFIGURED");
+    assert.match(valid.items[0].backNumberProduction.source, /Authoritative Product Truth Donovan 2026-09-01/u);
     const otherClothingSize = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Junior S", customerEmail: "juniors@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "15", backNumberSizeClass: "JUNIOR" },
       items: [{ articleId: "sp-live-137294", size: "S", quantity: 1, deviation: false, overrides: empty }],
     }, "correction-001-junior-s")).value;
-    assert.deepEqual(otherClothingSize.items[0].backNumberProduction, { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "VALIDATED", source: association.juniorValidationNote });
+    assert.deepEqual(otherClothingSize.items[0].backNumberProduction, valid.items[0].backNumberProduction);
   });
 
   await context.test("verenigingsinstellingen zijn gereviseerd terwijl bestaande orders hun productiesnapshot behouden", async () => {
@@ -92,25 +95,25 @@ test("Sportpaleis live pilot correctieronde 1 — pilotkritieke scope", async (c
     assert.equal(existing.items[0].foilColor, "Wit");
     const updated = await service.updateAssociation(admin.token, admin.csrfToken, before.id, {
       expectedRevision: before.revision,
-      fontProfile: "schluber · pilotcorrectie",
+      fontProfile: before.fontProfile,
       foilColors: ["Wit", "Zwart"],
       defaultFoilColor: "Zwart",
-      dimensionsCm: { ...before.dimensionsCm, backNumberSenior: 21 },
+      dimensionsCm: { ...before.dimensionsCm, backNumberSenior: 20, backNumberJuniorSourceValue: 20 },
       juniorGarmentSizes: before.juniorGarmentSizes,
     });
     assert.equal(updated.revision, before.revision + 1);
     const bootstrap = await service.bootstrap(admin.token);
     const profile = bootstrap.productionProfiles.find(({ id }) => id === "profile-source-a-s-c-waterwijk-backNumber");
-    assert.equal(profile.fontProfile, "schluber · pilotcorrectie");
+    assert.equal(profile.fontProfile, "Schluber");
     assert.equal(profile.foilColor, "Wit");
-    assert.match(profile.sizeLabel, /Rug Senior 210 mm/);
+    assert.equal(profile.sizeLabel, "Rugnummer 20 cm");
     assert.equal(bootstrap.orders.find(({ id }) => id === existing.id).items[0].foilColor, "Wit");
     const after = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Na voorstel", customerEmail: "navoorstel@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "10", backNumberSizeClass: "SENIOR" },
       items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: empty }],
     }, "correction-001-proposal-after")).value;
-    assert.equal(after.items[0].backNumberProduction.physicalHeightMm, 210);
+    assert.equal(after.items[0].backNumberProduction.physicalHeightMm, 200);
     assert.equal(after.items[0].foilColor, "Zwart");
   });
 });

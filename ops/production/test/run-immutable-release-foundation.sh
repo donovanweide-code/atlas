@@ -56,8 +56,22 @@ printf 'export {};\n' > "$fixture/app/scripts/workspace-runtime.mjs"
 printf 'export {};\n' > "$fixture/app/scripts/production-migrate.mjs"
 printf 'export {};\n' > "$fixture/app/scripts/sportpaleis-production-shaped-assurance.mjs"
 printf 'process.stdout.write("{\\"status\\":\\"PASS\\"}\\n");\n' > "$fixture/app/scripts/sportpaleis-domain-rollback-bridge.mjs"
-cat > "$fixture/app/config/sportpaleis-production-shaped-assurance-v3.json" <<'EOF'
-{"schemaVersion":3,"contractId":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V3_DOMAIN_RECORDS","minimumLoad":{"revisionPolls":100,"libraryPreviews":300,"concurrentFullBootstraps":4,"largeFreeProductionHeightsMm":[80,200]},"limits":{"allRoutesP95Ms":1000,"allRoutesMaxMs":5000,"bootstrapP95Ms":2000,"bootstrapMaxMs":3000,"bootstrapSurfaceMaxBytes":{"overview":3500000,"orders":3500000,"production":5250000,"library":2000000,"teamwear":3250000,"admin":2500000},"eventLoopP95Ms":100,"eventLoopMaxMs":1000,"rssHighWaterBytes":1073741824,"databaseConnectionLimit":8,"databaseAcquireTimeouts":0},"requiredInvariants":["authenticatedRoutes","normalAndReviewAuth","readRevisionStable","readAuditStable","legacyStateWriteStable","businessHashesStable","domainRecordWritesIncremental","cacheInvalidationExact","interruptedRetryRecovered","previewFanoutBounded","bootstrapCacheBounded","scopedBootstrapPayloads","largeFreeProduction80Mm","largeFreeProduction200Mm","productionIdempotency","artifactIdentity","tenantAndScopeIsolation","rollbackMaterializationProven"]}
+node - "$fixture/app/config" <<'NODE'
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const root = process.argv[2];
+const matrix = { schemaVersion: 1, recordCount: 57, records: Array.from({ length: 57 }, (_, index) => ({ id: `SPW-RF-${String(index + 1).padStart(3, "0")}`, finalStatus: "CLOSED" })) };
+const fixtures = { schemaVersion: 1, fixtures: Array.from({ length: 6 }, (_, index) => ({ id: `fixture-${index + 1}` })) };
+const matrixBytes = Buffer.from(JSON.stringify(matrix));
+const fixtureBytes = Buffer.from(JSON.stringify(fixtures));
+fs.writeFileSync(path.join(root, "sportpaleis-regression-failure-matrix-v1.json"), matrixBytes);
+fs.writeFileSync(path.join(root, "sportpaleis-immutable-regression-fixtures-v1.json"), fixtureBytes);
+const hash = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+fs.writeFileSync(path.join(root, "sportpaleis-regression-contract-v1.json"), JSON.stringify({ schemaVersion: 1, contractId: "SPW-VERSIONED-REGRESSION-CONTRACT-V1-20260906", failureMatrix: { sha256: hash(matrixBytes) }, immutableFixtureManifest: { sha256: hash(fixtureBytes) } }));
+NODE
+cat > "$fixture/app/config/sportpaleis-production-shaped-assurance-v4.json" <<'EOF'
+{"schemaVersion":4,"contractId":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V4_VERSIONED_SOAK","regressionContract":{"id":"SPW-VERSIONED-REGRESSION-CONTRACT-V1-20260906","path":"app/config/sportpaleis-regression-contract-v1.json"},"minimumLoad":{"revisionPolls":100,"libraryPreviews":300,"concurrentFullBootstraps":4,"soakCycles":5,"largeFreeProductionHeightsMm":[80,200]},"limits":{"allRoutesP95Ms":1000,"allRoutesMaxMs":5000,"bootstrapP95Ms":2000,"bootstrapMaxMs":3000,"bootstrapSurfaceMaxBytes":{"overview":3500000,"orders":3500000,"production":5250000,"library":2000000,"teamwear":3250000,"admin":2500000},"eventLoopP95Ms":100,"eventLoopMaxMs":1000,"rssHighWaterBytes":1073741824,"rssRecoveryBudgetBytes":536870912,"steadyStateRssGrowthBytes":67108864,"soakRecoveredRssBandBytes":134217728,"soakMaximumPositiveRssStepBytes":67108864,"databaseConnectionLimit":8,"databaseAcquireTimeouts":0,"databaseQueueHighWater":0},"requiredInvariants":["authenticatedRoutes","normalAndReviewAuth","readRevisionStable","readAuditStable","legacyStateWriteStable","businessHashesStable","domainRecordWritesIncremental","cacheInvalidationExact","interruptedRetryRecovered","previewFanoutBounded","bootstrapCacheBounded","scopedBootstrapPayloads","largeFreeProduction80Mm","largeFreeProduction200Mm","sameColorSourceConcurrency","productionIdempotency","artifactIdentity","productionArtifactReconciliation","tenantAndScopeIsolation","rollbackMaterializationProven","multiCycleSoakCompleted","soakMemoryRecovered","soakMemoryTrendStable","soakQueueStable","noLegacyMonolithLoads"]}
 EOF
 printf '<!doctype html>workspace\n' > "$fixture/app/dist-workspace/workspace.html"
 printf '<!doctype html>sportpaleis\n' > "$fixture/app/dist-workspace/sportpaleis.html"
@@ -77,7 +91,10 @@ const files = [
   "app/scripts/workspace-runtime.mjs", "app/scripts/production-migrate.mjs",
   "app/scripts/sportpaleis-production-shaped-assurance.mjs",
   "app/scripts/sportpaleis-domain-rollback-bridge.mjs",
-  "app/config/sportpaleis-production-shaped-assurance-v3.json",
+  "app/config/sportpaleis-production-shaped-assurance-v4.json",
+  "app/config/sportpaleis-regression-contract-v1.json",
+  "app/config/sportpaleis-regression-failure-matrix-v1.json",
+  "app/config/sportpaleis-immutable-regression-fixtures-v1.json",
   "app/dist-workspace/workspace.html", "app/dist-workspace/sportpaleis.html",
   "app/dist-workspace/assets/app.js", "deployment/wbd-workspace.service",
 ].map((name) => {
@@ -85,20 +102,61 @@ const files = [
   return { path: name, bytes: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
 });
 const assurance = files.find(({ path: name }) => name === "app/scripts/sportpaleis-production-shaped-assurance.mjs");
-const contract = files.find(({ path: name }) => name === "app/config/sportpaleis-production-shaped-assurance-v3.json");
-fs.writeFileSync(path.join(root, "RELEASE-MANIFEST.json"), JSON.stringify({ schemaVersion: 2, releaseId, commit, tag, files, deployability: { productionShapedAssuranceRequired: true }, productionShapedAssurance: { entrypoint: assurance.path, sha256: assurance.sha256, contract: contract.path, contractSha256: contract.sha256, requiredPhase: "PRE_DEPLOY" } }, null, 2));
+const contract = files.find(({ path: name }) => name === "app/config/sportpaleis-production-shaped-assurance-v4.json");
+const regression = files.find(({ path: name }) => name === "app/config/sportpaleis-regression-contract-v1.json");
+const matrix = files.find(({ path: name }) => name === "app/config/sportpaleis-regression-failure-matrix-v1.json");
+const fixtures = files.find(({ path: name }) => name === "app/config/sportpaleis-immutable-regression-fixtures-v1.json");
+fs.writeFileSync(path.join(root, "RELEASE-MANIFEST.json"), JSON.stringify({ schemaVersion: 2, releaseId, commit, tag, files, deployability: { productionShapedAssuranceRequired: true }, productionShapedAssurance: { entrypoint: assurance.path, sha256: assurance.sha256, contract: contract.path, contractSha256: contract.sha256, regressionContract: regression.path, regressionContractSha256: regression.sha256, regressionFailureMatrix: matrix.path, regressionFailureMatrixSha256: matrix.sha256, immutableFixtureManifest: fixtures.path, immutableFixtureManifestSha256: fixtures.sha256, requiredPhase: "PRE_DEPLOY" } }, null, 2));
 NODE
 tar -C "$fixture" -czf "$artifact" app deployment RELEASE-MANIFEST.json
 artifact_hash="$(sha256sum "$artifact" | awk '{print $1}')"
 assurance_hash="$(sha256sum "$fixture/app/scripts/sportpaleis-production-shaped-assurance.mjs" | awk '{print $1}')"
-contract_hash="$(sha256sum "$fixture/app/config/sportpaleis-production-shaped-assurance-v3.json" | awk '{print $1}')"
+contract_hash="$(sha256sum "$fixture/app/config/sportpaleis-production-shaped-assurance-v4.json" | awk '{print $1}')"
+regression_hash="$(sha256sum "$fixture/app/config/sportpaleis-regression-contract-v1.json" | awk '{print $1}')"
+matrix_hash="$(sha256sum "$fixture/app/config/sportpaleis-regression-failure-matrix-v1.json" | awk '{print $1}')"
+fixture_hash="$(sha256sum "$fixture/app/config/sportpaleis-immutable-regression-fixtures-v1.json" | awk '{print $1}')"
 backup_hash="$(awk 'NR==1 {print $1}' "$WBD_BACKUP_DIR/wbd-mariadb-20260821T000000Z.sql.enc.sha256")"
 cat > "$external_manifest" <<EOF
-{"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$artifact")","artifactSha256":"$artifact_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v3.json","contractSha256":"$contract_hash","requiredPhase":"PRE_DEPLOY"}}
+{"releaseId":"$candidate_id","commit":"$commit","tag":"$tag","artifact":"$(basename "$artifact")","artifactSha256":"$artifact_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v4.json","contractSha256":"$contract_hash","regressionContract":"app/config/sportpaleis-regression-contract-v1.json","regressionContractSha256":"$regression_hash","regressionFailureMatrix":"app/config/sportpaleis-regression-failure-matrix-v1.json","regressionFailureMatrixSha256":"$matrix_hash","immutableFixtureManifest":"app/config/sportpaleis-immutable-regression-fixtures-v1.json","immutableFixtureManifestSha256":"$fixture_hash","requiredPhase":"PRE_DEPLOY"}}
 EOF
 cat > "$assurance_evidence" <<EOF
-{"schemaVersion":3,"status":"PASS","releaseId":"$candidate_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$artifact_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash","assuranceContract":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V3_DOMAIN_RECORDS"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"bootstrapSurfaceBytes":{"overview":100,"orders":100,"production":100,"library":100,"teamwear":100,"admin":100},"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}]},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"scopedBootstrapPayloads":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"productionIdempotency":true,"artifactIdentity":true,"productionArtifactReconciliation":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true}}
+{"schemaVersion":4,"status":"PASS","releaseId":"$candidate_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$artifact_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash","assuranceContract":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V4_VERSIONED_SOAK","regressionContractSha256":"$regression_hash","regressionContract":"SPW-VERSIONED-REGRESSION-CONTRACT-V1-20260906"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"bootstrapSurfaceBytes":{"overview":100,"orders":100,"production":100,"library":100,"teamwear":100,"admin":100},"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0,"queueHighWater":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true,"soakMemoryRecovered":true,"soakMemoryTrendStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}],"sameColorSourceConcurrency":{"winnerJobId":"job-1","loserCode":"PRODUCTION_PHYSICAL_STEP_CONFLICT","dbRecordDeltas":{"jobs":1,"artifacts":1,"idempotency":1},"visibleSvgArtifacts":1,"visibleReservations":1,"visibleCommitMarkers":1,"quarantineEntries":0}},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"scopedBootstrapPayloads":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"sameColorSourceConcurrency":true,"productionIdempotency":true,"artifactIdentity":true,"productionArtifactReconciliation":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true,"multiCycleSoakCompleted":true,"soakMemoryRecovered":true,"soakMemoryTrendStable":true,"soakQueueStable":true,"noLegacyMonolithLoads":true}}
 EOF
+
+# De broker leest het externe manifest. Daarom moeten ontbrekende of afwijkende
+# regressiecontractbindings al tijdens prepare blokkeren, vóór staging of planbouw.
+invalid_regression_manifest_dir="$root/invalid-regression-manifests"
+mkdir -p "$invalid_regression_manifest_dir"
+node - "$external_manifest" "$invalid_regression_manifest_dir" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const [source, target] = process.argv.slice(2);
+const manifest = JSON.parse(fs.readFileSync(source, "utf8"));
+const bindings = [
+  ["regressionContract", "regressionContractSha256"],
+  ["regressionFailureMatrix", "regressionFailureMatrixSha256"],
+  ["immutableFixtureManifest", "immutableFixtureManifestSha256"],
+];
+for (const [entry, hash] of bindings) {
+  const withoutHash = structuredClone(manifest);
+  delete withoutHash.productionShapedAssurance[hash];
+  fs.writeFileSync(path.join(target, `missing-${hash}.json`), JSON.stringify(withoutHash));
+  const wrongHash = structuredClone(manifest);
+  wrongHash.productionShapedAssurance[hash] = "0".repeat(64);
+  fs.writeFileSync(path.join(target, `wrong-${hash}.json`), JSON.stringify(wrongHash));
+  const wrongPath = structuredClone(manifest);
+  wrongPath.productionShapedAssurance[entry] = `app/config/not-allowlisted-${entry}.json`;
+  fs.writeFileSync(path.join(target, `wrong-${entry}-path.json`), JSON.stringify(wrongPath));
+}
+NODE
+for invalid_manifest in "$invalid_regression_manifest_dir"/*.json; do
+  if $deploy_script prepare --artifact "$artifact" --manifest "$invalid_manifest" --expected-current "$old_id" --assurance-evidence "$assurance_evidence" >"$root/invalid-regression.out" 2>&1; then
+    printf 'extern manifest zonder exacte regressiecontractbinding werd ten onrechte geaccepteerd\n' >&2
+    exit 1
+  fi
+  [[ "$(basename "$(cat "$WBD_ROOT/current")")" == "$old_id" ]]
+  [[ ! -e "$WBD_ROOT/shared/deploy-plans/$candidate_id.json" ]]
+done
 
 # Een structureel incompleet raw artifact moet vóór staging, rollbackmateriaal en
 # deployplan fail-closed stoppen. De actieve release blijft daarbij onaangeraakt.
@@ -159,10 +217,10 @@ NODE
 tar -C "$second_fixture" -czf "$second_artifact" app deployment RELEASE-MANIFEST.json
 second_hash="$(sha256sum "$second_artifact" | awk '{print $1}')"
 cat > "$second_manifest" <<EOF
-{"releaseId":"$second_id","commit":"$commit","tag":"$second_id","artifact":"$(basename "$second_artifact")","artifactSha256":"$second_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v3.json","contractSha256":"$contract_hash","requiredPhase":"PRE_DEPLOY"}}
+{"releaseId":"$second_id","commit":"$commit","tag":"$second_id","artifact":"$(basename "$second_artifact")","artifactSha256":"$second_hash","deployability":{"productionShapedAssuranceRequired":true},"productionShapedAssurance":{"entrypoint":"app/scripts/sportpaleis-production-shaped-assurance.mjs","sha256":"$assurance_hash","contract":"app/config/sportpaleis-production-shaped-assurance-v4.json","contractSha256":"$contract_hash","regressionContract":"app/config/sportpaleis-regression-contract-v1.json","regressionContractSha256":"$regression_hash","regressionFailureMatrix":"app/config/sportpaleis-regression-failure-matrix-v1.json","regressionFailureMatrixSha256":"$matrix_hash","immutableFixtureManifest":"app/config/sportpaleis-immutable-regression-fixtures-v1.json","immutableFixtureManifestSha256":"$fixture_hash","requiredPhase":"PRE_DEPLOY"}}
 EOF
 cat > "$second_assurance" <<EOF
-{"schemaVersion":3,"status":"PASS","releaseId":"$second_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$second_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash","assuranceContract":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V3_DOMAIN_RECORDS"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"bootstrapSurfaceBytes":{"overview":100,"orders":100,"production":100,"library":100,"teamwear":100,"admin":100},"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}]},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"scopedBootstrapPayloads":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"productionIdempotency":true,"artifactIdentity":true,"productionArtifactReconciliation":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true}}
+{"schemaVersion":4,"status":"PASS","releaseId":"$second_id","identity":{"candidateCommit":"$commit","candidateArtifactSha256":"$second_hash","restoreBackupSha256":"$backup_hash","assuranceEntrypointSha256":"$assurance_hash","assuranceContractSha256":"$contract_hash","assuranceContract":"SPORTPALEIS_PRODUCTION_SHAPED_ASSURANCE_V4_VERSIONED_SOAK","regressionContractSha256":"$regression_hash","regressionContract":"SPW-VERSIONED-REGRESSION-CONTRACT-V1-20260906"},"load":{"httpErrors":0,"serverErrors":0,"p95Ms":10,"maxMs":20,"bootstrapSurfaceBytes":{"overview":100,"orders":100,"production":100,"library":100,"teamwear":100,"admin":100},"byRoute":{"/api/sportpaleis/v1/bootstrap":{"p95Ms":10,"maxMs":20}}},"pool":{"connectionLimit":8,"acquireTimeouts":0,"queueHighWater":0},"runtime":{"eventLoopP95Ms":5,"eventLoopMaxMs":10,"rssHighWaterBytes":1000000,"rssRecoveredWithinBudget":true,"steadyStateMemoryStable":true,"soakMemoryRecovered":true,"soakMemoryTrendStable":true},"practice":{"largeFreeProduction":[{"heightMm":80},{"heightMm":200}],"sameColorSourceConcurrency":{"winnerJobId":"job-1","loserCode":"PRODUCTION_PHYSICAL_STEP_CONFLICT","dbRecordDeltas":{"jobs":1,"artifacts":1,"idempotency":1},"visibleSvgArtifacts":1,"visibleReservations":1,"visibleCommitMarkers":1,"quarantineEntries":0}},"invariants":{"authenticatedRoutes":true,"normalAndReviewAuth":true,"readRevisionStable":true,"readAuditStable":true,"legacyStateWriteStable":true,"businessHashesStable":true,"domainRecordWritesIncremental":true,"cacheInvalidationExact":true,"interruptedRetryRecovered":true,"previewFanoutBounded":true,"bootstrapCacheBounded":true,"scopedBootstrapPayloads":true,"largeFreeProduction80Mm":true,"largeFreeProduction200Mm":true,"sameColorSourceConcurrency":true,"productionIdempotency":true,"artifactIdentity":true,"productionArtifactReconciliation":true,"tenantAndScopeIsolation":true,"rollbackMaterializationProven":true,"multiCycleSoakCompleted":true,"soakMemoryRecovered":true,"soakMemoryTrendStable":true,"soakQueueStable":true,"noLegacyMonolithLoads":true}}
 EOF
 if ! $deploy_script prepare --artifact "$second_artifact" --manifest "$second_manifest" --expected-current "$candidate_id" --assurance-evidence "$second_assurance" >"$root/second-prepare.out" 2>&1; then
   cat "$root/second-prepare.out" >&2
@@ -288,6 +346,7 @@ printf 'INTERMEDIATE_SWITCH_FAILURE_ROLLBACK=PASS\n'
 printf 'STALE_AND_HUMAN_GO_GUARDS=PASS\n'
 printf 'PRECHECK_FAILED_EVIDENCE=PASS\n'
 printf 'PRECHECK_FAILURE_ACTIVE_UNCHANGED=PASS\n'
+printf 'EXTERNAL_REGRESSION_CONTRACT_BINDING=PASS\n'
 
 export SPW_TEST_MIGRATION_STATUS=FAIL
 set +e

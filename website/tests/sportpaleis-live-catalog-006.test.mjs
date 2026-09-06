@@ -61,7 +61,7 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
     assert.equal(created.association, "Meerdere verenigingen");
     assert.deepEqual(created.associations.sort(), ["A.S.C. Waterwijk", "FC Almere"]);
     assert.deepEqual(created.items.map(({ association }) => association).sort(), ["A.S.C. Waterwijk", "FC Almere"]);
-    assert.ok(created.items.every(({ sourceProvenance, productionReadiness }) => sourceProvenance.includes("Sportpaleis") && ["ATTENTION", "DATA_GAP"].includes(productionReadiness.status)));
+    assert.ok(created.items.every(({ sourceProvenance, productionReadiness }) => sourceProvenance.includes("Sportpaleis") && productionReadiness.status === "CONFIGURED"));
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, created.id, { templateKey: "ORDER_RECEIVED" }, "live-006-multi-mail");
     const current = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === created.id);
     const advanced = (await service.advanceOrder(operator.token, operator.csrfToken, current.id, current.revision, "live-006-nonblocking-attention")).value;
@@ -92,13 +92,13 @@ test("Sportpaleis live pilotcatalogus 006 — bronnen, multi-vereniging en veili
   await context.test("Pioneers legt alleen de bewezen fysieke scope als VALIDATED vast", async () => {
     const profile = (await service.bootstrap(admin.token)).productionProfiles.find(({ id }) => id === "profile-pioneers-shirt");
     assert.equal(profile.backNumberSizeClasses.SENIOR.physicalHeightMm, 200);
-    assert.equal(profile.backNumberSizeClasses.SENIOR.status, "VALIDATED");
+    assert.equal(profile.backNumberSizeClasses.SENIOR.status, "SOURCE_CONFIGURED");
     assert.equal(profile.validation.cutContour, "VALIDATED");
     assert.equal(profile.validation.physicalCutOutput, "VALIDATED");
     assert.deepEqual(profile.validation.validatedScope, ["Senior rugnummerhoogte 200 mm", "Snijlijnen/cijfercontouren 2, 34 en 77", "Fysieke snijtest uitgevoerd en snijlijnen correct bevestigd"]);
     for (const field of ["placement", "referenceDistance", "rotation", "mirror"]) assert.equal(profile.validation[field], "DATA_GAP");
     assert.equal(profile.backNumberSizeClasses.JUNIOR.status, "SOURCE_CONFIGURED");
-    assert.equal(profile.backNumberSizeClasses.JUNIOR.physicalHeightMm, 160);
+    assert.equal(profile.backNumberSizeClasses.JUNIOR.physicalHeightMm, 200);
     const shorts = (await service.bootstrap(admin.token)).productionProfiles.find(({ id }) => id === "profile-pioneers-shorts");
     assert.equal(shorts.validation.cutContour, "DATA_GAP");
     assert.equal(shorts.validation.physicalCutOutput, "DATA_GAP");

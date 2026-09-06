@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "contractId": "SPW-VERSIONED-REGRESSION-CONTRACT-V1-20260906",
+  "candidateBaseRelease": "SPW-STATE-ARCHITECTURE-RECOVERY-R2.26.49-20260905",
+  "candidateBaseCommit": "5d9ee57fe1d25ebd0b44ee68af3b7f2111d5ecbe",
+  "failureMatrix": {
+    "path": "app/config/sportpaleis-regression-failure-matrix-v1.json",
+    "sha256": "8e1d59b734965cb2ecb0742192dc2308d64c997114a34fef8862f6dfed591fd0",
+    "records": 57,
+    "leafFailures": 48,
+    "suiteAggregates": 9
+  },
+  "immutableFixtureManifest": {
+    "path": "app/config/sportpaleis-immutable-regression-fixtures-v1.json",
+    "sha256": "c3691736ccc738fe9f728f5ab1e4c46f000f7c450e78ed3fa4e149c4d80a690a"
+  },
+  "layers": [
+    {
+      "id": "current_sportpaleis_product_truth",
+      "authority": ["commit:048937d", "commit:054f6aa", "Donovan Product Truth 2026-09-01/03"],
+      "purpose": "Actuele artikel-, bron-, maat-, kleur- en personalizationwaarheid."
+    },
+    {
+      "id": "architecture_and_data_integrity",
+      "authority": ["R2.26.49 architecture contract", "domain-record migration and rollbackbridge tests"],
+      "purpose": "Domeinopslag, auth, revisions, audit, isolation en dataintegriteit."
+    },
+    {
+      "id": "production_practice",
+      "authority": ["Sportpaleis production practice contract", "immutable PlotJob/artifact evidence"],
+      "purpose": "Bedrukken, Productie, batching, geometrie, idempotency en historie."
+    },
+    {
+      "id": "rollback_and_legacy_compatibility",
+      "authority": ["R2.26.38 rollback target", "releasebroker and rollbackbridge contracts"],
+      "purpose": "Additieve migratie en exacte terugmaterialisatie zonder historische eisen actueel te maken."
+    },
+    {
+      "id": "historical_immutable_evidence",
+      "authority": ["SPW-IMMUTABLE-REGRESSION-FIXTURES-V1-20260906", "SHA-256 per fixture"],
+      "purpose": "Historische bytes en release-evidence blijven uitvoerbaar en zichtbaar."
+    },
+    {
+      "id": "mail_pdf_web_push_inactive",
+      "authority": ["Mail/PDF/Web-Push paused boundary", "historical immutable release evidence"],
+      "purpose": "Contracttesten blijven groen zonder functionaliteit te activeren."
+    },
+    {
+      "id": "owner_workspace_r4_separate",
+      "authority": ["WBD Owner R4 candidate 33bda989", "no Owner deployment in Sportpaleis release"],
+      "purpose": "Owner Workspace deelt primitieve grenzen maar blijft een afzonderlijke candidate."
+    },
+    {
+      "id": "repository_general_platform",
+      "authority": ["repository history", "component-local versioned contract"],
+      "purpose": "Overige Atlas/WBD-regressies blijven zichtbaar in de volledige repositorygate."
+    }
+  ],
+  "testLayerResolver": {
+    "mode": "FIRST_MATCH_WINS",
+    "rules": [
+      { "layer": "owner_workspace_r4_separate", "filePattern": "^wbd-owner-|^owner-" },
+      { "layer": "mail_pdf_web_push_inactive", "filePattern": "mail|pdf|web-push|imap|invoice" },
+      { "layer": "historical_immutable_evidence", "filePattern": "immutable-regression-fixtures|release-recovery|production-history" },
+      { "layer": "rollback_and_legacy_compatibility", "filePattern": "rollback|release|migration|backfill" },
+      { "layer": "architecture_and_data_integrity", "filePattern": "sportpaleis-(domain|state|auth|review|production-persistence)|mariadb|workspace-cache" },
+      { "layer": "current_sportpaleis_product_truth", "filePattern": "sportpaleis-(font|canonical|live-catalog|product-truth|production-source|rugnumber|human-review)" },
+      { "layer": "production_practice", "filePattern": "^sportpaleis-" },
+      { "layer": "repository_general_platform", "filePattern": ".*" }
+    ]
+  },
+  "policy": {
+    "allowedFailureClassifications": [
+      "REAL_PRODUCT_DEFECT",
+      "STALE_EXPECTATION",
+      "MISSING_IMMUTABLE_FIXTURE",
+      "WRONG_SCOPE_OR_CONTRACT",
+      "DUPLICATE_OR_CONTRADICTORY_TEST"
+    ],
+    "silentSkipAllowed": false,
+    "unexplainedFailureAllowed": false,
+    "magicCountsAllowed": false,
+    "notApplicableRequiresSource": true,
+    "productTruthChangeRequiresContractMigration": true,
+    "historicalTestsRemainVisible": true,
+    "dateOrderEnvironmentDependentTestsAllowed": false,
+    "releaseBrokerMustVerifyVersionAndHash": true
+  }
+}

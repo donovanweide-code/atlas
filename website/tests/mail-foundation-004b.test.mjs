@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -154,8 +155,8 @@ test("organization separation houdt WBD-branding uit Sportpaleis-mail", async ()
 test("factuuradapter berekent betaaltermijn en vervaldatum zonder PDF-mutatie", async () => {
   assert.equal(formatInvoiceDueDate("2026-08-08", 14), "22-08-2026");
   assert.equal(formatInvoiceDueDate("ongeldig", 14), "Onbekend");
-  const invoice = JSON.parse(await readFile(path.resolve("..", "invoices", "wbd", "data", "sent", "mail-foundation-003-review.json"), "utf8"));
-  const pdfPath = path.resolve("..", "output", "pdf", "sent", "mail-foundation-003-review.pdf");
+  const invoice = JSON.parse(await readFile(new URL("../../invoices/wbd/data/sent/mail-foundation-003-review.json", import.meta.url), "utf8"));
+  const pdfPath = fileURLToPath(new URL("../../output/pdf/sent/mail-foundation-003-review.pdf", import.meta.url));
   const before = createHash("sha256").update(await readFile(pdfPath)).digest("hex");
   const request = wbdMailRequest(invoice, { id: "existing-pdf", filename: "TEST-003.pdf", mimeType: "application/pdf", bytes: await readFile(pdfPath) });
   assert.equal(request.context.invoice.payment_term, "14 dagen");

@@ -204,7 +204,10 @@ test("Teamorder structureert gemengde bulkinput en accepteert geen vereniging", 
   assert.deepEqual(created.associations, []);
   assert.equal(created.association, "Geen vereniging");
   assert.equal(created.productionLines.length, 3);
-  assert.equal((await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id).productionStatus, "READY");
+  const stored = (await service.bootstrap(admin.token)).orders.find(({ id }) => id === created.id);
+  assert.equal(stored.productionStatus, "ATTENTION");
+  assert.equal(stored.association, "Geen vereniging");
+  assert.equal(stored.productionLines.length, 3, "de ingevoerde fixture blijft zichtbaar maar krijgt zonder toepassingsbinding geen productieautoriteit");
 });
 
 test("medewerker lifecycle deactiveert veilig en bewaart historische attributie", async (context) => {

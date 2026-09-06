@@ -68,8 +68,9 @@ test("Sportpaleis final pilot readiness 004", async (context) => {
     const before = (await service.bootstrap(admin.token)).associations[0];
     await service.updateAssociation(admin.token, admin.csrfToken, before.id, { expectedRevision: before.revision, active: before.active, notes: `${before.notes} · praktijkreview`, juniorValidationStatus: "DATA_GAP", juniorValidationNote: before.juniorValidationNote });
     const after = (await service.bootstrap(admin.token)).associations[0];
+    const persisted = (await store.read()).associations.find(({ id }) => id === before.id);
     assert.equal(after.revision, before.revision + 1);
-    assert.equal(after.validationHistory[0].userId, "kevin");
+    assert.equal(persisted.validationHistory[0].userId, "kevin");
     await assert.rejects(() => service.updateAssociation(admin.token, admin.csrfToken, before.id, { expectedRevision: before.revision, notes: "verouderd" }), (error) => error.code === "REVISION_CONFLICT");
   });
 

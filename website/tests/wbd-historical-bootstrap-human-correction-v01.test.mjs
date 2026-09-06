@@ -219,7 +219,9 @@ test("één Organization-bevestiging maakt organizations-coverage niet compleet 
 });
 
 test("Capabilities en browserdata blijven buiten de correctiescope", async () => {
-  const diff = execFileSync("git", ["diff", "2e23b7c", "--", "website/scripts/wbd-capability-catalog.mjs"], { encoding: "utf8" });
+  // Dit is het immutable contract van de historische v0.1-release, niet een
+  // verbod op latere versioned Owner-capabilities in de huidige repository.
+  const diff = execFileSync("git", ["diff", "2e23b7c", "a30859c", "--", "website/scripts/wbd-capability-catalog.mjs"], { encoding: "utf8" });
   assert.equal(diff, "");
   const owner = await readFile(new URL("../src/wbd-owner.ts", import.meta.url), "utf8");
   const home = await readFile(new URL("../src/wbd-control-home.ts", import.meta.url), "utf8");

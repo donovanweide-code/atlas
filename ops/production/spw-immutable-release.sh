@@ -182,7 +182,7 @@ verify_external_artifact() {
 }
 
 verify_production_shaped_assurance() {
-  local evidence="$1" manifest="$2" artifact="$3" artifact_hash release_id commit assurance_hash contract_hash contract_entry contract_tmp verified_hash
+  local evidence="$1" manifest="$2" artifact="$3" artifact_hash release_id commit assurance_hash contract_hash contract_entry contract_tmp regression_hash regression_entry regression_tmp matrix_hash matrix_entry matrix_tmp fixture_hash fixture_entry fixture_tmp verified_hash
   [[ -n "$evidence" && -f "$evidence" ]] || fail "verplichte production-shaped assurance-evidence ontbreekt."
   release_id="$(manifest_field "$manifest" releaseId)"
   commit="$(manifest_field "$manifest" commit)"
@@ -190,38 +190,52 @@ verify_production_shaped_assurance() {
   assurance_hash="$(manifest_field "$manifest" productionShapedAssurance.sha256 | tr '[:upper:]' '[:lower:]')"
   contract_hash="$(manifest_field "$manifest" productionShapedAssurance.contractSha256 | tr '[:upper:]' '[:lower:]')"
   contract_entry="$(manifest_field "$manifest" productionShapedAssurance.contract)"
-  [[ "$contract_entry" == "app/config/sportpaleis-production-shaped-assurance-v3.json" ]] || fail "assurancecontractpad is niet geallowlist."
+  regression_hash="$(manifest_field "$manifest" productionShapedAssurance.regressionContractSha256 | tr '[:upper:]' '[:lower:]')"
+  regression_entry="$(manifest_field "$manifest" productionShapedAssurance.regressionContract)"
+  matrix_hash="$(manifest_field "$manifest" productionShapedAssurance.regressionFailureMatrixSha256 | tr '[:upper:]' '[:lower:]')"
+  matrix_entry="$(manifest_field "$manifest" productionShapedAssurance.regressionFailureMatrix)"
+  fixture_hash="$(manifest_field "$manifest" productionShapedAssurance.immutableFixtureManifestSha256 | tr '[:upper:]' '[:lower:]')"
+  fixture_entry="$(manifest_field "$manifest" productionShapedAssurance.immutableFixtureManifest)"
+  [[ "$contract_entry" == "app/config/sportpaleis-production-shaped-assurance-v4.json" ]] || fail "assurancecontractpad is niet geallowlist."
+  [[ "$regression_entry" == "app/config/sportpaleis-regression-contract-v1.json" && "$matrix_entry" == "app/config/sportpaleis-regression-failure-matrix-v1.json" && "$fixture_entry" == "app/config/sportpaleis-immutable-regression-fixtures-v1.json" ]] || fail "regressiecontractpaden zijn niet geallowlist."
   contract_tmp="$(mktemp)"
-  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp"; then rm -f -- "$contract_tmp"; fail "versioned assurancecontract ontbreekt uit artifact."; fi
-  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" ]] || { rm -f -- "$contract_tmp"; fail "assurancecontracthash wijkt af."; }
-  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" <<'NODE'
+  regression_tmp="$(mktemp)"; matrix_tmp="$(mktemp)"; fixture_tmp="$(mktemp)"
+  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp" || ! tar -xOzf "$artifact" "$regression_entry" >"$regression_tmp" || ! tar -xOzf "$artifact" "$matrix_entry" >"$matrix_tmp" || ! tar -xOzf "$artifact" "$fixture_entry" >"$fixture_tmp"; then rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "versioned assurance- of regressiecontract ontbreekt uit artifact."; fi
+  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" && "$(sha256_file "$regression_tmp")" == "$regression_hash" && "$(sha256_file "$matrix_tmp")" == "$matrix_hash" && "$(sha256_file "$fixture_tmp")" == "$fixture_hash" ]] || { rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "assurance- of regressiecontracthash wijkt af."; }
+  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" "$regression_hash" "$regression_tmp" "$matrix_hash" "$matrix_tmp" "$fixture_hash" "$fixture_tmp" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
-const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile] = process.argv.slice(2);
+const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile, regressionSha256, regressionFile, matrixSha256, matrixFile, fixtureSha256, fixtureFile] = process.argv.slice(2);
 const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
 const contract = JSON.parse(fs.readFileSync(contractFile, "utf8"));
-if (evidence.schemaVersion !== 3 || evidence.status !== "PASS" || evidence.releaseId !== releaseId) throw new Error("production-shaped assurance is niet PASS voor deze release");
+const regression = JSON.parse(fs.readFileSync(regressionFile, "utf8"));
+const matrix = JSON.parse(fs.readFileSync(matrixFile, "utf8"));
+const fixtureManifest = JSON.parse(fs.readFileSync(fixtureFile, "utf8"));
+if (evidence.schemaVersion !== 4 || evidence.status !== "PASS" || evidence.releaseId !== releaseId) throw new Error("production-shaped assurance is niet PASS voor deze release");
 if (evidence.identity?.candidateCommit !== commit || evidence.identity?.candidateArtifactSha256 !== artifactSha256) throw new Error("assurance candidatebinding wijkt af");
 if (!/^[a-f0-9]{64}$/u.test(String(evidence.identity?.restoreBackupSha256 ?? ""))) throw new Error("assurance restorebinding ontbreekt");
 if (evidence.identity?.assuranceEntrypointSha256 !== assuranceSha256) throw new Error("assurance testversie wijkt af");
 if (evidence.identity?.assuranceContractSha256 !== contractSha256) throw new Error("assurance drempelcontract wijkt af");
-if (evidence.identity?.assuranceContract !== contract.contractId || contract.schemaVersion !== 3) throw new Error("assurance contractidentiteit wijkt af");
+if (evidence.identity?.assuranceContract !== contract.contractId || contract.schemaVersion !== 4) throw new Error("assurance contractidentiteit wijkt af");
+if (evidence.identity?.regressionContractSha256 !== regressionSha256 || evidence.identity?.regressionContract !== regression.contractId || regression.schemaVersion !== 1) throw new Error("regressiecontractbinding wijkt af");
+if (regression.failureMatrix?.sha256 !== matrixSha256 || matrix.recordCount !== 57 || matrix.records?.some(({ finalStatus }) => finalStatus !== "CLOSED")) throw new Error("failurematrix is niet volledig gesloten");
+if (regression.immutableFixtureManifest?.sha256 !== fixtureSha256 || fixtureManifest.schemaVersion !== 1 || fixtureManifest.fixtures?.length !== 6) throw new Error("immutable fixturebinding wijkt af");
 if (evidence.load?.httpErrors !== 0 || evidence.load?.serverErrors !== 0) throw new Error("assurance bevat HTTP-fouten");
 const required = contract.requiredInvariants;
 if (!required.every((key) => evidence.invariants?.[key] === true) || !Object.values(evidence.invariants ?? {}).every((value) => value === true)) throw new Error("assurance-invariant is niet groen");
 const limits = contract.limits;
 if (evidence.load?.p95Ms > limits.allRoutesP95Ms || evidence.load?.maxMs > limits.allRoutesMaxMs || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.p95Ms > limits.bootstrapP95Ms || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.maxMs > limits.bootstrapMaxMs) throw new Error("assurance latencygrens is overschreden");
 for (const [surface, maximum] of Object.entries(limits.bootstrapSurfaceMaxBytes ?? {})) if (!(evidence.load?.bootstrapSurfaceBytes?.[surface] > 0) || evidence.load.bootstrapSurfaceBytes[surface] > maximum) throw new Error(`assurance payloadgrens is overschreden voor ${surface}`);
-if (evidence.runtime?.eventLoopP95Ms > limits.eventLoopP95Ms || evidence.runtime?.eventLoopMaxMs > limits.eventLoopMaxMs || evidence.runtime?.rssHighWaterBytes > limits.rssHighWaterBytes || evidence.runtime?.rssRecoveredWithinBudget !== true || evidence.runtime?.steadyStateMemoryStable !== true) throw new Error("assurance runtimegrens is overschreden");
-if (evidence.pool?.connectionLimit !== limits.databaseConnectionLimit || evidence.pool?.acquireTimeouts !== limits.databaseAcquireTimeouts) throw new Error("assurance databasepoolgrens is overschreden");
-if (contract.minimumLoad?.concurrentFullBootstraps < 4 || contract.minimumLoad?.libraryPreviews < 300 || contract.minimumLoad?.revisionPolls < 100 || limits.eventLoopMaxMs > 1000 || limits.eventLoopP95Ms > 100 || limits.rssHighWaterBytes > 1073741824) throw new Error("versioned assurancecontract versoepelt een bestaande harde grens");
+if (evidence.runtime?.eventLoopP95Ms > limits.eventLoopP95Ms || evidence.runtime?.eventLoopMaxMs > limits.eventLoopMaxMs || evidence.runtime?.rssHighWaterBytes > limits.rssHighWaterBytes || evidence.runtime?.rssRecoveredWithinBudget !== true || evidence.runtime?.steadyStateMemoryStable !== true || evidence.runtime?.soakMemoryRecovered !== true || evidence.runtime?.soakMemoryTrendStable !== true) throw new Error("assurance runtimegrens is overschreden");
+if (evidence.pool?.connectionLimit !== limits.databaseConnectionLimit || evidence.pool?.acquireTimeouts !== limits.databaseAcquireTimeouts || evidence.pool?.queueHighWater > limits.databaseQueueHighWater) throw new Error("assurance databasepoolgrens is overschreden");
+if (contract.minimumLoad?.concurrentFullBootstraps < 4 || contract.minimumLoad?.libraryPreviews < 300 || contract.minimumLoad?.revisionPolls < 100 || contract.minimumLoad?.soakCycles < 5 || limits.eventLoopMaxMs > 1000 || limits.eventLoopP95Ms > 100 || limits.rssHighWaterBytes > 1073741824 || limits.steadyStateRssGrowthBytes > 67108864) throw new Error("versioned assurancecontract versoepelt een bestaande harde grens");
 const heights = new Set((evidence.practice?.largeFreeProduction ?? []).map(({ heightMm }) => heightMm));
 if (!(contract.minimumLoad?.largeFreeProductionHeightsMm ?? []).every((height) => heights.has(height))) throw new Error("assurance grote Vrije-productiepraktijk ontbreekt");
 const body = fs.readFileSync(file);
 process.stdout.write(crypto.createHash("sha256").update(body).digest("hex"));
 NODE
-  )"; then rm -f -- "$contract_tmp"; fail "production-shaped assurance-evidence faalt de versioned brokergrens."; fi
-  rm -f -- "$contract_tmp"
+  )"; then rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "production-shaped assurance-evidence faalt de versioned brokergrens."; fi
+  rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"
   printf '%s' "$verified_hash"
 }
 
@@ -271,7 +285,10 @@ verify_artifact_layout_contract() {
     app/scripts/production-migrate.mjs \
     app/scripts/sportpaleis-production-shaped-assurance.mjs \
     app/scripts/sportpaleis-domain-rollback-bridge.mjs \
-    app/config/sportpaleis-production-shaped-assurance-v3.json \
+    app/config/sportpaleis-production-shaped-assurance-v4.json \
+    app/config/sportpaleis-regression-contract-v1.json \
+    app/config/sportpaleis-regression-failure-matrix-v1.json \
+    app/config/sportpaleis-immutable-regression-fixtures-v1.json \
     app/dist-workspace/workspace.html \
     app/dist-workspace/sportpaleis.html \
     deployment/wbd-workspace.service \

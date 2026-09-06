@@ -136,18 +136,16 @@ test("maximaal veilige 450-mm baan onderzoekt herkenbare rugnummergroepen gezame
 
 test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest als vier herkenbare fysieke sets", async (context) => {
   const { service, admin } = await fixture(context);
-  const font = (await service.bootstrap(admin.token)).productionFonts.find(({ status }) => status === "TECHNICALLY_VALID");
   const order = (await service.createOrder(admin.token, admin.csrfToken, {
-    orderKind: "CUSTOM",
+    orderKind: "INDIVIDUAL",
     customer: "A.S.C. Waterwijk · production-shaped PLOT-2026-0058",
     customerEmail: "",
     customerPhone: "",
-    association: "A.S.C. Waterwijk",
-    standardPersonalization: empty,
-    items: [{ product: "4 × rugnummer 26", size: "", quantity: 4, personalization: "Rugnummer 26", foilColor: "Zwart", deviation: true, overrides: empty }],
-    productionLines: [{ id: "plot-2026-0058-rugnummer-26", type: "NUMBER", content: "26", previewLabel: "Rugnummer 26", widthMm: 211.2, heightMm: 220, quantity: 4, sourceId: font.id, provenance: "Production-shaped regressie van PLOT-2026-0058 / SP-2026-0081" }],
+    standardPersonalization: { ...empty, backNumber: "26", backNumberSizeClass: "SENIOR" },
+    items: [{ articleId: "sp-live-137294", size: "L", quantity: 4, deviation: false, overrides: empty }],
   }, "plot-2026-0058-production-shaped-order")).value;
   const controlled = (await service.advanceOrder(admin.token, admin.csrfToken, order.id, order.revision, "plot-2026-0058-production-shaped-control")).value;
+  const font = (await service.bootstrap(admin.token)).productionFonts.find(({ id }) => id === controlled.productionLines[0].source.id);
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: controlled.id, expectedRevision: controlled.revision }] }, "plot-2026-0058-production-shaped-proposal")).value;
   const job = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "plot-2026-0058-production-shaped-job")).value;
 
@@ -161,7 +159,7 @@ test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest a
     assert.equal(copy.length, 1);
     assert.equal(copy[0].semanticGroup.value, "26");
     assert.equal(copy[0].semanticGroup.copyCount, 4);
-    assert.equal(copy[0].semanticGroup.garmentCompositionSpacingMm, 30);
+    assert.equal(copy[0].semanticGroup.garmentCompositionSpacingMm, 5);
     assert.deepEqual(copy[0].physicalMembers.map(({ digit }) => digit), ["2", "6"]);
     assert.deepEqual(copy[0].physicalMembers.map(({ digitIndex }) => digitIndex), [0, 1]);
   }
@@ -182,8 +180,8 @@ test("production-shaped PLOT-2026-0058: 4×26 blijft semantisch intact en nest a
   context.diagnostic(`4×26 candidate groups: ${placements.map(({ widthMm, heightMm, nestingRotationApplied }) => `${widthMm}×${heightMm} r${nestingRotationApplied}`).join(" | ")}; used=${after.widthMm}×${after.lengthMm}`);
   assert.ok(after.lengthMm < before.lengthMm, `de veilige 450-mm baan moet de herkenbare 26-sets aantoonbaar compacter nesten (${after.lengthMm} < ${before.lengthMm})`);
   assert.ok(savingMm > 0 && savingPercent > 0);
-  assert.equal(job.snapshot.layout.configuredWidthMm, 450);
-  assert.deepEqual(placements.map(({ nestingRotationApplied }) => nestingRotationApplied), [90, 90, 90, 90]);
+  assert.equal(job.snapshot.layout.configuredWidthMm, 440);
+  assert.equal(new Set(placements.map(({ nestingRotationApplied }) => nestingRotationApplied)).size, 1, "alle vier occurrences gebruiken dezelfde deterministische veilige oriëntatie");
   assert.equal(new Set(placements.map(({ yMm }) => yMm)).size, 2, "4×26 gebruikt een 2+2-layout");
 
   const history = (await service.bootstrap(admin.token)).productionJobs.find(({ id }) => id === job.id);
@@ -220,20 +218,33 @@ test("Winkel en Webshop blijven aparte groepen; de medewerker kiest en daarna bl
   assert.deepEqual(proposal.groups.map(({ sourceChannel }) => sourceChannel), ["STORE", "WEBSHOP_XPRT"]);
   assert.ok(proposal.groups.every(({ productionLineRefs }) => productionLineRefs.length === 1));
 
+  const jobsBefore = (await service.bootstrap(admin.token)).productionJobs.length;
   const [current, later] = proposal.groups;
-  const firstJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: current.id, orders: current.orders }, "sequence-current-job")).value;
+  const concurrent = await Promise.allSettled([
+    service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: current.id, orders: current.orders }, "sequence-current-job"),
+    service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: later.id, orders: later.orders }, "sequence-later-concurrent-job"),
+  ]);
+  assert.equal(concurrent.filter(({ status }) => status === "fulfilled").length, 1, "gelijktijdige STORE/WEBSHOP-keuzes leveren exact één job");
+  assert.equal(concurrent.filter(({ status, reason }) => status === "rejected" && reason?.code === "PRODUCTION_PHYSICAL_STEP_CONFLICT").length, 1, "de verliezende kleurstap faalt fysiek gesloten");
+  const firstJob = concurrent.find(({ status }) => status === "fulfilled").value.value;
   assert.equal(firstJob.humanAcceptance.status, "PENDING");
-  await assert.rejects(service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: later.id, orders: later.orders }, "sequence-later-while-human-go-pending"), (error) => error.code === "PRODUCTION_PHYSICAL_STEP_CONFLICT");
+  const firstGroup = proposal.groups.find(({ id }) => id === firstJob.snapshot.productionGroup.id);
+  const secondGroup = proposal.groups.find(({ id }) => id !== firstGroup.id);
+  const afterRace = await service.bootstrap(operator.token);
+  assert.equal(afterRace.productionJobs.length, jobsBefore + 1);
+  assert.equal(afterRace.productionJobs.filter(({ id }) => id === firstJob.id).length, 1);
+  assert.equal(afterRace.productionProposals.find(({ id }) => id === proposal.id).groups.filter(({ productionJobId }) => Boolean(productionJobId)).length, 1);
   await service.completeProductionJob(admin.token, admin.csrfToken, firstJob.id, "sequence-current-complete");
 
   const shared = await service.bootstrap(operator.token);
   const saved = shared.productionProposals.find(({ id }) => id === proposal.id);
-  assert.equal(saved.groups[0].productionJobId, firstJob.id);
+  assert.equal(saved.groups.find(({ id }) => id === firstGroup.id).productionJobId, firstJob.id);
   assert.equal(shared.productionJobs.find(({ id }) => id === firstJob.id).status, "COMPLETED");
-  assert.equal(saved.groups[1].status, "OPEN");
-  const secondJob = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: saved.groups[1].id, orders: saved.groups[1].orders }, "sequence-next-job")).value;
+  assert.equal(saved.groups.find(({ id }) => id === secondGroup.id).status, "OPEN");
+  const savedSecond = saved.groups.find(({ id }) => id === secondGroup.id);
+  const secondJob = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: savedSecond.id, orders: savedSecond.orders }, "sequence-next-job")).value;
   assert.notEqual(secondJob.id, firstJob.id);
-  assert.equal(secondJob.snapshot.productionGroup.sourceChannel, "WEBSHOP_XPRT");
+  assert.equal(secondJob.snapshot.productionGroup.sourceChannel, secondGroup.sourceChannel);
   assert.equal(secondJob.humanAcceptance.status, "PENDING");
 });
 
@@ -243,7 +254,8 @@ test("productie-UX toont één huidige stap, daarna-context en geen Webshop-Wink
   assert.match(workspace, /Nu produceren:/u);
   assert.match(workspace, /Daarna:/u);
   assert.match(workspace, />Start huidige stap</u);
-  assert.match(workspace, /activeGroup\.id === group\.id \? "CURRENT" : "LATER"/u);
+  assert.match(workspace, /physical\.activeGroupIds\.has\(group\.id\)\) return "CURRENT"/u);
+  assert.match(workspace, /if \(physical\.activeColors\.size\)[^]*return "LATER"/u);
   assert.match(workspace, /Webshopcommunicatie blijft gescheiden/u);
   assert.doesNotMatch(workspace, /REQUESTED_HEIGHT_AXIS_HORIZONTAL/u, "de fysieke implementatieterm lekt niet naar medewerker-UX");
   assert.match(css, /@media\(max-width:760px\)/u);

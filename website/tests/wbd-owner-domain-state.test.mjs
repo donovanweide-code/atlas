@@ -153,9 +153,9 @@ test("authenticatiepolls zijn cachehits zonder revision-, audit- of legacywrite"
     assert.equal(session.csrfToken, login.csrfToken);
   }
   const [atlas, search, promotions] = await Promise.all([
-    service.atlasWorkspace(login.token),
-    service.search(login.token, "Sportpaleis"),
-    service.promotions(login.token),
+    service.atlasWorkspace(login.token, new Date("2026-09-05T13:01:00.000Z")),
+    service.search(login.token, "Sportpaleis", new Date("2026-09-05T13:01:00.000Z")),
+    service.promotions(login.token, new Date("2026-09-05T13:01:00.000Z")),
   ]);
   assert.equal(atlas.schemaVersion, 1);
   for (const key of ["importantNow", "decisionsNeeded", "preparedActions", "sinceLastVisit", "evidence", "organizations", "capabilityRegistry"]) assert.ok(Array.isArray(atlas[key]), `Atlas-readmodel mist ${key}`);

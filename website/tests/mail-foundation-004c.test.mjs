@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { CaptureTransport, MailFoundation, MemoryMailStore, createMailOrganizations } from "../scripts/mail-foundation.mjs";
@@ -152,7 +153,7 @@ test("owner-approved logoauthority is gedeeld, faalt veilig terug en laat factuu
   const fallback = buildOrganizationCorporateFooter({ brandConfig: fallbackConfig });
   assert.doesNotMatch(fallback, /<img\b/i);
   assert.match(fallback, />We Build And Design<\/div>/);
-  const pdfPath = path.resolve("..", "output", "pdf", "sent", "mail-foundation-003-review.pdf");
+  const pdfPath = fileURLToPath(new URL("../../output/pdf/sent/mail-foundation-003-review.pdf", import.meta.url));
   const before = createHash("sha256").update(await readFile(pdfPath)).digest("hex");
   await foundation().preview(invoiceRequest(), actor);
   const after = createHash("sha256").update(await readFile(pdfPath)).digest("hex");

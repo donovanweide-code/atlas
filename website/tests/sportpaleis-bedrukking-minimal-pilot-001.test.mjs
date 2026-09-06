@@ -69,7 +69,10 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     order = (await service.createOrder(storeUser.token, storeUser.csrfToken, individualPayload(), "pilot-senior-order")).value;
     assert.equal(order.orderKind, "INDIVIDUAL");
     assert.equal(order.items[0].personalizationValues.backNumberSizeClass, "SENIOR");
-    assert.deepEqual(order.items[0].backNumberProduction, { sizeClass: "SENIOR", physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" });
+    assert.equal(order.items[0].backNumberProduction.sizeClass, "SENIOR");
+    assert.equal(order.items[0].backNumberProduction.physicalHeightMm, 200);
+    assert.equal(order.items[0].backNumberProduction.status, "SOURCE_CONFIGURED");
+    assert.match(order.items[0].backNumberProduction.source, /Authoritative Product Truth Donovan 2026-09-01/u);
     assert.match(order.items[0].personalization, /Rug 10 \(Senior\)/);
   });
 
@@ -79,7 +82,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
       { id: "junior", size: "S", quantity: 1, deviation: true, overrides: { initials: "", name: "", backNumber: "14", backNumberSizeClass: "JUNIOR", shortsNumber: "" } },
     ] }] }), "pilot-junior-override")).value;
     assert.equal(junior.items[0].variants[0].backNumberProduction.status, "SOURCE_CONFIGURED");
-    assert.equal(junior.items[0].variants[1].backNumberProduction.status, "VALIDATED");
+    assert.equal(junior.items[0].variants[1].backNumberProduction.status, "SOURCE_CONFIGURED");
     assert.equal(junior.items[0].variants[1].backNumberProduction.physicalHeightMm, 200);
   });
 
@@ -139,7 +142,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
 
   await context.test("schema-1 migratie en MariaDB mapping bewaren bestaande data zonder Junior/Senior te gokken", async () => {
     const migrated = migrateSportpaleisPilotState({ schemaVersion: 1, organizationId: "sport-2000-sportpaleis-bv", orders: [{ id: "LEGACY-1", revision: 1, customer: "Bestaand", customerEmail: "bestaand@example.nl", association: "A.S.C. Waterwijk", createdAt: "2026-08-01T00:00:00.000Z", stage: "ORDER", owner: "Patrick", totalPieces: 1, standardPersonalization: { initials: "", name: "", backNumber: "9", shortsNumber: "" }, items: [] }], users: [], audit: [] });
-    assert.equal(migrated.schemaVersion, 13); assert.equal(migrated.orders[0].standardPersonalization.backNumberSizeClass, "");
+    assert.equal(migrated.schemaVersion, 18); assert.equal(migrated.orders[0].standardPersonalization.backNumberSizeClass, "");
     assert.equal(migrated.orders[0].communication.requiredForIndividualOrder, false); assert.match(migrated.migrationWarnings[0], /geen gevalideerde/);
 
     const latest = (await service.bootstrap(storeUser.token)).orders.find(({ id }) => id === order.id);
@@ -149,7 +152,7 @@ test("Sportpaleis Bedrukking minimal pilot 001", async (context) => {
     assert.deepEqual(roundTrip.items[0].backNumberProduction, latest.items[0].backNumberProduction);
 
     const restarted = new SportpaleisFileStore({ filePath: store.filePath, backupDirectory: path.join(root, "backups"), seedPasswords: undefined });
-    await restarted.initialize(); assert.equal((await restarted.read()).schemaVersion, 13);
+    await restarted.initialize(); assert.equal((await restarted.read()).schemaVersion, 18);
   });
 
   await context.test("UI en schema borgen rode afwijking, 390px, focusbehoud, release en reproduceerbare migratie", async () => {

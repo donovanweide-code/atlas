@@ -1,0 +1,68 @@
+{
+  "document_status": "final",
+  "invoice": {
+    "number": "TEST-003",
+    "date": "2026-08-08",
+    "payment_term_days": 14,
+    "project": "Controlled SMTP activation",
+    "reference": "Technische reviewfixture"
+  },
+  "sender": {
+    "company_name": "We Build And Design",
+    "address": "Gerard Terborchstraat 35",
+    "postal_code": "1318 LE",
+    "city": "Almere",
+    "kvk": "69326126",
+    "vat_number": "NL190255879B01",
+    "iban": "NL16 KNAB 0603 6280 95",
+    "bic": "KNABNL2H",
+    "phone": "06 100 67 964",
+    "email": "info@webuildanddesign.nl",
+    "website": "webuildanddesign.nl"
+  },
+  "customer": {
+    "company_name": "WBD technische testfixture",
+    "contact_person": "Donovan test",
+    "email": "donovan@example.test",
+    "address": "Teststraat 3",
+    "postal_code": "1234 AB",
+    "city": "Almere",
+    "reference": "Geen klantdata"
+  },
+  "lines": [
+    {
+      "description": "Technische SMTP-validatie",
+      "quantity": "1",
+      "unit_price": "1.21",
+      "vat_rate": "21",
+      "price_mode": "inclusive"
+    }
+  ],
+  "validation": {
+    "blockers": [],
+    "resolved_blockers": [],
+    "resolved_at": "2026-08-08T10:45:00.000Z",
+    "resolution": "Lokale technische reviewfixture; geen klantdata."
+  },
+  "expected_totals": {
+    "exclusive": "1.00",
+    "vat": "0.21",
+    "inclusive": "1.21"
+  },
+  "workspace": {
+    "concept_id": "mail-foundation-003-review",
+    "created_at": "2026-08-08T10:45:00.000Z",
+    "updated_at": "2026-08-08T10:45:00.000Z",
+    "storage": "Business Foundation → Finance → Facturen → Verzonden",
+    "totals": {
+      "exclusive": "1.00",
+      "vat": "0.21",
+      "inclusive": "1.21"
+    },
+    "finalized_at": "2026-08-08T10:45:00.000Z",
+    "status": "sent",
+    "locked": true,
+    "pdf_url": "/__wbd-invoices/sent/mail-foundation-003-review/pdf",
+    "pdf_generated_at": "2026-08-08T10:45:00.000Z"
+  }
+}

@@ -27,9 +27,9 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
 
   await context.test("winkel ziet een toegestane echte fontbron maar geen logo-library of jobhistorie", async () => {
     const view = await service.bootstrap(storeUser.token);
-    assert.equal(view.schemaVersion, 13);
+    assert.equal(view.schemaVersion, 18);
     assert.equal(view.releaseId, "SPW-FUNCTIONAL-PILOT-FREEZE-READY-001-20260811");
-    assert.equal(view.productionFonts.length, 2);
+    assert.equal(view.productionFonts.length, initial.productionFonts.length);
     assert.equal(view.productionFonts[0].sha256, "F8ACE1F892B2BD9DC1792BA7F097FA7588F84FED48321480E04DE5390828221F");
     assert.equal(view.productionFonts[1].sha256, "5D083BEFACDF98AEBBA44F849A1A6578CD8F9B67C2F615321FF7920BFE11E585");
     assert.equal(view.productionFonts[0].sourceDataBase64, undefined);
@@ -64,7 +64,7 @@ test("Functional pilot freeze 012 — one production-line core, exact font sourc
     const duplicateInspection = await service.inspectProductionFont(admin.token, admin.csrfToken, duplicatePayload);
     const duplicate = await service.addProductionFont(admin.token, admin.csrfToken, { ...duplicatePayload, inspectionSha256: duplicateInspection.inspectionSha256 });
     assert.equal(duplicate.id, font.id);
-    assert.equal((await store.read()).productionFonts.length, 2);
+    assert.equal((await store.read()).productionFonts.length, initial.productionFonts.length);
   });
 
   await context.test("logo-/beeldmerkbronnen blijven gelaagd, aspect-locked en zonder stil rasterbewijs", async () => {

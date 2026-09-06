@@ -81,7 +81,7 @@ test("artikel 140298 biedt Initialen eerst en uitsluitend voor dit artikel aanvu
   assert.deepEqual(initialsChest.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Borstnummer 7"]);
   assert.deepEqual(all.productionLines.map(({ preview }) => preview.label), ["Initialen AB", "Rugnummer 24", "Borstnummer 7"]);
   assert.ok([initials, chest, initialsBack, initialsChest, all].every(({ customerPhone, productionLines }) => customerPhone === "" && productionLines.every(({ validation }) => validation.status === "VALID")));
-  assert.equal(all.productionLines.find(({ preview }) => preview.label.startsWith("Rugnummer")).heightMm, 220);
+  assert.equal(all.productionLines.find(({ preview }) => preview.label.startsWith("Rugnummer")).heightMm, 200);
   const initialsLine = all.productionLines.find(({ preview }) => preview.label.startsWith("Initialen"));
   const chestLine = all.productionLines.find(({ preview }) => preview.label.startsWith("Borstnummer"));
   assert.equal(chestLine.heightMm, initialsLine.heightMm);

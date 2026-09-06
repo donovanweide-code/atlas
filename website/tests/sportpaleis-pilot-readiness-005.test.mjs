@@ -44,10 +44,21 @@ const profileValidation = (source = "Test-only bevestigde fixture; niet als prod
 test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
   const { root, store, service, admin, operator, storeUser } = await fixture(context);
 
-  await context.test("20 van 20 verenigingsregels zijn reproduceerbaar tegen de vastgelegde bronfixture", async () => {
+  await context.test("alle matrixgebonden verenigingsregels zijn reproduceerbaar en latere Product Truth blijft afzonderlijk versioned", async () => {
     const fixtureData = JSON.parse(await readFile(new URL("../config/info-bedrukkingen-2026.confirmed-fixture.json", import.meta.url), "utf8"));
-    assert.equal(SPORTPALEIS_ASSOCIATIONS.length, 20);
-    assert.deepEqual(SPORTPALEIS_ASSOCIATIONS.map(normalizedAssociation), fixtureData.rows);
+    const matrixAssociations = SPORTPALEIS_ASSOCIATIONS.filter(({ source }) => source?.file === "info bedrukkingen 2026.xlsx");
+    assert.equal(matrixAssociations.length, fixtureData.rows.length);
+    for (const historical of fixtureData.rows) {
+      const current = matrixAssociations.find(({ name }) => name === historical.name);
+      if (["HBSA", "Sloeproeien"].includes(historical.name)) continue;
+      assert.ok(current, historical.name);
+      assert.equal(current.fontEvidence.sourceValue, historical.fontProfile, historical.name);
+      assert.equal(Number(current.source.range.match(/A(\d+)/u)?.[1]), historical.row, historical.name);
+      if (historical.dimensionsCm.backNumberSenior != null) assert.equal(current.dimensionsCm.backNumberSenior, 20, historical.name);
+    }
+    assert.equal(SPORTPALEIS_ASSOCIATIONS.find(({ name }) => name === "HBSA").productionEligibility, "NOT_APPLICABLE");
+    assert.equal(SPORTPALEIS_ASSOCIATIONS.find(({ name }) => name === "Sloeproeien").productionEligibility, "NOT_APPLICABLE");
+    assert.equal(SPORTPALEIS_ASSOCIATIONS.length - matrixAssociations.length, 2, "Seedorf TDG en Almeerse Hockeyclub zijn latere expliciete Product Truth");
   });
 
   let article;
@@ -59,7 +70,7 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     await assert.rejects(() => service.updateArticle(admin.token, admin.csrfToken, before.id, { expectedRevision: before.revision, availableSizes: [], validation: articleValidation() }), (error) => error.code === "VALIDATED_SIZES_REQUIRED");
     article = await service.updateArticle(admin.token, admin.csrfToken, before.id, {
       expectedRevision: before.revision, active: true, name: before.name, articleNumber: before.articleNumber, imageKey: before.imageKey,
-      association: "A.S.C. Waterwijk", profileId: "profile-shirt", variantLabels: ["Thuis · zwart"], availableSizes: ["164", "S", "M", "L", "XL"],
+      association: "A.S.C. Waterwijk", profileId: before.profileId, variantLabels: ["Thuis · zwart"], availableSizes: ["164", "S", "M", "L", "XL"],
       supports: ["initials", "name", "backNumber"], personalizationPolicy: { mode: "combination", fields: { initials: "optional", name: "optional", backNumber: "required" } }, validation: articleValidation(),
     });
     assert.equal(article.validation.status, "VALIDATED");
@@ -95,19 +106,25 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
   });
 
   let blockedJuniorOrder;
-  await context.test("normale order en Teamorder erven artikelbeleid; DATA_GAP blokkeert productie server-side", async () => {
+  await context.test("de vaste 200-mm-regel kan niet naar DATA_GAP worden teruggezet en blijft operationeel", async () => {
     const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
-    await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "DATA_GAP", juniorValidationNote: "Test-only reset zonder fysieke mm" });
+    await assert.rejects(
+      service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "DATA_GAP", juniorValidationNote: "Test-only reset zonder fysieke mm" }),
+      (error) => error.code === "BACK_NUMBER_HEIGHT_FIXED_200MM",
+    );
     blockedJuniorOrder = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "INDIVIDUAL", customer: "Junior geblokkeerd", customerEmail: "junior-gap@example.nl", customerPhone: "0612345678",
       standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "M", quantity: 1, deviation: false, overrides: {} }],
     }, "readiness-005-junior-gap")).value;
-    assert.equal(blockedJuniorOrder.items[0].productionReadiness.status, "DATA_GAP");
+    assert.equal(blockedJuniorOrder.items[0].productionReadiness.status, "CONFIGURED");
+    assert.doesNotMatch(blockedJuniorOrder.items[0].productionReadiness.reason ?? "", /hoogte|bron|fontbestand|contour/iu);
+    assert.equal(blockedJuniorOrder.items[0].backNumberProduction.physicalHeightMm, 200);
     await service.captureOrderMail(storeUser.token, storeUser.csrfToken, blockedJuniorOrder.id, { templateKey: "ORDER_RECEIVED" }, "readiness-005-junior-gap-mail");
     const latest = (await service.bootstrap(operator.token)).orders.find(({ id }) => id === blockedJuniorOrder.id);
     const controlled = (await service.advanceOrder(operator.token, operator.csrfToken, latest.id, latest.revision, "readiness-005-junior-gap-control")).value;
-    assert.equal(controlled.stage, "CONTROL", "een order met een productie-DATA_GAP blijft wel controleerbaar en zichtbaar in Productie");
-    await assert.rejects(() => service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-005-junior-gap-production"), (error) => error.code === "PRODUCTION_DATA_INCOMPLETE");
+    assert.equal(controlled.stage, "CONTROL");
+    const production = (await service.advanceOrder(operator.token, operator.csrfToken, controlled.id, controlled.revision, "readiness-005-junior-gap-production")).value;
+    assert.equal(production.stage, "PRINT");
 
     const team = (await service.createOrder(storeUser.token, storeUser.csrfToken, {
       orderKind: "TEAM", customer: "", customerEmail: "", customerPhone: "", standardPersonalization: empty,
@@ -122,19 +139,22 @@ test("Sportpaleis gerichte correctiefase readiness 005", async (context) => {
     await assert.rejects(() => service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Verkeerde maat", customerEmail: "maat@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "8", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "sp-live-137294", size: "XXXL", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-invalid-size"), (error) => error.code === "ARTICLE_SIZE_UNAVAILABLE");
   });
 
-  await context.test("Junior wordt pas na fysieke mm plus provenance in gekoppelde productiecontext gevalideerd", async () => {
+  await context.test("Junior en Senior blijven exact 200 mm; afwijkende adminwaarden falen gesloten", async () => {
     const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
-    const reset = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "DATA_GAP", juniorValidationNote: "Test-only reset zonder fysieke mm" });
-    await assert.rejects(() => service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: reset.revision, juniorValidationStatus: "VALIDATED", juniorValidationNote: "Testbron zonder mm" }), (error) => error.code === "JUNIOR_PHYSICAL_MM_REQUIRED");
-    const updated = await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: reset.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Test-only fysieke meting 180 mm; geen productiebron" });
-    assert.equal(updated.juniorPhysicalHeightMm, 180);
+    await assert.rejects(
+      service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Afwijkende testwaarde" }),
+      (error) => error.code === "BACK_NUMBER_HEIGHT_FIXED_200MM",
+    );
+    const updated = (await service.bootstrap(admin.token)).associations.find(({ id }) => id === association.id);
+    assert.equal(updated.juniorPhysicalHeightMm, 200);
     const profileAfter = (await service.bootstrap(admin.token)).productionProfiles.find(({ id }) => id === "profile-shirt");
-    assert.deepEqual(profileAfter.backNumberSizeClasses.JUNIOR, { physicalHeightMm: 180, sourceValueMm: 200, status: "VALIDATED", source: "Test-only fysieke meting 180 mm; geen productiebron" });
+    assert.equal(profileAfter.backNumberSizeClasses.JUNIOR.physicalHeightMm, 200);
+    assert.equal(profileAfter.backNumberSizeClasses.JUNIOR.status, "SOURCE_CONFIGURED");
     const created = (await service.createOrder(storeUser.token, storeUser.csrfToken, { orderKind: "INDIVIDUAL", customer: "Junior bevestigd", customerEmail: "junior-ok@example.nl", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "14", backNumberSizeClass: "JUNIOR" }, items: [{ articleId: "sp-live-137294", size: "164", quantity: 1, deviation: false, overrides: {} }] }, "readiness-005-junior-ok")).value;
-    assert.equal(created.items[0].backNumberProduction.physicalHeightMm, 180);
-    assert.equal(created.items[0].productionReadiness.status, "ATTENTION");
-    assert.match(created.items[0].productionReadiness.reason, /contour\/fontbestand/u);
-    assert.equal(blockedJuniorOrder.items[0].backNumberProduction.status, "DATA_GAP", "bestaande order bewaart de eerdere veilige snapshot");
+    assert.equal(created.items[0].backNumberProduction.physicalHeightMm, 200);
+    assert.equal(created.items[0].productionReadiness.status, "CONFIGURED");
+    assert.doesNotMatch(created.items[0].productionReadiness.reason ?? "", /hoogte|bron|fontbestand|contour/iu);
+    assert.equal(blockedJuniorOrder.items[0].backNumberProduction.physicalHeightMm, 200, "de eerdere ordersnapshot behoudt dezelfde authoritative hoogte");
   });
 
   await context.test("live pilotcatalogus vervangt demo-artikelen en reviewcontract is compleet", async () => {

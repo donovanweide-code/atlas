@@ -101,7 +101,7 @@ test("idempotency is payload-gebonden en een herordende maatverdeling materialis
   let proposal = await approve(service, operator, first, [{ id: "mixed", articleId: article.id, articleNumber: article.articleNumber, productName: article.name, color: "Navy", quantity: null, sizes: [], team: null, notes: null, placements: [placement("back-11", "BACK_NUMBER", "11")] }]);
   proposal = await service.updateTeamkitProductionSizing(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [{ itemId: "mixed", sizeQuantities: [{ size: "M", quantity: 3 }, { size: "140", quantity: 2 }] }] });
   const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
-  assert.deepEqual(prepared.orders[0].productionLines.map(({ heightMm, quantity }) => ({ heightMm, quantity })).sort((a, b) => a.heightMm - b.heightMm), [{ heightMm: 200, quantity: 2 }, { heightMm: 220, quantity: 3 }]);
+  assert.deepEqual(prepared.orders[0].productionLines.map(({ heightMm, quantity }) => ({ heightMm, quantity })).sort((a, b) => a.quantity - b.quantity), [{ heightMm: 200, quantity: 2 }, { heightMm: 200, quantity: 3 }]);
 });
 
 test("employee UX bevat geen universele Junior-gap en Today projecteert Teamwear/Webshop aandacht", async () => {

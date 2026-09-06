@@ -32,18 +32,18 @@ test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
 
   await context.test("de echte verenigingsconfiguratie is server-owned en behoudt alleen resterende datagaten", async () => {
     const state = await service.bootstrap(admin.token);
-    assert.equal(state.schemaVersion, 13);
-    assert.equal(state.associations.length, 20);
+    assert.equal(state.schemaVersion, 18);
+    assert.equal(state.associations.length, SPORTPALEIS_ASSOCIATIONS.length);
     assert.deepEqual(state.associations.map(({ name }) => name), SPORTPALEIS_ASSOCIATIONS.map(({ name }) => name));
     const asc = state.associations.find(({ name }) => name === "A.S.C. Waterwijk");
-    assert.equal(asc.dimensionsCm.backNumberSenior, 22);
+    assert.equal(asc.dimensionsCm.backNumberSenior, 20);
     assert.equal(asc.juniorValidationStatus, "VALIDATED");
     assert.equal(asc.juniorPhysicalHeightMm, 200);
     assert.deepEqual(asc.juniorGarmentSizes, ["116", "128", "140", "152", "164"]);
-    assert.equal(state.productionProfiles.find(({ id }) => id === "profile-shirt").sizeLabel, "Senior rugnummer 22 cm");
+    assert.equal(state.productionProfiles.find(({ id }) => id === "profile-shirt").sizeLabel, "Junior/Senior rugnummer 20 cm");
     assert.equal(state.productionProfiles.find(({ id }) => id === "profile-shorts").sizeLabel, "Shortnummer 7,5 cm");
     assert.equal(state.productionProfiles.find(({ id }) => id === "profile-initials").sizeLabel, "Initialen 3 cm");
-    assert.ok(SPORTPALEIS_DATA_GAPS.some((gap) => gap.includes("Junior")));
+    assert.equal(SPORTPALEIS_DATA_GAPS.some((gap) => /Junior.*(?:hoogte|maat)/iu.test(gap)), false);
   });
 
   await context.test("Eigen artikel blijft ordergebonden en ontbrekend productieprofiel blokkeert productie", async () => {
@@ -74,8 +74,8 @@ test("Sportpaleis Bedrukking Capability Build 003", async (context) => {
     }, "capability-team-order-0001");
     assert.equal(created.value.orderKind, "TEAM");
     assert.deepEqual(created.value.items[0].variants.map(({ participantName }) => participantName), ["Speler Een", "Speler Twee"]);
-    assert.equal(created.value.items[0].variants[0].backNumberProduction.physicalHeightMm, 220);
-    assert.equal(created.value.items[0].variants[1].backNumberProduction.status, "VALIDATED");
+    assert.equal(created.value.items[0].variants[0].backNumberProduction.physicalHeightMm, 200);
+    assert.equal(created.value.items[0].variants[1].backNumberProduction.status, "SOURCE_CONFIGURED");
     assert.equal(created.value.items[0].variants[1].backNumberProduction.physicalHeightMm, 200);
   });
 

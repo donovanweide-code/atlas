@@ -11,3 +11,11 @@ ops/release-engine/* text eol=lf
 ops/release-engine/contracts/*.json text eol=lf
 website/scripts/release-engine-*.mjs text eol=lf
 website/tests/release-recovery-engine-v1.test.mjs text eol=lf
+invoices/wbd/data/sent/mail-foundation-003-review.json -text
+invoices/wbd/data/sent/sportpaleis-f00248-concept.json -text
+release/WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.manifest.json -text
+website/config/sportpaleis-immutable-regression-fixtures-v1.json text eol=lf
+website/config/sportpaleis-regression-failure-matrix-v1.json text eol=lf
+website/config/sportpaleis-regression-contract-v1.json text eol=lf
+website/config/sportpaleis-production-shaped-assurance-v4.json text eol=lf
+website/tests/fixtures/regression/sportpaleis-r22649-original-57-junit.xml text eol=lf

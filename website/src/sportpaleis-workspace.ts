@@ -1304,7 +1304,7 @@ function proposalGroupSequenceState(state: PilotBootstrap, groups: NonNullable<P
   const physical = physicalState ?? productionPhysicalStepState(state, index);
   if (physical.activeColors.size) {
     if (physical.activeGroupIds.has(group.id)) return "CURRENT";
-    return physical.activeColors.size === 1 && physical.activeColors.has(normalizedFoilColor(group.foilColor)) ? "CURRENT" : "LATER";
+    return "LATER";
   }
   return group.status === "OPEN" ? "CURRENT" : "UNKNOWN";
 }

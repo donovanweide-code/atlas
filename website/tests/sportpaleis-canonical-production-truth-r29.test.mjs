@@ -60,7 +60,7 @@ test("gemengde Junior/Senior-aantallen materialiseren afzonderlijke fysieke waar
   proposal = await service.updateTeamkitProductionSizing(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision, items: [{ itemId: item.id, sizeQuantities: [{ size: "140", quantity: 2 }, { size: "M", quantity: 3 }] }] });
   const prepared = await service.prepareTeamkitInternalProduction(operator.token, operator.csrfToken, proposal.id, { expectedRevision: proposal.aggregateRevision });
   const lines = prepared.orders[0].productionLines;
-  assert.deepEqual(lines.map(({ heightMm, quantity }) => ({ heightMm, quantity })).sort((a, b) => a.heightMm - b.heightMm), [{ heightMm: 200, quantity: 2 }, { heightMm: 220, quantity: 3 }]);
+  assert.deepEqual(lines.map(({ heightMm, quantity }) => ({ heightMm, quantity })).sort((a, b) => a.quantity - b.quantity), [{ heightMm: 200, quantity: 2 }, { heightMm: 200, quantity: 3 }]);
   assert.deepEqual(new Set(lines.map(({ personalizationField }) => personalizationField)), new Set(["backNumber"]));
   assert.ok(lines.every(({ decorationIdentity }) => decorationIdentity.articleNumber === "140298" && decorationIdentity.decorationType === "backNumber" && decorationIdentity.value === "17"));
   assert.equal(new Set(lines.map(({ decorationIdentity }) => decorationIdentity.targetGroup)).size, 2);

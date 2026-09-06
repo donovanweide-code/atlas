@@ -25,6 +25,7 @@ function unresolvedProfileFixture(fontProfile = "FFF englisch") {
   };
   const profile = state.productionProfiles.find(({ id }) => id === "profile-pioneers-shirt");
   profile.fontProfile = fontProfile;
+  delete profile.canonicalFontSourceId;
   const order = { id: `SP-R222-${fontProfile.replace(/\W+/gu, "-")}`, revision: 1, association: article.association, items: [item] };
   const line = resolveCanonicalProductionLines(state, order.id, order.items)[0];
   const liberation = state.productionFonts.find(({ id }) => id.startsWith("font-liberation"));
@@ -59,16 +60,16 @@ async function fixture(context) {
   return { store, service, operator };
 }
 
-test("unresolved FFF englisch accepteert geen technisch geldig Liberation Sans", () => {
-  const { state, order, line } = unresolvedProfileFixture("FFF englisch");
+test("een werkelijk unresolved fontprofiel accepteert geen technisch geldig Liberation Sans", () => {
+  const { state, order, line } = unresolvedProfileFixture("Historisch ontbrekend lettertype");
   const result = validateFinalProductionTruth(state, order, [line]);
   assert.equal(result.status, "BLOCKED");
   assert.ok(result.findings.some(({ code }) => code === "PRODUCTION_CANONICAL_FONT_UNRESOLVED"));
   assert.ok(result.findings.some(({ code }) => code === "PRODUCTION_SOURCE_ROLE_MISMATCH"));
 });
 
-test("unresolved Schluber en Myriad Pro Bold blijven generiek fail-closed", () => {
-  for (const name of ["Schluber", "Myriad Pro Bold"]) {
+test("meerdere werkelijk unresolved fontprofielen blijven generiek fail-closed", () => {
+  for (const name of ["Ontbrekend lettertype A", "Ontbrekend lettertype B"]) {
     const { state, order, line } = unresolvedProfileFixture(name);
     const result = validateFinalProductionTruth(state, order, [line]);
     assert.equal(result.status, "BLOCKED", name);

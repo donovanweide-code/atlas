@@ -13,7 +13,8 @@ test("Productie toont fysieke batches en houdt technische PlotJob-identiteit in 
   assert.match(source, /Eerder productiewerk/u);
   assert.match(source, /data-action="production-filter" data-filter="attention"[^]*?statusCounts\.attention/u);
   const primary = source.slice(source.indexOf("const persistedGroupCards"), source.indexOf("const productionSearchOrders"));
-  assert.doesNotMatch(primary, /jobNumber/u, "technisch PlotJob-nummer domineert de primaire fysieke werkkaart niet");
+  assert.doesNotMatch(primary, /<strong>\$\{esc\(job\.jobNumber\)\}<\/strong>/u, "technisch PlotJob-nummer domineert de primaire fysieke werkkaart niet");
+  assert.match(primary, /<small>\$\{esc\(job\.jobNumber\)\}/u, "de immutable jobidentity blijft als secundair detail zichtbaar");
 });
 
 test("Winkel en Search ondersteunen dagelijkse afhaal- en Vandaag-flow", async () => {

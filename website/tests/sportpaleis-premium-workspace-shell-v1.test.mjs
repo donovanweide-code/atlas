@@ -47,7 +47,8 @@ test("artikel 140298 toont Initialen direct en aanvullende nummers via progressi
   const source = await readFile(sourceUrl, "utf8");
   const printing = source.slice(source.indexOf("function standardPrinting"), source.indexOf("function standardPrintingSummary"));
   assert.match(printing, /articleNumber === "140298"/u);
-  assert.match(printing, /field !== "backNumber" && field !== "chestNumber"/u);
+  assert.match(printing, /field !== "chestNumber" && \(field !== "backNumber" \|\| requiredStandardField\(state, field\)\)/u);
+  assert.match(printing, /field === "chestNumber" \|\| field === "backNumber" && !requiredStandardField\(state, field\)/u);
   assert.match(printing, /\+ Rugnummer of borstnummer toevoegen/u);
   assert.match(printing, /additionalFields\.map\(renderField\)/u);
 });

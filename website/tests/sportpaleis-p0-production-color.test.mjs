@@ -79,7 +79,7 @@ test("verenigingdefault en expliciete artikeloverride blijven logisch, persisten
 });
 
 test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerdere orders per kleurgroep", async (context) => {
-  const { service, admin, storeUser } = await fixture(context);
+  const { store, service, admin, storeUser } = await fixture(context);
   const initial = await service.bootstrap(admin.token);
   const pioneers = initial.associations.find(({ name }) => name === "Almere Pioneers");
   await service.updateAssociation(admin.token, admin.csrfToken, pioneers.id, { expectedRevision: pioneers.revision, foilColors: ["Wit"], defaultFoilColor: "Wit" });
@@ -152,7 +152,7 @@ test("een order met meerdere kleuren ondersteunt atomaire deelproductie en meerd
   assert.equal(mixedFullyProduced.productionClosure.status, "ELIGIBLE");
   const mixedReady = (await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: [{ id: mixedFullyProduced.id, expectedRevision: mixedFullyProduced.revision }] }, "p0-mixed-ready")).value;
   assert.deepEqual(mixedReady.completed.map(({ id }) => id), [mixed.id]);
-  assert.ok(state.audit.some(({ action, details }) => action === "Productiegroep bedrukt" && details.foilColor === "Wit" && details.snapshotHash === immutableHash));
+  assert.ok((await store.read()).audit.some(({ action, details }) => action === "Productiegroep bedrukt" && details.foilColor === "Wit" && details.snapshotHash === immutableHash));
 });
 
 test("kleine type-sortering ordent stabiel binnen één kleur vóór de bestaande nesting", async (context) => {

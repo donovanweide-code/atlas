@@ -60,7 +60,7 @@ test("expliciete historische decoration-intentie wordt deterministisch PROVEN zo
   const second = reconcileExistingOrderProductionTruth(state, order);
   assert.equal(first.status, "PROVEN");
   assert.deepEqual(first.productionLines.map(({ personalizationField, content, heightMm, quantity }) => ({ personalizationField, content, heightMm, quantity })), [
-    { personalizationField: "backNumber", content: "10", heightMm: 220, quantity: 2 },
+    { personalizationField: "backNumber", content: "10", heightMm: 200, quantity: 2 },
     { personalizationField: "initials", content: "AB", heightMm: 30, quantity: 2 },
   ]);
   assert.deepEqual(first.productionLines.map(({ id }) => id), second.productionLines.map(({ id }) => id));
@@ -74,12 +74,12 @@ test("gemengd Junior/Senior blijft in afzonderlijke fysieke groepen en kledingma
     quantity: 5,
     variants: [
       { id: "person-junior", quantity: 2, size: "140", personalization: "Rug 7 Junior", personalizationValues: { backNumber: "7", backNumberSizeClass: "JUNIOR" }, backNumberProduction: { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "Historische Junior-productieregel" } },
-      { id: "person-senior", quantity: 3, size: "M", personalization: "Rug 7 Senior", personalizationValues: { backNumber: "7", backNumberSizeClass: "SENIOR" }, backNumberProduction: { sizeClass: "SENIOR", physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "Historische Senior-productieregel" } },
+      { id: "person-senior", quantity: 3, size: "M", personalization: "Rug 7 Senior", personalizationValues: { backNumber: "7", backNumberSizeClass: "SENIOR" }, backNumberProduction: { sizeClass: "SENIOR", physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "Authoritative 200-mm-regel" } },
     ],
   });
   const result = reconcileExistingOrderProductionTruth(state, legacyOrder("SP-LEGACY-MIXED", [item]));
   assert.equal(result.status, "PROVEN");
-  assert.deepEqual(result.productionLines.map(({ heightMm, quantity }) => ({ heightMm, quantity })).sort((a, b) => a.heightMm - b.heightMm), [{ heightMm: 200, quantity: 2 }, { heightMm: 220, quantity: 3 }]);
+  assert.deepEqual(result.productionLines.map(({ heightMm, quantity }) => ({ heightMm, quantity })), [{ heightMm: 200, quantity: 5 }], "gelijke glyph, maat en decoration identity worden tot één occurrencegroep samengevoegd");
 
   const missingClass = reconcileExistingOrderProductionTruth(state, legacyOrder("SP-LEGACY-NO-CLASS", [legacyItem("no-class", "Rug 7", { size: "140" })]));
   assert.equal(missingClass.status, "HUMAN_DECISION_REQUIRED");
@@ -121,7 +121,7 @@ test("legacydiversiteit behoudt bron, orderklasse, cardinaliteit, kleur en lifec
       quantity: 3,
       variants: [
         { id: "persoon-a", participantName: "Persoon A", quantity: 1, size: "140", personalization: "Rug 8 Junior", personalizationValues: { initials: "AA", initialsInfix: "", name: "", backNumber: "8", chestNumber: "", backNumberSizeClass: "JUNIOR", shortsNumber: "" }, backNumberProduction: { sizeClass: "JUNIOR", physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "Historische Junior-regel" } },
-        { id: "persoon-b", participantName: "Persoon B", quantity: 2, size: "L", personalization: "Rug 19 Senior", personalizationValues: { initials: "BB", initialsInfix: "", name: "", backNumber: "19", chestNumber: "", backNumberSizeClass: "SENIOR", shortsNumber: "" }, backNumberProduction: { sizeClass: "SENIOR", physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "Historische Senior-regel" } },
+        { id: "persoon-b", participantName: "Persoon B", quantity: 2, size: "L", personalization: "Rug 19 Senior", personalizationValues: { initials: "BB", initialsInfix: "", name: "", backNumber: "19", chestNumber: "", backNumberSizeClass: "SENIOR", shortsNumber: "" }, backNumberProduction: { sizeClass: "SENIOR", physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: "Authoritative 200-mm-regel" } },
       ],
     })], { orderKind: "TEAM" }),
   ];
@@ -141,7 +141,7 @@ test("legacydiversiteit behoudt bron, orderklasse, cardinaliteit, kleur en lifec
   assert.deepEqual(new Set(multiple.productionLines.map(({ decorationIdentity }) => decorationIdentity.foilColor)), new Set(["Wit", "Zwart"]));
   const people = results.find(({ order }) => order.id === "SP-LEGACY-PERSONEN").result;
   assert.equal(people.status, "PROVEN");
-  assert.deepEqual(new Set(people.productionLines.filter(({ personalizationField }) => personalizationField === "backNumber").map(({ heightMm }) => heightMm)), new Set([200, 220]));
+  assert.deepEqual(new Set(people.productionLines.filter(({ personalizationField }) => personalizationField === "backNumber").map(({ heightMm }) => heightMm)), new Set([200]));
   const stored = { ...structuredClone(results[0].order), stage: "PRINT", productionLines: structuredClone(results[0].result.productionLines), productionCompletion: { status: "PARTIAL" } };
   const storedResult = reconcileExistingOrderProductionTruth(state, stored);
   assert.equal(storedResult.status, "PROVEN");
@@ -212,7 +212,7 @@ test("Junior/Senior en foliekleur zijn in dezelfde ordercontext herstelbaar zond
   order = await service.order(admin.token, order.id);
   assert.equal(order.productionStatus, "READY");
   assert.equal(order.productionLines[0].decorationIdentity.foilColor, "Wit");
-  assert.equal(order.productionLines[0].heightMm, 220);
+  assert.equal(order.productionLines[0].heightMm, 200);
   const persisted = await store.read();
   assert.ok(persisted.audit.filter(({ action, subject }) => action === "Ontbrekende bestaande-orderwaarheid beslist" && subject === order.id).length === 2);
 });

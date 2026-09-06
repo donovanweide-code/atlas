@@ -28,15 +28,16 @@ test("final pre-live catalogus 006 bevat exact de gevalideerde 183/267-grens", a
     assert.ok(article.catalogProvenance.imageUrl.startsWith("https://www.sportpaleis.nl/"), article.id);
     assert.ok(article.availableSizes.length > 0, article.id);
     assert.ok(article.availableSizes.every((size) => typeof article.priceConfiguration.articleUnitPricesBySizeEur[size] === "number"), article.id);
-    assert.ok(Object.values(article.priceConfiguration.personalizationUnitPricesEur).some((value) => typeof value === "number"), article.id);
+    assert.ok(Object.values(article.priceConfiguration.personalizationUnitPricesEur).some((value) => typeof value === "number")
+      || Object.keys(article.priceConfiguration.personalizationValuePricing ?? {}).length > 0, article.id);
     await access(new URL(`../src/assets/images/sportpaleis/live-catalog/${article.imageKey}.webp`, import.meta.url));
   }
 });
 
-test("alle 20 first-party verenigingslogo's en hun provenance zijn lokaal vastgelegd", async () => {
-  assert.equal(SPORTPALEIS_ASSOCIATIONS.length, 20);
-  assert.equal(Object.keys(SPORTPALEIS_ASSOCIATION_LOGOS).length, 20);
-  for (const association of SPORTPALEIS_ASSOCIATIONS) {
+test("alle verenigingen met een first-party logobinding en hun provenance zijn lokaal vastgelegd", async () => {
+  const logoAssociations = SPORTPALEIS_ASSOCIATIONS.filter(({ workspaceLogo }) => Boolean(workspaceLogo));
+  assert.deepEqual(Object.keys(SPORTPALEIS_ASSOCIATION_LOGOS).sort(), logoAssociations.map(({ name }) => name).sort());
+  for (const association of logoAssociations) {
     const logo = SPORTPALEIS_ASSOCIATION_LOGOS[association.name];
     assert.ok(logo, association.name);
     assert.equal(logo.authority, "SPORTPALEIS_LIVE_ASSOCIATION_PAGE");

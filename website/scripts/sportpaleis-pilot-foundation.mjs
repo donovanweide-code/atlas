@@ -339,7 +339,10 @@ for (const profile of PRODUCTION_PROFILES.filter(({ supports }) => supports?.inc
     SENIOR: { physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
     JUNIOR: { physicalHeightMm: SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE },
   };
-  profile.sizeLabel = String(profile.sizeLabel ?? "Rugnummer").replace(/(?:Junior[^·]*·\s*)?Senior\s*(?:rugnummer\s*)?\d+(?:[,.]\d+)?\s*cm/iu, "Junior/Senior rugnummer 20 cm");
+  const currentSizeLabel = String(profile.sizeLabel ?? "Rugnummer");
+  profile.sizeLabel = /Junior\/Senior rugnummer 20 cm/iu.test(currentSizeLabel)
+    ? currentSizeLabel
+    : currentSizeLabel.replace(/(?:Junior[^·]*·\s*)?Senior\s*(?:rugnummer\s*)?\d+(?:[,.]\d+)?\s*cm/iu, "Junior/Senior rugnummer 20 cm");
 }
 for (const profile of PRODUCTION_PROFILES) {
   profile.revision = 1;
@@ -2667,6 +2670,10 @@ export class SportpaleisPilotService {
     this.bootstrapResponseCache = new Map();
     this.bootstrapResponseCacheBytes = 0;
     this.bootstrapResponsePromises = new Map();
+    // De fysieke productiegrens is per runtime bewust single-flight. Zware
+    // artifactbouw blijft buiten de DB-lock, maar twee gelijktijdige keuzes
+    // mogen nooit dezelfde sequence/reservering voorbereiden.
+    this.productionMutationTail = Promise.resolve();
     this.isolatedProductionBuilds = typeof this.store.prepareAndCommit === "function";
   }
 
@@ -2676,21 +2683,26 @@ export class SportpaleisPilotService {
   }
 
   async #productionMutation(mutator) {
-    if (this.isolatedProductionBuilds) {
-      const effects = { artifacts: [] };
-      try {
-        const result = await this.store.prepareAndCommit((state) => mutator(state, effects));
-        for (const artifact of effects.artifacts) await markProductionArtifactCommitted({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifact, globalRevision: result.state.revision });
-        return result;
-      } catch (error) {
-        if (effects.artifacts.length) {
-          const committed = await this.store.read().catch(() => null);
-          await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifacts: effects.artifacts, state: committed, reason: error?.code ?? "PRODUCTION_TRANSACTION_FAILED" });
+    const execute = async () => {
+      if (this.isolatedProductionBuilds) {
+        const effects = { artifacts: [] };
+        try {
+          const result = await this.store.prepareAndCommit((state) => mutator(state, effects));
+          for (const artifact of effects.artifacts) await markProductionArtifactCommitted({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifact, globalRevision: result.state.revision });
+          return result;
+        } catch (error) {
+          if (effects.artifacts.length) {
+            const committed = await this.store.read().catch(() => null);
+            await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifacts: effects.artifacts, state: committed, reason: error?.code ?? "PRODUCTION_TRANSACTION_FAILED" });
+          }
+          throw error;
         }
-        throw error;
       }
-    }
-    return this.store.mutate(mutator);
+      return this.store.mutate(mutator);
+    };
+    const result = this.productionMutationTail.then(execute, execute);
+    this.productionMutationTail = result.then(() => undefined, () => undefined);
+    return result;
   }
 
   async #productionSnapshot(state, orders, jobNumber, createdAt, productionGroup, operationIdentity, effects = undefined) {
@@ -6531,6 +6543,18 @@ export class SportpaleisPilotService {
       const expectedRevision = Number(payload.expectedRevision);
       if (expectedRevision !== Number(association.revision ?? 1)) throw Object.assign(new Error("De vereniging is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: association.revision ?? 1 });
       const previous = { active: association.active, notes: association.notes, fontProfile: association.fontProfile, foilColors: structuredClone(association.foilColors), defaultFoilColor: association.defaultFoilColor ?? association.foilColors[0] ?? "Onbekend", dimensionsCm: structuredClone(association.dimensionsCm), juniorValidationStatus: association.juniorValidationStatus, juniorPhysicalHeightMm: association.juniorPhysicalHeightMm ?? null, juniorGarmentSizes: structuredClone(association.juniorGarmentSizes ?? []), juniorValidationNote: association.juniorValidationNote, workspaceLogoSha256: association.workspaceLogo?.sha256 ?? null };
+      const hasBackNumberApplication = (association.productionApplications ?? []).includes("backNumber") || Number(association.dimensionsCm?.backNumberSenior) > 0 || Number(association.dimensionsCm?.backNumberJuniorSourceValue) > 0;
+      if (hasBackNumberApplication) {
+        const requestedSeniorCm = payload.dimensionsCm?.backNumberSenior;
+        const requestedJuniorSourceCm = payload.dimensionsCm?.backNumberJuniorSourceValue;
+        const requestedJuniorMm = payload.juniorPhysicalHeightMm;
+        if ((requestedSeniorCm != null && Number(requestedSeniorCm) !== SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10)
+          || (requestedJuniorSourceCm != null && Number(requestedJuniorSourceCm) !== SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10)
+          || (requestedJuniorMm != null && requestedJuniorMm !== "" && Number(requestedJuniorMm) !== SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM)
+          || payload.juniorValidationStatus === "DATA_GAP") {
+          throw Object.assign(new Error("Senior- en Junior-rugnummers hebben een vaste authoritative hoogte van 200 mm."), { statusCode: 409, code: "BACK_NUMBER_HEIGHT_FIXED_200MM" });
+        }
+      }
       if (payload.active !== undefined) association.active = Boolean(payload.active);
       if (payload.notes !== undefined) association.notes = requiredText(payload.notes, "Notitie", 1_000);
       if (payload.fontProfile !== undefined) association.fontProfile = requiredText(payload.fontProfile, "Letterprofiel", 120);
@@ -6562,6 +6586,13 @@ export class SportpaleisPilotService {
       if (payload.juniorGarmentSizes !== undefined) {
         if (!Array.isArray(payload.juniorGarmentSizes) || payload.juniorGarmentSizes.length > 20) throw Object.assign(new Error("Ongeldige lijst Junior-kledingmaten."), { statusCode: 400, code: "JUNIOR_GARMENT_SIZES_INVALID" });
         association.juniorGarmentSizes = [...new Set(payload.juniorGarmentSizes.map((size) => requiredText(size, "Junior-kledingmaat", 20)))];
+      }
+      if (hasBackNumberApplication) {
+        association.dimensionsCm.backNumberSenior = SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10;
+        association.dimensionsCm.backNumberJuniorSourceValue = SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10;
+        association.juniorValidationStatus = "VALIDATED";
+        association.juniorPhysicalHeightMm = SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM;
+        association.juniorValidationNote = SPORTPALEIS_JUNIOR_RULE_SOURCE;
       }
       if (payload.workspaceLogo !== undefined) {
         if (payload.workspaceLogo === null) association.workspaceLogo = null;
@@ -8360,8 +8391,7 @@ function productionGroupSequenceState(state, proposal, groupId) {
   const activeGroups = activePhysicalProductionGroups(state);
   if (activeGroups.length) {
     if (jobStatus(group) === "AWAITING_HUMAN_CHECK") return "CURRENT";
-    const activeColors = new Set(activeGroups.map(({ group: activeGroup }) => normalizedProductionFoilColor(activeGroup.foilColor)));
-    return activeColors.size === 1 && activeColors.has(normalizedProductionFoilColor(group.foilColor)) ? "CURRENT" : "LATER";
+    return "LATER";
   }
   return group.status === "OPEN" ? "CURRENT" : "UNKNOWN";
 }

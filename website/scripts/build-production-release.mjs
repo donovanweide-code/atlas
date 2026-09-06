@@ -180,7 +180,10 @@ async function main() {
     [path.join(websiteRoot, "scripts", "wbd-owner-domain-rollback-bridge.mjs"), "app/scripts/wbd-owner-domain-rollback-bridge.mjs"],
     [path.join(websiteRoot, "scripts", "workspace-legacy-state-encode.mjs"), "app/scripts/workspace-legacy-state-encode.mjs"],
     [path.join(websiteRoot, "scripts", "workspace-legacy-state-encode-worker.mjs"), "app/scripts/workspace-legacy-state-encode-worker.mjs"],
-    [path.join(websiteRoot, "config", "sportpaleis-production-shaped-assurance-v3.json"), "app/config/sportpaleis-production-shaped-assurance-v3.json"],
+    [path.join(websiteRoot, "config", "sportpaleis-production-shaped-assurance-v4.json"), "app/config/sportpaleis-production-shaped-assurance-v4.json"],
+    [path.join(websiteRoot, "config", "sportpaleis-regression-contract-v1.json"), "app/config/sportpaleis-regression-contract-v1.json"],
+    [path.join(websiteRoot, "config", "sportpaleis-regression-failure-matrix-v1.json"), "app/config/sportpaleis-regression-failure-matrix-v1.json"],
+    [path.join(websiteRoot, "config", "sportpaleis-immutable-regression-fixtures-v1.json"), "app/config/sportpaleis-immutable-regression-fixtures-v1.json"],
     [path.join(websiteRoot, "config", "wbd-owner-domain-assurance-v1.json"), "app/config/wbd-owner-domain-assurance-v1.json"],
     [path.join(websiteRoot, "public", "assets", "organizations", "sportpaleis", "brand-006", "sportpaleis-logo-mail-safe.png"), "app/public/assets/organizations/sportpaleis/brand-006/sportpaleis-logo-mail-safe.png"],
     [path.join(repositoryRoot, "ops", "production", "wbd-workspace.service"), "deployment/wbd-workspace.service"],
@@ -218,8 +221,12 @@ async function main() {
   }
   const productionShapedAssurance = entries.find(({ path: entryPath }) => entryPath === "app/scripts/sportpaleis-production-shaped-assurance.mjs");
   if (!productionShapedAssurance) throw new Error("Permanente Sportpaleis production-shaped assurancegate ontbreekt uit het artifact.");
-  const productionShapedContract = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-production-shaped-assurance-v3.json");
+  const productionShapedContract = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-production-shaped-assurance-v4.json");
   if (!productionShapedContract) throw new Error("Versioned Sportpaleis assurancedrempelcontract ontbreekt uit het artifact.");
+  const regressionContract = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-regression-contract-v1.json");
+  const regressionFailureMatrix = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-regression-failure-matrix-v1.json");
+  const immutableFixtureManifest = entries.find(({ path: entryPath }) => entryPath === "app/config/sportpaleis-immutable-regression-fixtures-v1.json");
+  if (!regressionContract || !regressionFailureMatrix || !immutableFixtureManifest) throw new Error("Versioned Sportpaleis regressiecontract of evidencebinding ontbreekt uit het artifact.");
   const ownerDomainAssurance = entries.find(({ path: entryPath }) => entryPath === "app/scripts/wbd-owner-domain-assurance.mjs");
   if (!ownerDomainAssurance) throw new Error("Permanente WBD Owner domeinassurancegate ontbreekt uit het artifact.");
   const ownerDomainContract = entries.find(({ path: entryPath }) => entryPath === "app/config/wbd-owner-domain-assurance-v1.json");
@@ -248,6 +255,12 @@ async function main() {
       sha256: productionShapedAssurance.sha256,
       contract: productionShapedContract.path,
       contractSha256: productionShapedContract.sha256,
+      regressionContract: regressionContract.path,
+      regressionContractSha256: regressionContract.sha256,
+      regressionFailureMatrix: regressionFailureMatrix.path,
+      regressionFailureMatrixSha256: regressionFailureMatrix.sha256,
+      immutableFixtureManifest: immutableFixtureManifest.path,
+      immutableFixtureManifestSha256: immutableFixtureManifest.sha256,
       binds: ["commit", "artifact", "restore-backup", "tenant", "revision", "access-scope"],
     },
     ownerDomainAssurance: {
@@ -305,7 +318,19 @@ async function main() {
     assetManifestFingerprint: sha256(Buffer.from(`${JSON.stringify(entries.filter(({ path: entryPath }) => entryPath.startsWith("app/dist-workspace/")))}\n`, "utf8")),
     sourceProvenance: { remote: sourceRemote, tag, commit: remoteTagCommit, tree: sourceTree, verifiedAtBuild: true },
     deployability: { rollbackArtifactRequired: true, productionShapedAssuranceRequired: true, ownerDomainAssuranceRequired: true },
-    productionShapedAssurance: { entrypoint: productionShapedAssurance.path, sha256: productionShapedAssurance.sha256, contract: productionShapedContract.path, contractSha256: productionShapedContract.sha256, requiredPhase: "PRE_DEPLOY" },
+    productionShapedAssurance: {
+      entrypoint: productionShapedAssurance.path,
+      sha256: productionShapedAssurance.sha256,
+      contract: productionShapedContract.path,
+      contractSha256: productionShapedContract.sha256,
+      regressionContract: regressionContract.path,
+      regressionContractSha256: regressionContract.sha256,
+      regressionFailureMatrix: regressionFailureMatrix.path,
+      regressionFailureMatrixSha256: regressionFailureMatrix.sha256,
+      immutableFixtureManifest: immutableFixtureManifest.path,
+      immutableFixtureManifestSha256: immutableFixtureManifest.sha256,
+      requiredPhase: "PRE_DEPLOY",
+    },
     ownerDomainAssurance: { entrypoint: ownerDomainAssurance.path, sha256: ownerDomainAssurance.sha256, contract: ownerDomainContract.path, contractSha256: ownerDomainContract.sha256, requiredPhase: "PRE_DEPLOY" },
     runtimeDependencyCount: runtimeDependencies.length,
     persistentProductionArtifactCount: productionArtifacts.references.length,

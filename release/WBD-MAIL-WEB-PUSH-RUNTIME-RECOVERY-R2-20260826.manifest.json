@@ -1,0 +1,26 @@
+{
+  "releaseId": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826",
+  "commit": "69437f64f27ba08954e0bc6232ef6945cc2a48fa",
+  "tag": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826",
+  "artifact": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.tar.gz",
+  "artifactBytes": 18533070,
+  "artifactSha256": "a0a4b4a1f9ace38920fbb91a261f2008e43b66f348b343f69ed72a40c5141e29",
+  "baseFreezeTag": "SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-MOBILE-NAV-HOTFIX-20260826",
+  "baseFreezeCommit": "bff77acd108212c8d0062c549cccc63f53ccf932",
+  "buildTimestamp": "2026-08-26T10:40:37.808Z",
+  "assetManifestFingerprint": "57ae17df95561775bb3a33956f947320420a15943c0200d105561ff643820c3e",
+  "sourceProvenance": {
+    "remote": "origin",
+    "tag": "WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826",
+    "commit": "69437f64f27ba08954e0bc6232ef6945cc2a48fa",
+    "tree": "b0d085ebea8b9678b3d78be50cb8a6bde0f020a1",
+    "verifiedAtBuild": true
+  },
+  "deployability": {
+    "rollbackArtifactRequired": true
+  },
+  "runtimeDependencyCount": 57,
+  "persistentProductionArtifactCount": 4,
+  "reproducibleCommand": "node website/scripts/build-production-release.mjs WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826 WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826 SPW-PREMIUM-HUMAN-EXPERIENCE-FINAL-R2-MOBILE-NAV-HOTFIX-20260826",
+  "embeddedManifestSha256": "8fee832933ec7bbbf2924af3c8621eb69ef7487c7a372cc1c7a7f3401d7bcf60"
+}

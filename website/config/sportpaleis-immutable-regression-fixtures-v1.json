@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "contractId": "SPW-IMMUTABLE-REGRESSION-FIXTURES-V1-20260906",
+  "purpose": "Byte-authentieke historische evidence voor de vier als MISSING_IMMUTABLE_FIXTURE geclassificeerde repositoryregressies.",
+  "provenance": {
+    "recoveredAt": "2026-09-06T00:00:00.000Z",
+    "recoveredFrom": [
+      "authoritative Atlas main checkout",
+      "immutable production release inbox"
+    ],
+    "candidateBaseCommit": "5d9ee57fe1d25ebd0b44ee68af3b7f2111d5ecbe",
+    "rule": "Een fixture is alleen geldig wanneer pad, bytegrootte en SHA-256 alle exact overeenkomen."
+  },
+  "fixtures": [
+    {
+      "id": "sportpaleis-f00248-concept-json",
+      "path": "invoices/wbd/data/sent/sportpaleis-f00248-concept.json",
+      "bytes": 2308,
+      "sha256": "c2cc69e2557e7ea77185ef95b8b9cfe1fca43c217d722807f815cad780a041e1",
+      "source": "authoritative Atlas main checkout"
+    },
+    {
+      "id": "sportpaleis-f00248-concept-pdf",
+      "path": "output/pdf/sent/sportpaleis-f00248-concept.pdf",
+      "bytes": 108590,
+      "sha256": "bbc2226a1e01336f219459ceaf6611b3dd20ccf9b34df758fd5efb0063954d07",
+      "source": "authoritative Atlas main checkout"
+    },
+    {
+      "id": "mail-foundation-003-review-json",
+      "path": "invoices/wbd/data/sent/mail-foundation-003-review.json",
+      "bytes": 1889,
+      "sha256": "bc90f7d27e677392ba6984c329881da2c55bfc7e976e57e03eb6324f8be6aa7f",
+      "source": "authoritative Atlas main checkout"
+    },
+    {
+      "id": "mail-foundation-003-review-pdf",
+      "path": "output/pdf/sent/mail-foundation-003-review.pdf",
+      "bytes": 108343,
+      "sha256": "8c1eb5550064da4fe777e34697a60018eefd4834fa4ed667b27b81561db8fb1b",
+      "source": "authoritative Atlas main checkout"
+    },
+    {
+      "id": "web-push-runtime-recovery-r2-artifact",
+      "path": "release/WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.tar.gz",
+      "bytes": 18533070,
+      "sha256": "a0a4b4a1f9ace38920fbb91a261f2008e43b66f348b343f69ed72a40c5141e29",
+      "source": "immutable production release inbox"
+    },
+    {
+      "id": "web-push-runtime-recovery-r2-manifest",
+      "path": "release/WBD-MAIL-WEB-PUSH-RUNTIME-RECOVERY-R2-20260826.manifest.json",
+      "bytes": 1396,
+      "sha256": "d66fdbda0489631e96367ad48075b3e1771bf0e6f6f990e422c75f207cc3eba1",
+      "source": "immutable production release inbox"
+    }
+  ]
+}

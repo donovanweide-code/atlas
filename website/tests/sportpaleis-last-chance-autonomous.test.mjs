@@ -143,7 +143,8 @@ test("meegeleverde Hockey-bronnen koppelen uitsluitend bij bewezen 20 cm en 7,5 
   assert.ok(state.productionProfiles.find(({ id }) => id === "profile-source-buitenhout-mhc-shortsNumber")?.productionNumberAssetIds?.includes(short.id));
   const lelystad = state.associations.find(({ name }) => name === "MHC Lelystad");
   assert.ok(lelystad);
-  assert.equal(rug.contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === lelystad.id), false, "22 cm MHC-regel mag de 20 cm bron niet erven");
+  assert.equal(rug.contexts?.some(({ type, id }) => type === "ASSOCIATION" && id === lelystad.id), true, "de authoritative 20-cm-hockeybron geldt ook voor MHC Lelystad");
+  assert.ok(state.productionProfiles.find(({ id }) => id === "profile-source-mhc-lelystad-backNumber")?.productionNumberAssetIds?.includes(rug.id));
 });
 
 test("review lifecycle is inactive by default and normal UX exposes neither stale PILOT nor testdata controls", async (context) => {

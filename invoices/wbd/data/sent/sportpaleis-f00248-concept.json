@@ -1,0 +1,77 @@
+{
+  "document_status": "final",
+  "invoice": {
+    "number": "F00248",
+    "date": "2026-08-04",
+    "payment_term_days": 14,
+    "project": "Sportpaleis Workspace en bedrukkingsmodule",
+    "reference": "Workspace project"
+  },
+  "sender": {
+    "company_name": "We Build And Design",
+    "address": "Gerard Terborchstraat 35",
+    "postal_code": "1318 LE",
+    "city": "Almere",
+    "kvk": "69326126",
+    "vat_number": "NL190255879B01",
+    "iban": "NL16 KNAB 0603 6280 95",
+    "bic": "KNABNL2H",
+    "phone": "06 100 67 964",
+    "email": "info@webuildanddesign.nl",
+    "website": "webuildanddesign.nl"
+  },
+  "customer": {
+    "company_name": "Sport 2000 Sportpaleis B.V.",
+    "contact_person": "Kevin de Vaal",
+    "address": "De Corridor 6",
+    "postal_code": "1315 VG",
+    "city": "Almere",
+    "reference": "Workspace afsrpaak Donovan"
+  },
+  "lines": [
+    {
+      "description": "Bedrukkingsmodule – voorschot Codex-credits",
+      "quantity": "1",
+      "unit_price": "100.00",
+      "vat_rate": "21",
+      "price_mode": "inclusive"
+    },
+    {
+      "description": "Bedrukkingsmodule – reeds gemaakte ontwikkelkosten",
+      "quantity": "1",
+      "unit_price": "231.01",
+      "vat_rate": "21",
+      "price_mode": "inclusive"
+    }
+  ],
+  "validation": {
+    "blockers": [],
+    "resolved_blockers": [
+      "Bevestig dat F00248 daadwerkelijk het eerstvolgende beschikbare factuurnummer is.",
+      "Bevestig het btw-nummer: F00247 toont NL190255879B01 in het afzenderblok maar NL190255870B01 in de footer."
+    ],
+    "resolved_at": "2026-08-04T21:57:29.035Z",
+    "resolution": "Expliciet bevestigd in de WBD Workspace."
+  },
+  "expected_totals": {
+    "exclusive": "273.56",
+    "vat": "57.45",
+    "inclusive": "331.01"
+  },
+  "workspace": {
+    "concept_id": "sportpaleis-f00248-concept",
+    "created_at": "2026-08-04T21:33:27.935Z",
+    "updated_at": "2026-08-04T21:57:29.035Z",
+    "storage": "Business Foundation → Finance → Facturen → Verzonden",
+    "totals": {
+      "exclusive": "273.56",
+      "vat": "57.45",
+      "inclusive": "331.01"
+    },
+    "finalized_at": "2026-08-04T21:57:29.035Z",
+    "status": "sent",
+    "locked": true,
+    "pdf_url": "/__wbd-invoices/sent/sportpaleis-f00248-concept/pdf",
+    "pdf_generated_at": "2026-08-04T22:08:01.608Z"
+  }
+}

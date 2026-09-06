@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
@@ -24,10 +24,14 @@ const backfillEvidenceFile = process.env.CANARY_BACKFILL_EVIDENCE_FILE;
 const activeCandidateIds = String(process.env.SPORTPALEIS_ACTIVE_REVIEW_CANDIDATE_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerIds = String(process.env.WBD_REVIEW_ACCESS_ISSUER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const issuerSecret = String(process.env.WBD_REVIEW_ACCESS_ISSUER_SECRET ?? "");
-const assuranceContractBytes = await readFile(new URL("../config/sportpaleis-production-shaped-assurance-v3.json", import.meta.url));
+const assuranceContractBytes = await readFile(new URL("../config/sportpaleis-production-shaped-assurance-v4.json", import.meta.url));
 const assuranceContract = JSON.parse(assuranceContractBytes);
 const assuranceContractSha256 = createHash("sha256").update(assuranceContractBytes).digest("hex");
-assert.equal(assuranceContract.schemaVersion, 3, "onbekende assurancecontractversie");
+const regressionContractBytes = await readFile(new URL("../config/sportpaleis-regression-contract-v1.json", import.meta.url));
+const regressionContract = JSON.parse(regressionContractBytes);
+const regressionContractSha256 = createHash("sha256").update(regressionContractBytes).digest("hex");
+assert.equal(assuranceContract.schemaVersion, 4, "onbekende assurancecontractversie");
+assert.equal(regressionContract.contractId, assuranceContract.regressionContract.id, "assurance gebruikt niet het vereiste regressiecontract");
 assert.ok(database && artifactRoot && releaseId, "canaryconfiguratie ontbreekt");
 assert.match(candidateCommit ?? "", /^[a-f0-9]{40}$/u, "candidatecommit ontbreekt");
 assert.match(candidateArtifactSha256 ?? "", /^[a-f0-9]{64}$/u, "candidate-artifacthash ontbreekt");
@@ -59,6 +63,17 @@ const businessHashes = (state) => ({
 const percentile = (values, fraction) => values.length ? values.slice().sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * fraction))] : 0;
 const rounded = (value) => Math.round(value * 100) / 100;
 const emptyPersonalization = Object.freeze({ initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" });
+
+async function productionArtifactInventory() {
+  const visibleRoot = path.join(artifactRoot, "outputs", "sportpaleis-plotjobs");
+  const quarantineRoot = path.join(artifactRoot, "outputs", "sportpaleis-artifact-quarantine");
+  const entries = async (root) => {
+    try { return (await readdir(root, { recursive: true })).map((entry) => String(entry).replaceAll("\\", "/")).sort(); }
+    catch (error) { if (error?.code === "ENOENT") return []; throw error; }
+  };
+  const [visible, quarantine] = await Promise.all([entries(visibleRoot), entries(quarantineRoot)]);
+  return { visible, quarantine };
+}
 
 function largeFreeLines(fontId, heightMm) {
   return assuranceContract.minimumLoad.largeFreeProductionValues.map((content) => ({
@@ -236,6 +251,38 @@ async function storeInitialize() {
     assert.ok(batch.every((status) => status === 200));
     if (offset % 48 === 0) assert.ok((await Promise.all([...coreRoutes, bootstrapRoutes[offset % bootstrapRoutes.length]].map((route, index) => request(route, allCookies[index % allCookies.length])))).every((status) => status === 200));
   }
+  const soakCycles = [];
+  for (let cycle = 0; cycle < assuranceContract.minimumLoad.soakCycles; cycle += 1) {
+    const phase = `soak-${cycle + 1}`;
+    await enterLoadPhase(phase);
+    const timingsStart = timings.length;
+    const statusesStart = statuses.length;
+    const rssCycleStartBytes = process.memoryUsage().rss;
+    let rssCycleHighWaterBytes = rssCycleStartBytes;
+    for (let offset = 0; offset < assuranceContract.minimumLoad.soakRevisionPollsPerCycle; offset += concurrentRevisionPolls) {
+      const batch = await Promise.all(Array.from({ length: Math.min(concurrentRevisionPolls, assuranceContract.minimumLoad.soakRevisionPollsPerCycle - offset) }, (_, index) => request("/api/sportpaleis/v1/state-revision", allCookies[(offset + index) % allCookies.length])));
+      assert.ok(batch.every((status) => status === 200), `soak ${cycle + 1}: revisionpoll faalde`);
+      rssCycleHighWaterBytes = Math.max(rssCycleHighWaterBytes, process.memoryUsage().rss);
+    }
+    for (let offset = 0; offset < assuranceContract.minimumLoad.soakLibraryPreviewsPerCycle; offset += 12) {
+      const batch = await Promise.all(Array.from({ length: Math.min(12, assuranceContract.minimumLoad.soakLibraryPreviewsPerCycle - offset) }, (_, index) => request(previewRoutes[(offset + index) % previewRoutes.length], allCookies[(offset + index) % allCookies.length])));
+      assert.ok(batch.every((status) => status === 200), `soak ${cycle + 1}: Library-preview faalde`);
+      rssCycleHighWaterBytes = Math.max(rssCycleHighWaterBytes, process.memoryUsage().rss);
+    }
+    const bootstrapBatch = await Promise.all(Array.from({ length: assuranceContract.minimumLoad.soakBootstrapsPerCycle }, (_, index) => request(bootstrapRoutes[index % bootstrapRoutes.length], allCookies[index % allCookies.length])));
+    assert.ok(bootstrapBatch.every((status) => status === 200), `soak ${cycle + 1}: bootstrap faalde`);
+    rssCycleHighWaterBytes = Math.max(rssCycleHighWaterBytes, process.memoryUsage().rss);
+    const cycleState = await store.readSnapshot();
+    assert.equal(cycleState.revision, beforeRevision, `soak ${cycle + 1}: read veroorzaakte revisionchurn`);
+    assert.equal(cycleState.audit.length, beforeAudit, `soak ${cycle + 1}: read veroorzaakte auditchurn`);
+    assert.deepEqual(businessHashes(cycleState), beforeBusiness, `soak ${cycle + 1}: businessdata driftte`);
+    await enterLoadPhase(`${phase}-rest`);
+    global.gc?.();
+    await new Promise((resolve) => setTimeout(resolve, assuranceContract.minimumLoad.soakRestMsPerCycle));
+    global.gc?.();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    soakCycles.push({ cycle: cycle + 1, phase, timingsStart, timingsEnd: timings.length, statusesStart, statusesEnd: statuses.length, rssStartBytes: rssCycleStartBytes, rssHighWaterBytes: rssCycleHighWaterBytes, rssAfterRestBytes: process.memoryUsage().rss });
+  }
   await enterLoadPhase("pool-pressure");
   const blockers = await Promise.all(Array.from({ length: 6 }, () => pool.getConnection()));
   const sleeps = blockers.map((connection) => connection.query("SELECT SLEEP(0.75)").finally(() => connection.release()));
@@ -293,6 +340,91 @@ async function storeInitialize() {
   const originalProposalHashes = new Map(practiceBefore.productionProposals.map((proposal) => [proposal.id, sha256CanonicalJson(proposal)]));
   const font = practiceBefore.productionFonts.find(({ name, status }) => name === "Spain Euro 2016" && status === "TECHNICALLY_VALID");
   assert.ok(font, "authoritative Spain Euro 2016 ontbreekt in de production-shaped restore");
+  const createControlledSourceOrder = async (source, key) => {
+    const created = (await service.createOrder(normalToken, normalSession.csrf, {
+      orderKind: "CUSTOM", source,
+      ...(source === "STORE" ? {} : { externalReference: `${source}-${key}`, provenance: `${source} production-shaped concurrencyfixture` }),
+      customer: `Geïsoleerde kanaalfixture ${key}`, customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization,
+      items: [{ product: "Kanaalconcurrency", size: "", quantity: 1, personalization: "AA", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }],
+      productionLines: [{ id: `line-${key}`, type: "INITIALS", content: "AA", previewLabel: "Initialen AA", widthMm: 50, heightMm: 30, quantity: 1, sourceId: font.id, provenance: "Real-MariaDB gelijke-kleurconcurrency" }],
+    }, `assurance-channel-${key}-order`)).value;
+    return (await service.advanceOrder(normalToken, normalSession.csrf, created.id, created.revision, `assurance-channel-${key}-control`)).value;
+  };
+  const storeOrder = await createControlledSourceOrder("STORE", "store");
+  const webshopOrder = await createControlledSourceOrder("WEBSHOP_XPRT", "webshop");
+  const channelProposal = (await service.createProductionProposal(normalToken, normalSession.csrf, {
+    orders: [storeOrder, webshopOrder].map(({ id, revision }) => ({ id, expectedRevision: revision })),
+  }, "assurance-channel-proposal")).value;
+  assert.deepEqual(channelProposal.groups.map(({ sourceChannel }) => sourceChannel), ["STORE", "WEBSHOP_XPRT"], "kanaalfixture leverde niet twee gelijke-kleurbrongroepen");
+  const raceKeys = ["assurance-channel-store-job", "assurance-channel-webshop-job"];
+  const raceDbBefore = {
+    jobs: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'productionJobs'", [practiceBefore.organizationId]))[0].count),
+    artifacts: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_artifact_reference WHERE organization_id = ?", [practiceBefore.organizationId]))[0].count),
+    idempotency: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_key IN (?, ?)", [practiceBefore.organizationId, ...raceKeys.map((key) => `${normalUser.id}:CREATE_PRODUCTION_JOB:${key}`)]))[0].count),
+  };
+  const raceArtifactsBefore = await productionArtifactInventory();
+  const raceOutcomes = await Promise.allSettled(channelProposal.groups.map((group, index) => service.createProductionJob(
+    normalToken,
+    normalSession.csrf,
+    { proposalId: channelProposal.id, proposalGroupId: group.id, orders: group.orders },
+    raceKeys[index],
+  )));
+  const raceWinner = raceOutcomes.find(({ status }) => status === "fulfilled");
+  const raceLoser = raceOutcomes.find(({ status }) => status === "rejected");
+  const raceWinnerIndex = raceOutcomes.findIndex(({ status }) => status === "fulfilled");
+  assert.equal(raceOutcomes.filter(({ status }) => status === "fulfilled").length, 1, "gelijktijdige gelijke-kleurgroepen committen niet exact één PlotJob");
+  assert.equal(raceWinner.value.duplicate, false, "winnende gelijke-kleurintentie is niet nieuw");
+  assert.equal(raceLoser?.reason?.code, "PRODUCTION_PHYSICAL_STEP_CONFLICT", "verliezer faalt niet op de logische fysieke-stapgrens");
+  const raceState = await store.readSnapshot();
+  const raceProposal = raceState.productionProposals.find(({ id }) => id === channelProposal.id);
+  assert.equal(raceProposal.groups.filter(({ status, productionJobId }) => status === "CONVERTED" && productionJobId).length, 1, "race committe niet exact één groep");
+  assert.equal(raceProposal.groups.filter(({ status, productionJobId }) => status === "OPEN" && !productionJobId).length, 1, "race liet de niet-gekozen groep niet veilig OPEN");
+  const raceDbAfter = {
+    jobs: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'productionJobs'", [practiceBefore.organizationId]))[0].count),
+    artifacts: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_artifact_reference WHERE organization_id = ?", [practiceBefore.organizationId]))[0].count),
+    idempotency: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_key IN (?, ?)", [practiceBefore.organizationId, ...raceKeys.map((key) => `${normalUser.id}:CREATE_PRODUCTION_JOB:${key}`)]))[0].count),
+  };
+  assert.deepEqual({ jobs: raceDbAfter.jobs - raceDbBefore.jobs, artifacts: raceDbAfter.artifacts - raceDbBefore.artifacts, idempotency: raceDbAfter.idempotency - raceDbBefore.idempotency }, { jobs: 1, artifacts: 1, idempotency: 1 }, "real-MariaDB race liet dubbele of ontbrekende persistente records achter");
+  const winnerJob = raceWinner.value.value;
+  const winnerArtifactRows = await pool.query("SELECT plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable FROM sp_workspace_artifact_reference WHERE organization_id = ? AND plot_job_id = ?", [practiceBefore.organizationId, winnerJob.id]);
+  assert.equal(winnerArtifactRows.length, 1, "winnende PlotJob mist zijn unieke artifactreferentie");
+  assert.deepEqual({
+    plotJobId: winnerArtifactRows[0].plot_job_id,
+    sha256: String(winnerArtifactRows[0].artifact_sha256).toUpperCase(),
+    path: winnerArtifactRows[0].artifact_path,
+    format: winnerArtifactRows[0].artifact_format,
+    immutable: Number(winnerArtifactRows[0].immutable),
+  }, {
+    plotJobId: winnerJob.id,
+    sha256: winnerJob.snapshot.artifact.sha256,
+    path: winnerJob.snapshot.artifact.path,
+    format: winnerJob.snapshot.artifact.format,
+    immutable: 1,
+  }, "database-artifactreferentie wijkt af van de immutable winnende PlotJob");
+  const expectedWinnerIdentity = `${normalUser.id}:CREATE_PRODUCTION_JOB:${raceKeys[raceWinnerIndex]}`;
+  const winnerIdempotencyRows = await pool.query("SELECT identity_key FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_key IN (?, ?)", [practiceBefore.organizationId, ...raceKeys.map((key) => `${normalUser.id}:CREATE_PRODUCTION_JOB:${key}`)]);
+  assert.deepEqual(winnerIdempotencyRows.map(({ identity_key: identity }) => identity), [expectedWinnerIdentity], "exact de winnende intentie moet als idempotencyrecord zijn vastgelegd");
+  const raceCommittedMarker = JSON.parse(await readFile(path.join(artifactRoot, `${winnerJob.snapshot.artifact.path}.committed.json`), "utf8"));
+  assert.deepEqual({ jobNumber: raceCommittedMarker.jobNumber, artifactPath: raceCommittedMarker.artifactPath, artifactSha256: raceCommittedMarker.artifactSha256, status: raceCommittedMarker.status }, { jobNumber: winnerJob.jobNumber, artifactPath: winnerJob.snapshot.artifact.path, artifactSha256: winnerJob.snapshot.artifact.sha256, status: "COMMITTED" }, "commitmarkering correspondeert niet exact met job, pad en hash");
+  const raceArtifactsAfter = await productionArtifactInventory();
+  const visibleRaceArtifacts = raceArtifactsAfter.visible.filter((entry) => !raceArtifactsBefore.visible.includes(entry));
+  const quarantinedRaceArtifacts = raceArtifactsAfter.quarantine.filter((entry) => !raceArtifactsBefore.quarantine.includes(entry));
+  assert.equal(visibleRaceArtifacts.filter((entry) => entry.endsWith("-production.svg")).length, 1, "race liet niet exact één zichtbare SVG achter");
+  assert.equal(visibleRaceArtifacts.filter((entry) => entry.endsWith(".reservation.json")).length, 1, "race liet niet exact één reservering achter");
+  assert.equal(visibleRaceArtifacts.filter((entry) => entry.endsWith(".committed.json")).length, 1, "race liet niet exact één commitmarkering achter");
+  assert.equal(quarantinedRaceArtifacts.length, 0, "geserialiseerde gelijke-kleurrace maakte onverwachte quarantaine-evidence");
+  const sameColorSourceConcurrency = {
+    winnerJobId: winnerJob.id,
+    winnerArtifactPath: winnerJob.snapshot.artifact.path,
+    winnerArtifactSha256: winnerJob.snapshot.artifact.sha256,
+    winnerIdempotencyIdentity: expectedWinnerIdentity,
+    loserCode: raceLoser.reason.code,
+    dbRecordDeltas: { jobs: 1, artifacts: 1, idempotency: 1 },
+    visibleSvgArtifacts: 1,
+    visibleReservations: 1,
+    visibleCommitMarkers: 1,
+    quarantineEntries: 0,
+  };
   const practiceRuns = [];
   for (const heightMm of assuranceContract.minimumLoad.largeFreeProductionHeightsMm) {
     const operationPrefix = `assurance-${candidateCommit.slice(0, 12)}-${heightMm}`;
@@ -324,9 +456,9 @@ async function storeInitialize() {
   for (const order of practiceAfter.orders) if (originalOrderHashes.has(order.id)) assert.equal(sha256CanonicalJson(order), originalOrderHashes.get(order.id), `bestaande order ${order.id} wijzigde door assurancefixture`);
   for (const job of practiceAfter.productionJobs) if (originalJobHashes.has(job.id)) assert.equal(sha256CanonicalJson(job), originalJobHashes.get(job.id), `bestaande PlotJob ${job.id} wijzigde door assurancefixture`);
   for (const proposal of practiceAfter.productionProposals) if (originalProposalHashes.has(proposal.id)) assert.equal(sha256CanonicalJson(proposal), originalProposalHashes.get(proposal.id), `bestaand voorstel ${proposal.id} wijzigde door assurancefixture`);
-  assert.equal(practiceAfter.orders.length, practiceBefore.orders.length + practiceRuns.length);
-  assert.equal(practiceAfter.productionJobs.length, practiceBefore.productionJobs.length + practiceRuns.length);
-  assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length);
+  assert.equal(practiceAfter.orders.length, practiceBefore.orders.length + practiceRuns.length + 2);
+  assert.equal(practiceAfter.productionJobs.length, practiceBefore.productionJobs.length + practiceRuns.length + 1);
+  assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length + 1);
   const storeMetricsAfterPractice = store.metricsSnapshot();
   const productionBuildQueue = productionJobBuildLoad();
   assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 0, "runtime-start mag de legacy monolith niet laden of backfillen");
@@ -367,6 +499,25 @@ async function storeInitialize() {
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
   const limits = assuranceContract.limits;
+  const soakCycleMetrics = soakCycles.map((cycle) => ({
+    cycle: cycle.cycle,
+    ...metricsFor(timings.slice(cycle.timingsStart, cycle.timingsEnd)),
+    httpErrors: statuses.slice(cycle.statusesStart, cycle.statusesEnd).filter((status) => status >= 400).length,
+    serverErrors: statuses.slice(cycle.statusesStart, cycle.statusesEnd).filter((status) => status >= 500).length,
+    eventLoopMaxMs: rounded(phaseEventLoopMaxMs.get(cycle.phase) ?? 0),
+    rssStartBytes: cycle.rssStartBytes,
+    rssHighWaterBytes: cycle.rssHighWaterBytes,
+    rssAfterRestBytes: cycle.rssAfterRestBytes,
+  }));
+  const recoveredRss = soakCycleMetrics.map(({ rssAfterRestBytes }) => rssAfterRestBytes);
+  const rssPositiveSteps = recoveredRss.slice(1).map((value, index) => Math.max(0, value - recoveredRss[index]));
+  const soakMemoryRecovered = soakCycleMetrics.every(({ rssAfterRestBytes, rssStartBytes: cycleStart }) => rssAfterRestBytes - cycleStart <= limits.rssRecoveryBudgetBytes)
+    && Math.max(...recoveredRss) - Math.min(...recoveredRss) <= limits.soakRecoveredRssBandBytes;
+  const soakMemoryTrendStable = recoveredRss.at(-1) - recoveredRss[0] <= limits.steadyStateRssGrowthBytes
+    && Math.max(0, ...rssPositiveSteps) <= limits.soakMaximumPositiveRssStepBytes;
+  const soakQueueStable = queueHighWater <= limits.databaseQueueHighWater;
+  const multiCycleSoakCompleted = soakCycleMetrics.length === assuranceContract.minimumLoad.soakCycles
+    && soakCycleMetrics.every(({ count, httpErrors, serverErrors, eventLoopMaxMs }) => count >= assuranceContract.minimumLoad.soakRevisionPollsPerCycle + assuranceContract.minimumLoad.soakLibraryPreviewsPerCycle + assuranceContract.minimumLoad.soakBootstrapsPerCycle && httpErrors === 0 && serverErrors === 0 && eventLoopMaxMs <= limits.eventLoopMaxMs);
   const productionBuildOffEventLoop = productionBuildQueue.active === 0 && productionBuildQueue.queued === 0 && productionBuildQueue.inFlight === 0 && productionBuildQueue.maximumConcurrent === limits.productionBuildMaximumConcurrent && productionBuildQueue.maximumQueued === limits.productionBuildMaximumQueued;
   const databaseConnectionReleasedDuringProductionBuild = storeMetricsAfterPractice.preparedMutations >= practiceRuns.length && storeMetricsAfterPractice.transactionHoldMsMax <= limits.databaseTransactionHoldMaxMs;
   const bootstrapSurfaceBytes = Object.fromEntries(assuranceContract.minimumLoad.bootstrapSurfaces.map((surface) => [surface, metricsFor(timings.filter(({ route }) => route === `/api/sportpaleis/v1/bootstrap?surface=${surface}`)).maxBytes]));
@@ -377,18 +528,18 @@ async function storeInitialize() {
     && emptyFieldBytes("production", "teamkitProposals")
     && emptyFieldBytes("library", "orders") && emptyFieldBytes("library", "productionJobs") && emptyFieldBytes("library", "teamkitProposals")
     && emptyFieldBytes("teamwear", "orders") && emptyFieldBytes("teamwear", "productionJobs");
-  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && databaseConnectionReleasedDuringProductionBuild;
+  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && databaseConnectionReleasedDuringProductionBuild && multiCycleSoakCompleted && soakMemoryRecovered && soakMemoryTrendStable && soakQueueStable;
   const result = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
-    identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId },
+    identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId, regressionContractSha256, regressionContract: regressionContract.contractId },
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapSurfaceBytes, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: { ...Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])), "/api/sportpaleis/v1/bootstrap": bootstrapMetrics } },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
-    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
+    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
-    practice: { largeFreeProduction: practiceRuns, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true },
+    practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

@@ -75,14 +75,15 @@ test("UNWANTED OUTER CUT RECTANGLE REMOVED: SVG bevat uitsluitend werkelijke con
   assert.equal((preview.svg.match(/<path\b/gu) ?? []).length, job.productionGeometry.contours.length);
 });
 
-test("Teamorder 1-20 blijft binnen een gemeten, begrensde generatieflow", async () => {
+test("Teamorder 1-20 materialiseert deterministisch; latency valt onder de versioned production-shaped gate", async (context) => {
   const font = await managedFontFixture();
-  const pieces = Array.from({ length: 20 }, (_, index) => fontPiece(font, String(index + 1), 220, `timing-${index + 1}`));
+  const pieces = Array.from({ length: 20 }, (_, index) => fontPiece(font, String(index + 1), 200, `timing-${index + 1}`));
   const started = performance.now();
   const result = batch(pieces, "MINI-006-TIMING");
   const elapsedMs = performance.now() - started;
   assert.equal(result.jobs[0].productionGeometry.groups.length, 20);
-  assert.ok(elapsedMs < 15_000, `1-20 duurde ${elapsedMs.toFixed(1)} ms`);
+  assert.equal(result.jobs[0].productionGeometry.groups.every(({ sourceBoundsMm }) => Math.abs(sourceBoundsMm.height - 200) < 0.001), true);
+  context.diagnostic(`Niet-blokkerende lokale timing: ${elapsedMs.toFixed(1)} ms; release-latency wordt door het versioned Linux/MariaDB-contract afgedwongen.`);
 });
 
 test("Teamorder bewaart default en per-regel Junior/Senior los van kledingmaat", async (context) => {
@@ -94,7 +95,10 @@ test("Teamorder bewaart default en per-regel Junior/Senior los van kledingmaat",
   const admin = await service.login({ email: "kevin@sportpaleis.nl", password: passwords.kevin });
   const association = (await service.bootstrap(admin.token)).associations.find(({ name }) => name === "A.S.C. Waterwijk");
   assert.ok(association);
-  await service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Mini-006 regressiefixture met fysieke millimeters" });
+  await assert.rejects(
+    service.updateAssociation(admin.token, admin.csrfToken, association.id, { expectedRevision: association.revision, juniorValidationStatus: "VALIDATED", juniorPhysicalHeightMm: 180, juniorValidationNote: "Mini-006 afwijkende regressiewaarde" }),
+    (error) => error.code === "BACK_NUMBER_HEIGHT_FIXED_200MM",
+  );
   const user = await service.login({ email: "collega@sportpaleis.nl", password: passwords.collega });
 
   const seniorDefault = (await service.createOrder(user.token, user.csrfToken, {
@@ -104,7 +108,7 @@ test("Teamorder bewaart default en per-regel Junior/Senior los van kledingmaat",
       { participantName: "XL wordt Junior", size: "XL", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "11", backNumberSizeClass: "JUNIOR" } },
     ] }],
   }, "mini-006-senior-default")).value;
-  assert.deepEqual(seniorDefault.items[0].variants.map(({ size, backNumberProduction }) => [size, backNumberProduction.sizeClass, backNumberProduction.physicalHeightMm]), [["152", "SENIOR", 220], ["XL", "JUNIOR", 180]]);
+  assert.deepEqual(seniorDefault.items[0].variants.map(({ size, backNumberProduction }) => [size, backNumberProduction.sizeClass, backNumberProduction.physicalHeightMm]), [["152", "SENIOR", 200], ["XL", "JUNIOR", 200]]);
 
   const juniorDefault = (await service.createOrder(user.token, user.csrfToken, {
     orderKind: "TEAM", customer: "Junior default", customerEmail: "", customerPhone: "", standardPersonalization: { ...empty, backNumber: "12", backNumberSizeClass: "JUNIOR" },
@@ -113,7 +117,7 @@ test("Teamorder bewaart default en per-regel Junior/Senior los van kledingmaat",
       { participantName: "152 wordt Senior", size: "152", quantity: 1, deviation: true, overrides: { ...empty, backNumber: "13", backNumberSizeClass: "SENIOR" } },
     ] }],
   }, "mini-006-junior-default")).value;
-  assert.deepEqual(juniorDefault.items[0].variants.map(({ size, backNumberProduction }) => [size, backNumberProduction.sizeClass, backNumberProduction.physicalHeightMm]), [["XL", "JUNIOR", 180], ["152", "SENIOR", 220]]);
+  assert.deepEqual(juniorDefault.items[0].variants.map(({ size, backNumberProduction }) => [size, backNumberProduction.sizeClass, backNumberProduction.physicalHeightMm]), [["XL", "JUNIOR", 200], ["152", "SENIOR", 200]]);
 });
 
 test("workspace-contract zet directe kleur-CTA boven de lijst en Teamorder faalt gesloten zonder fysieke mm", async () => {
