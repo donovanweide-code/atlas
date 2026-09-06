@@ -340,6 +340,7 @@ async function storeInitialize() {
   const originalProposalHashes = new Map(practiceBefore.productionProposals.map((proposal) => [proposal.id, sha256CanonicalJson(proposal)]));
   const font = practiceBefore.productionFonts.find(({ name, status }) => name === "Spain Euro 2016" && status === "TECHNICALLY_VALID");
   assert.ok(font, "authoritative Spain Euro 2016 ontbreekt in de production-shaped restore");
+  const runCrashAndChannelRace = async () => {
   const createControlledSourceOrder = async (source, key) => {
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
       orderKind: "CUSTOM", source,
@@ -483,22 +484,8 @@ async function storeInitialize() {
     visibleCommitMarkers: 1,
     quarantineEntries: 0,
   };
-  const sequenceBeforeReject = raceState.nextProductionJobSequence;
-  const raceArtifactBeforeReject = await readFile(path.join(artifactRoot, winnerJob.snapshot.artifact.path));
-  const rejectedRaceJob = await service.rejectProductionJob(normalToken, normalSession.csrf, winnerJob.id, { reason: "ASSURANCE_FIXTURE_SEQUENCE_RELEASE" });
-  assert.equal(rejectedRaceJob.duplicate, false, "assurancefixturejob werd niet exact eenmaal reject-only afgesloten");
-  assert.equal(rejectedRaceJob.value.status, "REJECTED", "assurancefixturejob bleef fysieke kleurstap blokkeren");
-  const raceStateAfterReject = await store.readSnapshot();
-  assert.equal(raceStateAfterReject.nextProductionJobSequence, sequenceBeforeReject, "reject-only maakte ten onrechte een nieuwe jobsequence");
-  assert.equal(raceStateAfterReject.productionJobs.length, raceState.productionJobs.length, "reject-only maakte ten onrechte een nieuwe PlotJob");
-  assert.deepEqual(await readFile(path.join(artifactRoot, winnerJob.snapshot.artifact.path)), raceArtifactBeforeReject, "reject-only wijzigde het immutable artifact");
-  const remainingRaceProposal = raceStateAfterReject.productionProposals.find(({ id }) => id === channelProposal.id);
-  const remainingRaceGroup = remainingRaceProposal.groups.find(({ status, productionJobId }) => status === "OPEN" && !productionJobId);
-  assert.ok(remainingRaceGroup, "verliezende gelijke-kleurgroep bleef niet expliciet retrybaar");
-  const remainingRaceJob = (await service.createProductionJob(normalToken, normalSession.csrf, { proposalId: remainingRaceProposal.id, proposalGroupId: remainingRaceGroup.id, orders: remainingRaceGroup.orders }, "assurance-channel-remaining-sequence-job")).value;
-  assert.equal(remainingRaceJob.status, "AWAITING_HUMAN_CHECK", "resterende gelijke-kleurgroep werd niet als aparte menselijke stap voorbereid");
-  const remainingRaceRejected = await service.rejectProductionJob(normalToken, normalSession.csrf, remainingRaceJob.id, { reason: "ASSURANCE_FIXTURE_SEQUENCE_RELEASE" });
-  assert.equal(remainingRaceRejected.value.status, "REJECTED", "resterende assurancefixturegroep bleef de volgende productiestap blokkeren");
+  return { sameColorSourceConcurrency, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan };
+  };
   const practiceRuns = [];
   for (const heightMm of assuranceContract.minimumLoad.largeFreeProductionHeightsMm) {
     const operationPrefix = `assurance-${candidateCommit.slice(0, 12)}-${heightMm}`;
@@ -526,6 +513,7 @@ async function storeInitialize() {
     assert.equal(committedMarker.artifactSha256, artifactSha256, `${heightMm} mm commitmarkering wijkt af`);
     practiceRuns.push({ heightMm, wallMs: rounded(wallMs), orderId: created.id, plotJobId: first.value.id, artifactSha256, committedMarker: true, generationMetrics: first.value.snapshot.generationMetrics });
   }
+  const { sameColorSourceConcurrency, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan } = await runCrashAndChannelRace();
   const practiceAfter = await store.readSnapshot();
   for (const order of practiceAfter.orders) if (originalOrderHashes.has(order.id)) assert.equal(sha256CanonicalJson(order), originalOrderHashes.get(order.id), `bestaande order ${order.id} wijzigde door assurancefixture`);
   for (const job of practiceAfter.productionJobs) if (originalJobHashes.has(job.id)) assert.equal(sha256CanonicalJson(job), originalJobHashes.get(job.id), `bestaande PlotJob ${job.id} wijzigde door assurancefixture`);

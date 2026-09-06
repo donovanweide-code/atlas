@@ -71,7 +71,8 @@ test("Web Push transport is prepared zonder credential, fail-closed bij partial 
   const vapid = createECDH("prime256v1"); vapid.generateKeys();
   const subscriber = createECDH("prime256v1"); subscriber.generateKeys();
   let request;
-  const transport = createWebPushTransportFromEnvironment({ WBD_PUSH_VAPID_PUBLIC_KEY: vapid.getPublicKey().toString("base64url"), WBD_PUSH_VAPID_PRIVATE_KEY: vapid.getPrivateKey().toString("base64url"), WBD_PUSH_VAPID_SUBJECT: "mailto:security@webuildanddesign.nl" }, { fetchImpl: async (endpoint, options) => { request = { endpoint, options }; return { ok: true, status: 201 }; } });
+  const vapidPrivateKey = Buffer.from(vapid.getPrivateKey().toString("hex").padStart(64, "0"), "hex");
+  const transport = createWebPushTransportFromEnvironment({ WBD_PUSH_VAPID_PUBLIC_KEY: vapid.getPublicKey().toString("base64url"), WBD_PUSH_VAPID_PRIVATE_KEY: vapidPrivateKey.toString("base64url"), WBD_PUSH_VAPID_SUBJECT: "mailto:security@webuildanddesign.nl" }, { fetchImpl: async (endpoint, options) => { request = { endpoint, options }; return { ok: true, status: 201 }; } });
   const result = await transport.send({ endpoint: "https://push.example.test/send/1", keys: { p256dh: subscriber.getPublicKey().toString("base64url"), auth: randomBytes(16).toString("base64url") } }, { title: "WBD Mail", body: "Veilige betekenis", data: { priority: "HIGH" } });
   assert.equal(result.status, "DELIVERED");
   assert.equal(request.options.headers["Content-Encoding"], "aes128gcm");
