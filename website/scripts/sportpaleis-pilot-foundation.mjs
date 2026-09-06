@@ -9583,7 +9583,25 @@ async function markProductionArtifactCommitted({ runtimeArtifactRoot, artifact, 
   const absolute = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifact.path);
   const bytes = await readFile(absolute);
   if (sha256(bytes).toUpperCase() !== String(artifact.sha256).toUpperCase()) throw Object.assign(new Error("Artifactbytes wijken af vóór commitmarkering."), { code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
-  await writeCreateOnlyEvidence(`${absolute}.committed.json`, { schemaVersion: 1, status: "COMMITTED", jobNumber: artifact.jobNumber, artifactPath: artifact.path, artifactSha256: String(artifact.sha256).toUpperCase(), operationIdentityHash: artifact.operationIdentityHash, globalRevision: Number(globalRevision), immutableArtifact: true });
+  const evidencePath = `${absolute}.committed.json`;
+  const expected = { schemaVersion: 1, status: "COMMITTED", jobNumber: artifact.jobNumber, artifactPath: artifact.path, artifactSha256: String(artifact.sha256).toUpperCase(), operationIdentityHash: artifact.operationIdentityHash, globalRevision: Number(globalRevision), immutableArtifact: true };
+  const expectedBytes = Buffer.from(`${JSON.stringify(expected)}\n`, "utf8");
+  let existingBytes;
+  try { existingBytes = await readFile(evidencePath); }
+  catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    try { await writeFile(evidencePath, expectedBytes, { flag: "wx", mode: 0o640 }); return; }
+    catch (writeError) { if (writeError?.code !== "EEXIST") throw writeError; }
+    existingBytes = await readFile(evidencePath);
+  }
+  let existing;
+  try { existing = JSON.parse(existingBytes); }
+  catch (cause) { throw Object.assign(new Error("Immutable artifactevidence is ongeldig."), { code: "PRODUCTION_ARTIFACT_EVIDENCE_COLLISION", cause }); }
+  const historicRevision = Number(existing.globalRevision);
+  const expectedHistoricBytes = Buffer.from(`${JSON.stringify({ ...expected, globalRevision: historicRevision })}\n`, "utf8");
+  if (!Number.isSafeInteger(historicRevision) || historicRevision < 0 || historicRevision > Number(globalRevision) || sha256(existingBytes) !== sha256(expectedHistoricBytes)) {
+    throw Object.assign(new Error("Immutable artifactevidence wijkt af."), { code: "PRODUCTION_ARTIFACT_EVIDENCE_COLLISION" });
+  }
 }
 
 async function moveCreateOnly(source, destination) {

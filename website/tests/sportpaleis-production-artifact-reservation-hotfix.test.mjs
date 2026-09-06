@@ -139,6 +139,38 @@ test("crash vóór final-link laat alleen reconcileerbare evidence en geen zicht
   assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
 });
 
+test("startupreconciliatie behoudt bestaand immutable commitbewijs wanneer de globale revision later stijgt", async (context) => {
+  const root = await temporaryRoot(context, "committed-revision-advance");
+  const reserved = await reserveImmutableProductionArtifactAsync({
+    runtimeArtifactRoot: root,
+    jobNumber: "PLOT-2026-0072",
+    bytes: Buffer.from("<svg>immutable committed output</svg>"),
+    operationIdentity: "committed-revision-advance",
+  });
+  const productionJobs = [{ snapshot: { artifact: { path: reserved.relativePath, sha256: reserved.artifactHash } } }];
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 41, productionJobs } }), { checked: 1, committed: 1, quarantined: 0 });
+  const committedPath = path.join(root, `${reserved.relativePath}.committed.json`);
+  const committedAtRevision41 = await readFile(committedPath);
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 42, productionJobs } }), { checked: 1, committed: 1, quarantined: 0 });
+  assert.deepEqual(await readFile(committedPath), committedAtRevision41);
+});
+
+test("startupreconciliatie weigert gewijzigde of toekomstige immutable commitmarkers", async (context) => {
+  const root = await temporaryRoot(context, "committed-marker-integrity");
+  const reserved = await reserveImmutableProductionArtifactAsync({
+    runtimeArtifactRoot: root,
+    jobNumber: "PLOT-2026-0073",
+    bytes: Buffer.from("<svg>immutable integrity output</svg>"),
+    operationIdentity: "committed-marker-integrity",
+  });
+  const productionJobs = [{ snapshot: { artifact: { path: reserved.relativePath, sha256: reserved.artifactHash } } }];
+  await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 41, productionJobs } });
+  const committedPath = path.join(root, `${reserved.relativePath}.committed.json`);
+  const committed = JSON.parse(await readFile(committedPath, "utf8"));
+  await writeFile(committedPath, `${JSON.stringify({ ...committed, globalRevision: 43 })}\n`, "utf8");
+  await assert.rejects(reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 42, productionJobs } }), (error) => error?.code === "PRODUCTION_ARTIFACT_EVIDENCE_COLLISION");
+});
+
 test("legacy final zonder reservation-evidence blijft niet onzichtbaar orphan", async (context) => {
   const root = await temporaryRoot(context, "missing-reservation");
   const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0072", bytes: Buffer.from("<svg>final zonder evidence</svg>") };
