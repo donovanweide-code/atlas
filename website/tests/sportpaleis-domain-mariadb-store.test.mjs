@@ -381,6 +381,56 @@ test("zware production-prepare blokkeert de gewone mutationlane niet en revision
   assert.equal(metrics.transactionPhaseMsMax.prepareInsideTransaction, 0, "geen command projecteert binnen de DB-transactie");
 });
 
+test("append-only ordercommand behoudt frozen records en vermijdt volledige collectieclone", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
+  await store.initialize();
+  await store.mutate(async (state) => {
+    state.orders.unshift({ id: "SP-2026-append-seed", revision: 1, customer: "ongewijzigd", eventHistory: [] });
+    state.idempotency["append-only-existing"] = { status: "SUCCEEDED" };
+    return { state, value: null };
+  });
+  const before = await store.readSnapshot();
+  const firstOrder = before.orders[0];
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.orders[0].customer = "mag niet muteren";
+    return { state, value: null };
+  }), TypeError, "een bestaande frozen order kon via de append-only grens worden gemuteerd");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.orders[0] = { ...state.orders[0], customer: "mag ook niet vervangen" };
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een bestaand orderrecord kon via replacement worden gewijzigd");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.orders = state.orders.slice(1);
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een bestaand orderrecord kon via de append-only grens worden verwijderd");
+  const existingIdentity = Object.keys(before.idempotency)[0];
+  assert.ok(existingIdentity, "fixture mist bestaand idempotencyrecord voor overwrite-regressie");
+  await assert.rejects(store.mutateAppendOnly(async (state) => {
+    state.idempotency[existingIdentity] = { status: "OVERSCHREVEN" };
+    return { state, value: null };
+  }), ({ code }) => code === "DOMAIN_APPEND_ONLY_VIOLATION", "een bestaand idempotencyrecord kon worden overschreven");
+  assert.equal((await store.readSnapshot()).orders[0], firstOrder, "mislukte nested mutatie verving het bestaande record");
+  const appended = { id: "SP-2026-append-only", revision: 1, eventHistory: [] };
+  const result = await store.mutateAppendOnly(async (state) => {
+    state.nextOrderSequence += 1;
+    state.orders.unshift(appended);
+    state.idempotency["append-only-order"] = { status: "SUCCEEDED", value: appended };
+    state.audit.unshift({ id: "audit-append-only", at: "2026-09-05T06:01:00.000Z", userId: "fixture", action: "Order aangemaakt", subject: appended.id, details: {} });
+    return { state, value: appended.id };
+  }, { allowedScalarKeys: ["nextOrderSequence"] });
+  assert.equal(result.value, appended.id);
+  const after = await store.readSnapshot();
+  assert.equal(after.orders[0].id, appended.id);
+  assert.equal(after.orders[1], firstOrder, "ongewijzigde order verloor zijn recordidentiteit");
+  assert.equal(after.idempotency["append-only-order"].status, "SUCCEEDED");
+  assert.equal(after.audit[0].id, "audit-append-only");
+  assert.equal(store.metricsSnapshot().transactionPhaseMsMax.prepareInsideTransaction, 0);
+});
+
 test("mutationlane geeft concrete retrybare backpressure zonder een drieëndertigste draft te starten", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));

@@ -166,6 +166,38 @@ function changedAuditEvents(previous, next) {
   return next.filter(({ id }) => !previousIds.has(id));
 }
 
+function assertAppendOnlyDraft(current, finalized, allowedScalarKeys) {
+  for (const key of finalized.changedKeys) {
+    if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) {
+      const nextById = new Map((finalized.state[key] ?? []).map((record) => [sportpaleisRecordIdentity(key, record), record]));
+      for (const record of current[key] ?? []) {
+        const identity = sportpaleisRecordIdentity(key, record);
+        if (nextById.get(identity) !== record) {
+          throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde of verwijderde ${key}/${identity}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
+        }
+      }
+      continue;
+    }
+    if (key === "audit") {
+      const nextById = new Map((finalized.state.audit ?? []).map((event) => [event.id, event]));
+      for (const event of current.audit ?? []) if (nextById.get(event.id) !== event) {
+        throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde of verwijderde audit/${event.id}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
+      }
+      continue;
+    }
+    if (key === "idempotency") {
+      const next = finalized.state.idempotency ?? {};
+      for (const [identity, record] of Object.entries(current.idempotency ?? {})) if (next[identity] !== record) {
+        throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde of verwijderde idempotency/${identity}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
+      }
+      continue;
+    }
+    if (!allowedScalarKeys.has(key)) {
+      throw new SportpaleisMariaDbStoreError(`Append-only command wijzigde niet-toegestane statekey ${key}.`, "DOMAIN_APPEND_ONLY_VIOLATION");
+    }
+  }
+}
+
 function prepareMutationPersistence({ current, finalized, globalRevision, schemaVersion, domainCache, domainRevisions, recordOrdinals }) {
   const nextRevision = Number(globalRevision) + 1;
   finalized.state.revision = nextRevision;
@@ -588,6 +620,25 @@ export class SportpaleisDomainMariaDbStore {
     });
   }
 
+  // Commands that only append records or replace scalar values can use the
+  // structural draft: record collections and idempotency are copied shallowly
+  // while every existing record remains frozen. This keeps the command in the
+  // same bounded mutation lane without cloning and serializing complete order,
+  // audit and idempotency collections. Any accidental nested update therefore
+  // still fails closed instead of mutating the shared snapshot.
+  async mutateAppendOnly(mutator, { allowedScalarKeys = [] } = {}) {
+    const allowedScalars = new Set(allowedScalarKeys);
+    return this.#enqueueMutation(async () => {
+      const prepared = await this.#prepareMutationCommand(mutator, {
+        refresh: false,
+        draftFactory: createPreparedSportpaleisStateDraft,
+        preparedGuard: (current, finalized) => assertAppendOnlyDraft(current, finalized, allowedScalars),
+      });
+      if (prepared.completed) return prepared.completed;
+      return this.#commitPreparedCommand(prepared.command);
+    });
+  }
+
   async #commitPreparedCommand(preparedCommand) {
     const connection = await this.#connection();
     const transactionStartedAt = performance.now();
@@ -751,7 +802,7 @@ export class SportpaleisDomainMariaDbStore {
     return this.#enqueueMutation(() => this.#commitPreparedCommand(prepared.command));
   }
 
-  async #prepareMutationCommand(mutator, { refresh, draftFactory }) {
+  async #prepareMutationCommand(mutator, { refresh, draftFactory, preparedGuard = null }) {
     const preparationStartedAt = performance.now();
     if (refresh) await this.#refresh(false);
     const baseRevision = this.globalRevision;
@@ -764,6 +815,7 @@ export class SportpaleisDomainMariaDbStore {
     }
     const prepared = lazy.finalize();
     if (prepared.changedKeys.length === 0) return { completed: { state: baseSnapshot, value: preparedResult.value } };
+    if (preparedGuard) preparedGuard(baseSnapshot, prepared);
     const persistence = prepareMutationPersistence({ current: baseSnapshot, finalized: prepared, globalRevision: baseRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
     const preparationMs = performance.now() - preparationStartedAt;
     this.metrics.preparedMutations += 1;

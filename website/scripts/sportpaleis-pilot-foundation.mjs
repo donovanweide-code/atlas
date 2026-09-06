@@ -4397,10 +4397,13 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator", "store"]);
-    const result = await this.store.mutate(async (state) => {
+    const mutateOrder = typeof this.store.mutateAppendOnly === "function"
+      ? this.store.mutateAppendOnly.bind(this.store)
+      : this.store.mutate.bind(this.store);
+    const result = await mutateOrder(async (state) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_ORDER", async () => createWorkspaceOrderRecord(state, user, payload), payload);
       return { state, value: outcome };
-    });
+    }, { allowedScalarKeys: ["nextOrderSequence"] });
     return result.value;
   }
 
