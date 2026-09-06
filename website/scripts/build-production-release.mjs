@@ -71,7 +71,7 @@ async function collect(directory, prefix) {
   return files;
 }
 
-async function collectReferencedProductionArtifacts() {
+async function collectReferencedProductionArtifacts(readReleaseBytes) {
   const state = createSportpaleisProductionBootstrap(new Date("2026-08-11T00:00:00.000Z"));
   const byPath = new Map();
   const references = [];
@@ -91,7 +91,7 @@ async function collectReferencedProductionArtifacts() {
     if (!allowedRoots.some((root) => absolute.startsWith(`${root}${path.sep}`))) {
       throw new Error(`PlotJob ${job.jobNumber} valt buiten de productieartefactgrens.`);
     }
-    const bytes = await readFile(absolute);
+    const bytes = await readReleaseBytes({ absolute, archive: normalized });
     const actualHash = sha256(bytes).toUpperCase();
     if (actualHash !== artifact.sha256) throw new Error(`PlotJob ${job.jobNumber} artefacthash wijkt af.`);
     const previous = byPath.get(normalized);
@@ -113,13 +113,13 @@ async function collectReferencedProductionArtifacts() {
   };
 }
 
-async function verifyAuthoritativeProductionAssets() {
+async function verifyAuthoritativeProductionAssets(readReleaseBytes) {
   const verified = [];
   for (const asset of SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS) {
     const sourcePath = path.join(websiteRoot, ...asset.sourcePath.split("/"));
     const artifactPath = path.join(websiteRoot, "dist-workspace", ...asset.artifactPath.split("/"));
-    const sourceEvidence = assertAuthoritativeProductionAssetBytes(asset, await readFile(sourcePath), asset.sourcePath);
-    const artifactEvidence = assertAuthoritativeProductionAssetBytes(asset, await readFile(artifactPath), `dist-workspace/${asset.artifactPath}`);
+    const sourceEvidence = assertAuthoritativeProductionAssetBytes(asset, await readReleaseBytes({ absolute: sourcePath, archive: `app/${asset.sourcePath}` }), asset.sourcePath);
+    const artifactEvidence = assertAuthoritativeProductionAssetBytes(asset, await readReleaseBytes({ absolute: artifactPath, archive: `app/dist-workspace/${asset.artifactPath}` }), `dist-workspace/${asset.artifactPath}`);
     if (sourceEvidence.sha256 !== artifactEvidence.sha256) throw new Error(`Authoritative production asset is niet byte-identiek gematerialiseerd: ${asset.id}`);
     verified.push({ ...artifactEvidence, releasePath: `app/dist-workspace/${asset.artifactPath}` });
   }
@@ -128,6 +128,30 @@ async function verifyAuthoritativeProductionAssets() {
 
 function git(...args) {
   return execFileSync("git", args, { cwd: repositoryRoot, encoding: "utf8" }).trim();
+}
+
+function gitBytes(...args) {
+  return execFileSync("git", args, { cwd: repositoryRoot, encoding: null, maxBuffer: 256 * 1024 * 1024 });
+}
+
+function repositoryRelativePath(absolute) {
+  const relative = path.relative(repositoryRoot, absolute);
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`Releasebron valt buiten de repository: ${absolute}`);
+  return relative.split(path.sep).join("/");
+}
+
+function canonicalGeneratedBytes(archive, bytes) {
+  const extension = path.posix.extname(archive).toLowerCase();
+  const textual = new Set([".css", ".html", ".js", ".json", ".map", ".svg", ".txt", ".webmanifest", ".xml"]);
+  if (!textual.has(extension) || bytes.includes(0)) return bytes;
+  return Buffer.from(bytes.toString("utf8").replace(/\r\n?/gu, "\n"), "utf8");
+}
+
+function committedOrGeneratedBytes(file, { commit, trackedPaths }) {
+  const relative = repositoryRelativePath(file.absolute);
+  if (trackedPaths.has(relative)) return gitBytes("cat-file", "blob", `${commit}:${relative}`);
+  if (relative.startsWith("website/dist-workspace/")) return readFile(file.absolute).then((bytes) => canonicalGeneratedBytes(file.archive, bytes));
+  throw new Error(`Releasebron is niet immutable aan commit ${commit} gebonden: ${relative}`);
 }
 
 async function main() {
@@ -150,6 +174,14 @@ async function main() {
     tag,
     expectedCommit: commit,
   });
+  execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build:workspace"], {
+    cwd: websiteRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: { ...process.env, SOURCE_DATE_EPOCH: String(Math.floor(new Date(sourceCommitTimestamp).getTime() / 1000)) },
+  });
+  const trackedPaths = new Set(gitBytes("ls-files", "-z").toString("utf8").split("\0").filter(Boolean));
+  const releaseBytes = (file) => committedOrGeneratedBytes(file, { commit, trackedPaths });
 
   const runtimeDependencies = await collectRuntimeDependencyGraph({
     websiteRoot,
@@ -195,8 +227,8 @@ async function main() {
     [path.join(repositoryRoot, "ops", "production", "PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"), "deployment/PRODUCTION-PERSISTENCE-MIGRATION-RUNBOOK.md"],
     [path.join(websiteRoot, ".env.production.example"), "deployment/production.env.example"],
   ].map(([absolute, archive]) => ({ absolute, archive }));
-  const authoritativeProductionAssets = await verifyAuthoritativeProductionAssets();
-  const productionArtifacts = await collectReferencedProductionArtifacts();
+  const authoritativeProductionAssets = await verifyAuthoritativeProductionAssets(releaseBytes);
+  const productionArtifacts = await collectReferencedProductionArtifacts(releaseBytes);
   const files = [
     ...explicit,
     ...runtimeDependencies,
@@ -208,7 +240,7 @@ async function main() {
   const entries = [];
   const tarParts = [];
   for (const file of files) {
-    const bytes = await readFile(file.absolute);
+    const bytes = await releaseBytes(file);
     entries.push({ path: file.archive, bytes: bytes.length, sha256: sha256(bytes) });
     tarParts.push(tarHeader(file.archive, bytes.length, file.archive.endsWith(".sh") ? 0o755 : 0o644), bytes);
     const padding = (512 - (bytes.length % 512)) % 512;

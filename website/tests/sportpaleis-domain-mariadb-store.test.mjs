@@ -8,6 +8,7 @@ import test from "node:test";
 import { createSportpaleisPasswordRecord, createSportpaleisProductionBootstrap, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { SportpaleisDomainMariaDbStore } from "../scripts/sportpaleis-domain-mariadb-store.mjs";
 import { materializeLegacyRollbackState } from "../scripts/sportpaleis-domain-rollback-bridge.mjs";
+import { decodeSportpaleisRuntimeState } from "../scripts/sportpaleis-mariadb-store.mjs";
 import { sha256CanonicalJson } from "../scripts/workspace-domain-state.mjs";
 import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 
@@ -480,13 +481,33 @@ test("recordmutatie vervangt alleen het gekozen record en behoudt de overige imm
     changed.revision += 1;
     state.orders[index] = changed;
     state.audit.unshift({ id: "audit-record-mutation", at: "2026-09-05T06:02:00.000Z", userId: "fixture", action: "Gerichte recordmutatie", subject: changed.id, details: {} });
-    return { state, value: changed.id };
+    return {
+      state,
+      value: changed.id,
+      recordMutationContract: { records: { orders: [changed.id] }, allowAuditAppend: true },
+    };
   });
   const after = await store.readSnapshot();
   assert.equal(after.orders.find(({ id }) => id === "SP-RECORD-1").customer, "gericht gewijzigd");
   assert.equal(after.orders.find(({ id }) => id === "SP-RECORD-2"), untouched, "ongewijzigd record verloor zijn cached identity");
   assert.equal(store.metricsSnapshot().recordWrites - writesBefore, 1, "recordmutatie schreef meer dan het gekozen orderrecord");
   assert.equal(after.audit[0].id, "audit-record-mutation");
+
+  const unchangedHash = sha256CanonicalJson(after);
+  await assert.rejects(store.mutateRecords(async (state) => {
+    const index = state.orders.findIndex(({ id }) => id === "SP-RECORD-2");
+    state.orders[index] = { ...state.orders[index], customer: "niet toegestaan" };
+    return { state, value: null, recordMutationContract: { records: { orders: ["SP-RECORD-1"] } } };
+  }), ({ code }) => code === "DOMAIN_RECORD_MUTATION_VIOLATION");
+  await assert.rejects(store.mutateRecords(async (state) => {
+    state.orders.pop();
+    return { state, value: null, recordMutationContract: { records: { orders: ["SP-RECORD-1"] } } };
+  }), ({ code }) => code === "DOMAIN_RECORD_MUTATION_VIOLATION");
+  await assert.rejects(store.mutateRecords(async (state) => {
+    [state.orders[0], state.orders[1]] = [state.orders[1], state.orders[0]];
+    return { state, value: null, recordMutationContract: { records: { orders: ["SP-RECORD-1", "SP-RECORD-2"] } } };
+  }), ({ code }) => code === "DOMAIN_RECORD_MUTATION_VIOLATION");
+  assert.equal(sha256CanonicalJson(await store.readSnapshot()), unchangedHash, "geweigerde recordmutaties wijzigden de snapshot");
 });
 
 test("mutationlane geeft concrete retrybare backpressure zonder een drieëndertigste draft te starten", async () => {
@@ -624,6 +645,10 @@ test("rollbackbridge materialiseert onder revision- en hashlock exact één lega
   });
   assert.equal(pool.legacy.revision, domainSnapshot.revision);
   assert.equal(evidence.stateSha256, sha256CanonicalJson(domainSnapshot));
+  const decodedLegacy = decodeSportpaleisRuntimeState(pool.legacy.state_json);
+  assert.equal(sha256CanonicalJson(decodedLegacy), evidence.stateSha256, "opgeslagen legacy-bytes decoderen naar dezelfde domeinhash");
+  assert.deepEqual(decodedLegacy, domainSnapshot, "rollbackdoel is volledig gelijk aan de domeinsnapshot");
+  assert.equal(createHash("sha256").update(pool.legacy.state_json).digest("hex"), evidence.encodedSha256, "bewijs bindt de daadwerkelijk opgeslagen bytes");
   await assert.rejects(materializeLegacyRollbackState({ pool, expectedGlobalRevision: domainSnapshot.revision - 1, expectedDomainHash: evidence.stateSha256 }), /revision-drift/);
 });
 

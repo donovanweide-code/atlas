@@ -69,6 +69,16 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(broker, /eventLoopP95Ms > 100/u);
   assert.match(broker, /website\/scripts\/sportpaleis-domain-rollback-bridge\.mjs/u);
   assert.match(assurance, /materializeLegacyRollbackStateIsolated/u);
+  assert.match(assurance, /expectedDomainHash: rollbackSourceSha256/u);
+  assert.match(assurance, /decodeSportpaleisRuntimeState\(rollbackRow\.state_json\)/u);
+  assert.match(assurance, /rollbackEncodedSha256, rollbackProof\.encodedSha256/u);
+  assert.match(assurance, /rollbackProof\.isolatedProcessExitConfirmed === true/u);
+  assert.doesNotMatch(assurance, /rollbackMaterializationProven: true/u, "rollbackbewijs mag geen constante schijn-PASS zijn");
+  const rollbackBridge = await readFile(new URL("../scripts/sportpaleis-domain-rollback-bridge.mjs", import.meta.url), "utf8");
+  const rollbackChild = await readFile(new URL("../scripts/sportpaleis-domain-rollback-child.mjs", import.meta.url), "utf8");
+  assert.match(rollbackBridge, /isolatedProcessExitConfirmed: true/u, "parent bevestigt een terminale child-exit");
+  assert.match(rollbackChild, /await pool\.end\(\)/u, "child sluit de databasepool vóór zijn resultaat");
+  assert.match(rollbackChild, /process\.send\?\.\(response, \(\) => process\.disconnect\(\)\)/u, "child disconnect pas na poolcleanup en result-flush");
   assert.match(assurance, /largeFreeProductionHeightsMm/u);
   assert.match(assurance, /recordWrites/u);
   assert.match(assurance, /bootstrapFieldBytes/u);

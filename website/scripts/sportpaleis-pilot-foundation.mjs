@@ -4255,7 +4255,18 @@ export class SportpaleisPilotService {
         syncOpenProposalOrderRevisions(state, order);
       }
       audit(state, user.id, "Productiejob uitsluitend afgekeurd", job.jobNumber, { productionJobId: job.id, immutableArtifactSha256: job.snapshot.artifact.sha256, snapshotHash: job.snapshotHash, reason, rejectedBy: actor, orderIds: orders.map(({ id }) => id), physicalCompletionPerformed: false, replacementJobCreated: false, ...(humanGoReference ? { humanGoReference, authorizedReconciliation: true } : {}) });
-      return { state, value: { duplicate: false, value: structuredClone(job) } };
+      return {
+        state,
+        value: { duplicate: false, value: structuredClone(job) },
+        recordMutationContract: {
+          records: {
+            productionJobs: [job.id],
+            productionProposals: [currentProposal.id],
+            orders: orders.map(({ id }) => id),
+          },
+          allowAuditAppend: true,
+        },
+      };
     });
     return result.value;
   }
@@ -4928,7 +4939,15 @@ export class SportpaleisPilotService {
         audit(state, user.id, "Orderstatus gewijzigd", order.id, { from: previous, to: order.stage, revision: order.revision });
         return order;
       });
-      return { state, value: outcome };
+      return {
+        state,
+        value: outcome,
+        recordMutationContract: {
+          records: { orders: [orderId] },
+          allowAuditAppend: true,
+          allowIdempotencyAppend: true,
+        },
+      };
     });
     return result.value;
   }

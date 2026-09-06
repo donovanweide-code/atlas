@@ -217,6 +217,48 @@ function assertAppendOnlyDraft(current, finalized, allowedScalarKeys) {
   }
 }
 
+function assertSelectedRecordDraft(current, finalized, contract) {
+  const allowedRecords = contract?.records && typeof contract.records === "object" ? contract.records : null;
+  if (!allowedRecords) throw new SportpaleisMariaDbStoreError("Gerichte recordmutatie mist haar expliciete recordcontract.", "DOMAIN_RECORD_MUTATION_CONTRACT_REQUIRED");
+  const allowedByCollection = new Map(Object.entries(allowedRecords).map(([collectionKey, recordIds]) => {
+    if (!SPORTPALEIS_RECORD_COLLECTIONS.has(collectionKey) || !Array.isArray(recordIds) || recordIds.some((recordId) => typeof recordId !== "string" || !recordId)) {
+      throw new SportpaleisMariaDbStoreError("Gerichte recordmutatie bevat een ongeldig collectie- of recordcontract.", "DOMAIN_RECORD_MUTATION_CONTRACT_INVALID");
+    }
+    return [collectionKey, new Set(recordIds)];
+  }));
+  for (const key of finalized.changedKeys) {
+    if (SPORTPALEIS_RECORD_COLLECTIONS.has(key)) {
+      const allowed = allowedByCollection.get(key);
+      if (!allowed) throw new SportpaleisMariaDbStoreError(`Gerichte recordmutatie wijzigde niet-toegestane collectie ${key}.`, "DOMAIN_RECORD_MUTATION_VIOLATION");
+      const previous = current[key] ?? [];
+      const next = finalized.state[key] ?? [];
+      const previousIds = previous.map((record) => sportpaleisRecordIdentity(key, record));
+      const nextIds = next.map((record) => sportpaleisRecordIdentity(key, record));
+      if (previousIds.length !== nextIds.length || previousIds.some((recordId, index) => recordId !== nextIds[index])) {
+        throw new SportpaleisMariaDbStoreError(`Gerichte recordmutatie voegde toe, verwijderde of herschikte ${key}-records.`, "DOMAIN_RECORD_MUTATION_VIOLATION");
+      }
+      for (let index = 0; index < previous.length; index += 1) {
+        if (previous[index] !== next[index] && !allowed.has(previousIds[index])) {
+          throw new SportpaleisMariaDbStoreError(`Gerichte recordmutatie wijzigde niet-toegestaan record ${key}/${previousIds[index]}.`, "DOMAIN_RECORD_MUTATION_VIOLATION");
+        }
+      }
+      continue;
+    }
+    if (key === "audit" && contract.allowAuditAppend === true) {
+      changedAuditEvents(current.audit ?? [], finalized.state.audit ?? []);
+      continue;
+    }
+    if (key === "idempotency" && contract.allowIdempotencyAppend === true) {
+      const next = finalized.state.idempotency ?? {};
+      for (const [identity, record] of Object.entries(current.idempotency ?? {})) if (next[identity] !== record) {
+        throw new SportpaleisMariaDbStoreError(`Gerichte recordmutatie wijzigde of verwijderde idempotency/${identity}.`, "DOMAIN_RECORD_MUTATION_VIOLATION");
+      }
+      continue;
+    }
+    throw new SportpaleisMariaDbStoreError(`Gerichte recordmutatie wijzigde niet-toegestane statekey ${key}.`, "DOMAIN_RECORD_MUTATION_VIOLATION");
+  }
+}
+
 function prepareMutationPersistence({ current, finalized, globalRevision, schemaVersion, domainCache, domainRevisions, recordOrdinals }) {
   const nextRevision = Number(globalRevision) + 1;
   finalized.state.revision = nextRevision;
@@ -668,6 +710,7 @@ export class SportpaleisDomainMariaDbStore {
       const prepared = await this.#prepareMutationCommand(mutator, {
         refresh: false,
         draftFactory: createPreparedSportpaleisStateDraft,
+        preparedGuard: (current, finalized, result) => assertSelectedRecordDraft(current, finalized, result.recordMutationContract),
       });
       if (prepared.completed) return prepared.completed;
       return this.#commitPreparedCommand(prepared.command);
@@ -850,7 +893,7 @@ export class SportpaleisDomainMariaDbStore {
     }
     const prepared = lazy.finalize();
     if (prepared.changedKeys.length === 0) return { completed: { state: baseSnapshot, value: preparedResult.value } };
-    if (preparedGuard) preparedGuard(baseSnapshot, prepared);
+    if (preparedGuard) preparedGuard(baseSnapshot, prepared, preparedResult);
     const persistence = prepareMutationPersistence({ current: baseSnapshot, finalized: prepared, globalRevision: baseRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
     const preparationMs = performance.now() - preparationStartedAt;
     this.metrics.preparedMutations += 1;

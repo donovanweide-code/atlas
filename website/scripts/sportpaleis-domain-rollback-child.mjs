@@ -5,6 +5,7 @@ import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-br
 process.on("disconnect", () => process.exit(0));
 process.once("message", async ({ database, expectedGlobalRevision, expectedDomainHash } = {}) => {
   let pool;
+  let response;
   try {
     const socketPath = String(database?.socketPath ?? "").trim();
     const name = String(database?.name ?? database?.database ?? "").trim();
@@ -26,10 +27,14 @@ process.once("message", async ({ database, expectedGlobalRevision, expectedDomai
       multipleStatements: false,
     });
     const result = await materializeLegacyRollbackState({ pool, expectedGlobalRevision, expectedDomainHash });
-    process.send?.({ ok: true, result });
+    await pool.end();
+    pool = null;
+    response = { ok: true, result };
   } catch (error) {
-    process.send?.({ ok: false, error: { message: error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", code: error?.code ?? "LEGACY_ROLLBACK_ISOLATION_FAILED" } });
-  } finally {
     await pool?.end().catch(() => undefined);
+    pool = null;
+    response = { ok: false, error: { message: error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", code: error?.code ?? "LEGACY_ROLLBACK_ISOLATION_FAILED" } };
+  } finally {
+    if (process.connected) process.send?.(response, () => process.disconnect());
   }
 });

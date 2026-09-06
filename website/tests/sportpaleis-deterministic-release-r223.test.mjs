@@ -57,5 +57,9 @@ test("releasemanifest gebruikt immutable commitmetadata en geen actuele klok", a
   const source = await readFile(new URL("../scripts/build-production-release.mjs", import.meta.url), "utf8");
   assert.match(source, /sourceCommitTimestamp = new Date\(git\("show", "-s", "--format=%cI", commit\)\)\.toISOString\(\)/u);
   assert.match(source, /buildTimestamp: sourceCommitTimestamp/u);
+  assert.match(source, /gitBytes\("cat-file", "blob", `\$\{commit\}:\$\{relative\}`\)/u, "tracked releasebytes komen uit de immutable commit en niet uit platformafhankelijke worktree-EOL");
+  assert.match(source, /SOURCE_DATE_EPOCH/u, "workspacebuild is aan de committijd gebonden");
+  assert.match(source, /canonicalGeneratedBytes/u, "gegenereerde tekstassets krijgen een platformonafhankelijke representatie");
+  assert.match(source, /Releasebron is niet immutable aan commit/u, "ongetrackte niet-buildbronnen falen gesloten");
   assert.doesNotMatch(source, /buildTimestamp: new Date\(\)\.toISOString\(\)/u);
 });

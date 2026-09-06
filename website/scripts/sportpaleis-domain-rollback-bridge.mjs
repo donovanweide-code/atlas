@@ -20,26 +20,31 @@ export function materializeLegacyRollbackStateIsolated({ database, expectedGloba
       execArgv: ["--max-old-space-size=768", "--max-semi-space-size=64"],
     });
     let settled = false;
-    const finish = (callback, value) => {
+    let response = null;
+    const finish = (callback, value, { terminate = false } = {}) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       child.off("message", onMessage);
       child.off("error", onError);
       child.off("exit", onExit);
-      if (child.connected) child.disconnect();
-      child.kill();
+      if (terminate) {
+        if (child.connected) child.disconnect();
+        child.kill();
+      }
       callback(value);
     };
     const failure = (message, code = "LEGACY_ROLLBACK_ISOLATION_FAILED") => Object.assign(new Error(message), { code });
-    const onMessage = (message) => message?.ok
-      ? finish(resolve, message.result)
-      : finish(reject, failure(message?.error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", message?.error?.code));
-    const onError = () => finish(reject, failure("De geïsoleerde rollbackmaterialisatie kon niet worden uitgevoerd."));
-    const onExit = (code) => finish(reject, failure(code === 0
-      ? "De geïsoleerde rollbackmaterialisatie gaf geen resultaat."
-      : "De geïsoleerde rollbackmaterialisatie stopte onverwacht."));
-    const timer = setTimeout(() => finish(reject, failure("De geïsoleerde rollbackmaterialisatie duurde te lang.", "LEGACY_ROLLBACK_ISOLATION_TIMEOUT")), Math.max(1_000, Number(timeoutMs) || ISOLATED_ROLLBACK_TIMEOUT_MS));
+    const onMessage = (message) => { response = message; };
+    const onError = () => finish(reject, failure("De geïsoleerde rollbackmaterialisatie kon niet worden uitgevoerd."), { terminate: true });
+    const onExit = (code) => {
+      if (code !== 0) return finish(reject, failure("De geïsoleerde rollbackmaterialisatie stopte onverwacht."));
+      if (!response) return finish(reject, failure("De geïsoleerde rollbackmaterialisatie gaf geen resultaat."));
+      return response.ok
+        ? finish(resolve, Object.freeze({ ...response.result, isolatedProcessExitConfirmed: true }))
+        : finish(reject, failure(response?.error?.message ?? "De geïsoleerde rollbackmaterialisatie is mislukt.", response?.error?.code));
+    };
+    const timer = setTimeout(() => finish(reject, failure("De geïsoleerde rollbackmaterialisatie duurde te lang.", "LEGACY_ROLLBACK_ISOLATION_TIMEOUT"), { terminate: true }), Math.max(1_000, Number(timeoutMs) || ISOLATED_ROLLBACK_TIMEOUT_MS));
     timer.unref?.();
     child.on("message", onMessage);
     child.once("error", onError);
