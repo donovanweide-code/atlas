@@ -511,6 +511,14 @@ async function storeInitialize() {
     const committedMarker = JSON.parse(await readFile(path.join(artifactRoot, `${first.value.snapshot.artifact.path}.committed.json`), "utf8"));
     assert.equal(committedMarker.status, "COMMITTED", `${heightMm} mm artifact mist de commitmarkering`);
     assert.equal(committedMarker.artifactSha256, artifactSha256, `${heightMm} mm commitmarkering wijkt af`);
+    const beforeFixtureReject = await store.readSnapshot();
+    const rejected = await service.rejectProductionJob(normalToken, normalSession.csrf, first.value.id, { reason: "ASSURANCE_FIXTURE_HEIGHT_SEQUENCE_RELEASE" });
+    assert.equal(rejected.duplicate, false, `${heightMm} mm assurancefixture werd niet exact eenmaal reject-only afgesloten`);
+    assert.equal(rejected.value.status, "REJECTED", `${heightMm} mm assurancefixture bleef de volgende fysieke stap blokkeren`);
+    const afterFixtureReject = await store.readSnapshot();
+    assert.equal(afterFixtureReject.nextProductionJobSequence, beforeFixtureReject.nextProductionJobSequence, `${heightMm} mm reject-only maakte een nieuwe jobsequence`);
+    assert.equal(afterFixtureReject.productionJobs.length, beforeFixtureReject.productionJobs.length, `${heightMm} mm reject-only maakte een nieuwe PlotJob`);
+    assert.deepEqual(await readFile(path.join(artifactRoot, first.value.snapshot.artifact.path)), artifactBytes, `${heightMm} mm reject-only wijzigde het immutable artifact`);
     practiceRuns.push({ heightMm, wallMs: rounded(wallMs), orderId: created.id, plotJobId: first.value.id, artifactSha256, committedMarker: true, generationMetrics: first.value.snapshot.generationMetrics });
   }
   const { sameColorSourceConcurrency, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan } = await runCrashAndChannelRace();
