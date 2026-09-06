@@ -333,6 +333,113 @@ async function storeInitialize() {
   assert.equal(afterRollbackProbe.revision, beforeRollbackProbe.revision, "afgebroken mutatie wijzigde revision");
   assert.equal(afterRollbackProbe.preferences[normalUser.id].density, nextDensity, "afgebroken mutatie lekte gedeeltelijke state");
 
+  await enterLoadPhase("mariadb-multibatch-rollback");
+  const batchRowCount = assuranceContract.minimumLoad.mariaDbBatchRows;
+  assert.ok(Number.isInteger(batchRowCount) && batchRowCount > 200, "MariaDB multibatchcontract vereist meer dan 200 records");
+  const batchPrefix = `assurance-multibatch-${candidateCommit.slice(0, 12)}-`;
+  const batchRecords = Array.from({ length: batchRowCount }, (_, index) => ({
+    id: `${batchPrefix}${String(index).padStart(4, "0")}`,
+    name: `Geïsoleerde multibatchfixture ${index + 1}`,
+    articleNumber: `ASSURANCE-${String(index + 1).padStart(4, "0")}`,
+    supplierNumber: "ASSURANCE-ONLY",
+    association: "Geïsoleerde assurancefixture",
+    sizes: [],
+    decorationOptions: [],
+    status: "ASSURANCE_FIXTURE",
+  }));
+  const originalArticles = (await store.readSnapshot()).articles;
+  const originalArticlesHash = hashJson(originalArticles);
+  const metaBeforeBatch = (await pool.query("SELECT global_revision FROM sp_workspace_domain_meta WHERE organization_id = ?", [before.organizationId]))[0];
+  const recordsBeforeBatch = Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ?", [before.organizationId, `${batchPrefix}%`]))[0].count);
+  assert.equal(recordsBeforeBatch, 0, "multibatchfixture bestond al vóór de probe");
+  let recordBatchCalls = 0;
+  let injectSecondBatchFailure = true;
+  const faultPool = {
+    query: (...arguments_) => pool.query(...arguments_),
+    async getConnection() {
+      const connection = await pool.getConnection();
+      return new Proxy(connection, {
+        get(target, property) {
+          if (property === "batch") return async (sql, parameters) => {
+            if (String(sql).startsWith("INSERT INTO sp_workspace_domain_record")) {
+              recordBatchCalls += 1;
+              if (injectSecondBatchFailure && recordBatchCalls === 2) {
+                throw Object.assign(new Error("Geïsoleerde foutinjectie in MariaDB-batch 2."), { code: "ASSURANCE_BATCH_TWO_FAILURE" });
+              }
+            }
+            return target.batch(sql, parameters);
+          };
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    },
+  };
+  const batchStore = new SportpaleisDomainMariaDbStore({ pool: faultPool });
+  await batchStore.initialize();
+  const applyBatchFixture = async (state) => {
+    const existing = new Set(state.articles.map(({ id }) => id));
+    const missing = batchRecords.filter(({ id }) => !existing.has(id));
+    if (missing.length === 0) return { unchanged: true, value: { inserted: 0 } };
+    state.articles.push(...missing);
+    return { state, value: { inserted: missing.length } };
+  };
+  const batchStoreHashBeforeFailure = hashJson((await batchStore.readSnapshot()).articles);
+  await assert.rejects(
+    batchStore.prepareAndCommit(applyBatchFixture),
+    (error) => error?.code === "DOMAIN_TRANSACTION_FAILED" && error?.cause?.code === "ASSURANCE_BATCH_TWO_FAILURE",
+    "fout in MariaDB-batch 2 moet de volledige mutatie afbreken",
+  );
+  assert.equal(recordBatchCalls, 2, "foutinjectie bereikte niet exact de tweede recordbatch");
+  assert.equal(hashJson((await batchStore.readSnapshot()).articles), batchStoreHashBeforeFailure, "rollback wijzigde de in-memory domeincache");
+  const metaAfterBatchFailure = (await pool.query("SELECT global_revision FROM sp_workspace_domain_meta WHERE organization_id = ?", [before.organizationId]))[0];
+  assert.equal(Number(metaAfterBatchFailure.global_revision), Number(metaBeforeBatch.global_revision), "batchrollback wijzigde de globale revision");
+  assert.equal(Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ?", [before.organizationId, `${batchPrefix}%`]))[0].count), 0, "batchrollback liet gedeeltelijke records achter");
+  const restartAfterBatchFailure = new SportpaleisDomainMariaDbStore({ pool });
+  await restartAfterBatchFailure.initialize();
+  assert.equal(hashJson((await restartAfterBatchFailure.readSnapshot()).articles), originalArticlesHash, "restart na batchrollback week af van de bronstate");
+
+  injectSecondBatchFailure = false;
+  const batchCommit = await batchStore.prepareAndCommit(applyBatchFixture);
+  assert.equal(batchCommit.value.inserted, batchRowCount, "multibatchretry committe niet alle records");
+  const revisionAfterBatchCommit = (await batchStore.readSnapshot()).revision;
+  const duplicateBatchCommit = await batchStore.prepareAndCommit(applyBatchFixture);
+  assert.equal(duplicateBatchCommit.value.inserted, 0, "multibatchretry was niet idempotent");
+  assert.equal((await batchStore.readSnapshot()).revision, revisionAfterBatchCommit, "idempotente multibatchretry verhoogde de revision");
+  const persistedBatchRows = await pool.query("SELECT record_id, ordinal, record_sha256 FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ? ORDER BY ordinal ASC", [before.organizationId, `${batchPrefix}%`]);
+  assert.equal(persistedBatchRows.length, batchRowCount, "multibatchretry materialiseerde niet exact één record per identity");
+  assert.equal(new Set(persistedBatchRows.map(({ record_id }) => record_id)).size, batchRowCount, "multibatchretry maakte dubbele identities");
+  assert.equal(new Set(persistedBatchRows.map(({ ordinal }) => Number(ordinal))).size, batchRowCount, "multibatchretry maakte dubbele ordinals");
+  assert.ok(persistedBatchRows.every(({ record_sha256 }) => /^[a-f0-9]{64}$/u.test(record_sha256)), "multibatchretry mist recordhashes");
+  const restartAfterBatchCommit = new SportpaleisDomainMariaDbStore({ pool });
+  await restartAfterBatchCommit.initialize();
+  assert.equal((await restartAfterBatchCommit.readSnapshot()).articles.filter(({ id }) => id.startsWith(batchPrefix)).length, batchRowCount, "restart verloor multibatchrecords");
+  const batchMetrics = batchStore.metricsSnapshot();
+  assert.ok(batchMetrics.writeBatches >= 3 && batchMetrics.writeBatchRows >= batchRowCount && batchMetrics.writeBatchMaxRows === 200, "echte MariaDB-multibatchgrens is niet gebruikt");
+  assert.ok(batchMetrics.transactionHoldMsMax <= assuranceContract.limits.databaseTransactionHoldMaxMs, `MariaDB-multibatch hield de transactie ${batchMetrics.transactionHoldMsMax} ms vast`);
+
+  await batchStore.prepareAndCommit(async (state) => {
+    state.articles = state.articles.filter(({ id }) => !id.startsWith(batchPrefix));
+    return { state, value: null };
+  });
+  const restartAfterBatchCleanup = new SportpaleisDomainMariaDbStore({ pool });
+  await restartAfterBatchCleanup.initialize();
+  assert.equal(hashJson((await restartAfterBatchCleanup.readSnapshot()).articles), originalArticlesHash, "multibatchcleanup herstelde de authentieke articles niet byte-semantisch");
+  assert.equal(Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ?", [before.organizationId, `${batchPrefix}%`]))[0].count), 0, "multibatchcleanup liet fixture-records achter");
+  const mariaDbMultiBatch = {
+    rows: batchRowCount,
+    injectedFailureBatch: 2,
+    retryRevision: revisionAfterBatchCommit,
+    batchCalls: batchMetrics.writeBatches,
+    batchRows: batchMetrics.writeBatchRows,
+    maximumBatchRows: batchMetrics.writeBatchMaxRows,
+    transactionHoldMsMax: rounded(batchMetrics.transactionHoldMsMax),
+    slowestTransaction: batchMetrics.transactionSlowest,
+    rollbackAndRestartHashEqual: true,
+    retryExactlyOnce: true,
+    cleanupHashEqual: true,
+  };
+
   await enterLoadPhase("large-free-production");
   const practiceBefore = await store.readSnapshot();
   const originalOrderHashes = new Map(practiceBefore.orders.map((order) => [order.id, sha256CanonicalJson(order)]));
@@ -609,8 +716,8 @@ async function storeInitialize() {
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
-    practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
+    practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue, mariaDbMultiBatch },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, mariaDbMultiBatchRollback: mariaDbMultiBatch.rollbackAndRestartHashEqual && mariaDbMultiBatch.retryExactlyOnce && mariaDbMultiBatch.cleanupHashEqual, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

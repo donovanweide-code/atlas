@@ -24,6 +24,7 @@ class DomainMemoryPool {
     this.artifacts = new Map();
     this.idempotency = new Map();
     this.queries = [];
+    this.batchCalls = [];
     this.commits = 0;
     this.rollbacks = 0;
     this.transactionDurationsMs = [];
@@ -65,6 +66,11 @@ class DomainMemoryConnection {
     this.transactionSnapshot = null;
   }
   release() {}
+  async batch(sql, parameters) {
+    this.pool.batchCalls.push({ sql, count: parameters.length });
+    for (const values of parameters) await this.query(sql, values);
+    return { affectedRows: parameters.length };
+  }
   async query(sql, parameters = []) {
     this.pool.queries.push(sql);
     if (sql.includes("FROM wbd_schema_migrations")) return [{ checksum: this.pool.checksum }];
@@ -452,6 +458,7 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   const heartbeatAt = [];
   const heartbeat = setInterval(() => heartbeatAt.push(performance.now()), 20);
   const transactionsBeforeBuild = pool.transactionDurationsMs.length;
+  const batchCallsBeforeBuild = pool.batchCalls.length;
   const recordWritesBeforeBuild = store.metricsSnapshot().recordWrites;
   const first = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
   clearInterval(heartbeat);
@@ -460,6 +467,7 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   assert.ok(heartbeatAt.length >= 10, "de event-loop blijft tijdens de geïsoleerde workerproductie responsief");
   assert.ok(Math.max(0, ...heartbeatGaps) < 500, `event-loopblok tijdens productie is begrensd: ${Math.max(0, ...heartbeatGaps)} ms`);
   assert.ok(buildTransactions.length >= 1 && Math.max(...buildTransactions) < 1_500, `de databaseverbinding omvat niet de zware geometryworker: ${buildTransactions.join(", ")} ms`);
+  assert.ok(pool.batchCalls.slice(batchCallsBeforeBuild).some(({ sql }) => sql.startsWith("INSERT INTO sp_workspace_domain_record")), "production persistence gebruikt de gebundelde MariaDB-writegrens");
   assert.ok(store.metricsSnapshot().recordWrites - recordWritesBeforeBuild <= 6, "een nieuwe PlotJob herschrijft geen honderden indexverschoven records");
   context.diagnostic(`worker heartbeat max=${Math.max(0, ...heartbeatGaps).toFixed(1)}ms; db transaction max=${Math.max(...buildTransactions).toFixed(1)}ms; record writes=${store.metricsSnapshot().recordWrites - recordWritesBeforeBuild}`);
   const retry = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");

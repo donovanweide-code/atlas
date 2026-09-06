@@ -135,11 +135,14 @@ function encodePayload(value) {
 }
 
 async function insertBatches(connection, sql, parameters, maximumBatchSize = 200) {
+  let batches = 0;
   for (let offset = 0; offset < parameters.length; offset += maximumBatchSize) {
     const batch = parameters.slice(offset, offset + maximumBatchSize);
     if (typeof connection.batch === "function") await connection.batch(sql, batch);
     else for (const values of batch) await connection.query(sql, values);
+    batches += 1;
   }
+  return batches;
 }
 
 function changedAuditEvents(previous, next) {
@@ -281,6 +284,9 @@ function createMetrics() {
     mutations: 0, unchangedMutations: 0, clonedKeys: 0, cacheHits: 0, cacheMisses: 0,
     preparedMutations: 0, preparedMutationMsTotal: 0, preparedMutationMsMax: 0,
     transactionHoldMsTotal: 0, transactionHoldMsMax: 0,
+    writeBatches: 0, writeBatchRows: 0, writeBatchMaxRows: 0,
+    transactionPhaseMsMax: { begin: 0, lockMeta: 0, preparedValidation: 0, prepareInsideTransaction: 0, writeDomains: 0, updateMeta: 0, commit: 0, failed: 0 },
+    transactionSlowest: null,
   };
 }
 
@@ -561,9 +567,21 @@ export class SportpaleisDomainMariaDbStore {
   async mutate(mutator, preparedCommand = null) {
     const connection = await this.#connection();
     const transactionStartedAt = performance.now();
+    let phaseStartedAt = transactionStartedAt;
+    const phaseDurations = {};
+    let transactionSucceeded = false;
+    let persistedDomains = [];
+    const completePhase = (name) => {
+      const now = performance.now();
+      const duration = now - phaseStartedAt;
+      phaseDurations[name] = Number((Number(phaseDurations[name] ?? 0) + duration).toFixed(3));
+      this.metrics.transactionPhaseMsMax[name] = Math.max(Number(this.metrics.transactionPhaseMsMax[name] ?? 0), duration);
+      phaseStartedAt = now;
+    };
     let phase = "begin";
     try {
       await connection.beginTransaction();
+      completePhase("begin");
       phase = "lock-meta";
       const meta = await connection.query(
         "SELECT schema_version, global_revision, contract_version FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
@@ -573,6 +591,7 @@ export class SportpaleisDomainMariaDbStore {
       if (this.globalRevision !== Number(meta[0].global_revision)) {
         throw new SportpaleisMariaDbStoreError("De lokale domeinsnapshot is verouderd; herhaal veilig na refresh.", "DOMAIN_SNAPSHOT_STALE");
       }
+      completePhase("lockMeta");
       const current = this.snapshot;
       let result;
       let persistence;
@@ -592,65 +611,68 @@ export class SportpaleisDomainMariaDbStore {
         }
         persistence = prepareMutationPersistence({ current, finalized: lazy.finalize(), globalRevision: this.globalRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
       }
+      persistedDomains = persistence.domains.map(({ domain }) => domain);
+      completePhase(preparedCommand ? "preparedValidation" : "prepareInsideTransaction");
       this.metrics.mutations += 1;
       this.metrics.clonedKeys += persistence.clonedKeys;
       const { nextRevision } = persistence;
+      const persistBatch = async (sql, parameters) => {
+        const batches = await insertBatches(connection, sql, parameters);
+        this.metrics.writeBatches += batches;
+        this.metrics.writeBatchRows += parameters.length;
+        this.metrics.writeBatchMaxRows = Math.max(this.metrics.writeBatchMaxRows, Math.min(200, parameters.length));
+      };
       phase = "write-domains";
       for (const domainPlan of persistence.domains) {
         const { domain } = domainPlan;
         if (domainPlan.auditAdditions.length) {
           const minimum = await connection.query("SELECT COALESCE(MIN(ordinal), 0) AS minimum_ordinal FROM sp_workspace_audit_event WHERE organization_id = ?", [ORGANIZATION_ID]);
           let ordinal = Number(minimum[0].minimum_ordinal) - domainPlan.auditAdditions.length;
-          for (const event of domainPlan.auditAdditions) {
-            await connection.query(
-              "INSERT INTO sp_workspace_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
-              [ORGANIZATION_ID, event.id, ordinal, nextRevision, event.json, event.sha256],
-            );
-            this.metrics.auditAppends += 1;
-            ordinal += 1;
-          }
+          const auditParameters = domainPlan.auditAdditions.map((event) => [ORGANIZATION_ID, event.id, ordinal++, nextRevision, event.json, event.sha256]);
+          await persistBatch(
+            "INSERT INTO sp_workspace_audit_event (organization_id, event_id, ordinal, global_revision, event_json, event_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))",
+            auditParameters,
+          );
+          this.metrics.auditAppends += auditParameters.length;
         }
         for (const collectionPlan of domainPlan.collectionPlans) {
-          for (const recordId of collectionPlan.deleted) {
-            await connection.query(
-              "DELETE FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = ? AND record_id = ?",
-              [ORGANIZATION_ID, collectionPlan.collectionKey, recordId],
-            );
-            this.metrics.recordDeletes += 1;
-          }
-          for (const record of collectionPlan.changed) {
-            await connection.query(
-              "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE domain_key = VALUES(domain_key), ordinal = VALUES(ordinal), record_revision = record_revision + 1, global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
-              [ORGANIZATION_ID, domain, collectionPlan.collectionKey, record.recordId, record.ordinal, nextRevision, record.json, record.hash],
-            );
-            this.metrics.recordWrites += 1;
-          }
-        }
-        for (const event of domainPlan.historyAdditions) {
-          await connection.query(
-            "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
-            [ORGANIZATION_ID, event.orderId, event.eventId, event.ordinal, event.orderRevision, nextRevision, event.json, event.sha256],
+          const deleteParameters = collectionPlan.deleted.map((recordId) => [ORGANIZATION_ID, collectionPlan.collectionKey, recordId]);
+          await persistBatch(
+            "DELETE FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = ? AND record_id = ?",
+            deleteParameters,
           );
-          this.metrics.historyWrites += 1;
-        }
-        for (const reference of domainPlan.artifactReferences) {
-          await connection.query(
-            "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
-            [ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, nextRevision],
+          this.metrics.recordDeletes += deleteParameters.length;
+          const recordParameters = collectionPlan.changed.map((record) => [ORGANIZATION_ID, domain, collectionPlan.collectionKey, record.recordId, record.ordinal, nextRevision, record.json, record.hash]);
+          await persistBatch(
+            "INSERT INTO sp_workspace_domain_record (organization_id, domain_key, collection_key, record_id, ordinal, record_revision, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE domain_key = VALUES(domain_key), ordinal = VALUES(ordinal), record_revision = record_revision + 1, global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
+            recordParameters,
           );
-          this.metrics.artifactReferenceWrites += 1;
+          this.metrics.recordWrites += recordParameters.length;
         }
-        for (const record of domainPlan.idempotency.deleted) {
-          await connection.query("DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_sha256 = ? AND identity_key = ?", [ORGANIZATION_ID, record.identityHash, record.identity]);
-          this.metrics.idempotencyDeletes += 1;
-        }
-        for (const record of domainPlan.idempotency.changed) {
-          await connection.query(
-            "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
-            [ORGANIZATION_ID, record.identityHash, record.identity, nextRevision, record.json, record.sha256],
-          );
-          this.metrics.idempotencyWrites += 1;
-        }
+        const historyParameters = domainPlan.historyAdditions.map((event) => [ORGANIZATION_ID, event.orderId, event.eventId, event.ordinal, event.orderRevision, nextRevision, event.json, event.sha256]);
+        await persistBatch(
+          "INSERT INTO sp_workspace_order_history_event (organization_id, order_id, event_id, ordinal, order_revision, global_revision, event_json, event_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+          historyParameters,
+        );
+        this.metrics.historyWrites += historyParameters.length;
+        const artifactParameters = domainPlan.artifactReferences.map((reference) => [ORGANIZATION_ID, reference.plotJobId, reference.sha256, reference.path, reference.format, nextRevision]);
+        await persistBatch(
+          "INSERT INTO sp_workspace_artifact_reference (organization_id, plot_job_id, artifact_sha256, artifact_path, artifact_format, immutable, global_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))",
+          artifactParameters,
+        );
+        this.metrics.artifactReferenceWrites += artifactParameters.length;
+        const idempotencyDeleteParameters = domainPlan.idempotency.deleted.map((record) => [ORGANIZATION_ID, record.identityHash, record.identity]);
+        await persistBatch(
+          "DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_sha256 = ? AND identity_key = ?",
+          idempotencyDeleteParameters,
+        );
+        this.metrics.idempotencyDeletes += idempotencyDeleteParameters.length;
+        const idempotencyParameters = domainPlan.idempotency.changed.map((record) => [ORGANIZATION_ID, record.identityHash, record.identity, nextRevision, record.json, record.sha256]);
+        await persistBatch(
+          "INSERT INTO sp_workspace_idempotency_record (organization_id, identity_sha256, identity_key, global_revision, record_json, record_sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE global_revision = VALUES(global_revision), record_json = VALUES(record_json), record_sha256 = VALUES(record_sha256), updated_at = UTC_TIMESTAMP(3)",
+          idempotencyParameters,
+        );
+        this.metrics.idempotencyWrites += idempotencyParameters.length;
         const update = await connection.query(
           "UPDATE sp_workspace_domain_state SET domain_revision = domain_revision + 1, global_revision = ?, payload_json = ?, payload_sha256 = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND domain_key = ? AND domain_revision = ?",
           [nextRevision, domainPlan.payloadJson, domainPlan.payloadSha256, ORGANIZATION_ID, domain, domainPlan.priorDomainRevision],
@@ -658,27 +680,45 @@ export class SportpaleisDomainMariaDbStore {
         if (Number(update.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError(`Gelijktijdige wijziging in domein ${domain}.`, "DOMAIN_CONCURRENCY_CONFLICT");
         this.metrics.domainWrites += 1;
       }
+      completePhase("writeDomains");
       const metaUpdate = await connection.query(
         "UPDATE sp_workspace_domain_meta SET global_revision = ?, schema_version = ?, cutover_mode = 'DOMAIN_READS', updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ?",
         [nextRevision, this.schemaVersion, ORGANIZATION_ID, this.globalRevision],
       );
       if (Number(metaUpdate.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
+      completePhase("updateMeta");
       phase = "commit";
       await connection.commit();
+      completePhase("commit");
       this.domainCache = persistence.nextDomainCache;
       this.domainRevisions = persistence.nextDomainRevisions;
       this.recordOrdinals = persistence.nextRecordOrdinals;
       this.globalRevision = nextRevision;
       this.snapshot = persistence.nextSnapshot;
+      transactionSucceeded = true;
       return { state: this.snapshot, value: result.value };
     } catch (cause) {
       await connection.rollback().catch(() => undefined);
       if (cause?.statusCode || cause instanceof SportpaleisMariaDbStoreError) throw cause;
       throw new SportpaleisMariaDbStoreError("Domeintransactie is mislukt.", "DOMAIN_TRANSACTION_FAILED", cause);
     } finally {
+      if (!transactionSucceeded) {
+        const failedPhaseMs = performance.now() - phaseStartedAt;
+        phaseDurations.failed = Number(failedPhaseMs.toFixed(3));
+        this.metrics.transactionPhaseMsMax.failed = Math.max(this.metrics.transactionPhaseMsMax.failed, failedPhaseMs);
+      }
       const transactionHoldMs = performance.now() - transactionStartedAt;
       this.metrics.transactionHoldMsTotal += transactionHoldMs;
-      this.metrics.transactionHoldMsMax = Math.max(this.metrics.transactionHoldMsMax, transactionHoldMs);
+      if (transactionHoldMs > this.metrics.transactionHoldMsMax) {
+        this.metrics.transactionHoldMsMax = transactionHoldMs;
+        this.metrics.transactionSlowest = {
+          holdMs: Number(transactionHoldMs.toFixed(3)),
+          prepared: Boolean(preparedCommand),
+          changedDomains: persistedDomains,
+          phases: { ...phaseDurations },
+          finalPhase: phase,
+        };
+      }
       connection.release();
     }
   }
@@ -719,7 +759,13 @@ export class SportpaleisDomainMariaDbStore {
     for (const row of recordRows) domains[row.domain_key] = { ...(domains[row.domain_key] ?? { scalarBytes: 0 }), recordBytes: Number(row.bytes), records: Number(row.record_count) };
     return { engine: "mariadb-domain-record-v1", domains, globalRevision: this.globalRevision, metrics: this.metricsSnapshot() };
   }
-  metricsSnapshot() { return Object.freeze({ ...this.metrics }); }
+  metricsSnapshot() {
+    return Object.freeze({
+      ...this.metrics,
+      transactionPhaseMsMax: Object.freeze({ ...this.metrics.transactionPhaseMsMax }),
+      transactionSlowest: this.metrics.transactionSlowest ? Object.freeze({ ...this.metrics.transactionSlowest, phases: Object.freeze({ ...this.metrics.transactionSlowest.phases }), changedDomains: Object.freeze([...this.metrics.transactionSlowest.changedDomains]) }) : null,
+    });
+  }
   async close() { if (this.ownsPool) await this.pool.end(); }
   async #connection() {
     try { return await this.pool.getConnection(); } catch (cause) { throw new SportpaleisMariaDbStoreError("Workspace MariaDB is niet bereikbaar.", "DATABASE_CONNECTION_FAILED", cause); }
