@@ -81,8 +81,9 @@ test("persistent child-readiness is begrensd en laat na startup-timeout geen pro
 
 test("persistent child-timeout termineert vóór een queued retry op een nieuwe generatie", async () => {
   await recycleProductionJobBuildIsolation();
-  process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED = "1";
+  delete process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED;
   await warmProductionJobBuildIsolation();
+  process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED = "1";
   const firstGeneration = productionJobBuildLoad().child?.generation;
   const hanging = buildProductionJobSnapshotIsolated({ assuranceFault: "HANG_BEFORE_BUILD" }, {
     operationIdentity: "persistent-child-timeout-regression",
@@ -106,11 +107,14 @@ test("persistent child weigert een resultaat boven de versioned IPC-grens", asyn
   await recycleProductionJobBuildIsolation();
   process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED = "1";
   await warmProductionJobBuildIsolation();
-  delete process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED;
-  await assert.rejects(
-    buildProductionJobSnapshotIsolated({ assuranceFault: "OVERSIZED_OUTPUT" }, { operationIdentity: "persistent-child-output-bound-regression" }),
-    (error) => error?.code === "PRODUCTION_JOB_BUILD_OUTPUT_TOO_LARGE" && error?.statusCode === 413,
-  );
-  await recycleProductionJobBuildIsolation();
+  try {
+    await assert.rejects(
+      buildProductionJobSnapshotIsolated({ assuranceFault: "OVERSIZED_OUTPUT" }, { operationIdentity: "persistent-child-output-bound-regression" }),
+      (error) => error?.code === "PRODUCTION_JOB_BUILD_OUTPUT_TOO_LARGE" && error?.statusCode === 413,
+    );
+  } finally {
+    delete process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED;
+    await recycleProductionJobBuildIsolation();
+  }
   assert.equal(productionJobBuildLoad().child, null);
 });

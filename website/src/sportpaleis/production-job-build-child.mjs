@@ -20,13 +20,17 @@ function resources(cpuStart = process.cpuUsage()) {
 }
 
 process.on("disconnect", () => process.exit(0));
-process.on("message", async ({ type, requestId, input, maxOutputBytes } = {}) => {
+process.on("message", async ({ type, requestId, input, maxOutputBytes, assuranceFaultsEnabled = false } = {}) => {
   if (type !== "build" || !requestId) return;
-  if (process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1" && input.assuranceFault === "HANG_BEFORE_BUILD") return;
+  // The persistent child may predate an assurance phase. The trusted parent
+  // therefore carries the per-request test switch over IPC; business input
+  // alone can never activate a fault.
+  const allowAssuranceFault = assuranceFaultsEnabled === true;
+  if (allowAssuranceFault && input.assuranceFault === "HANG_BEFORE_BUILD") return;
   const cpuStart = process.cpuUsage();
   try {
-    if (process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1" && input.assuranceFault === "FAST_FAILURE") throw Object.assign(new Error("assurance fast failure"), { code: "ASSURANCE_FAST_FAILURE", statusCode: 409 });
-    const snapshot = process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1" && input.assuranceFault === "OVERSIZED_OUTPUT"
+    if (allowAssuranceFault && input.assuranceFault === "FAST_FAILURE") throw Object.assign(new Error("assurance fast failure"), { code: "ASSURANCE_FAST_FAILURE", statusCode: 409 });
+    const snapshot = allowAssuranceFault && input.assuranceFault === "OVERSIZED_OUTPUT"
       ? { artifactPayload: "x".repeat(Number(maxOutputBytes) + 1) }
       : (await productionBuilder())(
         input.state,
@@ -41,7 +45,7 @@ process.on("message", async ({ type, requestId, input, maxOutputBytes } = {}) =>
     const outputBytes = Buffer.byteLength(JSON.stringify(snapshot));
     if (outputBytes > Number(maxOutputBytes)) throw Object.assign(new Error("De productieopbouw overschrijdt de begrensde resultaatgrootte."), { code: "PRODUCTION_JOB_BUILD_OUTPUT_TOO_LARGE", statusCode: 413 });
     buildCount += 1;
-    if (process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1" && input.assuranceFault === "EXIT_AFTER_BUILD_BEFORE_MESSAGE") {
+    if (allowAssuranceFault && input.assuranceFault === "EXIT_AFTER_BUILD_BEFORE_MESSAGE") {
       process.send?.({ type: "telemetry", requestId, resources: { ...resources(cpuStart), outputBytes } }, () => process.exit(23));
       return;
     }

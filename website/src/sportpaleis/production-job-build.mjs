@@ -352,7 +352,15 @@ async function runPersistentBuildChild(input, timeoutMs) {
     child.on("message", onMessage);
     child.once("error", onError);
     child.once("exit", onExit);
-    try { child.send({ type: "build", requestId, input, maxOutputBytes: MAX_PRODUCTION_WORKER_OUTPUT_BYTES }, (error) => { if (error) onError(error); }); }
+    try {
+      child.send({
+        type: "build",
+        requestId,
+        input,
+        maxOutputBytes: MAX_PRODUCTION_WORKER_OUTPUT_BYTES,
+        assuranceFaultsEnabled: process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1",
+      }, (error) => { if (error) onError(error); });
+    }
     catch { onError(); }
   });
 }
