@@ -19,6 +19,9 @@ test("V4-soakdrempels behouden V3 en zijn zwaarder dan of gelijk aan de falende 
   assert.ok(contract.minimumLoad.concurrentMutations >= 20, "mutationlane krijgt production-shaped concurrency");
   assert.ok(contract.limits.ordinaryMutationDuringProductionMaxMs <= 1500, "gewone writes blijven ook tijdens productie begrensd");
   assert.ok(contract.limits.productionWorkerInputMaxBytes <= 1_000_000, "de productieworker krijgt geen volledige Library-state meer");
+  assert.ok(contract.limits.productionWorkerStartupMaxMs <= 20_000, "child-readiness blijft begrensd");
+  assert.ok(contract.limits.productionWorkerRssMaxBytes <= 536_870_912, "childgeheugen blijft begrensd en recycleerbaar");
+  assert.ok(contract.limits.productionWorkerOutputMaxBytes <= 8_000_000, "IPC-resultaat blijft begrensd");
   assert.ok(contract.limits.eventLoopMaxMs <= 1000);
   assert.ok(contract.limits.eventLoopP95Ms <= 100);
   assert.ok(contract.limits.rssHighWaterBytes <= 1073741824);
@@ -31,14 +34,15 @@ test("V4-soakdrempels behouden V3 en zijn zwaarder dan of gelijk aan de falende 
   assert.equal(contract.limits.databaseAcquireTimeouts, 0);
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.production < 6_534_299, "productionbootstrap blijft onder de gemeten monolithische nulmeting");
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.library < contract.limits.bootstrapSurfaceMaxBytes.production);
-  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "sameColorSourceConcurrency", "workerCrashRecoveredWithoutOrphan", "parentReservationCrashRecoveredWithoutOrphan", "productionIdempotency", "productionArtifactReconciliation", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads", "expiredAndRevokedSessions", "coldAndWarmBootstrap", "managedFoilColorsComplete", "boundedSvgProcessing", "staleReadsPrevented", "transactionRollbackProven", "restartRecovery", "productionBuildOffEventLoop", "productionWorkerInputBounded", "productionPreparationDoesNotBlockMutations", "mutationLaneBounded", "mariaDbMultiBatchRollback", "multiCycleSoakCompleted", "soakMemoryRecovered", "soakMemoryTrendStable", "soakQueueStable", "noLegacyMonolithLoads"]) assert.ok(contract.requiredInvariants.includes(required));
+  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "sameColorSourceConcurrency", "workerCrashRecoveredWithoutOrphan", "parentReservationCrashRecoveredWithoutOrphan", "productionIdempotency", "productionArtifactReconciliation", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads", "expiredAndRevokedSessions", "coldAndWarmBootstrap", "managedFoilColorsComplete", "boundedSvgProcessing", "staleReadsPrevented", "transactionRollbackProven", "restartRecovery", "productionBuildOffEventLoop", "productionWorkerLowPriorityIsolated", "productionWorkerResourcesBounded", "productionWorkerOutputBounded", "productionWorkerExternalRssObserved", "productionWorkerRecycled", "productionWorkerInputBounded", "productionPreparationDoesNotBlockMutations", "mutationLaneBounded", "mariaDbMultiBatchRollback", "multiCycleSoakCompleted", "soakMemoryRecovered", "soakMemoryTrendStable", "soakQueueStable", "noLegacyMonolithLoads"]) assert.ok(contract.requiredInvariants.includes(required));
 });
 
 test("releaseartifact en broker binden dezelfde immutable gatecode en het drempelcontract", async () => {
-  const [builder, broker, assurance] = await Promise.all([
+  const [builder, broker, assurance, productionBuild] = await Promise.all([
     readFile(new URL("../scripts/build-production-release.mjs", import.meta.url), "utf8"),
     readFile(new URL("../../ops/production/spw-immutable-release.sh", import.meta.url), "utf8"),
     readFile(new URL("../scripts/sportpaleis-production-shaped-assurance.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../src/sportpaleis/production-job-build.mjs", import.meta.url), "utf8"),
   ]);
   const externalManifestSource = builder.slice(builder.indexOf("const externalManifest ="), builder.indexOf("const manifestPath ="));
   assert.ok(externalManifestSource.startsWith("const externalManifest ="), "extern release-manifest is afzonderlijk inspecteerbaar");
@@ -53,6 +57,7 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(builder, /sportpaleis-domain-rollback-bridge\.mjs/u);
   assert.match(builder, /sportpaleis-domain-backfill\.mjs/u);
   assert.match(builder, /workspace-legacy-state-encode-worker\.mjs/u);
+  assert.match(productionBuild, /new URL\("\.\/production-job-build-child\.mjs", import\.meta\.url\)/u);
   assert.match(builder, /contractSha256/u);
   assert.match(broker, /assuranceContractSha256/u);
   assert.match(broker, /regressionContractSha256/u);
@@ -76,6 +81,10 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /ASSURANCE_BATCH_TWO_FAILURE/u);
   assert.match(assurance, /mutationLaneBounded/u);
   assert.match(assurance, /productionPreparationDoesNotBlockMutations/u);
+  assert.match(assurance, /productionWorkerResourcesBounded/u);
+  assert.match(assurance, /productionWorkerOutputBounded/u);
+  assert.match(assurance, /productionWorkerExternalRssObserved/u);
+  assert.match(assurance, /productionWorkerRecycled/u);
   assert.match(assurance, /x-assurance-delay-response/u);
   assert.match(assurance, /httpResponseAbortedAfterServerCommit/u);
   assert.match(assurance, /mariaDbMultiBatchRollback/u);

@@ -34,7 +34,7 @@ import {
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
 import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
-import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, projectProductionJobBuildInput } from "../src/sportpaleis/production-job-build.mjs";
+import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, projectProductionJobBuildInput, warmProductionJobBuildIsolation } from "../src/sportpaleis/production-job-build.mjs";
 import { COPY_ON_WRITE_BASE_SNAPSHOT } from "./workspace-domain-storage-primitives.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
@@ -2631,7 +2631,7 @@ function ingestWebshopDocumentIntoState(state, { sourceMessageId, receivedAt, in
 }
 
 export class SportpaleisPilotService {
-  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessIssuerSecret = "", reviewAccessEnabled = false, reviewAccessIsolatedState = false }) {
+  constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessIssuerSecret = "", reviewAccessEnabled = false, reviewAccessIsolatedState = false, prewarmProductionBuildIsolation = false }) {
     this.store = store;
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
@@ -2675,11 +2675,15 @@ export class SportpaleisPilotService {
     // mogen nooit dezelfde sequence/reservering voorbereiden.
     this.productionMutationTail = Promise.resolve();
     this.isolatedProductionBuilds = typeof this.store.prepareAndCommit === "function";
+    this.prewarmProductionBuildIsolation = prewarmProductionBuildIsolation === true;
   }
 
   async initialize() {
     await this.store.initialize();
-    if (this.isolatedProductionBuilds) await reconcileProductionArtifactStorage({ runtimeArtifactRoot: this.runtimeArtifactRoot, state: await this.store.read() });
+    if (this.isolatedProductionBuilds) {
+      if (this.prewarmProductionBuildIsolation) await warmProductionJobBuildIsolation();
+      await reconcileProductionArtifactStorage({ runtimeArtifactRoot: this.runtimeArtifactRoot, state: await this.store.read() });
+    }
   }
 
   async #productionMutation(mutator) {

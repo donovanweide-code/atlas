@@ -358,6 +358,7 @@ export async function createWorkspaceRuntimeServer(options = {}) {
           mailboxConfiguration,
           creativeStudioEnabled: config.creativeStudioEnabled,
           runtimeArtifactRoot: config.nodeEnv === "production" ? SPORTPALEIS_RUNTIME_ARTIFACT_ROOT : undefined,
+          prewarmProductionBuildIsolation: config.nodeEnv === "production",
           reviewPrincipalIds: config.reviewPrincipalIds,
           activeReviewCandidateIds: config.activeReviewCandidateIds,
           reviewAccessEnabled: config.reviewAccessEnabled,

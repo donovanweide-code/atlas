@@ -11,7 +11,7 @@ import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-stor
 import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
 import { createSportpaleisPilotRequestHandler, reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, reserveImmutableProductionArtifactAsync, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
-import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, productionJobBuildLoad, projectProductionJobBuildInput } from "../src/sportpaleis/production-job-build.mjs";
+import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, PRODUCTION_BUILD_ISOLATION_KIND, productionJobBuildLoad, projectProductionJobBuildInput, recycleProductionJobBuildIsolation } from "../src/sportpaleis/production-job-build.mjs";
 import { inspectProductionAssetSvg } from "../src/sportpaleis/production-assets-svg.mjs";
 
 const database = process.env.CANARY_WORKSPACE_DB;
@@ -97,6 +97,9 @@ let activeHighWater = 0;
 let idleLowWater = 8;
 let queueHighWater = 0;
 let rssHighWater = rssStartBytes;
+let productionChildExternalRssHighWaterBytes = 0;
+let productionChildRssProbeInFlight = false;
+const productionChildExternalRssByPid = new Map();
 const phaseEventLoopMaxMs = new Map();
 let loopTickAt = performance.now();
 const loopSampler = setInterval(() => {
@@ -118,6 +121,25 @@ const poolSampler = setInterval(() => {
   rssHighWater = Math.max(rssHighWater, process.memoryUsage().rss);
 }, 5);
 poolSampler.unref();
+const productionChildRssSampler = setInterval(async () => {
+  const pid = productionJobBuildLoad().child?.pid;
+  if (!Number.isInteger(pid) || productionChildRssProbeInFlight) return;
+  productionChildRssProbeInFlight = true;
+  try {
+    const status = await readFile(`/proc/${pid}/status`, "utf8");
+    const rssKb = Number(status.match(/^VmRSS:\s+(\d+)\s+kB$/mu)?.[1] ?? 0);
+    const rssBytes = rssKb * 1024;
+    if (rssBytes > 0) {
+      productionChildExternalRssByPid.set(pid, Math.max(productionChildExternalRssByPid.get(pid) ?? 0, rssBytes));
+      productionChildExternalRssHighWaterBytes = Math.max(productionChildExternalRssHighWaterBytes, rssBytes);
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") handlerErrors.push({ route: "production-child-rss", error });
+  } finally {
+    productionChildRssProbeInFlight = false;
+  }
+}, 10);
+productionChildRssSampler.unref();
 const loop = monitorEventLoopDelay({ resolution: 10 });
 loop.enable();
 const cpuStart = process.cpuUsage();
@@ -129,6 +151,8 @@ try {
   loop.disable();
   clearInterval(loopSampler);
   clearInterval(poolSampler);
+  clearInterval(productionChildRssSampler);
+  await recycleProductionJobBuildIsolation().catch(() => undefined);
   if (server) await new Promise((resolve) => server.close(resolve));
   await pool.end().catch(() => undefined);
 }
@@ -142,7 +166,7 @@ async function storeInitialize() {
   const normalUser = customerUsers.find(({ role }) => role === "operator");
   assert.ok(issuer && normalUser && customerUsers.length === productionCustomerSeats, "issuer, operator of drie customer seats ontbreken in restorefixture");
 
-  const service = new SportpaleisPilotService({ store, releaseId, secureCookies: false, allowedOrigin: "http://127.0.0.1", uploadsEnabled: false, productionAssetUploadsEnabled: false, fontUploadsEnabled: false, mailMode: "capture", mailboxConfiguration: { configured: false }, creativeStudioEnabled: false, artifactRoot, runtimeArtifactRoot: artifactRoot, installedProductionAssetRoot: `${artifactRoot}/installed-assets`, activeReviewCandidateIds: activeCandidateIds, reviewAccessEnabled: true, reviewAccessIsolatedState: true, reviewAccessIssuerPrincipalIds: issuerIds, reviewAccessIssuerSecret: issuerSecret });
+  const service = new SportpaleisPilotService({ store, releaseId, secureCookies: false, allowedOrigin: "http://127.0.0.1", uploadsEnabled: false, productionAssetUploadsEnabled: false, fontUploadsEnabled: false, mailMode: "capture", mailboxConfiguration: { configured: false }, creativeStudioEnabled: false, artifactRoot, runtimeArtifactRoot: artifactRoot, installedProductionAssetRoot: `${artifactRoot}/installed-assets`, activeReviewCandidateIds: activeCandidateIds, reviewAccessEnabled: true, reviewAccessIsolatedState: true, reviewAccessIssuerPrincipalIds: issuerIds, reviewAccessIssuerSecret: issuerSecret, prewarmProductionBuildIsolation: true });
   const safeSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg>', "utf8");
   const inspectedSafeSvg = inspectProductionAssetSvg({ bytes: safeSvg, filename: "assurance-safe.svg" });
   assert.equal(inspectedSafeSvg.source.sha256, sha(safeSvg).toUpperCase(), "geldige SVG verliest bronidentiteit");
@@ -564,7 +588,9 @@ async function storeInitialize() {
     delete process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED;
   }
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(productionJobBuildLoad(), { active: 0, queued: 0, inFlight: 0, maximumConcurrent: 1, maximumQueued: 4 }, "workercrash liet queue- of in-flightstate achter");
+  const workerCrashLoad = productionJobBuildLoad();
+  assert.deepEqual({ active: workerCrashLoad.active, queued: workerCrashLoad.queued, inFlight: workerCrashLoad.inFlight }, { active: 0, queued: 0, inFlight: 0 }, "workercrash liet queue- of in-flightstate achter");
+  assert.equal(workerCrashLoad.child, null, "workercrash liet het defecte childprocess actief");
   assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "workercrash na echte build liet een zichtbaar of gequarantaineerd orphanartifact achter");
   const workerCrashStateAfter = await store.readSnapshot();
   assert.deepEqual(workerCrashStateAfter.orders.map(sha256CanonicalJson), workerCrashStateBefore.orders.map(sha256CanonicalJson), "workercrash wijzigde orders");
@@ -750,6 +776,22 @@ async function storeInitialize() {
   assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length + 1);
   const storeMetricsAfterPractice = store.metricsSnapshot();
   const productionBuildQueue = productionJobBuildLoad();
+  const productionWorkerLowPriorityIsolated = productionBuildQueue.isolationKind === PRODUCTION_BUILD_ISOLATION_KIND
+    && productionBuildQueue.child?.status === "READY" && productionBuildQueue.child.connected === true
+    && Number.isInteger(productionBuildQueue.child.pid) && Number(productionBuildQueue.workerPriority) >= 10;
+  const productionWorkerResourcesBounded = productionBuildQueue.childLifetime?.buildCount >= practiceRuns.length + 1
+    && productionBuildQueue.childLifetime.maxStartupMs <= assuranceContract.limits.productionWorkerStartupMaxMs
+    && productionBuildQueue.childLifetime.maxRssBytes <= assuranceContract.limits.productionWorkerRssMaxBytes
+    && productionBuildQueue.childLifetime.cpuUserMicros > 0;
+  const productionWorkerOutputBounded = productionBuildQueue.childLifetime?.maxOutputBytes > 0
+    && productionBuildQueue.childLifetime.maxOutputBytes <= assuranceContract.limits.productionWorkerOutputMaxBytes;
+  const productionWorkerExternalRssObserved = productionChildExternalRssByPid.size >= productionBuildQueue.childLifetime.generations
+    && productionChildExternalRssHighWaterBytes > 0
+    && [...productionChildExternalRssByPid.values()].every((rssBytes) => rssBytes > 0)
+    && productionChildExternalRssHighWaterBytes <= assuranceContract.limits.productionWorkerRssMaxBytes;
+  await recycleProductionJobBuildIsolation();
+  const productionBuildQueueAfterRecycle = productionJobBuildLoad();
+  const productionWorkerRecycled = productionBuildQueueAfterRecycle.child === null;
   assert.equal(storeMetricsAfterPractice.fullLegacyLoads, 0, "runtime-start mag de legacy monolith niet laden of backfillen");
   assert.ok(storeMetricsAfterPractice.recordWrites > 0 && storeMetricsAfterPractice.domainWrites > 0, "domeinrecordwrites zijn niet gebruikt");
 
@@ -786,6 +828,8 @@ async function storeInitialize() {
   const metrics = { ...metricsFor(timings), eventLoopP95Ms: rounded(loop.percentile(95) / 1e6), eventLoopMaxMs: rounded(loop.max / 1e6) };
   const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route.startsWith("/api/sportpaleis/v1/bootstrap")));
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
+  const productionChildRssHighWaterBytes = Math.max(Number(productionBuildQueue.childLifetime?.maxRssBytes ?? 0), productionChildExternalRssHighWaterBytes);
+  const combinedRssHighWaterBytes = rssHighWater + productionChildRssHighWaterBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
   const limits = assuranceContract.limits;
   const soakCycleMetrics = soakCycles.map((cycle) => ({
@@ -823,7 +867,7 @@ async function storeInitialize() {
     && emptyFieldBytes("production", "teamkitProposals")
     && emptyFieldBytes("library", "orders") && emptyFieldBytes("library", "productionJobs") && emptyFieldBytes("library", "teamkitProposals")
     && emptyFieldBytes("teamwear", "orders") && emptyFieldBytes("teamwear", "productionJobs");
-  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && productionWorkerInputBounded && databaseConnectionReleasedDuringProductionBuild && productionPreparationDoesNotBlockMutations && multiCycleSoakCompleted && soakMemoryRecovered && soakMemoryTrendStable && soakQueueStable;
+  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && combinedRssHighWaterBytes <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && productionWorkerLowPriorityIsolated && productionWorkerResourcesBounded && productionWorkerOutputBounded && productionWorkerExternalRssObserved && productionWorkerRecycled && productionWorkerInputBounded && databaseConnectionReleasedDuringProductionBuild && productionPreparationDoesNotBlockMutations && multiCycleSoakCompleted && soakMemoryRecovered && soakMemoryTrendStable && soakQueueStable;
   const result = {
     schemaVersion: 4,
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
@@ -831,10 +875,10 @@ async function storeInitialize() {
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapSurfaceBytes, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: { ...Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])), "/api/sportpaleis/v1/bootstrap": bootstrapMetrics } },
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
-    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
+    runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssParentHighWaterBytes: rssHighWater, productionChildRssHighWaterBytes, productionChildExternalRssHighWaterBytes, productionChildExternalRssByPid: Object.fromEntries(productionChildExternalRssByPid), rssHighWaterBytes: combinedRssHighWaterBytes, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000), productionChild: productionBuildQueue.child, productionChildLifetime: productionBuildQueue.childLifetime },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
-    practice: { largeFreeProduction: practiceRuns, productionWorkerReachability, sameColorSourceConcurrency, productionBuildQueue, productionPreparationConcurrency, mutationLane, mariaDbMultiBatch },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, productionWorkerInputBounded, databaseConnectionReleasedDuringProductionBuild, productionPreparationDoesNotBlockMutations, mutationLaneBounded: mutationLane.activeHighWater === 1 && mutationLane.queueDepthAfter === 0 && mutationLane.backpressureRejects === 0, mariaDbMultiBatchRollback: mariaDbMultiBatch.rollbackAndRestartHashEqual && mariaDbMultiBatch.retryExactlyOnce && mariaDbMultiBatch.cleanupHashEqual, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
+    practice: { largeFreeProduction: practiceRuns, productionWorkerReachability, sameColorSourceConcurrency, productionBuildQueue, productionBuildQueueAfterRecycle, productionPreparationConcurrency, mutationLane, mariaDbMultiBatch },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, productionWorkerLowPriorityIsolated, productionWorkerResourcesBounded, productionWorkerOutputBounded, productionWorkerExternalRssObserved, productionWorkerRecycled, productionWorkerInputBounded, databaseConnectionReleasedDuringProductionBuild, productionPreparationDoesNotBlockMutations, mutationLaneBounded: mutationLane.activeHighWater === 1 && mutationLane.queueDepthAfter === 0 && mutationLane.backpressureRejects === 0, mariaDbMultiBatchRollback: mariaDbMultiBatch.rollbackAndRestartHashEqual && mariaDbMultiBatch.retryExactlyOnce && mariaDbMultiBatch.cleanupHashEqual, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

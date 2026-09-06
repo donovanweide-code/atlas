@@ -294,6 +294,7 @@ test("releasebuilder volgt de gecontroleerde production runtime-importgraph zond
     "app/src/sportpaleis/direct-print/cut-job.ts",
     "app/src/sportpaleis/direct-print/reference-2-34-77.ts",
     "app/src/sportpaleis/production-asset-inspection-worker.mjs",
+    "app/src/sportpaleis/production-job-build-child.mjs",
   ]) assert.ok(packaged.has(required), `${required} ontbreekt in runtimegraph`);
   assert.ok([...packaged].every((archive) => !archive.includes("/tests/") && !archive.includes(".codex-tmp")));
 });
