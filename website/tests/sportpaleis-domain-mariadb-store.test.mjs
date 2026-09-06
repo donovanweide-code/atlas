@@ -628,6 +628,7 @@ test("historie en artifactreferentie zijn immutable en een fout rolt recordwrite
 test("rollbackbridge materialiseert onder revision- en hashlock exact één legacy snapshot", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  legacy.preferences.rollbackUndefinedFixture = { attention: undefined };
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
   await store.backfillLegacySource();
@@ -647,7 +648,7 @@ test("rollbackbridge materialiseert onder revision- en hashlock exact één lega
   assert.equal(evidence.stateSha256, sha256CanonicalJson(domainSnapshot));
   const decodedLegacy = decodeSportpaleisRuntimeState(pool.legacy.state_json);
   assert.equal(sha256CanonicalJson(decodedLegacy), evidence.stateSha256, "opgeslagen legacy-bytes decoderen naar dezelfde domeinhash");
-  assert.deepEqual(decodedLegacy, domainSnapshot, "rollbackdoel is volledig gelijk aan de domeinsnapshot");
+  assert.deepEqual(decodedLegacy, JSON.parse(JSON.stringify(domainSnapshot)), "rollbackdoel is volledig gelijk aan het canonieke legacy JSON-contract");
   assert.equal(createHash("sha256").update(pool.legacy.state_json).digest("hex"), evidence.encodedSha256, "bewijs bindt de daadwerkelijk opgeslagen bytes");
   await assert.rejects(materializeLegacyRollbackState({ pool, expectedGlobalRevision: domainSnapshot.revision - 1, expectedDomainHash: evidence.stateSha256 }), /revision-drift/);
 });

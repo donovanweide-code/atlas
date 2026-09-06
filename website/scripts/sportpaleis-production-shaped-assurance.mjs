@@ -830,6 +830,7 @@ async function storeInitialize() {
   const rssEndBytes = process.memoryUsage().rss;
   await enterLoadPhase("rollback-materialization");
   const rollbackSource = await store.readSnapshot();
+  const rollbackCanonicalSource = JSON.parse(JSON.stringify(rollbackSource));
   const rollbackSourceSha256 = sha256CanonicalJson(rollbackSource);
   const rollbackProof = await materializeLegacyRollbackStateIsolated({
     database: { socketPath: "/run/mysqld/mysqld.sock", name: database, user: "root" },
@@ -849,7 +850,7 @@ async function storeInitialize() {
   assert.equal(Number(rollbackDecoded.revision), Number(rollbackSource.revision), "gedecodeerde rollbackstate verloor de revision");
   assert.equal(rollbackDecodedSha256, rollbackSourceSha256, "legacy-row decodeert niet naar de verwachte domeinhash");
   assert.equal(rollbackEncodedSha256, rollbackProof.encodedSha256, "legacy-rowbytes wijken af van het materialisatiebewijs");
-  assert.deepEqual(rollbackDecoded, rollbackSource, "legacy-row is niet byte-semantisch gelijk aan de domeinsnapshot");
+  assert.deepEqual(rollbackDecoded, rollbackCanonicalSource, "legacy-row is niet gelijk aan de canonieke JSON-representatie van de domeinsnapshot");
   const rollbackMaterializationProven = rollbackProof.stateSha256 === rollbackSourceSha256
     && rollbackDecodedSha256 === rollbackSourceSha256
     && rollbackEncodedSha256 === rollbackProof.encodedSha256

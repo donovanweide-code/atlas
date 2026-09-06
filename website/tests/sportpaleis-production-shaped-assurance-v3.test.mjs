@@ -70,6 +70,7 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(broker, /website\/scripts\/sportpaleis-domain-rollback-bridge\.mjs/u);
   assert.match(assurance, /materializeLegacyRollbackStateIsolated/u);
   assert.match(assurance, /expectedDomainHash: rollbackSourceSha256/u);
+  assert.match(assurance, /rollbackCanonicalSource = JSON\.parse\(JSON\.stringify\(rollbackSource\)\)/u, "rollbackvergelijking gebruikt exact het legacy JSON-contract");
   assert.match(assurance, /decodeSportpaleisRuntimeState\(rollbackRow\.state_json\)/u);
   assert.match(assurance, /rollbackEncodedSha256, rollbackProof\.encodedSha256/u);
   assert.match(assurance, /rollbackProof\.isolatedProcessExitConfirmed === true/u);
