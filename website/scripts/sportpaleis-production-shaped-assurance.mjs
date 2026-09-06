@@ -96,6 +96,14 @@ const statuses = [];
 let activeHighWater = 0;
 let idleLowWater = 8;
 let queueHighWater = 0;
+let assuranceProcessQueueHighWater = 0;
+const phaseQueueHighWater = new Map();
+// Connections held by the pool-pressure fixture are created serially by the
+// MariaDB driver. Its own concurrent setup calls can therefore briefly enter
+// the driver's acquire queue before any product request is sent. Preserve that
+// signal separately; the hard product gate starts only after the six fixture
+// connections have all been acquired and the setup queue is empty.
+const assuranceSetupOnlyPoolPhases = new Set(["pool-pressure-setup"]);
 let rssHighWater = rssStartBytes;
 let combinedRssHighWaterBytes = rssStartBytes;
 let productionChildExternalRssHighWaterBytes = 0;
@@ -123,7 +131,10 @@ const enterLoadPhase = async (next) => {
 const poolSampler = setInterval(() => {
   activeHighWater = Math.max(activeHighWater, Number(pool.activeConnections?.() ?? 0));
   idleLowWater = Math.min(idleLowWater, Number(pool.idleConnections?.() ?? 0));
-  queueHighWater = Math.max(queueHighWater, Number(pool.taskQueueSize?.() ?? 0));
+  const currentQueueSize = Number(pool.taskQueueSize?.() ?? 0);
+  assuranceProcessQueueHighWater = Math.max(assuranceProcessQueueHighWater, currentQueueSize);
+  phaseQueueHighWater.set(loadPhase, Math.max(phaseQueueHighWater.get(loadPhase) ?? 0, currentQueueSize));
+  if (!assuranceSetupOnlyPoolPhases.has(loadPhase)) queueHighWater = Math.max(queueHighWater, currentQueueSize);
   const parentRssBytes = process.memoryUsage().rss;
   rssHighWater = Math.max(rssHighWater, parentRssBytes);
   combinedRssHighWaterBytes = Math.max(combinedRssHighWaterBytes, parentRssBytes);
@@ -330,8 +341,10 @@ async function storeInitialize() {
     await new Promise((resolve) => setTimeout(resolve, 50));
     soakCycles.push({ cycle: cycle + 1, phase, timingsStart, timingsEnd: timings.length, statusesStart, statusesEnd: statuses.length, rssStartBytes: rssCycleStartBytes, rssHighWaterBytes: rssCycleHighWaterBytes, rssAfterRestBytes: process.memoryUsage().rss });
   }
-  await enterLoadPhase("pool-pressure");
+  await enterLoadPhase("pool-pressure-setup");
   const blockers = await Promise.all(Array.from({ length: 6 }, () => pool.getConnection()));
+  assert.equal(pool.taskQueueSize?.(), 0, "pooldrukfixture begon terwijl eigen connection-acquires nog wachtten");
+  await enterLoadPhase("pool-pressure");
   const sleeps = blockers.map((connection) => connection.query("SELECT SLEEP(0.75)").finally(() => connection.release()));
   const underPressureRoutes = [
     ...Array.from({ length: concurrentFullBootstraps }, (_, index) => bootstrapRoutes[index % bootstrapRoutes.length]),
@@ -919,7 +932,7 @@ async function storeInitialize() {
     identity: { candidateCommit, candidateArtifactSha256, restoreBackupSha256, assuranceEntrypointSha256, assuranceContractSha256, assuranceContract: assuranceContract.contractId, regressionContractSha256, regressionContract: regressionContract.contractId },
     restoredState: { revisionBeforeReads: beforeRevision, revisionAfterReads: afterReads.revision, stateBytes: Number(beforeRow.bytes), auditBefore: beforeAudit, auditAfterReads: afterReads.audit.length },
     load: { requests: statuses.length, httpErrors: statuses.filter((status) => status >= 400).length, serverErrors: statuses.filter((status) => status >= 500).length, concurrencyModel: { productionCustomerSeats, concurrentReviewPrincipals, concurrentFullBootstraps, concurrentRevisionPolls, heldPoolConnections: blockers.length }, p50Ms: metrics.p50Ms, p95Ms: metrics.p95Ms, maxMs: metrics.maxMs, bootstrapSurfaceBytes, bootstrapFieldBytes, byPhase: Object.fromEntries([...new Set(timings.map(({ phase }) => phase))].map((phase) => [phase, metricsFor(timings.filter((entry) => entry.phase === phase))])), byRoute: { ...Object.fromEntries([...new Set(timings.map(({ route }) => route))].map((route) => [route, metricsFor(timings.filter((entry) => entry.route === route))])), "/api/sportpaleis/v1/bootstrap": bootstrapMetrics } },
-    pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
+    pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, assuranceProcessQueueHighWater, assuranceSetupOnlyPoolPhases: [...assuranceSetupOnlyPoolPhases], queueHighWaterByPhase: Object.fromEntries(phaseQueueHighWater), acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, assuranceProcessEventLoopMaxMs: rounded(loop.max / 1e6), brokerOnlyEventLoopPhases: [...brokerOnlyEventLoopPhases], eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssParentHighWaterBytes: rssHighWater, productionChildRssHighWaterBytes, productionChildExternalRssHighWaterBytes, productionChildExternalRssByPid: Object.fromEntries(productionChildExternalRssByPid), rssHighWaterBytes: combinedRssHighWaterBytes, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000), productionChild: productionBuildQueue.child, productionChildLifetime: productionBuildQueue.childLifetime },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof: { ...rollbackProof, ...rollbackVerification } },
     practice: { largeFreeProduction: practiceRuns, productionWorkerReachability, sameColorSourceConcurrency, productionBuildQueue, productionBuildQueueAfterRecycle, productionPreparationConcurrency, mutationLane, mariaDbMultiBatch },

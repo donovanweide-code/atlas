@@ -80,6 +80,10 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /brokerOnlyEventLoopPhases = new Set\(\["rollback-materialization"\]\)/u, "offline brokerrollback vervuilt de productruntime-eventloopmeting niet");
   assert.match(assurance, /assuranceProcessEventLoopMaxMs/u, "offline rollbackbelasting blijft afzonderlijk zichtbaar");
   assert.match(assurance, /productRuntimeEventLoopMaxMs/u, "de harde eventloopgate blijft alle productruntimefasen meten");
+  assert.match(assurance, /assuranceSetupOnlyPoolPhases = new Set\(\["pool-pressure-setup"\]\)/u, "fixture-acquires zijn afzonderlijk van productpooldruk zichtbaar");
+  assert.match(assurance, /assert\.equal\(pool\.taskQueueSize\?\.\(\), 0/u, "productpooldruk start uitsluitend met een lege acquirequeue");
+  assert.match(assurance, /assuranceProcessQueueHighWater/u, "runner-eigen acquirewachtrij blijft als evidence zichtbaar");
+  assert.match(assurance, /queueHighWaterByPhase/u, "poolwachtrij is per fase herleidbaar");
   assert.doesNotMatch(assurance, /decodeSportpaleisRuntimeState/u, "de parent-assurance decodeert de legacy-state niet synchroon");
   assert.doesNotMatch(assurance, /rollbackMaterializationProven: true/u, "rollbackbewijs mag geen constante schijn-PASS zijn");
   const rollbackBridge = await readFile(new URL("../scripts/sportpaleis-domain-rollback-bridge.mjs", import.meta.url), "utf8");
