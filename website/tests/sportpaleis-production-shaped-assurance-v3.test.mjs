@@ -19,6 +19,7 @@ test("V4-soakdrempels behouden V3 en zijn zwaarder dan of gelijk aan de falende 
   assert.ok(contract.minimumLoad.concurrentMutations >= 20, "mutationlane krijgt production-shaped concurrency");
   assert.ok(contract.limits.ordinaryMutationDuringProductionMaxMs <= 1500, "gewone writes blijven ook tijdens productie begrensd");
   assert.ok(contract.limits.productionWorkerInputMaxBytes <= 1_000_000, "de productieworker krijgt geen volledige Library-state meer");
+  assert.ok(contract.limits.productionWorkerPriorityMinimum >= 19, "de CPU-zware child draait op de laagste best-effort schedulerprioriteit");
   assert.ok(contract.limits.productionWorkerStartupMaxMs <= 20_000, "child-readiness blijft begrensd");
   assert.ok(contract.limits.productionWorkerRssMaxBytes <= 536_870_912, "childgeheugen blijft begrensd en recycleerbaar");
   assert.ok(contract.limits.productionWorkerOutputMaxBytes <= 8_000_000, "IPC-resultaat blijft begrensd");

@@ -47,6 +47,7 @@
     "databaseTransactionHoldMaxMs": 1500,
     "ordinaryMutationDuringProductionMaxMs": 1500,
     "productionWorkerInputMaxBytes": 1000000,
+    "productionWorkerPriorityMinimum": 19,
     "productionWorkerStartupMaxMs": 20000,
     "productionWorkerRssMaxBytes": 536870912,
     "productionWorkerOutputMaxBytes": 8000000,

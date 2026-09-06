@@ -243,7 +243,7 @@ async function startBuildChild({ startupTimeoutMs = DEFAULT_CHILD_STARTUP_TIMEOU
     const onMessage = (message) => {
       if (message?.type !== "ready") return;
       try {
-        setPriority(child.pid, osConstants.priority.PRIORITY_BELOW_NORMAL);
+        setPriority(child.pid, osConstants.priority.PRIORITY_LOW);
         state.actualPriority = getPriority(child.pid);
       } catch (cause) {
         finish(reject, cause);

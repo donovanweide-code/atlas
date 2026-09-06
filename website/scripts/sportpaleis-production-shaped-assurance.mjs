@@ -97,6 +97,7 @@ let activeHighWater = 0;
 let idleLowWater = 8;
 let queueHighWater = 0;
 let rssHighWater = rssStartBytes;
+let combinedRssHighWaterBytes = rssStartBytes;
 let productionChildExternalRssHighWaterBytes = 0;
 let productionChildRssProbeInFlight = false;
 const productionChildExternalRssByPid = new Map();
@@ -118,7 +119,9 @@ const poolSampler = setInterval(() => {
   activeHighWater = Math.max(activeHighWater, Number(pool.activeConnections?.() ?? 0));
   idleLowWater = Math.min(idleLowWater, Number(pool.idleConnections?.() ?? 0));
   queueHighWater = Math.max(queueHighWater, Number(pool.taskQueueSize?.() ?? 0));
-  rssHighWater = Math.max(rssHighWater, process.memoryUsage().rss);
+  const parentRssBytes = process.memoryUsage().rss;
+  rssHighWater = Math.max(rssHighWater, parentRssBytes);
+  combinedRssHighWaterBytes = Math.max(combinedRssHighWaterBytes, parentRssBytes);
 }, 5);
 poolSampler.unref();
 const productionChildRssSampler = setInterval(async () => {
@@ -130,8 +133,11 @@ const productionChildRssSampler = setInterval(async () => {
     const rssKb = Number(status.match(/^VmRSS:\s+(\d+)\s+kB$/mu)?.[1] ?? 0);
     const rssBytes = rssKb * 1024;
     if (rssBytes > 0) {
+      const parentRssBytes = process.memoryUsage().rss;
+      rssHighWater = Math.max(rssHighWater, parentRssBytes);
       productionChildExternalRssByPid.set(pid, Math.max(productionChildExternalRssByPid.get(pid) ?? 0, rssBytes));
       productionChildExternalRssHighWaterBytes = Math.max(productionChildExternalRssHighWaterBytes, rssBytes);
+      combinedRssHighWaterBytes = Math.max(combinedRssHighWaterBytes, parentRssBytes + rssBytes);
     }
   } catch (error) {
     if (error?.code !== "ENOENT") handlerErrors.push({ route: "production-child-rss", error });
@@ -778,7 +784,8 @@ async function storeInitialize() {
   const productionBuildQueue = productionJobBuildLoad();
   const productionWorkerLowPriorityIsolated = productionBuildQueue.isolationKind === PRODUCTION_BUILD_ISOLATION_KIND
     && productionBuildQueue.child?.status === "READY" && productionBuildQueue.child.connected === true
-    && Number.isInteger(productionBuildQueue.child.pid) && Number(productionBuildQueue.workerPriority) >= 10;
+    && Number.isInteger(productionBuildQueue.child.pid)
+    && Number(productionBuildQueue.workerPriority) >= assuranceContract.limits.productionWorkerPriorityMinimum;
   const productionWorkerResourcesBounded = productionBuildQueue.childLifetime?.buildCount >= practiceRuns.length + 1
     && productionBuildQueue.childLifetime.maxStartupMs <= assuranceContract.limits.productionWorkerStartupMaxMs
     && productionBuildQueue.childLifetime.maxRssBytes <= assuranceContract.limits.productionWorkerRssMaxBytes
@@ -829,7 +836,6 @@ async function storeInitialize() {
   const bootstrapMetrics = metricsFor(timings.filter(({ route }) => route.startsWith("/api/sportpaleis/v1/bootstrap")));
   const steadyStateMemoryStable = memoryCycles.length === 3 && memoryCycles.at(-1) - memoryCycles[0] <= assuranceContract.limits.steadyStateRssGrowthBytes;
   const productionChildRssHighWaterBytes = Math.max(Number(productionBuildQueue.childLifetime?.maxRssBytes ?? 0), productionChildExternalRssHighWaterBytes);
-  const combinedRssHighWaterBytes = rssHighWater + productionChildRssHighWaterBytes;
   const rssRecoveredWithinBudget = rssEndBytes - rssStartBytes <= rssRecoveryBudgetBytes && steadyStateMemoryStable;
   const limits = assuranceContract.limits;
   const soakCycleMetrics = soakCycles.map((cycle) => ({
