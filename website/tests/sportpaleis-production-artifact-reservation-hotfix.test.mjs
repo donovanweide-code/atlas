@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, reserveImmutableProductionArtifactAsync, SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
 
 const passwords = { kevin: "Artifact-Admin-2026!", patrick: "Artifact-Operator-2026!", collega: "Artifact-Store-2026!", "donovan-support": "Artifact-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
@@ -84,6 +84,75 @@ test("gelijktijdige reserveringen materialiseren exact één immutable final", a
   assert.deepEqual((await readdir(directory)).filter((name) => !name.startsWith(".")), ["PLOT-2026-0067-production.svg"]);
 });
 
+test("asynchrone parent-side reservering is collision-safe en idempotent", async (context) => {
+  const root = await temporaryRoot(context, "async-parent");
+  const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0068", bytes: Buffer.from("<svg>parent-side async</svg>"), operationIdentity: "async-parent-operation" };
+  const results = await Promise.all(Array.from({ length: 8 }, () => reserveImmutableProductionArtifactAsync(input)));
+  assert.equal(results.filter(({ reused }) => reused === false).length, 1);
+  assert.equal(new Set(results.map(({ artifactIdentity }) => artifactIdentity)).size, 1);
+  assert.equal(new Set(results.map(({ operationIdentityHash }) => operationIdentityHash)).size, 1);
+  assert.deepEqual(await readFile(path.join(root, results[0].relativePath)), input.bytes);
+  const files = await readdir(path.dirname(path.join(root, results[0].relativePath)));
+  assert.equal(files.filter((name) => name.endsWith("-production.svg")).length, 1);
+  assert.equal(files.filter((name) => name.endsWith(".reservation.json")).length, 1);
+  assert.equal(files.filter((name) => name.includes(".pending-")).length, 0);
+});
+
+test("asynchrone parent-side reservering overschrijft afwijkende immutable bytes nooit", async (context) => {
+  const root = await temporaryRoot(context, "async-collision");
+  const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0069", bytes: Buffer.from("<svg>bedoelde async output</svg>"), operationIdentity: "async-collision-operation" };
+  const expected = await reserveImmutableProductionArtifactAsync({ ...input, persist: false });
+  const absolute = path.join(root, expected.relativePath);
+  const existing = Buffer.from("<svg>afwijkende immutable output</svg>");
+  await mkdir(path.dirname(absolute), { recursive: true });
+  await writeFile(absolute, existing, { flag: "wx" });
+  await assert.rejects(reserveImmutableProductionArtifactAsync(input), (error) => error?.code === "PRODUCTION_ARTIFACT_IDENTITY_COLLISION" && error?.statusCode === 409);
+  assert.deepEqual(await readFile(absolute), existing);
+});
+
+test("crash na final-link maar vóór parentreturn wordt bij startup immutable gequarantaineerd", async (context) => {
+  const root = await temporaryRoot(context, "async-after-final-crash");
+  const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0070", bytes: Buffer.from("<svg>crash na final link</svg>"), operationIdentity: "async-after-final-crash" };
+  await assert.rejects(reserveImmutableProductionArtifactAsync({ ...input, faultInjector: (point) => {
+    if (point === "AFTER_FINAL_BEFORE_RETURN") throw Object.assign(new Error("fault after final"), { code: "ASSURANCE_AFTER_FINAL" });
+  } }), (error) => error?.code === "ASSURANCE_AFTER_FINAL");
+  const before = await readdir(root, { recursive: true });
+  assert.equal(before.filter((name) => name.endsWith("-production.svg")).length, 1);
+  assert.equal(before.filter((name) => name.endsWith(".reservation.json")).length, 1);
+  const result = await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 1, productionJobs: [] } });
+  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
+  const after = await readdir(root, { recursive: true });
+  assert.equal(after.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 0);
+  assert.equal(after.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg")).length, 1);
+});
+
+test("crash vóór final-link laat alleen reconcileerbare evidence en geen zichtbare SVG achter", async (context) => {
+  const root = await temporaryRoot(context, "async-before-final-crash");
+  const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0071", bytes: Buffer.from("<svg>crash voor final link</svg>"), operationIdentity: "async-before-final-crash" };
+  await assert.rejects(reserveImmutableProductionArtifactAsync({ ...input, faultInjector: (point) => {
+    if (point === "AFTER_RESERVATION_BEFORE_FINAL") throw Object.assign(new Error("fault before final"), { code: "ASSURANCE_BEFORE_FINAL" });
+  } }), (error) => error?.code === "ASSURANCE_BEFORE_FINAL");
+  const before = await readdir(root, { recursive: true });
+  assert.equal(before.filter((name) => name.endsWith("-production.svg")).length, 0);
+  assert.equal(before.filter((name) => name.endsWith(".reservation.json")).length, 1);
+  const result = await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 1, productionJobs: [] } });
+  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
+});
+
+test("legacy final zonder reservation-evidence blijft niet onzichtbaar orphan", async (context) => {
+  const root = await temporaryRoot(context, "missing-reservation");
+  const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0072", bytes: Buffer.from("<svg>final zonder evidence</svg>") };
+  const expected = reserveImmutableProductionArtifact({ ...input, persist: false });
+  const absolute = path.join(root, expected.relativePath);
+  await mkdir(path.dirname(absolute), { recursive: true });
+  await writeFile(absolute, input.bytes, { flag: "wx" });
+  const result = await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 1, productionJobs: [] } });
+  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
+  const files = await readdir(root, { recursive: true });
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 0);
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg")).length, 1);
+});
+
 test("onderbroken pending create blokkeert geen complete atomische final", async (context) => {
   const root = await temporaryRoot(context, "interrupted");
   const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0067", bytes: Buffer.from("<svg>herstelde complete output</svg>") };
@@ -144,6 +213,7 @@ test("database-rollback laat state atomisch en bewaart uncommitted output uitslu
 
   const retried = await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, request, "artifact-rollback-retry");
   assert.equal(retried.value.job.snapshot.artifact.reservation.reused, false);
+  assert.equal("artifactPayload" in retried.value.job.snapshot, false, "interne workerpayload lekte naar opgeslagen PlotJob-state");
   const committed = await inner.read();
   assert.equal(committed.productionJobs.filter(({ id }) => id === retried.value.job.id).length, 1);
   assert.equal(committed.nextProductionJobSequence, before.nextProductionJobSequence + 1);

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
-import { mkdir, open, readFile, rename, stat, unlink, writeFile, readdir } from "node:fs/promises";
+import { link, mkdir, open, readFile, rename, stat, unlink, writeFile, readdir } from "node:fs/promises";
 import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -2723,7 +2723,8 @@ export class SportpaleisPilotService {
       foilRolls: source.foilRolls,
     };
     options.abMirrorAccepted = source.productionJobs?.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS") ?? false;
-    const snapshot = await buildProductionJobSnapshotIsolated({
+    const buildStartedAt = performance.now();
+    const drySnapshot = await buildProductionJobSnapshotIsolated({
       state: projectedState,
       orders,
       jobNumber,
@@ -2731,9 +2732,38 @@ export class SportpaleisPilotService {
       artifactRoot: this.artifactRoot,
       runtimeArtifactRoot: this.runtimeArtifactRoot,
       productionGroup,
-      options: { ...options, operationIdentity },
+      options: { ...options, operationIdentity, persistArtifacts: false, returnArtifactPayload: true },
     }, { operationIdentity });
-    if (snapshot?.artifact?.format === "SVG" && snapshot.artifact.path && snapshot.artifact.sha256) effects?.artifacts.push({ jobNumber, path: snapshot.artifact.path, sha256: snapshot.artifact.sha256, operationIdentityHash: snapshot.artifact.reservation?.operationIdentityHash ?? sha256(operationIdentity) });
+    const { artifactPayload, ...publicSnapshot } = drySnapshot;
+    if (publicSnapshot?.artifact?.format !== "SVG") return publicSnapshot;
+    if (typeof artifactPayload !== "string" || artifactPayload.length === 0) throw Object.assign(new Error("Workerresultaat mist de interne SVG-payload voor parent-side reservering."), { statusCode: 503, code: "PRODUCTION_ARTIFACT_PAYLOAD_MISSING" });
+    const bytes = Buffer.from(artifactPayload, "utf8");
+    const persistenceStartedAt = performance.now();
+    const reservation = await reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: this.runtimeArtifactRoot, jobNumber, bytes, operationIdentity });
+    if (reservation.artifactHash !== publicSnapshot.artifact.sha256) throw Object.assign(new Error("Workerresultaat en parent-side artifactreservering wijken af."), { statusCode: 503, code: "PRODUCTION_ARTIFACT_HASH_MISMATCH" });
+    const persistenceMs = Math.round((performance.now() - persistenceStartedAt) * 10) / 10;
+    const artifact = {
+      ...publicSnapshot.artifact,
+      filename: reservation.filename,
+      path: reservation.relativePath,
+      identity: reservation.artifactIdentity,
+      reservation: {
+        strategy: "JOB_NUMBER_PLUS_CONTENT_SHA256_CREATE_ONLY_V1",
+        reused: reservation.reused,
+        operationIdentityHash: reservation.operationIdentityHash,
+        evidencePath: reservation.reservationEvidencePath,
+      },
+    };
+    const snapshot = {
+      ...publicSnapshot,
+      artifact,
+      generationMetrics: publicSnapshot.generationMetrics ? {
+        ...publicSnapshot.generationMetrics,
+        persistenceMs,
+        snapshotTotalMs: Math.round((performance.now() - buildStartedAt) * 10) / 10,
+      } : null,
+    };
+    effects?.artifacts.push({ jobNumber, path: artifact.path, sha256: artifact.sha256, operationIdentityHash: artifact.reservation.operationIdentityHash });
     return snapshot;
   }
 
@@ -9469,6 +9499,62 @@ export function reserveImmutableProductionArtifact({ runtimeArtifactRoot, jobNum
   }
 }
 
+export async function reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot, jobNumber, bytes, persist = true, operationIdentity = undefined, faultInjector = undefined }) {
+  if (!/^PLOT-\d{4}-\d{4,}$/u.test(String(jobNumber ?? ""))) throw Object.assign(new Error("Ongeldig productiebestandnummer."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_INVALID" });
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw Object.assign(new Error("Lege productiebestandbytes kunnen niet immutable worden gereserveerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_BYTES_INVALID" });
+  const artifactHash = sha256(bytes).toUpperCase();
+  const artifactIdentity = `${jobNumber}:${artifactHash}`;
+  const hashDirectory = artifactHash.toLocaleLowerCase("en-US");
+  const filename = `${jobNumber}-production.svg`;
+  const relativeDirectory = path.join("outputs", "sportpaleis-plotjobs", jobNumber, hashDirectory);
+  const relativePath = path.join(relativeDirectory, filename).replaceAll(path.sep, "/");
+  const absoluteDirectory = path.resolve(runtimeArtifactRoot, relativeDirectory);
+  const absolutePath = path.resolve(runtimeArtifactRoot, relativePath);
+  if (!absolutePath.startsWith(`${absoluteDirectory}${path.sep}`)) throw Object.assign(new Error("Ongeldige productiebestandlocatie."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+  if (!persist) return { artifactHash, artifactIdentity, filename, relativePath, reused: false };
+
+  await mkdir(absoluteDirectory, { recursive: true });
+  const evidenceRecord = operationIdentity ? productionArtifactEvidenceRecord({ jobNumber, relativePath, artifactHash, operationIdentity }) : null;
+  const evidencePath = `${absolutePath}.reservation.json`;
+  const ensureEvidence = async () => {
+    if (!evidenceRecord) return null;
+    await writeCreateOnlyEvidence(evidencePath, evidenceRecord);
+    return path.relative(runtimeArtifactRoot, evidencePath).replaceAll(path.sep, "/");
+  };
+  const verifyExisting = async () => {
+    const existing = await readFile(absolutePath);
+    const existingHash = sha256(existing).toUpperCase();
+    if (existingHash !== artifactHash || existing.length !== bytes.length) throw Object.assign(new Error("Bestaande immutable artifactidentiteit bevat andere bytes en blijft onaangeroerd."), { statusCode: 409, code: "PRODUCTION_ARTIFACT_IDENTITY_COLLISION", artifactIdentity, expectedSha256: artifactHash, actualSha256: existingHash });
+    const reservationEvidencePath = await ensureEvidence();
+    return { artifactHash, artifactIdentity, filename, relativePath, reused: true, ...(operationIdentity ? { operationIdentityHash: sha256(String(operationIdentity)), reservationEvidencePath } : {}) };
+  };
+  try { return await verifyExisting(); }
+  catch (error) { if (error?.code !== "ENOENT") throw error; }
+
+  const pendingPath = path.join(absoluteDirectory, `.${filename}.pending-${process.pid}-${randomBytes(10).toString("hex")}`);
+  let pendingHandle;
+  try {
+    pendingHandle = await open(pendingPath, "wx", 0o640);
+    await pendingHandle.writeFile(bytes);
+    await pendingHandle.sync();
+    await pendingHandle.close();
+    pendingHandle = undefined;
+    const reservationEvidencePath = await ensureEvidence();
+    await faultInjector?.("AFTER_RESERVATION_BEFORE_FINAL");
+    try {
+      await link(pendingPath, absolutePath);
+      await faultInjector?.("AFTER_FINAL_BEFORE_RETURN");
+      return { artifactHash, artifactIdentity, filename, relativePath, reused: false, ...(operationIdentity ? { operationIdentityHash: sha256(String(operationIdentity)), reservationEvidencePath } : {}) };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      return await verifyExisting();
+    }
+  } finally {
+    if (pendingHandle) await pendingHandle.close().catch(() => undefined);
+    await unlink(pendingPath).catch((error) => { if (error?.code !== "ENOENT") throw error; });
+  }
+}
+
 function committedArtifactReferenceSet(state) {
   return new Set((state?.productionJobs ?? []).flatMap((job) => {
     const artifact = job?.snapshot?.artifact;
@@ -9533,18 +9619,49 @@ export async function reconcileProductionArtifactStorage({ runtimeArtifactRoot, 
   try { entries = await readdir(root, { recursive: true }); }
   catch (error) { if (error?.code === "ENOENT") return Object.freeze({ checked: 0, committed: 0, quarantined: 0 }); throw error; }
   const reservations = entries.filter((entry) => String(entry).endsWith("-production.svg.reservation.json"));
-  if (reservations.length > 10_000) throw Object.assign(new Error("Te veel artifactreserveringen voor begrensde startupreconciliatie."), { code: "PRODUCTION_ARTIFACT_RECONCILIATION_LIMIT" });
+  const finals = entries.filter((entry) => String(entry).endsWith("-production.svg"));
+  const pending = entries.filter((entry) => /\.PLOT-\d{4}-\d{4,}-production\.svg\.pending-/u.test(String(entry).replaceAll("\\", "/")));
+  if ([reservations.length, finals.length, pending.length].some((count) => count > 10_000)) throw Object.assign(new Error("Te veel artifactobjecten in één startupreconciliatiecategorie."), { code: "PRODUCTION_ARTIFACT_RECONCILIATION_LIMIT" });
   const references = committedArtifactReferenceSet(state);
-  let committed = 0; let quarantined = 0;
+  const reservedPaths = new Set();
+  let checked = reservations.length; let committed = 0; let quarantined = 0;
   for (const relativeEvidence of reservations) {
     const evidencePath = path.resolve(root, relativeEvidence);
     const record = JSON.parse(await readFile(evidencePath, "utf8"));
+    reservedPaths.add(String(record.artifactPath).replaceAll("\\", "/"));
     const key = `${String(record.artifactPath).replaceAll("\\", "/")}|${String(record.artifactSha256).toUpperCase()}`;
     const artifact = { jobNumber: record.jobNumber, path: record.artifactPath, sha256: record.artifactSha256, operationIdentityHash: record.operationIdentityHash };
     if (references.has(key)) { await markProductionArtifactCommitted({ runtimeArtifactRoot, artifact, globalRevision: state.revision }); committed += 1; }
     else { await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts: [artifact], state, reason: "STARTUP_UNCOMMITTED_RECONCILIATION" }); quarantined += 1; }
   }
-  return Object.freeze({ checked: reservations.length, committed, quarantined });
+  for (const relativeFinal of finals) {
+    const artifactPath = path.join("outputs", "sportpaleis-plotjobs", relativeFinal).replaceAll(path.sep, "/");
+    if (reservedPaths.has(artifactPath)) continue;
+    checked += 1;
+    const absolute = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifactPath);
+    const bytes = await readFile(absolute);
+    const artifactHash = sha256(bytes).toUpperCase();
+    const jobNumber = String(relativeFinal).replaceAll("\\", "/").split("/")[0];
+    const key = `${artifactPath}|${artifactHash}`;
+    if (references.has(key)) continue;
+    await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts: [{ jobNumber, path: artifactPath, sha256: artifactHash, operationIdentityHash: sha256("MISSING_RESERVATION_EVIDENCE") }], state, reason: "STARTUP_FINAL_WITHOUT_RESERVATION" });
+    quarantined += 1;
+  }
+  for (const relativePending of pending) {
+    const normalized = String(relativePending).replaceAll("\\", "/");
+    const [jobNumber, hashDirectory] = normalized.split("/");
+    if (!/^PLOT-\d{4}-\d{4,}$/u.test(jobNumber) || !/^[a-f0-9]{64}$/u.test(hashDirectory)) throw Object.assign(new Error("Onderbroken artifactpad heeft geen geldige immutable identiteit."), { code: "PRODUCTION_ARTIFACT_PATH_INVALID" });
+    const source = path.resolve(root, relativePending);
+    const quarantineDirectory = checkedRuntimeArtifactPath(runtimeArtifactRoot, path.join("outputs", "sportpaleis-artifact-quarantine", jobNumber, hashDirectory));
+    await mkdir(quarantineDirectory, { recursive: true });
+    const destination = path.join(quarantineDirectory, `${path.basename(source)}.interrupted`);
+    if (await moveCreateOnly(source, destination)) {
+      await writeCreateOnlyEvidence(`${destination}.quarantine.json`, { schemaVersion: 1, status: "QUARANTINED_INTERRUPTED_PENDING", jobNumber, artifactSha256: hashDirectory.toUpperCase(), sourcePath: path.join("outputs", "sportpaleis-plotjobs", normalized).replaceAll(path.sep, "/"), reason: "STARTUP_PENDING_RECONCILIATION", businessStateMutated: false, immutableEvidencePreserved: true });
+      quarantined += 1;
+    }
+  }
+  checked += pending.length;
+  return Object.freeze({ checked, committed, quarantined });
 }
 
 function buildVersionedProductionArtifact(state, orders, productionLines, jobNumber, createdAt, artifactRoot, runtimeArtifactRoot, options = {}) {
@@ -9654,6 +9771,7 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   return {
     cutJob,
     preview,
+    artifactPayload: svg,
     productionDataHash,
     sources: resolved.map(({ source }) => source),
     outputWriter: { ...CUTJOB_SVG_WRITER },
@@ -9703,6 +9821,7 @@ export function buildProductionJobSnapshot(state, orders, jobNumber, createdAt =
     fontSources, logoSources,
     productionProfile: { id: firstProfile?.id ?? "generic-production-line-core", revision: firstProfile?.revision ?? 1, name: firstProfile?.name ?? "Generiek productieregelmodel" },
     sourceContours,
+    ...(options.returnArtifactPayload === true && productionArtifact ? { artifactPayload: productionArtifact.artifactPayload } : {}),
     ...(productionArtifact ? { outputWriter: { id: productionArtifact.outputWriter.id, version: productionArtifact.outputWriter.version, format: productionArtifact.outputWriter.format, proofStatus: productionArtifact.outputWriter.proofStatus, physicalRouteStatus: productionArtifact.outputWriter.physicalRouteStatus } } : {}),
     generationMetrics: productionArtifact ? { ...productionArtifact.generationMetrics, snapshotTotalMs: Math.round((performance.now() - snapshotStartedAt) * 10) / 10 } : null,
     productionGroup: { ...(productionGroup?.groupId ? { id: productionGroup.groupId, label: productionGroup.groupLabel } : {}), ...(productionGroup?.sourceChannel ? { sourceChannel: productionGroup.sourceChannel } : {}), foilColor: productionGroup?.foilColor ?? ([...new Set(orders.flatMap(({ items }) => items.map(({ foilColor }) => foilColor)))].join(" + ") || defaults.defaultFoilColor), material: "Folie · menselijke controle", workingWidthMm: defaults.workingWidthMm, maxSafeTrackWidthMm: defaults.maxSafeTrackWidthMm },

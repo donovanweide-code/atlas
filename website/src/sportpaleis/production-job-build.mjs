@@ -46,6 +46,7 @@ function runBuildWorker(input, timeoutMs, workerFactory) {
     let worker;
     let timer;
     let settled = false;
+    let terminationError;
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
@@ -63,12 +64,12 @@ function runBuildWorker(input, timeoutMs, workerFactory) {
       return;
     }
     timer = setTimeout(() => {
-      worker.terminate().catch(() => undefined);
-      finish(reject, buildError({
+      terminationError = buildError({
         message: "De productieopbouw duurde te lang en is veilig gestopt; er is niets geregistreerd.",
         code: "PRODUCTION_JOB_BUILD_TIMEOUT",
         statusCode: 503,
-      }));
+      });
+      worker.terminate().catch(() => finish(reject, terminationError));
     }, Math.max(1_000, Number(timeoutMs) || DEFAULT_BUILD_TIMEOUT_MS));
     timer.unref?.();
     worker.once("message", (message) => {
@@ -76,15 +77,15 @@ function runBuildWorker(input, timeoutMs, workerFactory) {
       if (message?.ok) finish(resolve, message.snapshot);
       else finish(reject, buildError(message?.error));
     });
-    worker.once("error", (error) => finish(reject, buildError({
+    worker.once("error", (error) => finish(reject, terminationError ?? buildError({
       message: "De geïsoleerde productieopbouw is veilig gestopt; er is niets geregistreerd.",
       code: error?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "PRODUCTION_JOB_BUILD_RESOURCE_LIMIT" : "PRODUCTION_JOB_BUILD_FAILED",
       statusCode: 503,
     })));
     worker.once("exit", (code) => {
-      if (code !== 0) finish(reject, buildError({
+      finish(reject, terminationError ?? buildError({
         message: "De geïsoleerde productieopbouw is veilig gestopt; er is niets geregistreerd.",
-        code: "PRODUCTION_JOB_BUILD_FAILED",
+        code: code === 0 ? "PRODUCTION_JOB_BUILD_NO_RESULT" : "PRODUCTION_JOB_BUILD_FAILED",
         statusCode: 503,
       }));
     });

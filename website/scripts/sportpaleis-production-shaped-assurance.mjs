@@ -5,13 +5,12 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { Worker } from "node:worker_threads";
 import mariadb from "mariadb";
 
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { materializeLegacyRollbackState } from "./sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "./workspace-domain-state.mjs";
-import { createSportpaleisPilotRequestHandler, reserveImmutableProductionArtifact, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
+import { createSportpaleisPilotRequestHandler, reconcileProductionArtifactStorage, reserveImmutableProductionArtifact, reserveImmutableProductionArtifactAsync, SportpaleisPilotService } from "./sportpaleis-pilot-foundation.mjs";
 import { buildProductionJobSnapshotIsolated, productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 import { inspectProductionAssetSvg } from "../src/sportpaleis/production-assets-svg.mjs";
 
@@ -341,19 +340,6 @@ async function storeInitialize() {
   const originalProposalHashes = new Map(practiceBefore.productionProposals.map((proposal) => [proposal.id, sha256CanonicalJson(proposal)]));
   const font = practiceBefore.productionFonts.find(({ name, status }) => name === "Spain Euro 2016" && status === "TECHNICALLY_VALID");
   assert.ok(font, "authoritative Spain Euro 2016 ontbreekt in de production-shaped restore");
-  const workerCrashArtifactsBefore = await productionArtifactInventory();
-  await assert.rejects(
-    buildProductionJobSnapshotIsolated({}, {
-      operationIdentity: `assurance-worker-crash-${candidateCommit}`,
-      workerFactory: () => new Worker("process.exit(23)", { eval: true }),
-    }),
-    (error) => error?.code === "PRODUCTION_JOB_BUILD_FAILED" && error?.statusCode === 503,
-    "een workercrash moet fail-closed als herstelbare productiebouwfout eindigen",
-  );
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(productionJobBuildLoad(), { active: 0, queued: 0, inFlight: 0, maximumConcurrent: 1, maximumQueued: 4 }, "workercrash liet queue- of in-flightstate achter");
-  assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "workercrash liet een zichtbaar of gequarantaineerd orphanartifact achter");
-  const workerCrashRecoveredWithoutOrphan = true;
   const createControlledSourceOrder = async (source, key) => {
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
       orderKind: "CUSTOM", source,
@@ -370,6 +356,64 @@ async function storeInitialize() {
     orders: [storeOrder, webshopOrder].map(({ id, revision }) => ({ id, expectedRevision: revision })),
   }, "assurance-channel-proposal")).value;
   assert.deepEqual(channelProposal.groups.map(({ sourceChannel }) => sourceChannel), ["STORE", "WEBSHOP_XPRT"], "kanaalfixture leverde niet twee gelijke-kleurbrongroepen");
+  const crashOperationIdentity = `assurance-worker-crash-${candidateCommit}`;
+  const crashGroup = channelProposal.groups[0];
+  const crashState = await store.readSnapshot();
+  const crashProjectedState = Object.fromEntries(["organizationId", "settings", "associations", "articles", "productionProfiles", "productionFonts", "productionElements", "productionAssetSources", "foilRolls"].map((key) => [key, crashState[key]]));
+  const crashInput = {
+    state: crashProjectedState,
+    orders: [storeOrder],
+    jobNumber: "PLOT-9999-9998",
+    createdAt: new Date().toISOString(),
+    artifactRoot,
+    runtimeArtifactRoot: artifactRoot,
+    productionGroup: { installedProductionAssetRoot: `${artifactRoot}/installed-assets`, lineRefs: crashGroup.productionLineRefs, foilColor: crashGroup.foilColor, sourceChannel: crashGroup.sourceChannel, groupId: crashGroup.id, groupLabel: crashGroup.label },
+    options: { installedProductionAssetRoot: `${artifactRoot}/installed-assets`, operationIdentity: crashOperationIdentity, persistArtifacts: false, returnArtifactPayload: true },
+    assuranceFault: "EXIT_AFTER_BUILD_BEFORE_MESSAGE",
+  };
+  const workerCrashArtifactsBefore = await productionArtifactInventory();
+  const workerCrashStateBefore = await store.readSnapshot();
+  process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED = "1";
+  try {
+    await assert.rejects(
+      buildProductionJobSnapshotIsolated(crashInput, { operationIdentity: crashOperationIdentity }),
+      (error) => error?.code === "PRODUCTION_JOB_BUILD_FAILED" && error?.statusCode === 503,
+      "een crash na echte productieopbouw maar vóór workerbericht moet fail-closed eindigen",
+    );
+  } finally {
+    delete process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED;
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(productionJobBuildLoad(), { active: 0, queued: 0, inFlight: 0, maximumConcurrent: 1, maximumQueued: 4 }, "workercrash liet queue- of in-flightstate achter");
+  assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "workercrash na echte build liet een zichtbaar of gequarantaineerd orphanartifact achter");
+  const workerCrashStateAfter = await store.readSnapshot();
+  assert.deepEqual(workerCrashStateAfter.orders.map(sha256CanonicalJson), workerCrashStateBefore.orders.map(sha256CanonicalJson), "workercrash wijzigde orders");
+  assert.deepEqual(workerCrashStateAfter.productionJobs.map(sha256CanonicalJson), workerCrashStateBefore.productionJobs.map(sha256CanonicalJson), "workercrash wijzigde PlotJobs");
+  assert.deepEqual(workerCrashStateAfter.productionProposals.map(sha256CanonicalJson), workerCrashStateBefore.productionProposals.map(sha256CanonicalJson), "workercrash wijzigde voorstellen");
+  const workerCrashRetry = await buildProductionJobSnapshotIsolated({ ...crashInput, assuranceFault: undefined }, { operationIdentity: crashOperationIdentity });
+  assert.equal(workerCrashRetry.artifact?.format, "SVG", "retry na workercrash leverde geen deterministische SVG-snapshot");
+  assert.deepEqual(await productionArtifactInventory(), workerCrashArtifactsBefore, "dry-buildretry reserveerde ten onrechte vóór parent-side commitgrens");
+  const workerCrashRecoveredWithoutOrphan = true;
+  const parentFaultOperation = `assurance-parent-reservation-crash-${candidateCommit}`;
+  const parentFaultBytes = Buffer.from(workerCrashRetry.artifactPayload, "utf8");
+  await assert.rejects(
+    reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9997", bytes: parentFaultBytes, operationIdentity: parentFaultOperation, faultInjector: (point) => {
+      if (point === "AFTER_FINAL_BEFORE_RETURN") throw Object.assign(new Error("assurance parent reservation crash"), { code: "ASSURANCE_PARENT_RESERVATION_CRASH" });
+    } }),
+    (error) => error?.code === "ASSURANCE_PARENT_RESERVATION_CRASH",
+  );
+  const parentFaultPrepared = await productionArtifactInventory();
+  assert.ok(parentFaultPrepared.visible.some((entry) => entry.endsWith("PLOT-9999-9997-production.svg")), "fault-injection bereikte de final-link niet");
+  assert.ok(parentFaultPrepared.visible.some((entry) => entry.endsWith("PLOT-9999-9997-production.svg.reservation.json")), "evidence bestond niet vóór de final-link");
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: 1, committed: 0, quarantined: 1 }, "parentcrash werd niet begrensd gereconcilieerd");
+  const parentFaultReconciled = await productionArtifactInventory();
+  assert.deepEqual(parentFaultReconciled.visible, workerCrashArtifactsBefore.visible, "parentcrash liet een zichtbare orphan achter");
+  assert.ok(parentFaultReconciled.quarantine.length > workerCrashArtifactsBefore.quarantine.length, "parentcrash behield geen immutable quarantine-evidence");
+  const parentRetry = await reserveImmutableProductionArtifactAsync({ runtimeArtifactRoot: artifactRoot, jobNumber: "PLOT-9999-9997", bytes: parentFaultBytes, operationIdentity: parentFaultOperation });
+  assert.equal(parentRetry.reused, false, "retry na gereconcilieerde parentcrash adopteerde ten onrechte een zichtbare final");
+  assert.deepEqual(await reconcileProductionArtifactStorage({ runtimeArtifactRoot: artifactRoot, state: workerCrashStateAfter }), { checked: 1, committed: 0, quarantined: 1 }, "retryevidence werd niet opnieuw zonder duplicaat gereconcilieerd");
+  assert.deepEqual((await productionArtifactInventory()).visible, workerCrashArtifactsBefore.visible, "retry na parentcrash liet een zichtbare orphan achter");
+  const parentReservationCrashRecoveredWithoutOrphan = true;
   const raceKeys = ["assurance-channel-store-job", "assurance-channel-webshop-job"];
   const raceDbBefore = {
     jobs: Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'productionJobs'", [practiceBefore.organizationId]))[0].count),
@@ -553,7 +597,7 @@ async function storeInitialize() {
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
     practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

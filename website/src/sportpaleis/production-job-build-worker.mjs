@@ -13,6 +13,7 @@ try {
     workerData.productionGroup,
     workerData.options,
   );
+  if (process.env.SPORTPALEIS_ASSURANCE_FAULTS_ENABLED === "1" && workerData.assuranceFault === "EXIT_AFTER_BUILD_BEFORE_MESSAGE") process.exit(23);
   parentPort.postMessage({ ok: true, snapshot });
 } catch (error) {
   parentPort.postMessage({
