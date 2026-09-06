@@ -16,6 +16,8 @@ test("V4-soakdrempels behouden V3 en zijn zwaarder dan of gelijk aan de falende 
   assert.deepEqual(contract.minimumLoad.largeFreeProductionHeightsMm, [80, 200]);
   assert.equal(contract.minimumLoad.quantityPerValue, 2);
   assert.ok(contract.minimumLoad.mariaDbBatchRows > 200, "echte MariaDB-gate forceert minimaal twee writebatches");
+  assert.ok(contract.minimumLoad.concurrentMutations >= 20, "mutationlane krijgt production-shaped concurrency");
+  assert.ok(contract.limits.ordinaryMutationDuringProductionMaxMs <= 1500, "gewone writes blijven ook tijdens productie begrensd");
   assert.ok(contract.limits.eventLoopMaxMs <= 1000);
   assert.ok(contract.limits.eventLoopP95Ms <= 100);
   assert.ok(contract.limits.rssHighWaterBytes <= 1073741824);
@@ -28,7 +30,7 @@ test("V4-soakdrempels behouden V3 en zijn zwaarder dan of gelijk aan de falende 
   assert.equal(contract.limits.databaseAcquireTimeouts, 0);
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.production < 6_534_299, "productionbootstrap blijft onder de gemeten monolithische nulmeting");
   assert.ok(contract.limits.bootstrapSurfaceMaxBytes.library < contract.limits.bootstrapSurfaceMaxBytes.production);
-  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "sameColorSourceConcurrency", "workerCrashRecoveredWithoutOrphan", "parentReservationCrashRecoveredWithoutOrphan", "productionIdempotency", "productionArtifactReconciliation", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads", "expiredAndRevokedSessions", "coldAndWarmBootstrap", "managedFoilColorsComplete", "boundedSvgProcessing", "staleReadsPrevented", "transactionRollbackProven", "restartRecovery", "mariaDbMultiBatchRollback", "multiCycleSoakCompleted", "soakMemoryRecovered", "soakMemoryTrendStable", "soakQueueStable", "noLegacyMonolithLoads"]) assert.ok(contract.requiredInvariants.includes(required));
+  for (const required of ["largeFreeProduction80Mm", "largeFreeProduction200Mm", "sameColorSourceConcurrency", "workerCrashRecoveredWithoutOrphan", "parentReservationCrashRecoveredWithoutOrphan", "productionIdempotency", "productionArtifactReconciliation", "rollbackMaterializationProven", "domainRecordWritesIncremental", "scopedBootstrapPayloads", "expiredAndRevokedSessions", "coldAndWarmBootstrap", "managedFoilColorsComplete", "boundedSvgProcessing", "staleReadsPrevented", "transactionRollbackProven", "restartRecovery", "productionPreparationDoesNotBlockMutations", "mutationLaneBounded", "mariaDbMultiBatchRollback", "multiCycleSoakCompleted", "soakMemoryRecovered", "soakMemoryTrendStable", "soakQueueStable", "noLegacyMonolithLoads"]) assert.ok(contract.requiredInvariants.includes(required));
 });
 
 test("releaseartifact en broker binden dezelfde immutable gatecode en het drempelcontract", async () => {
@@ -71,6 +73,10 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(assurance, /boundedSvgProcessing/u);
   assert.match(assurance, /transactionRollbackProven/u);
   assert.match(assurance, /ASSURANCE_BATCH_TWO_FAILURE/u);
+  assert.match(assurance, /mutationLaneBounded/u);
+  assert.match(assurance, /productionPreparationDoesNotBlockMutations/u);
+  assert.match(assurance, /x-assurance-delay-response/u);
+  assert.match(assurance, /httpResponseAbortedAfterServerCommit/u);
   assert.match(assurance, /mariaDbMultiBatchRollback/u);
   assert.match(assurance, /soakMemoryTrendStable/u);
   assert.match(assurance, /soakQueueStable/u);

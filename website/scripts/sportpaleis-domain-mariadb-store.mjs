@@ -31,6 +31,14 @@ const defaultMigrationFile = path.resolve(scriptDirectory, "..", "sportpaleis-se
 const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
 const REQUIRED_MIGRATION_VERSION = 7;
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
+const MAX_MUTATION_QUEUE = 32;
+
+function retryableStoreError(message, code, statusCode) {
+  const error = new SportpaleisMariaDbStoreError(message, code);
+  error.statusCode = statusCode;
+  error.retryable = true;
+  return error;
+}
 
 function databaseOptions(config) {
   return {
@@ -285,6 +293,7 @@ function createMetrics() {
     preparedMutations: 0, preparedMutationMsTotal: 0, preparedMutationMsMax: 0,
     transactionHoldMsTotal: 0, transactionHoldMsMax: 0,
     writeBatches: 0, writeBatchRows: 0, writeBatchMaxRows: 0,
+    mutationQueueDepth: 0, mutationQueueHighWater: 0, mutationActive: 0, mutationActiveHighWater: 0, mutationBackpressureRejects: 0,
     transactionPhaseMsMax: { begin: 0, lockMeta: 0, preparedValidation: 0, prepareInsideTransaction: 0, writeDomains: 0, updateMeta: 0, commit: 0, failed: 0 },
     transactionSlowest: null,
   };
@@ -304,6 +313,8 @@ export class SportpaleisDomainMariaDbStore {
     this.schemaVersion = null;
     this.snapshot = null;
     this.refreshPromise = null;
+    this.mutationTail = Promise.resolve();
+    this.mutationQueueDepth = 0;
     this.metrics = createMetrics();
   }
 
@@ -565,6 +576,19 @@ export class SportpaleisDomainMariaDbStore {
   }
 
   async mutate(mutator, preparedCommand = null) {
+    if (preparedCommand) return this.#enqueueMutation(() => this.#commitPreparedCommand(preparedCommand));
+    // Ordinary commands deliberately keep preparation and commit in the same
+    // bounded lane. They therefore cannot prepare against another local
+    // ordinary command while all CPU-heavy work still happens before a
+    // database connection is acquired.
+    return this.#enqueueMutation(async () => {
+      const prepared = await this.#prepareMutationCommand(mutator, { refresh: false, draftFactory: createLazySportpaleisStateDraft });
+      if (prepared.completed) return prepared.completed;
+      return this.#commitPreparedCommand(prepared.command);
+    });
+  }
+
+  async #commitPreparedCommand(preparedCommand) {
     const connection = await this.#connection();
     const transactionStartedAt = performance.now();
     let phaseStartedAt = transactionStartedAt;
@@ -589,30 +613,18 @@ export class SportpaleisDomainMariaDbStore {
       );
       if (meta.length !== 1 || Number(meta[0].contract_version) !== SPORTPALEIS_DOMAIN_CONTRACT_VERSION) throw new SportpaleisMariaDbStoreError("Domeinmetadata ontbreekt.", "DOMAIN_META_INVALID");
       if (this.globalRevision !== Number(meta[0].global_revision)) {
-        throw new SportpaleisMariaDbStoreError("De lokale domeinsnapshot is verouderd; herhaal veilig na refresh.", "DOMAIN_SNAPSHOT_STALE");
+        throw retryableStoreError("De Workspace is intussen gewijzigd; herhaal deze handeling veilig.", "DOMAIN_SNAPSHOT_STALE", 409);
       }
       completePhase("lockMeta");
       const current = this.snapshot;
       let result;
       let persistence;
-      if (preparedCommand) {
-        if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw new SportpaleisMariaDbStoreError("De voorbereide productieopdracht is verouderd.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
-        result = { value: preparedCommand.value };
-        persistence = preparedCommand.persistence;
-        if (!persistence || Number(persistence.baseRevision) !== Number(this.globalRevision)) throw new SportpaleisMariaDbStoreError("De voorbereide persistentieopdracht is verouderd.", "DOMAIN_PREPARED_SNAPSHOT_STALE");
-      } else {
-        const lazy = createLazySportpaleisStateDraft(current);
-        phase = "mutator";
-        result = await mutator(lazy.draft);
-        if (result.unchanged === true) {
-          this.metrics.unchangedMutations += 1;
-          await connection.rollback();
-          return { state: current, value: result.value };
-        }
-        persistence = prepareMutationPersistence({ current, finalized: lazy.finalize(), globalRevision: this.globalRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
-      }
+      if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw retryableStoreError("De voorbereide handeling is verouderd; vernieuw en probeer veilig opnieuw.", "DOMAIN_PREPARED_SNAPSHOT_STALE", 409);
+      result = { value: preparedCommand.value };
+      persistence = preparedCommand.persistence;
+      if (!persistence || Number(persistence.baseRevision) !== Number(this.globalRevision)) throw retryableStoreError("De voorbereide persistentie is verouderd; vernieuw en probeer veilig opnieuw.", "DOMAIN_PREPARED_SNAPSHOT_STALE", 409);
       persistedDomains = persistence.domains.map(({ domain }) => domain);
-      completePhase(preparedCommand ? "preparedValidation" : "prepareInsideTransaction");
+      completePhase("preparedValidation");
       this.metrics.mutations += 1;
       this.metrics.clonedKeys += persistence.clonedKeys;
       const { nextRevision } = persistence;
@@ -677,7 +689,7 @@ export class SportpaleisDomainMariaDbStore {
           "UPDATE sp_workspace_domain_state SET domain_revision = domain_revision + 1, global_revision = ?, payload_json = ?, payload_sha256 = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND domain_key = ? AND domain_revision = ?",
           [nextRevision, domainPlan.payloadJson, domainPlan.payloadSha256, ORGANIZATION_ID, domain, domainPlan.priorDomainRevision],
         );
-        if (Number(update.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError(`Gelijktijdige wijziging in domein ${domain}.`, "DOMAIN_CONCURRENCY_CONFLICT");
+        if (Number(update.affectedRows) !== 1) throw retryableStoreError(`Domein ${domain} wijzigde gelijktijdig; vernieuw en probeer veilig opnieuw.`, "DOMAIN_CONCURRENCY_CONFLICT", 409);
         this.metrics.domainWrites += 1;
       }
       completePhase("writeDomains");
@@ -685,7 +697,7 @@ export class SportpaleisDomainMariaDbStore {
         "UPDATE sp_workspace_domain_meta SET global_revision = ?, schema_version = ?, cutover_mode = 'DOMAIN_READS', updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ?",
         [nextRevision, this.schemaVersion, ORGANIZATION_ID, this.globalRevision],
       );
-      if (Number(metaUpdate.affectedRows) !== 1) throw new SportpaleisMariaDbStoreError("Gelijktijdige Workspace-wijziging is geweigerd.", "DATABASE_CONCURRENCY_CONFLICT");
+      if (Number(metaUpdate.affectedRows) !== 1) throw retryableStoreError("De Workspace wijzigde gelijktijdig; vernieuw en probeer veilig opnieuw.", "DATABASE_CONCURRENCY_CONFLICT", 409);
       completePhase("updateMeta");
       phase = "commit";
       await connection.commit();
@@ -728,25 +740,57 @@ export class SportpaleisDomainMariaDbStore {
   // revision lock and incremental domain/record transaction remain the only
   // commit boundary. A concurrent writer makes the prepared command stale and
   // fails closed; callers can retry with the same idempotency identity.
-  async prepareAndCommit(mutator) {
+  async prepareAndCommit(mutator, { refresh = true, draftFactory = createPreparedSportpaleisStateDraft } = {}) {
+    // Production preparation can include worker execution and immutable
+    // artifact reservation. It must never occupy the ordinary mutation lane:
+    // prepare from an immutable snapshot first, then enqueue only the short
+    // revision-checked database commit. Revision drift fails closed and is
+    // retried by the production service with the same idempotency identity.
+    const prepared = await this.#prepareMutationCommand(mutator, { refresh, draftFactory });
+    if (prepared.completed) return prepared.completed;
+    return this.#enqueueMutation(() => this.#commitPreparedCommand(prepared.command));
+  }
+
+  async #prepareMutationCommand(mutator, { refresh, draftFactory }) {
     const preparationStartedAt = performance.now();
-    await this.#refresh(false);
+    if (refresh) await this.#refresh(false);
     const baseRevision = this.globalRevision;
     const baseSnapshot = this.snapshot;
-    const lazy = createPreparedSportpaleisStateDraft(baseSnapshot);
+    const lazy = draftFactory(baseSnapshot);
     const preparedResult = await mutator(lazy.draft);
     if (preparedResult.unchanged === true) {
       this.metrics.unchangedMutations += 1;
-      return { state: baseSnapshot, value: preparedResult.value };
+      return { completed: { state: baseSnapshot, value: preparedResult.value } };
     }
     const prepared = lazy.finalize();
-    if (prepared.changedKeys.length === 0) return { state: baseSnapshot, value: preparedResult.value };
+    if (prepared.changedKeys.length === 0) return { completed: { state: baseSnapshot, value: preparedResult.value } };
     const persistence = prepareMutationPersistence({ current: baseSnapshot, finalized: prepared, globalRevision: baseRevision, schemaVersion: this.schemaVersion, domainCache: this.domainCache, domainRevisions: this.domainRevisions, recordOrdinals: this.recordOrdinals });
     const preparationMs = performance.now() - preparationStartedAt;
     this.metrics.preparedMutations += 1;
     this.metrics.preparedMutationMsTotal += preparationMs;
     this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
-    return this.mutate(null, { baseRevision, persistence, value: preparedResult.value });
+    return { command: { baseRevision, persistence, value: preparedResult.value } };
+  }
+
+  #enqueueMutation(operation) {
+    if (this.mutationQueueDepth >= MAX_MUTATION_QUEUE) {
+      this.metrics.mutationBackpressureRejects += 1;
+      return Promise.reject(retryableStoreError("De Workspace verwerkt al meerdere wijzigingen; probeer deze handeling zo opnieuw.", "DOMAIN_MUTATION_BACKPRESSURE", 503));
+    }
+    this.mutationQueueDepth += 1;
+    this.metrics.mutationQueueDepth = this.mutationQueueDepth;
+    this.metrics.mutationQueueHighWater = Math.max(this.metrics.mutationQueueHighWater, this.mutationQueueDepth);
+    const run = this.mutationTail.then(async () => {
+      this.metrics.mutationActive += 1;
+      this.metrics.mutationActiveHighWater = Math.max(this.metrics.mutationActiveHighWater, this.metrics.mutationActive);
+      try { return await operation(); }
+      finally { this.metrics.mutationActive -= 1; }
+    });
+    this.mutationTail = run.then(() => undefined, () => undefined);
+    return run.finally(() => {
+      this.mutationQueueDepth -= 1;
+      this.metrics.mutationQueueDepth = this.mutationQueueDepth;
+    });
   }
 
   async latestBackupStatus() { return { status: "external", strategy: "encrypted-logical-dump-plus-provider-backup" }; }

@@ -87,6 +87,7 @@ const pool = mariadb.createPool({ socketPath: "/run/mysqld/mysqld.sock", user: "
 const rssStartBytes = process.memoryUsage().rss;
 let server;
 let bootstrapRequestsReceived = 0;
+let delayedMutationResponseReady = null;
 const handlerErrors = [];
 const timings = [];
 const bootstrapFieldBytes = {};
@@ -201,6 +202,17 @@ async function storeInitialize() {
   const handler = createSportpaleisPilotRequestHandler(service, { onError: (entry) => handlerErrors.push(entry) });
   server = createServer(async (request, response) => {
     if (request.url?.startsWith("/api/sportpaleis/v1/bootstrap")) bootstrapRequestsReceived += 1;
+    if (request.headers["x-assurance-delay-response"] === "1" && delayedMutationResponseReady) {
+      const originalEnd = response.end.bind(response);
+      response.end = (...args) => {
+        const signalReady = delayedMutationResponseReady;
+        delayedMutationResponseReady = null;
+        signalReady();
+        const timer = setTimeout(() => originalEnd(...args), 250);
+        timer.unref();
+        return response;
+      };
+    }
     if (!(await handler(request, response))) { response.statusCode = 404; response.end(); }
   });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
@@ -328,12 +340,43 @@ async function storeInitialize() {
   await assert.rejects(store.mutate(async (state) => {
     state.preferences[normalUser.id].density = "assurance-rollback-probe";
     throw Object.assign(new Error("assurance rollback probe"), { code: "ASSURANCE_ROLLBACK_PROBE" });
-  }), (error) => error?.code === "DOMAIN_TRANSACTION_FAILED" && error?.cause?.code === "ASSURANCE_ROLLBACK_PROBE");
+  }), (error) => error?.code === "ASSURANCE_ROLLBACK_PROBE");
   const afterRollbackProbe = await store.readSnapshot();
   assert.equal(afterRollbackProbe.revision, beforeRollbackProbe.revision, "afgebroken mutatie wijzigde revision");
   assert.equal(afterRollbackProbe.preferences[normalUser.id].density, nextDensity, "afgebroken mutatie lekte gedeeltelijke state");
 
+  await enterLoadPhase("mutation-lane-concurrency");
+  const mutationLaneCount = assuranceContract.minimumLoad.concurrentMutations;
+  assert.ok(Number.isInteger(mutationLaneCount) && mutationLaneCount >= 20, "mutationlanecontract vereist minimaal twintig gelijktijdige commands");
+  const mutationLaneBefore = await store.readSnapshot();
+  const mutationLaneAuditBefore = mutationLaneBefore.audit.length;
+  const mutationLaneOperation = (index, kind) => async (state) => {
+    state.preferences[`assurance-lane-${index}`] = { density: index % 2 ? "compact" : "comfortable", kind };
+    state.audit.push({ id: `audit-assurance-lane-${candidateCommit.slice(0, 12)}-${index}`, at: new Date(Date.UTC(2026, 8, 6, 8, 0, index)).toISOString(), actorId: normalUser.id, action: "MUTATION_LANE_ASSURANCE", targetId: `assurance-lane-${index}`, details: { kind } });
+    return { state, value: { index, kind } };
+  };
+  const ordinaryMutationLane = Array.from({ length: mutationLaneCount }, (_, index) => store.mutate(mutationLaneOperation(index, "ordinary")));
+  const mutationLaneResults = await Promise.all(ordinaryMutationLane);
+  const mutationLaneAfter = await store.readSnapshot();
+  assert.deepEqual(mutationLaneResults.map(({ value }) => value.index), Array.from({ length: mutationLaneCount }, (_, index) => index), "mutationlane verloor of verwisselde een command");
+  assert.deepEqual(mutationLaneResults.map(({ state }) => state.revision), Array.from({ length: mutationLaneCount }, (_, index) => mutationLaneBefore.revision + index + 1), "mutationlane committe niet monotoon");
+  assert.equal(mutationLaneAfter.audit.length, mutationLaneAuditBefore + mutationLaneCount, "mutationlane mist auditevidence");
+  const mutationLaneMetrics = store.metricsSnapshot();
+  const mutationLane = {
+    commands: mutationLaneCount,
+    activeHighWater: mutationLaneMetrics.mutationActiveHighWater,
+    queueHighWater: mutationLaneMetrics.mutationQueueHighWater,
+    queueDepthAfter: mutationLaneMetrics.mutationQueueDepth,
+    backpressureRejects: mutationLaneMetrics.mutationBackpressureRejects,
+    monotoneCommits: true,
+    auditAppends: mutationLaneCount,
+  };
+  assert.equal(mutationLane.activeHighWater, 1, "mutationpreparation liep onbeperkt parallel");
+  assert.equal(mutationLane.queueDepthAfter, 0, "mutationlane hield afgewerkte commands vast");
+  assert.equal(mutationLane.backpressureRejects, 0, "toegestane production-shaped concurrency raakte backpressure");
+
   await enterLoadPhase("mariadb-multibatch-rollback");
+  const mariaDbMultiBatch = await (async () => {
   const batchRowCount = assuranceContract.minimumLoad.mariaDbBatchRows;
   assert.ok(Number.isInteger(batchRowCount) && batchRowCount > 200, "MariaDB multibatchcontract vereist meer dan 200 records");
   const batchPrefix = `assurance-multibatch-${candidateCommit.slice(0, 12)}-`;
@@ -395,9 +438,11 @@ async function storeInitialize() {
   const metaAfterBatchFailure = (await pool.query("SELECT global_revision FROM sp_workspace_domain_meta WHERE organization_id = ?", [before.organizationId]))[0];
   assert.equal(Number(metaAfterBatchFailure.global_revision), Number(metaBeforeBatch.global_revision), "batchrollback wijzigde de globale revision");
   assert.equal(Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ?", [before.organizationId, `${batchPrefix}%`]))[0].count), 0, "batchrollback liet gedeeltelijke records achter");
-  const restartAfterBatchFailure = new SportpaleisDomainMariaDbStore({ pool });
-  await restartAfterBatchFailure.initialize();
-  assert.equal(hashJson((await restartAfterBatchFailure.readSnapshot()).articles), originalArticlesHash, "restart na batchrollback week af van de bronstate");
+  let restartProbe = new SportpaleisDomainMariaDbStore({ pool });
+  await restartProbe.initialize();
+  assert.equal(hashJson((await restartProbe.readSnapshot()).articles), originalArticlesHash, "restart na batchrollback week af van de bronstate");
+  restartProbe = null;
+  global.gc?.();
 
   injectSecondBatchFailure = false;
   const batchCommit = await batchStore.prepareAndCommit(applyBatchFixture);
@@ -411,9 +456,11 @@ async function storeInitialize() {
   assert.equal(new Set(persistedBatchRows.map(({ record_id }) => record_id)).size, batchRowCount, "multibatchretry maakte dubbele identities");
   assert.equal(new Set(persistedBatchRows.map(({ ordinal }) => Number(ordinal))).size, batchRowCount, "multibatchretry maakte dubbele ordinals");
   assert.ok(persistedBatchRows.every(({ record_sha256 }) => /^[a-f0-9]{64}$/u.test(record_sha256)), "multibatchretry mist recordhashes");
-  const restartAfterBatchCommit = new SportpaleisDomainMariaDbStore({ pool });
-  await restartAfterBatchCommit.initialize();
-  assert.equal((await restartAfterBatchCommit.readSnapshot()).articles.filter(({ id }) => id.startsWith(batchPrefix)).length, batchRowCount, "restart verloor multibatchrecords");
+  restartProbe = new SportpaleisDomainMariaDbStore({ pool });
+  await restartProbe.initialize();
+  assert.equal((await restartProbe.readSnapshot()).articles.filter(({ id }) => id.startsWith(batchPrefix)).length, batchRowCount, "restart verloor multibatchrecords");
+  restartProbe = null;
+  global.gc?.();
   const batchMetrics = batchStore.metricsSnapshot();
   assert.ok(batchMetrics.writeBatches >= 3 && batchMetrics.writeBatchRows >= batchRowCount && batchMetrics.writeBatchMaxRows === 200, "echte MariaDB-multibatchgrens is niet gebruikt");
   assert.ok(batchMetrics.transactionHoldMsMax <= assuranceContract.limits.databaseTransactionHoldMaxMs, `MariaDB-multibatch hield de transactie ${batchMetrics.transactionHoldMsMax} ms vast`);
@@ -422,11 +469,12 @@ async function storeInitialize() {
     state.articles = state.articles.filter(({ id }) => !id.startsWith(batchPrefix));
     return { state, value: null };
   });
-  const restartAfterBatchCleanup = new SportpaleisDomainMariaDbStore({ pool });
-  await restartAfterBatchCleanup.initialize();
-  assert.equal(hashJson((await restartAfterBatchCleanup.readSnapshot()).articles), originalArticlesHash, "multibatchcleanup herstelde de authentieke articles niet byte-semantisch");
+  restartProbe = new SportpaleisDomainMariaDbStore({ pool });
+  await restartProbe.initialize();
+  assert.equal(hashJson((await restartProbe.readSnapshot()).articles), originalArticlesHash, "multibatchcleanup herstelde de authentieke articles niet byte-semantisch");
+  restartProbe = null;
   assert.equal(Number((await pool.query("SELECT COUNT(*) AS count FROM sp_workspace_domain_record WHERE organization_id = ? AND collection_key = 'articles' AND record_id LIKE ?", [before.organizationId, `${batchPrefix}%`]))[0].count), 0, "multibatchcleanup liet fixture-records achter");
-  const mariaDbMultiBatch = {
+  return {
     rows: batchRowCount,
     injectedFailureBatch: 2,
     retryRevision: revisionAfterBatchCommit,
@@ -439,6 +487,8 @@ async function storeInitialize() {
     retryExactlyOnce: true,
     cleanupHashEqual: true,
   };
+  })();
+  global.gc?.();
 
   await enterLoadPhase("large-free-production");
   const practiceBefore = await store.readSnapshot();
@@ -595,6 +645,7 @@ async function storeInitialize() {
   return { sameColorSourceConcurrency, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan };
   };
   const practiceRuns = [];
+  let productionPreparationConcurrency = null;
   for (const heightMm of assuranceContract.minimumLoad.largeFreeProductionHeightsMm) {
     const operationPrefix = `assurance-${candidateCommit.slice(0, 12)}-${heightMm}`;
     const created = (await service.createOrder(normalToken, normalSession.csrf, {
@@ -605,7 +656,30 @@ async function storeInitialize() {
     const proposal = (await service.createProductionProposal(normalToken, normalSession.csrf, { orders: [{ id: created.id, expectedRevision: created.revision }] }, `${operationPrefix}-proposal`)).value;
     const started = performance.now();
     const productionPayload = { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders };
-    const first = await service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
+    const productionArtifactsBefore = heightMm === 80 ? await productionArtifactInventory() : null;
+    const productionStateBefore = heightMm === 80 ? await store.readSnapshot() : null;
+    const firstPromise = service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
+    if (heightMm === 80) {
+      const workerDeadline = performance.now() + 5_000;
+      while (productionJobBuildLoad().active !== 1 && performance.now() < workerDeadline) await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(productionJobBuildLoad().active, 1, "productionworker was niet actief voor de echte lane-isolatieproef");
+      const concurrentOrderPayload = { orderKind: "CUSTOM", customer: "Geïsoleerde concurrentiefixture", customerEmail: "", customerPhone: "", standardPersonalization: emptyPersonalization, productionLines: [{ id: `line-${operationPrefix}-concurrent`, type: "INITIALS", content: "AA", previewLabel: "AA", widthMm: 50, heightMm: 30, quantity: 1, foilColor: "Wit", sourceId: font.id, provenance: "Real-MariaDB production-lane concurrencyfixture" }], items: [{ product: "Vrije opdruk concurrencyfixture", association: "Vrije bedrukking", size: "", quantity: 1, personalization: "AA", foilColor: "Wit", deviation: true, overrides: emptyPersonalization }] };
+      const responseReady = new Promise((resolve) => { delayedMutationResponseReady = resolve; });
+      const responseLossAbort = new AbortController();
+      const ordinaryMutationStartedAt = performance.now();
+      const responseLostRequest = fetch(`${origin}/api/sportpaleis/v1/orders`, { method: "POST", signal: responseLossAbort.signal, headers: { cookie: customerCookies[customerSessions.indexOf(normalSession)], "content-type": "application/json", "x-csrf-token": normalSession.csrf, "idempotency-key": `${operationPrefix}-concurrent-order`, "x-assurance-delay-response": "1" }, body: JSON.stringify(concurrentOrderPayload) });
+      await responseReady;
+      const ordinaryMutationWallMs = performance.now() - ordinaryMutationStartedAt;
+      responseLossAbort.abort();
+      await assert.rejects(responseLostRequest, (error) => error?.name === "AbortError", "response-lossfixture verloor de HTTP-response niet na servercommit");
+      assert.ok(ordinaryMutationWallMs <= assuranceContract.limits.ordinaryMutationDuringProductionMaxMs, `gewone write bleef ${rounded(ordinaryMutationWallMs)} ms achter productievoorbereiding hangen`);
+      assert.ok(productionJobBuildLoad().active === 1 || productionJobBuildLoad().queued > 0, "productievoorbereiding eindigde vóór de gewone write; de concurrencygrens is niet bewezen");
+      const recoveredOrder = await service.createOrder(normalToken, normalSession.csrf, concurrentOrderPayload, `${operationPrefix}-concurrent-order`);
+      assert.equal(recoveredOrder.duplicate, true, "response-lossretry was niet idempotent");
+      const responseLostHistoryLength = (await store.readSnapshot()).orders.find(({ id }) => id === recoveredOrder.value.id).eventHistory.length;
+      productionPreparationConcurrency = { ordinaryMutationWallMs: rounded(ordinaryMutationWallMs), productionStillActiveAfterMutation: true, concurrentOrderId: recoveredOrder.value.id, responseLostHistoryLength, httpResponseAbortedAfterServerCommit: true, responseLossRetryDuplicate: true };
+    }
+    const first = await firstPromise;
     const wallMs = performance.now() - started;
     const retry = await service.createProductionJob(normalToken, normalSession.csrf, productionPayload, `${operationPrefix}-job`);
     assert.equal(first.duplicate, false, `${heightMm} mm eerste productie-intentie is niet nieuw`);
@@ -619,6 +693,21 @@ async function storeInitialize() {
     const committedMarker = JSON.parse(await readFile(path.join(artifactRoot, `${first.value.snapshot.artifact.path}.committed.json`), "utf8"));
     assert.equal(committedMarker.status, "COMMITTED", `${heightMm} mm artifact mist de commitmarkering`);
     assert.equal(committedMarker.artifactSha256, artifactSha256, `${heightMm} mm commitmarkering wijkt af`);
+    if (heightMm === 80) {
+      const productionStateAfter = await store.readSnapshot();
+      const productionArtifactsAfter = await productionArtifactInventory();
+      const visibleAdded = productionArtifactsAfter.visible.filter((entry) => !productionArtifactsBefore.visible.includes(entry));
+      const quarantineAdded = productionArtifactsAfter.quarantine.filter((entry) => !productionArtifactsBefore.quarantine.includes(entry));
+      assert.equal(productionStateAfter.productionJobs.length, productionStateBefore.productionJobs.length + 1, "revisionretry maakte niet exact één PlotJob");
+      assert.equal(productionStateAfter.orders.filter(({ id }) => id === productionPreparationConcurrency.concurrentOrderId).length, 1, "concurrentieproef maakte niet exact één order");
+      assert.equal(productionStateAfter.orders.find(({ id }) => id === productionPreparationConcurrency.concurrentOrderId).eventHistory.length, productionPreparationConcurrency.responseLostHistoryLength, "response-lossretry dupliceerde orderhistorie");
+      const concurrentOrderIdentity = `${normalUser.id}:CREATE_ORDER:${operationPrefix}-concurrent-order`;
+      const concurrentOrderIdempotency = await pool.query("SELECT identity_key FROM sp_workspace_idempotency_record WHERE organization_id = ? AND identity_key = ?", [practiceBefore.organizationId, concurrentOrderIdentity]);
+      assert.equal(concurrentOrderIdempotency.length, 1, "response-lossretry legde niet exact één order-idempotencyrecord vast");
+      assert.equal(visibleAdded.filter((entry) => entry.endsWith("-production.svg")).length, 1, "revisionretry liet niet exact één zichtbare SVG achter");
+      assert.ok(quarantineAdded.some((entry) => entry.endsWith("quarantine.json")), "stale artifactpoging werd niet immutable in quarantaine behouden");
+      productionPreparationConcurrency = { ...productionPreparationConcurrency, plotJobDelta: 1, visibleSvgDelta: 1, concurrentOrderDelta: 1, concurrentOrderIdempotencyRecords: 1, concurrentOrderHistoryStable: true, quarantinedAttemptPreserved: true };
+    }
     const beforeFixtureReject = await store.readSnapshot();
     const rejected = await service.rejectProductionJob(normalToken, normalSession.csrf, first.value.id, { reason: "ASSURANCE_FIXTURE_HEIGHT_SEQUENCE_RELEASE" });
     assert.equal(rejected.duplicate, false, `${heightMm} mm assurancefixture werd niet exact eenmaal reject-only afgesloten`);
@@ -634,7 +723,7 @@ async function storeInitialize() {
   for (const order of practiceAfter.orders) if (originalOrderHashes.has(order.id)) assert.equal(sha256CanonicalJson(order), originalOrderHashes.get(order.id), `bestaande order ${order.id} wijzigde door assurancefixture`);
   for (const job of practiceAfter.productionJobs) if (originalJobHashes.has(job.id)) assert.equal(sha256CanonicalJson(job), originalJobHashes.get(job.id), `bestaande PlotJob ${job.id} wijzigde door assurancefixture`);
   for (const proposal of practiceAfter.productionProposals) if (originalProposalHashes.has(proposal.id)) assert.equal(sha256CanonicalJson(proposal), originalProposalHashes.get(proposal.id), `bestaand voorstel ${proposal.id} wijzigde door assurancefixture`);
-  assert.equal(practiceAfter.orders.length, practiceBefore.orders.length + practiceRuns.length + 2);
+  assert.equal(practiceAfter.orders.length, practiceBefore.orders.length + practiceRuns.length + 3);
   assert.equal(practiceAfter.productionJobs.length, practiceBefore.productionJobs.length + practiceRuns.length + 1);
   assert.equal(practiceAfter.productionProposals.length, practiceBefore.productionProposals.length + practiceRuns.length + 1);
   const storeMetricsAfterPractice = store.metricsSnapshot();
@@ -698,6 +787,7 @@ async function storeInitialize() {
     && soakCycleMetrics.every(({ count, httpErrors, serverErrors, eventLoopMaxMs }) => count >= assuranceContract.minimumLoad.soakRevisionPollsPerCycle + assuranceContract.minimumLoad.soakLibraryPreviewsPerCycle + assuranceContract.minimumLoad.soakBootstrapsPerCycle && httpErrors === 0 && serverErrors === 0 && eventLoopMaxMs <= limits.eventLoopMaxMs);
   const productionBuildOffEventLoop = productionBuildQueue.active === 0 && productionBuildQueue.queued === 0 && productionBuildQueue.inFlight === 0 && productionBuildQueue.maximumConcurrent === limits.productionBuildMaximumConcurrent && productionBuildQueue.maximumQueued === limits.productionBuildMaximumQueued;
   const databaseConnectionReleasedDuringProductionBuild = storeMetricsAfterPractice.preparedMutations >= practiceRuns.length && storeMetricsAfterPractice.transactionHoldMsMax <= limits.databaseTransactionHoldMaxMs;
+  const productionPreparationDoesNotBlockMutations = productionPreparationConcurrency?.productionStillActiveAfterMutation === true && productionPreparationConcurrency?.httpResponseAbortedAfterServerCommit === true && productionPreparationConcurrency?.responseLossRetryDuplicate === true && productionPreparationConcurrency?.concurrentOrderDelta === 1 && productionPreparationConcurrency?.concurrentOrderIdempotencyRecords === 1 && productionPreparationConcurrency?.concurrentOrderHistoryStable === true && productionPreparationConcurrency?.plotJobDelta === 1 && productionPreparationConcurrency?.visibleSvgDelta === 1 && productionPreparationConcurrency?.quarantinedAttemptPreserved === true && productionPreparationConcurrency?.ordinaryMutationWallMs <= limits.ordinaryMutationDuringProductionMaxMs;
   const bootstrapSurfaceBytes = Object.fromEntries(assuranceContract.minimumLoad.bootstrapSurfaces.map((surface) => [surface, metricsFor(timings.filter(({ route }) => route === `/api/sportpaleis/v1/bootstrap?surface=${surface}`)).maxBytes]));
   const emptyFieldBytes = (surface, field) => Number(bootstrapFieldBytes[surface]?.[field]) <= 2;
   const scopedBootstrapPayloads = assuranceContract.minimumLoad.bootstrapSurfaces.every((surface) => bootstrapSurfaceBytes[surface] > 0 && bootstrapSurfaceBytes[surface] <= limits.bootstrapSurfaceMaxBytes[surface])
@@ -706,7 +796,7 @@ async function storeInitialize() {
     && emptyFieldBytes("production", "teamkitProposals")
     && emptyFieldBytes("library", "orders") && emptyFieldBytes("library", "productionJobs") && emptyFieldBytes("library", "teamkitProposals")
     && emptyFieldBytes("teamwear", "orders") && emptyFieldBytes("teamwear", "productionJobs");
-  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && databaseConnectionReleasedDuringProductionBuild && multiCycleSoakCompleted && soakMemoryRecovered && soakMemoryTrendStable && soakQueueStable;
+  const thresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && bootstrapMetrics.p95Ms <= limits.bootstrapP95Ms && bootstrapMetrics.maxMs <= limits.bootstrapMaxMs && scopedBootstrapPayloads && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && rssHighWater <= limits.rssHighWaterBytes && rssRecoveredWithinBudget && practiceRuns.every(({ wallMs }) => wallMs <= 15_000) && productionBuildOffEventLoop && databaseConnectionReleasedDuringProductionBuild && productionPreparationDoesNotBlockMutations && multiCycleSoakCompleted && soakMemoryRecovered && soakMemoryTrendStable && soakQueueStable;
   const result = {
     schemaVersion: 4,
     status: thresholdsPassed ? "PASS" : "FAIL", releaseId,
@@ -716,8 +806,8 @@ async function storeInitialize() {
     pool: { connectionLimit: 8, activeHighWater, idleLowWater, queueHighWater, acquireTimeouts: handlerErrors.filter(({ error }) => error?.code === "DATABASE_CONNECTION_FAILED" && error?.cause?.code === "ER_GET_CONNECTION_TIMEOUT").length },
     runtime: { elapsedMs: rounded(elapsedMs), eventLoopP95Ms: metrics.eventLoopP95Ms, eventLoopMaxMs: metrics.eventLoopMaxMs, eventLoopMaxMsByPhase: Object.fromEntries([...phaseEventLoopMaxMs].map(([phase, value]) => [phase, rounded(value)])), rssStartBytes, rssHighWaterBytes: rssHighWater, rssEndBytes, rssRecoveryBudgetBytes, rssRecoveredWithinBudget, steadyStateMemoryStable, memoryCycles, soakCycles: soakCycleMetrics, soakMemoryRecovered, soakMemoryTrendStable, rssPositiveSteps, cpuUserMs: rounded(cpu.user / 1000), cpuSystemMs: rounded(cpu.system / 1000) },
     persistence: { offlineBackfill: backfillEvidence, store: storeMetricsAfterPractice, rollbackProof },
-    practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue, mariaDbMultiBatch },
-    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, mariaDbMultiBatchRollback: mariaDbMultiBatch.rollbackAndRestartHashEqual && mariaDbMultiBatch.retryExactlyOnce && mariaDbMultiBatch.cleanupHashEqual, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
+    practice: { largeFreeProduction: practiceRuns, sameColorSourceConcurrency, productionBuildQueue, productionPreparationConcurrency, mutationLane, mariaDbMultiBatch },
+    invariants: { authenticatedRoutes: true, readRevisionStable: true, readAuditStable: true, legacyStateWriteStable: true, businessHashesStable: true, domainRecordWritesIncremental: true, runtimeInitializationReadOnly: storeMetricsAfterPractice.fullLegacyLoads === 0, cacheInvalidationExact: true, interruptedRetryRecovered: true, normalAndReviewAuth: true, expiredAndRevokedSessions: true, previewFanoutBounded: true, bootstrapCacheBounded: rssRecoveredWithinBudget, coldAndWarmBootstrap: coldCache.entries === 1, scopedBootstrapPayloads, largeFreeProduction80Mm: practiceRuns.some(({ heightMm }) => heightMm === 80), largeFreeProduction200Mm: practiceRuns.some(({ heightMm }) => heightMm === 200), sameColorSourceConcurrency: true, workerCrashRecoveredWithoutOrphan, parentReservationCrashRecoveredWithoutOrphan, productionIdempotency: true, artifactIdentity: true, productionArtifactReconciliation: practiceRuns.every(({ committedMarker }) => committedMarker === true), managedFoilColorsComplete: activeFoilColors.length >= 6, boundedSvgProcessing: true, staleReadsPrevented: true, transactionRollbackProven: true, restartRecovery: true, productionBuildOffEventLoop, databaseConnectionReleasedDuringProductionBuild, productionPreparationDoesNotBlockMutations, mutationLaneBounded: mutationLane.activeHighWater === 1 && mutationLane.queueDepthAfter === 0 && mutationLane.backpressureRejects === 0, mariaDbMultiBatchRollback: mariaDbMultiBatch.rollbackAndRestartHashEqual && mariaDbMultiBatch.retryExactlyOnce && mariaDbMultiBatch.cleanupHashEqual, tenantAndScopeIsolation: true, rollbackMaterializationProven: true, multiCycleSoakCompleted, soakMemoryRecovered, soakMemoryTrendStable, soakQueueStable, noLegacyMonolithLoads: storeMetricsAfterPractice.fullLegacyLoads === 0 },
     businessHashes: beforeBusiness,
   };
   process.stdout.write(`${JSON.stringify(result)}\n`);

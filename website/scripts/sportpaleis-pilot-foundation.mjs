@@ -2685,18 +2685,26 @@ export class SportpaleisPilotService {
   async #productionMutation(mutator) {
     const execute = async () => {
       if (this.isolatedProductionBuilds) {
-        const effects = { artifacts: [] };
-        try {
-          const result = await this.store.prepareAndCommit((state) => mutator(state, effects));
-          for (const artifact of effects.artifacts) await markProductionArtifactCommitted({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifact, globalRevision: result.state.revision });
-          return result;
-        } catch (error) {
-          if (effects.artifacts.length) {
-            const committed = await this.store.read().catch(() => null);
-            await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifacts: effects.artifacts, state: committed, reason: error?.code ?? "PRODUCTION_TRANSACTION_FAILED" });
+        const retryableRevisionCodes = new Set(["DOMAIN_SNAPSHOT_STALE", "DOMAIN_PREPARED_SNAPSHOT_STALE", "DOMAIN_CONCURRENCY_CONFLICT", "DATABASE_CONCURRENCY_CONFLICT"]);
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          const effects = { artifacts: [] };
+          try {
+            const result = await this.store.prepareAndCommit((state) => mutator(state, effects));
+            for (const artifact of effects.artifacts) await markProductionArtifactCommitted({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifact, globalRevision: result.state.revision });
+            return result;
+          } catch (error) {
+            if (effects.artifacts.length) {
+              const committed = await this.store.read().catch(() => null);
+              await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot: this.runtimeArtifactRoot, artifacts: effects.artifacts, state: committed, reason: error?.code ?? "PRODUCTION_TRANSACTION_FAILED" });
+            }
+            if (attempt === 1 && error?.retryable === true && retryableRevisionCodes.has(error?.code)) {
+              await this.store.read();
+              continue;
+            }
+            throw error;
           }
-          throw error;
         }
+        throw Object.assign(new Error("De productiehandeling kon niet veilig worden afgerond."), { code: "PRODUCTION_RETRY_EXHAUSTED", statusCode: 409, retryable: true });
       }
       return this.store.mutate(mutator);
     };
@@ -4389,7 +4397,7 @@ export class SportpaleisPilotService {
     const { user } = await this.authenticate(token);
     await this.#assertCsrf(token, csrfToken);
     assertRole(user, ["admin", "operator", "store"]);
-    const result = await this.#productionMutation(async (state) => {
+    const result = await this.store.mutate(async (state) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_ORDER", async () => createWorkspaceOrderRecord(state, user, payload), payload);
       return { state, value: outcome };
     });

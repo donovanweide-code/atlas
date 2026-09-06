@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ import { createSportpaleisPasswordRecord, createSportpaleisProductionBootstrap, 
 import { SportpaleisDomainMariaDbStore } from "../scripts/sportpaleis-domain-mariadb-store.mjs";
 import { materializeLegacyRollbackState } from "../scripts/sportpaleis-domain-rollback-bridge.mjs";
 import { sha256CanonicalJson } from "../scripts/workspace-domain-state.mjs";
+import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/007-sportpaleis-domain-state.sql", import.meta.url);
 
@@ -320,13 +321,95 @@ test("gelijktijdige stores blokkeren stale writes en kunnen daarna veilig refres
   await assert.rejects(second.mutate(async (state) => {
     state.preferences.store = { density: "comfortable" };
     return { state, value: null };
-  }), ({ code }) => code === "DOMAIN_SNAPSHOT_STALE");
+  }), ({ code, statusCode, retryable }) => code === "DOMAIN_SNAPSHOT_STALE" && statusCode === 409 && retryable === true);
   assert.equal((await second.read()).preferences.operator.density, "compact");
   await second.mutate(async (state) => {
     state.preferences.store = { density: "comfortable" };
     return { state, value: null };
   });
   assert.equal((await first.read()).preferences.store.density, "comfortable");
+});
+
+test("zware production-prepare blokkeert de gewone mutationlane niet en revisiondrift faalt retrybaar", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
+  await store.initialize();
+  let releasePreparation;
+  let markPreparationStarted;
+  let preparationSettled = false;
+  const preparationBlocked = new Promise((resolve) => { releasePreparation = resolve; });
+  const preparationStarted = new Promise((resolve) => { markPreparationStarted = resolve; });
+  const applyProductionIntent = async (state) => {
+    if (state.idempotency["production-lane-intent"]) return { state, value: state.idempotency["production-lane-intent"], unchanged: true };
+    state.preferences.production = { density: "compact" };
+    state.idempotency["production-lane-intent"] = { status: "SUCCEEDED" };
+    return { state, value: state.idempotency["production-lane-intent"] };
+  };
+  const productionPrepare = store.prepareAndCommit(async (state) => {
+    markPreparationStarted();
+    await preparationBlocked;
+    return applyProductionIntent(state);
+  }).finally(() => { preparationSettled = true; });
+  await preparationStarted;
+  const ordinaryStartedAt = performance.now();
+  await store.mutate(async (state) => {
+    state.preferences.ordinary = { density: "comfortable" };
+    return { state, value: null };
+  });
+  const ordinaryWallMs = performance.now() - ordinaryStartedAt;
+  assert.equal(preparationSettled, false, "ordinary write wachtte ten onrechte op production-prepare");
+  assert.ok(ordinaryWallMs < 1_500, `ordinary write bleef ${ordinaryWallMs.toFixed(1)} ms achter production-prepare hangen`);
+  releasePreparation();
+  await assert.rejects(productionPrepare, ({ code, statusCode, retryable }) => code === "DOMAIN_PREPARED_SNAPSHOT_STALE" && statusCode === 409 && retryable === true);
+  await store.read();
+  const retried = await store.prepareAndCommit(applyProductionIntent);
+  const repeated = await store.prepareAndCommit(applyProductionIntent);
+  assert.equal(retried.value.status, "SUCCEEDED");
+  assert.deepEqual(repeated.value, retried.value);
+  const after = await store.readSnapshot();
+  assert.equal(after.preferences.ordinary.density, "comfortable");
+  assert.equal(after.preferences.production.density, "compact");
+  const metrics = store.metricsSnapshot();
+  assert.equal(metrics.mutationActiveHighWater, 1, "maximaal één gewone write/commit tegelijk");
+  assert.equal(metrics.mutationActive, 0);
+  assert.equal(metrics.mutationQueueDepth, 0);
+  assert.equal(metrics.mutationBackpressureRejects, 0);
+  assert.ok(metrics.mutationQueueHighWater >= 1);
+  assert.equal(metrics.transactionPhaseMsMax.prepareInsideTransaction, 0, "geen command projecteert binnen de DB-transactie");
+});
+
+test("mutationlane geeft concrete retrybare backpressure zonder een drieëndertigste draft te starten", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
+  await store.initialize();
+  let releaseFirst;
+  let markFirstStarted;
+  const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
+  const firstBlocked = new Promise((resolve) => { releaseFirst = resolve; });
+  const first = store.mutate(async (state) => {
+    markFirstStarted();
+    await firstBlocked;
+    return { state, value: "first", unchanged: true };
+  });
+  await firstStarted;
+  const accepted = Array.from({ length: 31 }, (_, index) => store.mutate(async (state) => ({ state, value: index, unchanged: true })));
+  await assert.rejects(
+    store.mutate(async (state) => ({ state, value: "overflow", unchanged: true })),
+    ({ code, statusCode, retryable }) => code === "DOMAIN_MUTATION_BACKPRESSURE" && statusCode === 503 && retryable === true,
+  );
+  releaseFirst();
+  await Promise.all([first, ...accepted]);
+  const metrics = store.metricsSnapshot();
+  assert.equal(metrics.mutationQueueHighWater, 32);
+  assert.equal(metrics.mutationBackpressureRejects, 1);
+  assert.equal(metrics.mutationQueueDepth, 0);
+  assert.equal(metrics.mutationActiveHighWater, 1);
 });
 
 test("prepared persistence faalt zonder writes bij revisiondrift en commit een idempotente retry exact eenmaal", async () => {
@@ -457,10 +540,27 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   const proposal = (await service.createProductionProposal(login.token, login.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }] }, "domain-production-proposal")).value;
   const heartbeatAt = [];
   const heartbeat = setInterval(() => heartbeatAt.push(performance.now()), 20);
+  context.after(() => clearInterval(heartbeat));
   const transactionsBeforeBuild = pool.transactionDurationsMs.length;
   const batchCallsBeforeBuild = pool.batchCalls.length;
   const recordWritesBeforeBuild = store.metricsSnapshot().recordWrites;
-  const first = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
+  const artifactsBefore = await readdir(runtimeRoot, { recursive: true }).catch(() => []);
+  const firstPromise = service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
+  const workerDeadline = performance.now() + 5_000;
+  while (productionJobBuildLoad().active !== 1 && performance.now() < workerDeadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(productionJobBuildLoad().active, 1, "de production-shaped worker was niet actief voor de concurrentieproef");
+  const ordinaryStartedAt = performance.now();
+  const concurrentOrderPayload = { orderKind: "CUSTOM", customer: "Concurrent orderfixture", customerEmail: "", customerPhone: "", standardPersonalization: empty, productionLines: [{ id: "domain-concurrent-AA", type: "INITIALS", content: "AA", previewLabel: "AA", widthMm: 50, heightMm: 30, quantity: 1, foilColor: "Wit", sourceId: font.id, provenance: "Domeinopslag concurrencyfixture" }], items: [{ product: "Vrije opdruk concurrencyfixture", association: "Vrije bedrukking", size: "", quantity: 1, personalization: "AA", foilColor: "Wit", deviation: true, overrides: empty }] };
+  const responseLostOrder = await service.createOrder(login.token, login.csrfToken, concurrentOrderPayload, "domain-concurrent-order");
+  const ordinaryWallMs = performance.now() - ordinaryStartedAt;
+  assert.ok(ordinaryWallMs < 1_500, `gewone orderwrite blokkeerde ${ordinaryWallMs.toFixed(1)} ms achter de productie-worker`);
+  assert.ok(productionJobBuildLoad().active === 1 || productionJobBuildLoad().queued > 0, "productie was al terminaal vóór de gewone write; de race is niet bewezen");
+  const responseLostHistoryLength = (await store.read()).orders.find(({ id }) => id === responseLostOrder.value.id).eventHistory.length;
+  const recoveredOrder = await service.createOrder(login.token, login.csrfToken, concurrentOrderPayload, "domain-concurrent-order");
+  assert.equal(responseLostOrder.duplicate, false, "eerste orderwrite na gesimuleerd responsverlies was niet nieuw");
+  assert.equal(recoveredOrder.duplicate, true, "retry na gesimuleerd responsverlies was niet idempotent");
+  assert.equal(recoveredOrder.value.id, responseLostOrder.value.id, "response-lossretry maakte een tweede order");
+  const first = await firstPromise;
   clearInterval(heartbeat);
   const heartbeatGaps = heartbeatAt.slice(1).map((at, index) => at - heartbeatAt[index]);
   const buildTransactions = pool.transactionDurationsMs.slice(transactionsBeforeBuild);
@@ -469,6 +569,7 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   assert.ok(buildTransactions.length >= 1 && Math.max(...buildTransactions) < 1_500, `de databaseverbinding omvat niet de zware geometryworker: ${buildTransactions.join(", ")} ms`);
   assert.ok(pool.batchCalls.slice(batchCallsBeforeBuild).some(({ sql }) => sql.startsWith("INSERT INTO sp_workspace_domain_record")), "production persistence gebruikt de gebundelde MariaDB-writegrens");
   assert.ok(store.metricsSnapshot().recordWrites - recordWritesBeforeBuild <= 6, "een nieuwe PlotJob herschrijft geen honderden indexverschoven records");
+  assert.equal(store.metricsSnapshot().transactionPhaseMsMax.prepareInsideTransaction, 0, "ook gewone domeinmutaties projecteren en encoderen vóór connection-acquire");
   context.diagnostic(`worker heartbeat max=${Math.max(0, ...heartbeatGaps).toFixed(1)}ms; db transaction max=${Math.max(...buildTransactions).toFixed(1)}ms; record writes=${store.metricsSnapshot().recordWrites - recordWritesBeforeBuild}`);
   const retry = await service.createProductionJob(login.token, login.csrfToken, { proposalId: proposal.id, proposalGroupId: proposal.groups[0].id, orders: proposal.groups[0].orders }, "domain-production-job");
   assert.equal(first.duplicate, false);
@@ -484,5 +585,12 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   assert.deepEqual(persisted.snapshot.artifact, artifactBefore);
   assert.equal([...pool.records.values()].filter(({ collection_key, record_id }) => collection_key === "productionJobs" && record_id === first.value.id).length, 1);
   assert.equal([...pool.artifacts.values()].filter(({ plot_job_id }) => plot_job_id === first.value.id).length, 1);
+  assert.equal([...pool.records.values()].filter(({ collection_key, record_id }) => collection_key === "orders" && record_id === responseLostOrder.value.id).length, 1);
+  assert.equal([...pool.idempotency.values()].filter(({ identity_key }) => identity_key === "operator:CREATE_ORDER:domain-concurrent-order").length, 1);
+  assert.equal((await store.read()).orders.find(({ id }) => id === responseLostOrder.value.id).eventHistory.length, responseLostHistoryLength, "response-lossretry dupliceerde orderhistorie");
+  const artifactsAfter = await readdir(runtimeRoot, { recursive: true });
+  const newArtifacts = artifactsAfter.filter((entry) => !artifactsBefore.includes(entry));
+  assert.equal(newArtifacts.filter((entry) => String(entry).endsWith("-production.svg") && !String(entry).includes("sportpaleis-artifact-quarantine")).length, 1, "revisionretry liet niet exact één zichtbare productie-SVG achter");
+  assert.ok(newArtifacts.some((entry) => String(entry).endsWith("quarantine.json")), "de stale eerste artifactpoging is niet immutable in quarantaine behouden");
   assert.ok(store.metricsSnapshot().recordWrites > 0);
 });

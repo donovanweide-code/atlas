@@ -137,6 +137,15 @@ function preparedValueChanged(key, value, previous) {
   return sha256CanonicalJson(value) !== sha256CanonicalJson(previous);
 }
 
+function clonedDraftValueChanged(_key, value, previous) {
+  if (value === previous) return false;
+  // The compatibility draft is a structured clone of JSON-backed state, so
+  // property order is preserved. A direct JSON comparison avoids recursively
+  // sorting and hashing multi-megabyte collections twice while retaining the
+  // conservative behavior that a reordered object is persisted again.
+  return JSON.stringify(value) !== JSON.stringify(previous);
+}
+
 // Existing service mutations receive a state-shaped object, but only top-level
 // domains that they actually touch are cloned. This is the compatibility seam
 // used while service commands are moved to explicit domain repositories.
@@ -145,6 +154,7 @@ export function createLazySportpaleisStateDraft(snapshot) {
     cloneValue: cloneForDraft,
     domainForKey: sportpaleisDomainForStateKey,
     hash: sha256CanonicalJson,
+    changedValue: clonedDraftValueChanged,
   });
 }
 
