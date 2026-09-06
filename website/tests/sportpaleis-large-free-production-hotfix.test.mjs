@@ -71,6 +71,11 @@ async function produceLargeFree(context, heightMm) {
   assert.ok(job.snapshot.productionLines.every((line) => line.quantity === 2 && line.heightMm === heightMm));
   assert.equal(job.snapshot.generationMetrics.physicalPieceCount, 28);
   assert.equal(job.snapshot.generationMetrics.nestedObjectCount, 22);
+  assert.equal("preview" in job.snapshot, false, "de grote immutable SVG blijft artifactdata en wordt niet dubbel in PlotJob-state opgeslagen");
+  if (job.snapshot.generationMetrics.workerTransport) {
+    assert.equal(job.snapshot.generationMetrics.workerTransport.kind, "DIRECT_FREE_PRODUCTION_REACHABILITY_V1");
+    assert.ok(job.snapshot.generationMetrics.workerTransport.serializedInputBytes < 1_000_000, `Vrije productie transporteerde ${job.snapshot.generationMetrics.workerTransport.serializedInputBytes} bytes naar de worker`);
+  }
   context.diagnostic(`${heightMm}mm pre-assert: source=${job.snapshot.generationMetrics.sourceResolutionMs}ms geometry=${job.snapshot.generationMetrics.geometryMs}ms semantic=${job.snapshot.generationMetrics.semanticGroupingMs}ms nesting=${job.snapshot.generationMetrics.nestingMs}ms svg=${job.snapshot.generationMetrics.svgAndIntegrityMs}ms persist=${job.snapshot.generationMetrics.persistenceMs}ms total=${job.snapshot.generationMetrics.totalMs}ms wall=${elapsedMs.toFixed(1)}ms`);
   assert.ok(job.snapshot.generationMetrics.nestingMs < 10_000, `nesting moet begrensd blijven, gemeten ${job.snapshot.generationMetrics.nestingMs} ms`);
   assert.ok(elapsedMs < 15_000, `de volledige lokale production-shaped write moet binnen 15 s blijven, gemeten ${elapsedMs.toFixed(1)} ms`);

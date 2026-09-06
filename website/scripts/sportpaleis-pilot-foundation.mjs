@@ -34,7 +34,7 @@ import {
   productionAssetPieces,
 } from "../src/sportpaleis/production-assets.mjs";
 import { inspectProductionAssetSourceIsolated } from "../src/sportpaleis/production-asset-inspection.mjs";
-import { buildProductionJobSnapshotIsolated } from "../src/sportpaleis/production-job-build.mjs";
+import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES, projectProductionJobBuildInput } from "../src/sportpaleis/production-job-build.mjs";
 import { COPY_ON_WRITE_BASE_SNAPSHOT } from "./workspace-domain-storage-primitives.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
@@ -2732,7 +2732,7 @@ export class SportpaleisPilotService {
     };
     options.abMirrorAccepted = source.productionJobs?.some(({ snapshot, humanAcceptance }) => snapshot?.artifact?.version?.includes("AUTO-MIRROR-AB") && humanAcceptance?.status === "PASS") ?? false;
     const buildStartedAt = performance.now();
-    const drySnapshot = await buildProductionJobSnapshotIsolated({
+    const workerInput = projectProductionJobBuildInput({
       state: projectedState,
       orders,
       jobNumber,
@@ -2741,7 +2741,13 @@ export class SportpaleisPilotService {
       runtimeArtifactRoot: this.runtimeArtifactRoot,
       productionGroup,
       options: { ...options, operationIdentity, persistArtifacts: false, returnArtifactPayload: true },
-    }, { operationIdentity });
+    });
+    const workerTransport = {
+      ...workerInput.projection,
+      serializedInputBytes: workerInput.projection?.kind === "DIRECT_FREE_PRODUCTION_REACHABILITY_V1" ? Buffer.byteLength(JSON.stringify(workerInput)) : null,
+    };
+    if (workerTransport.serializedInputBytes > MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES) throw Object.assign(new Error("De begrensde productieworkerinput is te groot; er is niets geregistreerd."), { statusCode: 409, code: "PRODUCTION_WORKER_INPUT_LIMIT" });
+    const drySnapshot = await buildProductionJobSnapshotIsolated(workerInput, { operationIdentity });
     const { artifactPayload, ...publicSnapshot } = drySnapshot;
     if (publicSnapshot?.artifact?.format !== "SVG") return publicSnapshot;
     if (typeof artifactPayload !== "string" || artifactPayload.length === 0) throw Object.assign(new Error("Workerresultaat mist de interne SVG-payload voor parent-side reservering."), { statusCode: 503, code: "PRODUCTION_ARTIFACT_PAYLOAD_MISSING" });
@@ -2767,6 +2773,7 @@ export class SportpaleisPilotService {
       artifact,
       generationMetrics: publicSnapshot.generationMetrics ? {
         ...publicSnapshot.generationMetrics,
+        workerTransport,
         persistenceMs,
         snapshotTotalMs: Math.round((performance.now() - buildStartedAt) * 10) / 10,
       } : null,

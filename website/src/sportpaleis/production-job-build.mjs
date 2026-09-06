@@ -4,6 +4,7 @@ const DEFAULT_BUILD_TIMEOUT_MS = 30_000;
 const DEFAULT_QUEUE_TIMEOUT_MS = 30_000;
 const MAX_CONCURRENT_BUILDS = 1;
 const MAX_QUEUED_BUILDS = 4;
+export const MAX_DIRECT_PRODUCTION_WORKER_INPUT_BYTES = 1_000_000;
 const buildQueue = [];
 const inFlightBuilds = new Map();
 let activeBuilds = 0;
@@ -24,6 +25,66 @@ export function productionJobBuildLoad() {
     maximumConcurrent: MAX_CONCURRENT_BUILDS,
     maximumQueued: MAX_QUEUED_BUILDS,
   });
+}
+
+/**
+ * A validated direct free-print order already owns its immutable production
+ * lines. Geometry generation therefore needs only the exact sources referenced
+ * by those lines, never the complete Library/catalog projection. Other order
+ * shapes deliberately retain the prior full-state boundary until their
+ * reachability contract is equally explicit.
+ */
+export function projectProductionJobBuildInput(input) {
+  const state = input?.state;
+  const orders = Array.isArray(input?.orders) ? input.orders : [];
+  const requestedRefs = Array.isArray(input?.productionGroup?.lineRefs) ? input.productionGroup.lineRefs : [];
+  const directFreeOrders = orders.length > 0 && orders.every((order) => order?.orderKind === "CUSTOM"
+    && Array.isArray(order.productionLines) && order.productionLines.length > 0
+    && Array.isArray(order.items) && order.items.length > 0
+    && order.items.every((item) => item?.sourceType === "CUSTOM" && item.association === "Vrije bedrukking" && item.productionProfileId == null));
+  const linesByKey = new Map(orders.flatMap((order) => (order.productionLines ?? []).map((line) => [`${order.id}|${line.id}`, line])));
+  const selectedOrderLines = requestedRefs.length
+    ? requestedRefs.map(({ orderId, lineId }) => linesByKey.get(`${orderId}|${lineId}`)).filter(Boolean)
+    : [...linesByKey.values()];
+  const supplements = Array.isArray(input?.productionGroup?.supplements) ? input.productionGroup.supplements : [];
+  const selectedLines = [...selectedOrderLines, ...supplements];
+  const exactSelection = selectedOrderLines.length > 0 && (!requestedRefs.length || selectedOrderLines.length === requestedRefs.length);
+  const independentlyBound = selectedLines.every((line) => !line.personalizationField
+    && ["PRODUCTION_SOURCE", "FONT", "PRODUCTION_ELEMENT"].includes(line.source?.kind)
+    && line.validation?.status === "VALID");
+  if (!state || !directFreeOrders || !exactSelection || !independentlyBound) {
+    return { ...input, projection: { kind: "FULL_STATE_SAFETY_FALLBACK_V1" } };
+  }
+
+  const fontIds = new Set(selectedLines.filter(({ source }) => source?.kind === "FONT").map(({ source }) => source.id));
+  const elementIds = new Set(selectedLines.filter(({ source }) => source?.kind === "PRODUCTION_ELEMENT").map(({ source }) => source.id));
+  const productionElements = (state.productionElements ?? []).filter(({ id }) => elementIds.has(id));
+  const projectedState = {
+    organizationId: state.organizationId,
+    settings: { productionDefaults: state.settings?.productionDefaults },
+    associations: [],
+    articles: [],
+    productionProfiles: [],
+    productionFonts: (state.productionFonts ?? []).filter(({ id }) => fontIds.has(id)),
+    productionElements,
+    // Direct free-print geometry is fully admitted and embedded in the selected
+    // production element. Original intake documents remain immutable evidence
+    // in their own domain and are not worker input.
+    productionAssetSources: [],
+    foilRolls: [],
+  };
+  return {
+    ...input,
+    state: projectedState,
+    projection: {
+      kind: "DIRECT_FREE_PRODUCTION_REACHABILITY_V1",
+      lineCount: selectedLines.length,
+      supplementCount: supplements.length,
+      fontCount: projectedState.productionFonts.length,
+      elementCount: productionElements.length,
+      sourceCount: projectedState.productionAssetSources.length,
+    },
+  };
 }
 
 function drainBuildQueue() {

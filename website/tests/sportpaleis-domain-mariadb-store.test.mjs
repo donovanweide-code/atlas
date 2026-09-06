@@ -638,6 +638,8 @@ test("grote Vrije productie en reject-only gebruiken recordtransacties zonder du
   assert.equal(recoveredOrder.duplicate, true, "retry na gesimuleerd responsverlies was niet idempotent");
   assert.equal(recoveredOrder.value.id, responseLostOrder.value.id, "response-lossretry maakte een tweede order");
   const first = await firstPromise;
+  assert.equal(first.value.snapshot.generationMetrics.workerTransport.kind, "DIRECT_FREE_PRODUCTION_REACHABILITY_V1");
+  assert.ok(first.value.snapshot.generationMetrics.workerTransport.serializedInputBytes < 1_000_000, `production-shaped workerinput was ${first.value.snapshot.generationMetrics.workerTransport.serializedInputBytes} bytes`);
   clearInterval(heartbeat);
   const heartbeatGaps = heartbeatAt.slice(1).map((at, index) => at - heartbeatAt[index]);
   const buildTransactions = pool.transactionDurationsMs.slice(transactionsBeforeBuild);
