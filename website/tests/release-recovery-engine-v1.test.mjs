@@ -865,6 +865,7 @@ test("machine identity service is hardened and break-glass is not granted to run
   assert.match(await readFile(new URL("../scripts/release-engine-runner.mjs", import.meta.url), "utf8"), /try \{ await releaseApplication\(\); \}[\s\S]*finally \{ await releaseEnvironmentLock\(\); \}/u);
   assert.match(installation, /traverse-only ACL \(`--x`\)[\s\S]*do not grant directory listing/u);
   assert.match(broker, /verify-host-context\|backup\|stage\|rollback-set\|migrate\|data-backfill\|switch\|restart\|rollback/u);
+  assert.match(broker, /install -d -o wbdapp -g wbdapp -m 0750 "\$WBD_ROOT\/shared\/outputs\/sportpaleis-artifact-quarantine"/u);
   assert.match(broker, /systemd-run --quiet --wait --pipe --collect --service-type=exec/u);
   assert.match(broker, /--setenv=WBD_RELEASE_ENGINE_HOST_CONTEXT=1/u);
   assert.match(broker, /DELEGATED_CALLER_INVALID/u);

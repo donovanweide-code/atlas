@@ -149,7 +149,10 @@ if (matches.length !== 1 || matches[0].idempotent !== true || matches[0].require
 NODE
     candidate="$WBD_ROOT/releases/$release_id"
     case "$adapter" in
-      sportpaleis-domain-backfill-v1) runner="$candidate/website/scripts/sportpaleis-domain-backfill.mjs" ;;
+      sportpaleis-domain-backfill-v1)
+        runner="$candidate/website/scripts/sportpaleis-domain-backfill.mjs"
+        install -d -o wbdapp -g wbdapp -m 0750 "$WBD_ROOT/shared/outputs/sportpaleis-artifact-quarantine"
+        ;;
       wbd-owner-domain-backfill-v1) runner="$candidate/website/scripts/wbd-owner-domain-backfill.mjs" ;;
       *) fail DATA_BACKFILL_NOT_ALLOWLISTED ;;
     esac

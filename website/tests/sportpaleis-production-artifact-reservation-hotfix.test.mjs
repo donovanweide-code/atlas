@@ -171,7 +171,7 @@ test("startupreconciliatie weigert gewijzigde of toekomstige immutable commitmar
   await assert.rejects(reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 42, productionJobs } }), (error) => error?.code === "PRODUCTION_ARTIFACT_EVIDENCE_COLLISION");
 });
 
-test("legacy final zonder reservation-evidence blijft niet onzichtbaar orphan", async (context) => {
+test("legacy final zonder reservation-evidence blijft immutable zichtbaar en wordt niet als orphan verplaatst", async (context) => {
   const root = await temporaryRoot(context, "missing-reservation");
   const input = { runtimeArtifactRoot: root, jobNumber: "PLOT-2026-0072", bytes: Buffer.from("<svg>final zonder evidence</svg>") };
   const expected = reserveImmutableProductionArtifact({ ...input, persist: false });
@@ -179,10 +179,11 @@ test("legacy final zonder reservation-evidence blijft niet onzichtbaar orphan", 
   await mkdir(path.dirname(absolute), { recursive: true });
   await writeFile(absolute, input.bytes, { flag: "wx" });
   const result = await reconcileProductionArtifactStorage({ runtimeArtifactRoot: root, state: { revision: 1, productionJobs: [] } });
-  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 1 });
+  assert.deepEqual(result, { checked: 1, committed: 0, quarantined: 0 });
   const files = await readdir(root, { recursive: true });
-  assert.equal(files.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 0);
-  assert.equal(files.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg")).length, 1);
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-plotjobs") && name.endsWith("-production.svg")).length, 1);
+  assert.equal(files.filter((name) => String(name).includes("sportpaleis-artifact-quarantine") && name.endsWith("-production.svg")).length, 0);
+  assert.deepEqual(await readFile(absolute), input.bytes);
 });
 
 test("onderbroken pending create blokkeert geen complete atomische final", async (context) => {

@@ -9717,13 +9717,11 @@ export async function reconcileProductionArtifactStorage({ runtimeArtifactRoot, 
     if (reservedPaths.has(artifactPath)) continue;
     checked += 1;
     const absolute = checkedRuntimeArtifactPath(runtimeArtifactRoot, artifactPath);
-    const bytes = await readFile(absolute);
-    const artifactHash = sha256(bytes).toUpperCase();
-    const jobNumber = String(relativeFinal).replaceAll("\\", "/").split("/")[0];
-    const key = `${artifactPath}|${artifactHash}`;
-    if (references.has(key)) continue;
-    await quarantineUncommittedProductionArtifacts({ runtimeArtifactRoot, artifacts: [{ jobNumber, path: artifactPath, sha256: artifactHash, operationIdentityHash: sha256("MISSING_RESERVATION_EVIDENCE") }], state, reason: "STARTUP_FINAL_WITHOUT_RESERVATION" });
-    quarantined += 1;
+    await readFile(absolute);
+    // Pre-contract production artifacts have no reservation sidecar and cannot
+    // be distinguished safely from an interrupted write. Preserve that
+    // immutable evidence in place; only reservation-bound or pending writes
+    // are eligible for automatic startup reconciliation.
   }
   for (const relativePending of pending) {
     const normalized = String(relativePending).replaceAll("\\", "/");
