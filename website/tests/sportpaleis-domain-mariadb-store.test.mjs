@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -177,6 +178,38 @@ test("runtime-start weigert een ontbrekende offline backfill zonder state te mut
   await assert.rejects(store.initialize(), ({ code }) => code === "DOMAIN_BACKFILL_REQUIRED");
   assert.equal(pool.meta, null);
   assert.equal(pool.commits, 0);
+});
+
+test("startupinitialisatie is single-flight en herhaald idempotent", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  await store.backfillLegacySource();
+  const before = pool.queries.length;
+  await Promise.all([store.initialize(), store.initialize(), store.initialize()]);
+  const afterFirst = pool.queries.length;
+  await store.initialize();
+  assert.ok(afterFirst > before, "eerste startup moet de immutable domeinstate hydrateren");
+  assert.equal(pool.queries.length, afterFirst, "herhaalde initialize mag geen databasewerk starten");
+  assert.equal((await store.readSnapshot()).revision, legacy.revision);
+});
+
+test("startup-poolwarmup faalt begrensd en kan daarna veilig herstarten", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  await new SportpaleisDomainMariaDbStore({ pool }).backfillLegacySource();
+  const events = new EventEmitter();
+  let idle = 0;
+  pool.idleConnections = () => idle;
+  pool.once = events.once.bind(events);
+  pool.off = events.off.bind(events);
+  const store = new SportpaleisDomainMariaDbStore({ pool, startupPoolReadyTimeoutMs: 5 });
+  await assert.rejects(store.initialize(), ({ code }) => code === "DATABASE_POOL_WARMUP_TIMEOUT");
+  idle = 1;
+  await store.initialize();
+  assert.equal((await store.readSnapshot()).revision, legacy.revision, "herstart na begrensde warmupfout verloor state");
 });
 
 test("additieve backfill is hashgelijk en een kleine mutatie schrijft geen legacy blob", async () => {

@@ -32,6 +32,14 @@ const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
 const REQUIRED_MIGRATION_VERSION = 7;
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
 const MAX_MUTATION_QUEUE = 32;
+const STARTUP_POOL_READY_TIMEOUT_MS = 5_000;
+const STARTUP_HYDRATION_YIELD_EVERY = 128;
+
+function yieldStartupHydration(index) {
+  return (index + 1) % STARTUP_HYDRATION_YIELD_EVERY === 0
+    ? new Promise((resolve) => setImmediate(resolve))
+    : null;
+}
 
 function retryableStoreError(message, code, statusCode) {
   const error = new SportpaleisMariaDbStoreError(message, code);
@@ -393,11 +401,12 @@ function createMetrics() {
 }
 
 export class SportpaleisDomainMariaDbStore {
-  constructor({ database, pool, migrationFile = defaultMigrationFile }) {
+  constructor({ database, pool, migrationFile = defaultMigrationFile, startupPoolReadyTimeoutMs = STARTUP_POOL_READY_TIMEOUT_MS }) {
     if (!pool && !database) throw new SportpaleisMariaDbStoreError("Workspace MariaDB-configuratie ontbreekt.", "DATABASE_CONFIG_MISSING");
     this.pool = pool ?? mariadb.createPool(databaseOptions(database));
     this.ownsPool = !pool;
     this.migrationFile = path.resolve(migrationFile);
+    this.startupPoolReadyTimeoutMs = startupPoolReadyTimeoutMs;
     this.domainCache = new Map();
     this.collectionCache = new Map();
     this.recordOrdinals = new Map();
@@ -406,12 +415,28 @@ export class SportpaleisDomainMariaDbStore {
     this.schemaVersion = null;
     this.snapshot = null;
     this.refreshPromise = null;
+    this.initializationPromise = null;
+    this.initialized = false;
     this.mutationTail = Promise.resolve();
     this.mutationQueueDepth = 0;
     this.metrics = createMetrics();
   }
 
   async initialize() {
+    if (this.initialized) return;
+    if (this.initializationPromise) return this.initializationPromise;
+    const pending = this.#initializeOnce();
+    this.initializationPromise = pending;
+    try {
+      await pending;
+      this.initialized = true;
+    } finally {
+      if (this.initializationPromise === pending) this.initializationPromise = null;
+    }
+  }
+
+  async #initializeOnce() {
+    await this.#awaitInitialPoolIdle();
     const migration = await readFile(this.migrationFile, "utf8");
     const connection = await this.#connection();
     try {
@@ -435,6 +460,29 @@ export class SportpaleisDomainMariaDbStore {
       connection.release();
     }
     await this.#refresh(true);
+  }
+
+  async #awaitInitialPoolIdle() {
+    if (typeof this.pool.idleConnections !== "function" || typeof this.pool.once !== "function") return;
+    if (Number(this.pool.idleConnections()) > 0) return;
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.pool.off?.("connection", onConnection);
+        this.pool.off?.("error", onError);
+        if (error) reject(error); else resolve();
+      };
+      const onConnection = () => finish();
+      const onError = (cause) => finish(new SportpaleisMariaDbStoreError("Workspace MariaDB-pool kon niet gereedkomen.", "DATABASE_POOL_WARMUP_FAILED", cause));
+      const timer = setTimeout(() => finish(new SportpaleisMariaDbStoreError("Workspace MariaDB-pool bleef tijdens startup onbeschikbaar.", "DATABASE_POOL_WARMUP_TIMEOUT")), this.startupPoolReadyTimeoutMs);
+      timer.unref?.();
+      this.pool.once("connection", onConnection);
+      this.pool.once("error", onError);
+      if (Number(this.pool.idleConnections()) > 0) finish();
+    });
   }
 
   // Releasebroker-only additive migration step. Runtime initialization is
@@ -598,7 +646,8 @@ export class SportpaleisDomainMariaDbStore {
       );
       this.metrics.recordRowsLoaded += recordRows.length;
       const grouped = new Map();
-      for (const row of recordRows) {
+      for (let index = 0; index < recordRows.length; index += 1) {
+        const row = recordRows[index];
         const record = decodePayload(row.record_json);
         this.metrics.decodedBytes += Buffer.byteLength(String(row.record_json));
         if (sha256CanonicalJson(record) !== row.record_sha256 || sportpaleisRecordIdentity(row.collection_key, record) !== row.record_id) {
@@ -607,6 +656,8 @@ export class SportpaleisDomainMariaDbStore {
         if (!grouped.has(row.collection_key)) grouped.set(row.collection_key, []);
         grouped.get(row.collection_key).push(immutableDomain(record));
         this.recordOrdinals.set(recordOrdinalKey(row.collection_key, row.record_id), Number(row.ordinal));
+        const yielded = yieldStartupHydration(index);
+        if (yielded) await yielded;
       }
       if (domain === "orders") {
         const historyRows = await this.pool.query(
@@ -615,11 +666,14 @@ export class SportpaleisDomainMariaDbStore {
         );
         this.metrics.historyRowsLoaded += historyRows.length;
         const histories = new Map();
-        for (const row of historyRows) {
+        for (let index = 0; index < historyRows.length; index += 1) {
+          const row = historyRows[index];
           const event = decodePayload(row.event_json);
           if (sha256CanonicalJson(event) !== row.event_sha256) throw new SportpaleisMariaDbStoreError(`Orderhistoriehash wijkt af voor ${row.order_id}.`, "ORDER_HISTORY_HASH_MISMATCH");
           if (!histories.has(row.order_id)) histories.set(row.order_id, []);
           histories.get(row.order_id).push(immutableDomain(event));
+          const yielded = yieldStartupHydration(index);
+          if (yielded) await yielded;
         }
         grouped.set("orders", (grouped.get("orders") ?? []).map((order) => immutableDomain({ ...order, eventHistory: histories.get(order.id) ?? [] })));
       }
@@ -630,10 +684,13 @@ export class SportpaleisDomainMariaDbStore {
         );
         this.metrics.idempotencyRowsLoaded += idempotencyRows.length;
         const idempotency = {};
-        for (const row of idempotencyRows) {
+        for (let index = 0; index < idempotencyRows.length; index += 1) {
+          const row = idempotencyRows[index];
           const record = decodePayload(row.record_json);
           if (sha256CanonicalJson(record) !== row.record_sha256) throw new SportpaleisMariaDbStoreError(`Idempotencyhash wijkt af voor ${row.identity_key}.`, "IDEMPOTENCY_HASH_MISMATCH");
           idempotency[row.identity_key] = immutableDomain(record);
+          const yielded = yieldStartupHydration(index);
+          if (yielded) await yielded;
         }
         const platform = { ...(this.domainCache.get("platform") ?? {}), idempotency: Object.freeze(idempotency) };
         this.domainCache.set("platform", Object.freeze(platform));
@@ -653,11 +710,15 @@ export class SportpaleisDomainMariaDbStore {
         [ORGANIZATION_ID],
       );
       this.metrics.auditRowsLoaded += auditRows.length;
-      const events = auditRows.map((row) => {
+      const events = [];
+      for (let index = 0; index < auditRows.length; index += 1) {
+        const row = auditRows[index];
         const event = decodePayload(row.event_json);
         if (sha256CanonicalJson(event) !== row.event_sha256) throw new SportpaleisMariaDbStoreError("Audit-evidencehash wijkt af.", "AUDIT_HASH_MISMATCH");
-        return immutableDomain(event);
-      });
+        events.push(immutableDomain(event));
+        const yielded = yieldStartupHydration(index);
+        if (yielded) await yielded;
+      }
       this.domainCache.set("audit", immutableDomain({ ...(this.domainCache.get("audit") ?? {}), audit: events }));
     }
     for (const domain of Object.keys(SPORTPALEIS_STATE_DOMAINS)) if (!this.domainCache.has(domain)) throw new SportpaleisMariaDbStoreError(`Domein ${domain} ontbreekt.`, "DOMAIN_MISSING");
