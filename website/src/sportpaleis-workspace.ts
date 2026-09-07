@@ -1296,11 +1296,6 @@ function proposalGroupSequenceState(state: PilotBootstrap, groups: NonNullable<P
   const index = projection ?? createOpenProductionProjectionIndex(state);
   const jobStatus = (candidate: NonNullable<ProductionProposal["groups"]>[number]) => candidate.productionJobId ? index.jobs.get(candidate.productionJobId)?.status : null;
   if (jobStatus(group) === "COMPLETED") return "COMPLETED";
-  const dependencies = group.dependsOnGroupIds ?? [];
-  if (dependencies.some((dependencyId) => {
-    const dependency = groups.find(({ id }) => id === dependencyId);
-    return !dependency || jobStatus(dependency) !== "COMPLETED";
-  })) return "LATER";
   const physical = physicalState ?? productionPhysicalStepState(state, index);
   if (physical.activeColors.size) {
     if (physical.activeGroupIds.has(group.id)) return "CURRENT";
@@ -2159,7 +2154,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   let reviewCandidateLoadSequence = 0;
   let orderSearchSequence = 0;
   let teamwearCatalogSearchSequence = 0;
-  let sharedSyncInFlight = false; let sharedSyncFormDirty = false; let deferredSharedRevision: number | null = null;
+  let sharedSyncInFlight = false; let sharedSyncFormDirty = false; let deferredSharedRevision: number | null = null; let productionTransitionEpoch = 0;
   const isSharedStatusRoute = (): boolean => {
     const current = path();
     if (current === `${BASE}/orders` || current === `${BASE}/productie` || current.startsWith(`${BASE}/productie/`)) return true;
@@ -2426,12 +2421,16 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     });
   };
   const checkSharedRevision = async (trigger: "interval" | "visible" | "focus" | "safe-boundary"): Promise<void> => {
-    if (!state || !isSharedStatusRoute() || document.visibilityState !== "visible" || sharedSyncInFlight) return;
+    if (!state || !isSharedStatusRoute() || document.visibilityState !== "visible" || sharedSyncInFlight || productionProposalBusy) return;
+    const startedBeforeProductionTransition = productionTransitionEpoch;
     sharedSyncInFlight = true;
     try {
       const { revision } = await api.currentRevision();
+      if (startedBeforeProductionTransition !== productionTransitionEpoch || productionProposalBusy) return;
       if (state.readOnlyFallback) {
-        state = await api.bootstrap(bootstrapSurfaceForPath());
+        const refreshedState = await api.bootstrap(bootstrapSurfaceForPath());
+        if (startedBeforeProductionTransition !== productionTransitionEpoch || productionProposalBusy) return;
+        state = refreshedState;
         deferredSharedRevision = null;
         notice = "Workspace-service hersteld · actuele productiestatus geladen.";
         render({ preserveScroll: true });
@@ -2439,11 +2438,14 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       }
       if (revision === state.revision) { deferredSharedRevision = null; return; }
       if (sharedSyncFormDirty || hasFocusedEditor()) { deferredSharedRevision = revision; showDeferredSyncNotice(); return; }
-      state = await api.bootstrap(bootstrapSurfaceForPath());
+      const refreshedState = await api.bootstrap(bootstrapSurfaceForPath());
+      if (startedBeforeProductionTransition !== productionTransitionEpoch || productionProposalBusy) return;
+      state = refreshedState;
       deferredSharedRevision = null;
       notice = trigger === "safe-boundary" ? "Actuele wijzigingen van een collega zijn veilig geladen." : "Werkplek automatisch bijgewerkt met de laatste status.";
       render({ preserveScroll: true });
     } catch {
+      if (startedBeforeProductionTransition !== productionTransitionEpoch || productionProposalBusy) return;
       if (!state.readOnlyFallback) {
         state.readOnlyFallback = true;
         notice = "Workspace-service niet bereikbaar · productieacties uitgeschakeld";
@@ -2719,6 +2721,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
       if (productionProposalBusy) return;
       const job = state.productionJobs.find(({ id }) => id === button.dataset.productionJobId);
       const startedAt = performance.now();
+      productionTransitionEpoch += 1;
       productionProposalBusy = true;
       productionProposalBusyKey = `complete:${button.dataset.productionJobId}`;
       productionActionFeedback = { tone: "progress", message: `${job?.jobNumber ?? "Productiejob"} als Bedrukt vastleggen…` };

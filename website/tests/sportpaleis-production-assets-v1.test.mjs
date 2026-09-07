@@ -222,7 +222,7 @@ test("beheerde nummerset toont samengestelde 12/34/77-preview uit dezelfde glyph
   const glyphMap = Object.fromEntries(candidates.map(({ id }, digit) => [String(digit), id]));
   const association = (await store.read()).associations[0];
   const asset = await service.promoteProductionAsset(admin.token, admin.csrfToken, source.id, { candidateIds: candidates.map(({ id }) => id), glyphMap, name: "Hockeynummers vereniging", ownerType: "ASSOCIATION", ownerName: association.name, productionMethod: "SELF_PRODUCED", heightMm: 75, contexts: [{ type: "ASSOCIATION", id: association.id, label: association.name }], applications: [{ kind: "NUMBER_SET", placement: "Short/rok" }], proofAuthority: "HUMAN_ACCEPTANCE" });
-  assert.deepEqual(asset.numberComposition, { freeContourSpacingMm: 5, measurement: "CONTOUR_TO_CONTOUR" });
+  assert.deepEqual(asset.numberComposition, { freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" });
   assert.equal(asset.lifecycleStatus, "PRODUCTION_READY");
   assert.equal(asset.contexts[0].id, association.id);
   assert.equal(asset.variants[0].widthMm, 75);

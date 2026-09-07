@@ -47,6 +47,8 @@ export const SPORTPALEIS_JUNIOR_GARMENT_SIZES = Object.freeze(["116", "128", "14
 export const SPORTPALEIS_JUNIOR_PHYSICAL_HEIGHT_MM = 200;
 export const SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM = 200;
 export const SPORTPALEIS_JUNIOR_RULE_SOURCE = "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.";
+export const SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM = Object.freeze({ SENIOR: 220, JUNIOR: 200 });
+export const SPORTPALEIS_WATERWIJK_RULE_SOURCE = "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.";
 
 export const SPORTPALEIS_CONFIGURATION_SOURCES = Object.freeze({
   productionMatrix: Object.freeze({
@@ -124,7 +126,7 @@ const association = (row, name, sourceName, fontProfile, foilColors, dimensions 
   dimensionsCm: Object.freeze({
     initialsShirt: dimensions.initialsShirt ?? null,
     backNumberJuniorSourceValue: dimensions.backNumberJuniorSourceValue == null ? null : SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10,
-    backNumberSenior: dimensions.backNumberSenior == null ? null : SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM / 10,
+    backNumberSenior: dimensions.backNumberSenior == null ? null : (name === "A.S.C. Waterwijk" ? SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.SENIOR : SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM) / 10,
     chestNumber: dimensions.chestNumber ?? null,
     shortsNumber: dimensions.shortsNumber ?? null,
     nameHeight: dimensions.nameHeight ?? null,

@@ -4,11 +4,11 @@ import test from "node:test";
 
 import { SPORTPALEIS_SUPPLIED_FONT_ADMISSION } from "../src/sportpaleis/supplied-font-admission.generated.mjs";
 import { SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS } from "../config/sportpaleis-authoritative-production-assets.mjs";
-import { SPORTPALEIS_ASSOCIATIONS, SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM } from "../config/sportpaleis-bedrukking-configuration.mjs";
-import { createSportpaleisProductionBootstrap, productionSourceCompatibilityMatrix } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { SPORTPALEIS_ASSOCIATIONS, SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM, SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM } from "../config/sportpaleis-bedrukking-configuration.mjs";
+import { createSportpaleisProductionBootstrap, productionSourceCompatibilityMatrix, resolveCanonicalProductionLines } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { inspectManagedFontAdmission } from "../src/sportpaleis/managed-font-production.mjs";
-import { NUMBER_GLYPH_SPACING_MM, productionAssetPiece } from "../src/sportpaleis/production-assets.mjs";
-import { boundsForContours, createCutJobBatch, validateGeometry } from "../src/sportpaleis/direct-print/index.ts";
+import { NUMBER_GLYPH_SPACING_MM, PIONEERS_NUMBER_GLYPH_SPACING_MM, productionAssetPiece, productionAssetPieces } from "../src/sportpaleis/production-assets.mjs";
+import { boundsForContours, createCutJobBatch, groupSemanticNumberObjects, validateGeometry } from "../src/sportpaleis/direct-print/index.ts";
 
 const now = new Date("2026-09-01T00:00:00.000Z");
 const near = (left, right, tolerance = 0.01) => Math.abs(Number(left) - Number(right)) <= tolerance;
@@ -65,12 +65,13 @@ test("Pioneers provenance bewaart immutable origineel en gebruikt exact tien ged
   assert.equal(asset.sizePolicy.defaultWidthMm, 0);
 });
 
-test("dubbele rugnummers 10, 17, 22 en 28 behouden per glyph 200 mm hoogte, aspect ratio en exact 5 mm contourafstand", () => {
+test("standaard dubbele nummers gebruiken 18 mm contourafstand en uitsluitend Pioneers gebruikt 5 mm", () => {
   const state = createSportpaleisProductionBootstrap(now);
   const assets = state.productionElements.filter(({ lifecycleStatus, applications }) => lifecycleStatus === "PRODUCTION_READY" && applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && /rug|shirt/iu.test(placement)));
   assert.ok(assets.length >= 2);
-  assert.equal(NUMBER_GLYPH_SPACING_MM, 5);
+  assert.equal(NUMBER_GLYPH_SPACING_MM, 18);
   for (const asset of assets) for (const value of ["10", "17", "22", "28"]) {
+    const expectedSpacingMm = asset.verifiedSourceKey === "pioneers-rug-senior-200" ? PIONEERS_NUMBER_GLYPH_SPACING_MM : NUMBER_GLYPH_SPACING_MM;
     const piece = productionAssetPiece({ asset, variant: asset.variants[0], line: { id: `line-${value}`, content: value, widthMm: 0, heightMm: 200, preview: { label: value } }, order: { id: "ASSURANCE", association: asset.contexts[0]?.label ?? "Sportpaleis", items: [] }, foilColor: "Wit" });
     const digitBounds = [];
     let cursor = 0;
@@ -83,8 +84,11 @@ test("dubbele rugnummers 10, 17, 22 en 28 behouden per glyph 200 mm hoogte, aspe
       assert.ok(near(produced.height, SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM), `${asset.id}:${value}:${digit}:height`);
       assert.ok(near(produced.width, glyph.widthUnits / glyph.heightUnits * 200), `${asset.id}:${value}:${digit}:ratio`);
     }
-    assert.ok(near(digitBounds[1].minX - digitBounds[0].maxX, 5), `${asset.id}:${value}:spacing`);
-    assert.ok(near(piece.requestedPhysicalSizeMm.widthMm, digitBounds[0].width + 5 + digitBounds[1].width), `${asset.id}:${value}:width`);
+    assert.ok(near(digitBounds[1].minX - digitBounds[0].maxX, expectedSpacingMm), `${asset.id}:${value}:spacing`);
+    assert.ok(near(piece.requestedPhysicalSizeMm.widthMm, digitBounds[0].width + expectedSpacingMm + digitBounds[1].width), `${asset.id}:${value}:width`);
+    const grouped = groupSemanticNumberObjects(productionAssetPieces({ asset, variant: asset.variants[0], line: { id: `group-${value}`, content: value, widthMm: 0, heightMm: 200, preview: { label: value } }, order: { id: "ASSURANCE", association: asset.contexts[0]?.label ?? "Sportpaleis", items: [] }, foilColor: "Wit" }));
+    const members = grouped[0].semanticGroup.physicalMembers;
+    assert.ok(near(members[1].relativePlacementMm.x - members[0].sourceBoundsMm.width, expectedSpacingMm), `${asset.id}:${value}:final-group-spacing`);
     assert.equal(validateGeometry(piece.contours).valid, true, `${asset.id}:${value}:geometry`);
     const batch = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: `DOUBLE-${asset.id}-${value}`, revision: 1, attemptIdPrefix: "product-truth-double", createdAt: now.toISOString(), pieces: [piece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } });
     assert.equal(batch.jobs.length, 1, `${asset.id}:${value}:job-count`);
@@ -93,11 +97,12 @@ test("dubbele rugnummers 10, 17, 22 en 28 behouden per glyph 200 mm hoogte, aspe
   }
 });
 
-test("alle actuele rugnummerprofielen zijn 200 mm en hockeynummertruth blijft van letters gescheiden", () => {
+test("Waterwijk gebruikt 220/200 mm zonder hockey- of andere clubregels te wijzigen", () => {
   const state = createSportpaleisProductionBootstrap(now);
   const matrix = productionSourceCompatibilityMatrix(state);
   for (const profile of state.productionProfiles.filter(({ supports }) => supports?.includes("backNumber"))) {
-    assert.equal(profile.backNumberSizeClasses.SENIOR.physicalHeightMm, 200, profile.id);
+    const waterwijk = ["profile-shirt", "profile-keeper", "profile-shirt-home", "profile-shirt-standard", "profile-source-a-s-c-waterwijk-backNumber"].includes(profile.id);
+    assert.equal(profile.backNumberSizeClasses.SENIOR.physicalHeightMm, waterwijk ? SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.SENIOR : 200, profile.id);
     assert.equal(profile.backNumberSizeClasses.JUNIOR.physicalHeightMm, 200, profile.id);
   }
   for (const association of ["MHC Lelystad", "Almeerse Hockeyclub", "Buitenhout MHC"]) {
@@ -107,4 +112,34 @@ test("alle actuele rugnummerprofielen zijn 200 mm en hockeynummertruth blijft va
     assert.equal(backNumber?.source?.id, "production-asset-verified-hockey-rug-200", association);
     assert.equal(matrix.some((row) => row.association === association && ["initials", "name"].includes(row.application) && row.source?.id === "production-asset-verified-hockey-rug-200"), false, association);
   }
+});
+
+test("Waterwijk wedstrijdshirt en -short projecteren Spain; overige items blijven Schluber", () => {
+  const state = createSportpaleisProductionBootstrap(now);
+  const article = (pattern) => state.articles.find(({ association, name, active }) => active && association === "A.S.C. Waterwijk" && pattern.test(name));
+  const shirt = article(/WEDSTRIJD SHIRT SELECTIE/iu);
+  const shorts = article(/WEDSTRIJD SHORT/iu);
+  const training = article(/TRAINING SHIRT/iu);
+  assert.equal(shirt.profileId, "profile-shirt-home");
+  assert.equal(shorts.profileId, "profile-shorts-home");
+  assert.notEqual(training.profileId, "profile-shirt-home");
+  const values = (overrides) => ({ initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "", ...overrides });
+  const item = (id, candidate, size, personalizationValues) => ({ id, articleNumber: candidate.articleNumber, association: candidate.association, productionProfileId: candidate.profileId, sourceProvenance: "gerichte Waterwijk Product Truth-test", foilColor: "Wit", variants: [{ id: `${id}-variant`, size, quantity: 1, personalizationValues, ...(personalizationValues.backNumber ? { backNumberProduction: { status: "SOURCE_CONFIGURED", sizeClass: personalizationValues.backNumberSizeClass, physicalHeightMm: personalizationValues.backNumberSizeClass === "SENIOR" ? 220 : 200, source: "Waterwijk Product Truth" } } : {}) }] });
+  const lines = resolveCanonicalProductionLines(state, "WATERWIJK-TRUTH", [
+    item("shirt-senior", shirt, "L", values({ backNumber: "12", backNumberSizeClass: "SENIOR" })),
+    item("shirt-junior", shirt, "152", values({ backNumber: "17", backNumberSizeClass: "JUNIOR" })),
+    item("short", shorts, "L", values({ shortsNumber: "24" })),
+    item("training", training, "L", values({ initials: "AB" })),
+  ]);
+  const fontName = (line) => state.productionFonts.find(({ id }) => id === line.source.id)?.name;
+  const senior = lines.find(({ itemId }) => itemId === "shirt-senior");
+  const junior = lines.find(({ itemId }) => itemId === "shirt-junior");
+  const short = lines.find(({ itemId }) => itemId === "short");
+  const other = lines.find(({ itemId }) => itemId === "training");
+  assert.equal(fontName(senior), "Spain Euro 2016");
+  assert.equal(fontName(junior), "Spain Euro 2016");
+  assert.equal(fontName(short), "Spain Euro 2016");
+  assert.equal(fontName(other), "Schluber");
+  assert.equal(senior.heightMm, 220);
+  assert.equal(junior.heightMm, 200);
 });

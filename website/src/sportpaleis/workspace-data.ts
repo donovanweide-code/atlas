@@ -713,7 +713,7 @@ export interface SportpaleisProductionElement {
     geometrySha256: string;
   };
   numberGlyphs?: Record<string, { candidateId: string; geometryHash: string; widthUnits: number; heightUnits: number; contours?: { id: string; closed: true; points: { x: number; y: number }[] }[] }>;
-  numberComposition?: { freeContourSpacingMm: 5; measurement: "CONTOUR_TO_CONTOUR"; glyphHeightMm?: number; widthMode?: "DERIVED_FROM_GLYPH_CONTOURS" };
+  numberComposition?: { freeContourSpacingMm: number; measurement: "CONTOUR_TO_CONTOUR"; glyphHeightMm?: number; widthMode?: "DERIVED_FROM_GLYPH_CONTOURS" };
   sourceLayers?: {
     visualSource: { filename: string; mimeType: string; sha256: string } | null;
     vectorSource: { filename: string; mimeType: string; sha256: string } | null;

@@ -6,7 +6,14 @@ import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
 
 const POINT_TO_MM = 25.4 / 72;
-export const NUMBER_GLYPH_SPACING_MM = 5;
+export const NUMBER_GLYPH_SPACING_MM = 18;
+export const PIONEERS_NUMBER_GLYPH_SPACING_MM = 5;
+
+export function productionNumberGlyphSpacingMm(asset) {
+  return asset?.verifiedSourceKey === "pioneers-rug-senior-200"
+    ? PIONEERS_NUMBER_GLYPH_SPACING_MM
+    : NUMBER_GLYPH_SPACING_MM;
+}
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
 const MAX_POINTS = 250_000;
@@ -596,6 +603,7 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
   if (asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED") throw assetError("Dit beeldmerk is nog niet vrijgegeven voor eigen productie.", "PRODUCTION_ASSET_NOT_READY", 409);
   const numberSet = asset.applications?.some(({ kind }) => kind === "NUMBER_SET");
   if (numberSet) {
+    const glyphSpacingMm = productionNumberGlyphSpacingMm(asset);
     if (!/^\d{1,4}$/u.test(line.content) || !asset.numberGlyphs) throw assetError("Deze nummerbron kan de gevraagde cijferreeks niet veilig zetten.", "PRODUCTION_ASSET_GLYPH_MISSING", 409);
     const requestedHeight = Number(line.heightMm || variant.heightMm);
     if (!(requestedHeight > 0)) throw assetError("Een nummerbron vereist een fysieke hoogte.", "PRODUCTION_ASSET_SIZE_MISSING", 409);
@@ -609,9 +617,10 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
       const translateX = offsetX - glyphBounds.minX * scale;
       contours.push(...glyph.contours.map((contour) => ({ ...contour, id: `${digit}-${contour.id}-${contours.length + 1}`, points: contour.points.map(({ x, y }) => ({ x: translateX + x * scale, y: y * scale })) })));
       // The business rule is a physical free contour gap, not typographic
-      // advance/kerning. Position the next contour exactly 5 mm after this
+      // advance/kerning. Position the next contour at the authoritative
+      // source-specific distance after this
       // glyph's right-most production contour.
-      offsetX += glyphBounds.width * scale + NUMBER_GLYPH_SPACING_MM;
+      offsetX += glyphBounds.width * scale + glyphSpacingMm;
     }
     const producedBounds = bounds(contours);
     return {
@@ -666,6 +675,7 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
   if (asset.lifecycleStatus !== "PRODUCTION_READY" || asset.productionMethod !== "SELF_PRODUCED") throw assetError("Dit beeldmerk is nog niet vrijgegeven voor eigen productie.", "PRODUCTION_ASSET_NOT_READY", 409);
   if (!/^\d{1,4}$/u.test(line.content) || !asset.numberGlyphs) throw assetError("Deze nummerbron kan de gevraagde cijferreeks niet veilig zetten.", "PRODUCTION_ASSET_GLYPH_MISSING", 409);
   const requestedHeight = Number(line.heightMm || variant.heightMm);
+  const glyphSpacingMm = productionNumberGlyphSpacingMm(asset);
   if (!(requestedHeight > 0)) throw assetError("Een nummerbron vereist een fysieke hoogte.", "PRODUCTION_ASSET_SIZE_MISSING", 409);
   const digits = Array.from(line.content);
   const semanticId = `${order.id}:${line.id}:number:${line.content}`;
@@ -700,7 +710,7 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
         digit,
         digitIndex,
         digitCount: digits.length,
-        garmentCompositionSpacingMm: NUMBER_GLYPH_SPACING_MM,
+        garmentCompositionSpacingMm: glyphSpacingMm,
       },
       assetIdentity: {
         assetId: asset.id,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { PIONEERS_NUMBER_SOURCE_DEFINITION } from "./pioneers-number-source.generated.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
+import { NUMBER_GLYPH_SPACING_MM, PIONEERS_NUMBER_GLYPH_SPACING_MM } from "./production-assets.mjs";
 import { validateGeometry } from "./direct-print/geometry.ts";
 
 const LEGACY_SOURCE_DEFINITIONS = Object.freeze([
@@ -215,7 +216,7 @@ function verifiedEntry(definition) {
     defaultFoilColor: null,
     numberGlyphs,
     contourNormalization,
-    numberComposition: Object.freeze({ freeContourSpacingMm: 5, measurement: "CONTOUR_TO_CONTOUR", glyphHeightMm: definition.heightMm, widthMode: "DERIVED_FROM_GLYPH_CONTOURS" }),
+    numberComposition: Object.freeze({ freeContourSpacingMm: definition.key === "pioneers-rug-senior-200" ? PIONEERS_NUMBER_GLYPH_SPACING_MM : NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR", glyphHeightMm: definition.heightMm, widthMode: "DERIVED_FROM_GLYPH_CONTOURS" }),
     sourceLayers: Object.freeze({ visualSource: null, vectorSource: Object.freeze({ filename: definition.filename, mimeType: "image/svg+xml", sha256: definition.sha256, originalFilename: definition.originalFilename ?? definition.filename, originalSha256 }), validatedCutContour: Object.freeze({ sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: "MATCHED", conversionMethod: definition.normalization?.method ?? "HUMAN_VERIFIED_SVG" }), physicallyProvenContour: null }),
     revision: 1,
     variants: Object.freeze([{ id: `variant-verified-${definition.key}`, label: definition.placement, widthMm: 0, heightMm: definition.heightMm, productionMode: "INTERNAL_PLOT", currentStock: null, minimumStock: null, targetStock: null }]),

@@ -30,6 +30,9 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
       || productionRule.rotation !== first.productionRule.rotation
       || semanticGroup?.value !== semantic.value)) throw new Error(`Rugnummer ${semantic.value} bevat incompatibele fysieke cijfers.`);
 
+    const contourSpacingMm = Number.isFinite(semantic.garmentCompositionSpacingMm)
+      ? semantic.garmentCompositionSpacingMm
+      : physicalRecognitionGapMm;
     let cursorX = 0;
     const contours: VectorContour[] = [];
     const physicalMembers: SemanticPhysicalMember[] = [];
@@ -50,7 +53,7 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
       // De 30 mm hoort bij het uiteindelijke persen op het kledingstuk. In het
       // snijbestand blijft de set herkenbaar in de juiste volgorde, maar gebruikt
       // hij uitsluitend de authoritative veilige contourafstand.
-      cursorX = quantizeMm(cursorX + memberBounds.width + physicalRecognitionGapMm);
+      cursorX = quantizeMm(cursorX + memberBounds.width + contourSpacingMm);
     }
     const compositeBounds = boundsForContours(contours);
     return {

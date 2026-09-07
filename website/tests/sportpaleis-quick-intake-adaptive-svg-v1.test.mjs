@@ -97,7 +97,7 @@ function vectorSvg() {
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 100">${groups}</svg>`);
 }
 
-test("authoritative hockey-SVG blijft leidend in normale orders met 200/75 mm en 5 mm multi-digit spacing", async (context) => {
+test("authoritative hockey-SVG blijft leidend in normale orders met 200/75 mm en standaard multi-digit spacing", async (context) => {
   const { root, service, store, admin, operator } = await fixture(context);
   const persisted = await store.read(); const association = persisted.associations.find(({ name }) => name === "Buitenhout MHC");
   await store.mutate(async (state) => {

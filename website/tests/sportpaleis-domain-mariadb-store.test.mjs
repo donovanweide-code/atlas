@@ -727,7 +727,7 @@ test("rollbackbridge materialiseert onder revision- en hashlock exact één lega
   await assert.rejects(materializeLegacyRollbackState({ pool, expectedGlobalRevision: domainSnapshot.revision - 1, expectedDomainHash: evidence.stateSha256 }), /revision-drift/);
 });
 
-test("Nu maken materialiseert een mutable orderrecord vanuit de frozen domeinsnapshot", async (context) => {
+test("Nu maken materialiseert ook bestaande WIT-groeporders vanuit de frozen domeinsnapshot", async (context) => {
   const runtimeRoot = await mkdtemp(path.join(tmpdir(), "sp-domain-current-group-"));
   context.after(() => rm(runtimeRoot, { recursive: true, force: true }));
   const migration = await readFile(migrationFile, "utf8");
@@ -743,6 +743,14 @@ test("Nu maken materialiseert een mutable orderrecord vanuit de frozen domeinsna
   const font = bootstrap.productionFonts.find(({ name }) => name === "Spain Euro 2016");
   assert.ok(font);
   const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
+  const existingOrder = (await service.createOrder(login.token, login.csrfToken, {
+    orderKind: "CUSTOM", customer: "Bestaande WIT-groep", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    productionLines: [{ id: "existing-current-group-number-2", type: "NUMBER", content: "2", previewLabel: "2", widthMm: 80, heightMm: 80, quantity: 1, foilColor: "Wit", sourceId: font.id, provenance: "Bestaande frozen WIT-groep" }],
+    items: [{ product: "Vrije opdruk", association: "Vrije bedrukking", size: "", quantity: 1, personalization: "2", foilColor: "Wit", deviation: true, overrides: empty }],
+  }, "existing-current-group-order")).value;
+  const existingProposal = (await service.createProductionProposal(login.token, login.csrfToken, {
+    orders: [{ id: existingOrder.id, expectedRevision: existingOrder.revision }],
+  }, "existing-current-group-proposal")).value;
   const order = (await service.createOrder(login.token, login.csrfToken, {
     orderKind: "CUSTOM", customer: "Nu maken domeinfixture", customerEmail: "", customerPhone: "", standardPersonalization: empty,
     productionLines: [{ id: "current-group-number-2", type: "NUMBER", content: "2", previewLabel: "2", widthMm: 80, heightMm: 80, quantity: 1, foilColor: "Wit", sourceId: font.id, provenance: "Nu maken frozen-draftregressie" }],
@@ -754,11 +762,16 @@ test("Nu maken materialiseert een mutable orderrecord vanuit de frozen domeinsna
   assert.equal(first.duplicate, false);
   assert.equal(retry.duplicate, true);
   assert.equal(retry.value.job.id, first.value.job.id);
+  assert.equal(first.value.proposal.id, existingProposal.id, "de actuele WIT-selectie sluit aan op de bestaande OPEN WIT-groep");
+  assert.deepEqual([...first.value.job.snapshot.orderIds].sort(), [existingOrder.id, order.id].sort(), "de leidende WIT-job bevat oud en nieuw exact eenmaal");
   const after = await store.readSnapshot();
   const persisted = after.orders.find(({ id }) => id === order.id);
   assert.ok(persisted.productionExecutionSnapshot?.executionHash);
   assert.equal(after.productionJobs.filter(({ snapshot }) => snapshot.orderIds.includes(order.id)).length, 1);
   assert.equal(after.productionProposals.filter(({ orders }) => orders.some(({ id }) => id === order.id)).length, 1);
+  const savedProposal = after.productionProposals.find(({ id }) => id === existingProposal.id);
+  assert.equal(savedProposal.groups.filter(({ productionJobId }) => productionJobId === first.value.job.id).length, 1, "de bestaande WIT-groep wijst naar exact één leidende job");
+  assert.equal(after.productionJobs.filter(({ id, status }) => id === first.value.job.id && status === "AWAITING_HUMAN_CHECK").length, 1);
 });
 
 test("grote Vrije productie en reject-only gebruiken recordtransacties zonder duplicaat of artifactmutatie", async (context) => {

@@ -10,6 +10,8 @@ import {
   SPORTPALEIS_CONFIGURATION_VERSION,
   SPORTPALEIS_FONT_CONFIRMATION,
   SPORTPALEIS_JUNIOR_RULE_SOURCE,
+  SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM,
+  SPORTPALEIS_WATERWIJK_RULE_SOURCE,
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { authoritativeProductionAssetById, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS } from "../config/sportpaleis-authoritative-production-assets.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
@@ -29,6 +31,7 @@ import {
 } from "../src/sportpaleis/managed-font-production.mjs";
 import {
   NUMBER_GLYPH_SPACING_MM,
+  productionNumberGlyphSpacingMm,
   productionAssetPreviewSvg,
   productionAssetPiece,
   productionAssetPieces,
@@ -230,6 +233,10 @@ function reconcileCanonicalProductionProfileSources(state) {
 }
 
 const ARTICLE_CATALOG = structuredClone(SPORTPALEIS_LIVE_PILOT_ARTICLES);
+for (const article of ARTICLE_CATALOG.filter(({ association }) => association === "A.S.C. Waterwijk")) {
+  if (/\bWEDSTRIJD SHIRT\b/iu.test(article.name)) article.profileId = "profile-shirt-home";
+  if (/\bWEDSTRIJD SHORT\b/iu.test(article.name)) article.profileId = "profile-shorts-home";
+}
 for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) => association === "Almere Pioneers" && ["116386", "116388"].includes(String(articleNumber)))) {
   article.supports = [...new Set([...(article.supports ?? []), "backNumber", "chestNumber"])];
   article.personalizationPolicy = { mode: "combination", fields: { ...(article.personalizationPolicy?.fields ?? {}), backNumber: "optional", chestNumber: "optional" } };
@@ -245,17 +252,17 @@ for (const article of ARTICLE_CATALOG.filter(({ association, articleNumber }) =>
 const ARTICLE_IMAGE_KEYS = new Set(ARTICLE_CATALOG.map(({ imageKey }) => imageKey));
 
 const PRODUCTION_PROFILES = [
-  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior/Senior rugnummer 20 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } } },
+  { id: "profile-shirt", name: "A.S.C. wedstrijdshirt · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior 20 cm · Senior 22 cm", fontProfile: "Spain", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE } } },
   { id: "profile-keeper", name: "A.S.C. keeperstrui · rug", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior/Senior rugnummer 20 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "name", "backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_JUNIOR_RULE_SOURCE } } },
-  { id: "profile-shorts", name: "A.S.C. wedstrijdshort · pijp", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-shorts", name: "A.S.C. wedstrijdshort · pijp", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Spain", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials", "shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-initials", name: "A.S.C. initialen · borst", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-none", name: "Geen bedrukking", placement: "Niet van toepassing", referenceDistanceCm: null, sizeLabel: "Geen", fontProfile: "Niet van toepassing", foilColor: "Niet van toepassing", mirror: false, rotationDeg: 0, supports: [], instruction: "Dit artikel heeft standaard geen bedrukking." },
   { id: "profile-pending", name: "Live artikel · productie-inrichting volgt", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP", fontProfile: "Onbekend", foilColor: "Onbekend", mirror: null, rotationDeg: null, supports: [], instruction: "Kritieke productie-inrichting ontbreekt. Het artikel mag worden besteld en naar Productie gaan, maar de uiteindelijke productieactie blijft geblokkeerd tot maat, bedrukoptie, letterprofiel en foliekleur voldoende zijn bevestigd." },
 ];
 PRODUCTION_PROFILES.push(
-  { id: "profile-shirt-home", name: "A.S.C. thuiswedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshirt)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
+  { id: "profile-shirt-home", name: "A.S.C. thuiswedstrijdshirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Rug Junior 20 cm · Senior 22 cm", fontProfile: "Spain", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE }, JUNIOR: { physicalHeightMm: 200, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE } } },
   { id: "profile-shirt-standard", name: "A.S.C. shirt · rugnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Junior bronwaarde 20 cm · Senior 22 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["backNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf.", backNumberSizeClasses: { SENIOR: { physicalHeightMm: 220, status: "SOURCE_CONFIGURED", source: "info bedrukkingen 2026.xlsx · Blad1!A5:J5" }, JUNIOR: { physicalHeightMm: null, sourceValueMm: 200, status: "DATA_GAP", source: "Bronwaarde 20 cm aanwezig; fysieke Junior-hoogte blijft geblokkeerd tot praktijkbevestiging" } } },
-  { id: "profile-shorts-home", name: "A.S.C. thuiswedstrijdshort · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber (Spain voor thuiswedstrijdshort)", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
+  { id: "profile-shorts-home", name: "A.S.C. thuiswedstrijdshort · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Spain", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-shorts-standard", name: "A.S.C. short · shortnummer", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Shortnummer 7,5 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["shortsNumber"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-initials-shirt", name: "A.S.C. shirt · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "Initialen op shirt 3 cm", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "PILOT-AANDACHT: positie, referentieafstand, rotatie en spiegeling worden in de handmatige pilot door Productie bepaald en blokkeren niet op zichzelf." },
   { id: "profile-initials-other", name: "A.S.C. overig artikel · initialen", placement: "Onbevestigd", referenceDistanceCm: null, sizeLabel: "DATA_GAP · fysieke maat niet artikel-specifiek bevestigd", fontProfile: "Schluber", foilColor: "Wit", mirror: null, rotationDeg: null, supports: ["initials"], instruction: "DATA_GAP: de fysieke bedrukkingsmaat ontbreekt en blokkeert productie. Positie, referentieafstand, rotatie en spiegeling zijn niet-blokkerende pilot-aandachtspunten." },
@@ -559,6 +566,13 @@ function publicUser(user) {
     quickAuth: user.quickPin?.hash ? { mode: "PIN", pinEnrolled: true } : { mode: "PASSWORD", pinEnrolled: false },
     ...(reviewDeveloper ? { principalType: user.principalType, candidateId: user.candidateId, runId: user.runId, mutationDisabled: true } : {}),
   };
+}
+for (const profile of PRODUCTION_PROFILES.filter(({ id }) => ["profile-shirt", "profile-keeper", "profile-shirt-home", "profile-shirt-standard", "profile-source-a-s-c-waterwijk-backNumber"].includes(id))) {
+  profile.backNumberSizeClasses = {
+    SENIOR: { physicalHeightMm: SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.SENIOR, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE },
+    JUNIOR: { physicalHeightMm: SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.JUNIOR, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE },
+  };
+  profile.sizeLabel = "Rug Junior 20 cm · Senior 22 cm";
 }
 
 // Bootstrap consumers render only the immutable audit identity and labels.
@@ -1209,6 +1223,7 @@ export function validateSportpaleisPilotState(input) {
   }
   reconcileCanonicalProductionProfileSources(state);
   reconcileVerifiedProductionNumberSources(state);
+  applyWaterwijkProductionAuthority(state);
   applyPioneersProductionAuthority(state);
   applyScBuitenboysShortAuthority(state);
   reconcileCanonicalProductionProfileSources(state);
@@ -3997,8 +4012,7 @@ export class SportpaleisPilotService {
           currentGroup.efficiencyEvidence = efficiency.evidence;
         }
         const currentOrders = currentGroup.orders.map(({ id, expectedRevision }) => {
-          const order = state.orders.find((candidate) => candidate.id === id);
-          if (!order) throw Object.assign(new Error("Order niet gevonden."), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, "Order niet gevonden.");
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error("Een order is intussen gewijzigd."), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           if (!["ORDER", "CONTROL", "PRINT"].includes(order.stage)) throw Object.assign(new Error("Alle orders moeten klaar voor of in productie zijn."), { statusCode: 409, code: "ORDER_NOT_READY" });
           const selectedLineIds = new Set(currentGroup.productionLineRefs.filter(({ orderId }) => orderId === order.id).map(({ lineId }) => lineId));
@@ -7263,6 +7277,10 @@ function reconcileVerifiedProductionNumberSources(state) {
       const auditId = `audit-${VERIFIED_NUMBER_SOURCE_EVENT.toLocaleLowerCase("en-US")}-${entry.definition.key}`;
       if (!state.audit.some(({ id }) => id === auditId)) state.audit.unshift({ id: auditId, at: "2026-09-01T00:00:00.000Z", userId: "system:verified-source-import", action: "Gecontroleerde SVG-nummerset opgenomen", subject: element.id, details: { sourceId, sourceSha256: entry.source.original.sha256, sourceFilename: entry.source.original.filename, normalizedSha256: entry.source.normalized?.sha256 ?? entry.source.original.sha256, normalizedFilename: entry.source.normalized?.filename ?? entry.source.original.filename, assetVersion: element.version, physicalHeightMm: entry.definition.heightMm, placement: entry.definition.placement, sourceBytesImmutable: true, geometryAiGenerated: false } });
     }
+    else if (existing.numberGlyphs) existing.numberComposition = structuredClone(entry.element.numberComposition);
+  }
+  for (const element of state.productionElements.filter(({ numberGlyphs }) => Boolean(numberGlyphs))) {
+    element.numberComposition = { ...(element.numberComposition ?? {}), freeContourSpacingMm: productionNumberGlyphSpacingMm(element), measurement: "CONTOUR_TO_CONTOUR" };
   }
   const assetsByKey = new Map(state.productionElements.filter(({ verifiedSourceKey }) => Boolean(verifiedSourceKey)).map((element) => [element.verifiedSourceKey, element.id]));
   const pioneersMasterKey = "pioneers-rug-senior-200";
@@ -7336,6 +7354,23 @@ function reconcileVerifiedProductionNumberSources(state) {
     subject: pioneersMaster.id,
     details: { sourceAssetId: pioneersMaster.id, sourceVersion: pioneersMaster.version, placements: ["backNumber", "chestNumber", "shortsNumber"], targetHeightsMm: { backNumber: 200, chestNumber: 80, shortsNumber: 80 }, supersededAssetId: supersededShort?.id ?? null, productTruth: "Donovan 2026-09-03: Rug, Borst en Short gebruiken dezelfde authoritative glyphs." },
   });
+}
+
+function applyWaterwijkProductionAuthority(state) {
+  for (const article of state.articles?.filter(({ association }) => association === "A.S.C. Waterwijk") ?? []) {
+    if (/\bWEDSTRIJD SHIRT\b/iu.test(article.name)) article.profileId = "profile-shirt-home";
+    if (/\bWEDSTRIJD SHORT\b/iu.test(article.name)) article.profileId = "profile-shorts-home";
+  }
+  for (const profile of state.productionProfiles ?? []) {
+    if (["profile-shirt", "profile-shirt-home", "profile-shorts", "profile-shorts-home"].includes(profile.id)) profile.fontProfile = "Spain";
+    if (["profile-shirt", "profile-keeper", "profile-shirt-home", "profile-shirt-standard", "profile-source-a-s-c-waterwijk-backNumber"].includes(profile.id)) {
+      profile.backNumberSizeClasses = {
+        SENIOR: { physicalHeightMm: SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.SENIOR, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE },
+        JUNIOR: { physicalHeightMm: SPORTPALEIS_WATERWIJK_BACK_NUMBER_HEIGHT_MM.JUNIOR, status: "SOURCE_CONFIGURED", source: SPORTPALEIS_WATERWIJK_RULE_SOURCE },
+      };
+      profile.sizeLabel = "Rug Junior 20 cm · Senior 22 cm";
+    }
+  }
 }
 
 function normalizedProductionIdentity(value) {
@@ -7717,7 +7752,7 @@ function validateProductionLines(value, state, user, orderKind, options = {}) {
     if (numberAsset && (!numberVariant || Array.from(content).some((digit) => !numberAsset.numberGlyphs?.[digit]))) throw Object.assign(new Error("De nummerbron bevat niet alle gevraagde cijfers."), { statusCode: 400, code: "PRODUCTION_ASSET_GLYPH_MISSING" });
     const requestedWidthMm = Number(line.widthMm); const heightMm = Number(line.heightMm); const quantity = Number(line.quantity);
     const widthMm = numberAsset?.sizePolicy?.widthDerived === true
-      ? Array.from(content).reduce((sum, digit) => { const glyph = numberAsset.numberGlyphs[digit]; return sum + glyph.widthUnits / glyph.heightUnits * heightMm; }, Math.max(0, content.length - 1) * NUMBER_GLYPH_SPACING_MM)
+      ? Array.from(content).reduce((sum, digit) => { const glyph = numberAsset.numberGlyphs[digit]; return sum + glyph.widthUnits / glyph.heightUnits * heightMm; }, Math.max(0, content.length - 1) * productionNumberGlyphSpacingMm(numberAsset))
       : requestedWidthMm;
     if ((!initialsInfix && (!(widthMm >= 1 && widthMm <= 1000) || !(heightMm >= 1 && heightMm <= 1000))) || (initialsInfix && (!(widthMm >= 0 && widthMm <= 1000) || !(heightMm >= 0 && heightMm <= 1000))) || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw Object.assign(new Error("Afmetingen moeten geldig zijn en aantal 1â€“999."), { statusCode: 400, code: "PRODUCTION_LINE_DIMENSIONS_INVALID" });
     let source; let proofStatus = "CONFIGURED"; let validation = { status: "VALID", reason: null };
@@ -8464,8 +8499,6 @@ function productionGroupSequenceState(state, proposal, groupId) {
   if (!group) return "UNKNOWN";
   const jobStatus = (candidate) => candidate.productionJobId ? state.productionJobs.find(({ id }) => id === candidate.productionJobId)?.status : null;
   if (jobStatus(group) === "COMPLETED") return "COMPLETED";
-  const dependencies = Array.isArray(group.dependsOnGroupIds) ? group.dependsOnGroupIds : [];
-  if (dependencies.some((dependencyId) => jobStatus(groups.find(({ id }) => id === dependencyId) ?? {}) !== "COMPLETED")) return "LATER";
   const activeGroups = activePhysicalProductionGroups(state);
   if (activeGroups.length) {
     if (jobStatus(group) === "AWAITING_HUMAN_CHECK") return "CURRENT";

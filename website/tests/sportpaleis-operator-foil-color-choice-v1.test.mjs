@@ -10,6 +10,15 @@ import { captureReceipt, createTestMailFoundation } from "./helpers/sportpaleis-
 const passwords = { kevin: "Color-Choice-Admin-2026!", patrick: "Color-Choice-Operator-2026!", collega: "Color-Choice-Store-2026!", "donovan-support": "Color-Choice-Support-2026!" };
 const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", backNumberSizeClass: "", shortsNumber: "" };
 
+function assertCommonFinalLayout(job) {
+  const groups = job.snapshot.layout.productionGeometry.groups;
+  assert.ok(groups.length > 0);
+  for (const placed of groups) {
+    assert.ok(placed.provenance.nestingSection?.key, `${job.snapshot.productionGroup.foilColor} mist de gemeenschappelijke final-layoutsectie`);
+    assert.equal(placed.nestingRotationApplied, placed.provenance.nestingSection.key === "back-numbers" ? 90 : 0);
+  }
+}
+
 async function fixture(context, key, { secondaryColor = "Blauw" } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), `sportpaleis-color-choice-${key}-`));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -44,6 +53,7 @@ test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en ron
   const { store, service, admin, operator, controlled, proposal, white, blue } = await fixture(context, "white-first");
   const whiteJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: white.id, orders: white.orders }, "color-choice-white-job")).value;
   assert.equal(whiteJob.snapshot.productionGroup.foilColor, "Wit");
+  assertCommonFinalLayout(whiteJob);
 
   let state = await service.bootstrap(admin.token);
   let savedProposal = state.productionProposals.find(({ id }) => id === proposal.id);
@@ -67,6 +77,7 @@ test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en ron
   assert.equal(savedBlue.status, "OPEN");
 
   const blueJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: blue.id, orders: savedBlue.orders }, "color-choice-blue-after-white")).value;
+  assertCommonFinalLayout(blueJob);
   await service.completeProductionJob(admin.token, admin.csrfToken, blueJob.id, "color-choice-blue-printed");
   state = await service.bootstrap(admin.token);
   assert.equal(state.orders.find(({ id }) => id === controlled.id).productionClosure.status, "ELIGIBLE", "alle kleuren Bedrukt maakt uitsluitend Gereed-eligible");
@@ -80,13 +91,23 @@ test("OPEN BLAUW + WIT laat WIT kiezen, blokkeert een tweede actieve stap en ron
 });
 
 test("OPEN BLAUW + WIT laat BLAUW als eerste keuze toe en houdt WIT OPEN", async (context) => {
-  const { service, admin, proposal, white, blue } = await fixture(context, "blue-first");
+  const { store, service, admin, proposal, white, blue } = await fixture(context, "blue-first");
+  await store.mutate(async (state) => {
+    const saved = state.productionProposals.find(({ id }) => id === proposal.id);
+    saved.groups.find(({ id }) => id === blue.id).dependsOnGroupIds = [white.id];
+    return { state, value: null };
+  });
   const blueJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: blue.id, orders: blue.orders }, "color-choice-blue-first-job")).value;
   assert.equal(blueJob.snapshot.productionGroup.foilColor, "Blauw");
+  assertCommonFinalLayout(blueJob);
   const state = await service.bootstrap(admin.token);
   const saved = state.productionProposals.find(({ id }) => id === proposal.id);
   assert.equal(saved.groups.find(({ id }) => id === white.id).status, "OPEN");
   assert.equal(state.productionJobs.filter((job) => job.status === "AWAITING_HUMAN_CHECK" && saved.groups.some(({ productionJobId }) => productionJobId === job.id)).length, 1);
+
+  const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  const sequence = source.slice(source.indexOf("function proposalGroupSequenceState"), source.indexOf("function productionGroupOrders"));
+  assert.doesNotMatch(sequence, /dependsOnGroupIds/u, "de client mag vóór een actieve fysieke job geen kleurvolgorde afdwingen");
 });
 
 test("gelijktijdige medewerkerkeuzes leveren nooit twee actieve kleuren in dezelfde productiecontext", async (context) => {
@@ -149,6 +170,35 @@ test("ZWART Bedrukt promoveert WIT over voorstelgrenzen en groepeert gelijke WIT
   assert.equal(finalState.productionProposals.filter(({ orders }) => orders.some(({ id }) => id === currentSecond.id)).length, 1, "geen tweede los WIT-voorstel aangemaakt");
 });
 
+test("WIT Bedrukt maakt ZWART direct uitvoerbaar zonder stale statuspoll-fallback", async (context) => {
+  const { service, operator, proposal, white, blue: black } = await fixture(context, "white-black-transition", { secondaryColor: "Zwart" });
+  const whiteJob = (await service.createProductionJob(operator.token, operator.csrfToken, {
+    proposalId: proposal.id, proposalGroupId: white.id, orders: white.orders,
+  }, "white-black-transition-white-job")).value;
+
+  const completed = await service.completeProductionJob(operator.token, operator.csrfToken, whiteJob.id, "white-black-transition-white-complete");
+  assert.equal(completed.value.status, "COMPLETED");
+  assert.equal(completed.projection.productionJobs[0].status, "COMPLETED");
+  assert.equal(completed.projection.productionProposals[0].groups.find(({ id }) => id === black.id).status, "OPEN");
+
+  const afterWhite = await service.bootstrap(operator.token);
+  const savedProposal = afterWhite.productionProposals.find(({ id }) => id === proposal.id);
+  const savedBlack = savedProposal.groups.find(({ id }) => id === black.id);
+  const blackJob = (await service.createProductionJob(operator.token, operator.csrfToken, {
+    proposalId: proposal.id, proposalGroupId: savedBlack.id, orders: savedBlack.orders,
+  }, "white-black-transition-black-job")).value;
+  assert.equal(blackJob.snapshot.productionGroup.foilColor, "Zwart");
+
+  const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
+  const sync = source.slice(source.indexOf("const checkSharedRevision"), source.indexOf("const focusLocationHashTarget"));
+  const completion = source.slice(source.indexOf('if (button.dataset.action === "complete-production-job"'), source.indexOf('if (button.dataset.action === "toggle-foil-roll"'));
+  assert.match(sync, /sharedSyncInFlight \|\| productionProposalBusy/u);
+  assert.match(sync, /startedBeforeProductionTransition !== productionTransitionEpoch \|\| productionProposalBusy/u);
+  assert.match(sync, /const refreshedState = await api\.bootstrap/u);
+  assert.match(completion, /productionTransitionEpoch \+= 1;[\s\S]*completeProductionJob/u);
+  assert.match(completion, /applyProductionCompletionProjection\(state!, projection\)/u);
+});
+
 test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze", async () => {
   const source = await readFile(new URL("../src/sportpaleis-workspace.ts", import.meta.url), "utf8");
   assert.match(source, /availableColorCount > 1 \? "Welke foliekleur wil je nu produceren\?" : "Nu maken"/u);
@@ -159,6 +209,6 @@ test("kleurkeuze-UX vraagt alleen bij meerdere veilige OPEN kleuren om een keuze
   assert.match(source, /blijft centraal aanwezig en wordt beschikbaar zodra de actieve kleur Bedrukt is gemeld/u);
   assert.match(source, /nu produceren/u);
   assert.match(source, /state\.readOnlyFallback = true;[\s\S]*productieacties uitgeschakeld/u);
-  assert.match(source, /if \(state\.readOnlyFallback\) \{[\s\S]*state = await api\.bootstrap\(bootstrapSurfaceForPath\(\)\)/u);
+  assert.match(source, /if \(state\.readOnlyFallback\) \{[\s\S]*const refreshedState = await api\.bootstrap\(bootstrapSurfaceForPath\(\)\)[\s\S]*state = refreshedState/u);
   assert.match(source, /const actionsDisabled = Boolean\(state\.readOnlyFallback\)/u);
 });
