@@ -39,7 +39,7 @@ assert.match(restoreBackupSha256 ?? "", /^[a-f0-9]{64}$/u, "restore-backuphash o
 assert.ok(backfillEvidenceFile, "offline backfillevidence ontbreekt");
 assert.ok(activeCandidateIds.length && issuerIds.length && issuerSecret.length >= 43, "reviewconfiguratie ontbreekt");
 const backfillEvidence = JSON.parse(await readFile(backfillEvidenceFile, "utf8"));
-assert.equal(backfillEvidence.status, "BACKFILLED", "canary vereist een verse offline backfill");
+assert.ok(new Set(["BACKFILLED", "ALREADY_BACKFILLED"]).has(backfillEvidence.status), "canary vereist een geslaagde idempotente offline backfill");
 assert.equal(backfillEvidence.legacySha256, backfillEvidence.composedSha256, "offline backfill is niet hashgelijk");
 
 const sha = (value) => createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");

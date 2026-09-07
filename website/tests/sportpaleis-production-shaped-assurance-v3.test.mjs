@@ -59,6 +59,7 @@ test("releaseartifact en broker binden dezelfde immutable gatecode en het drempe
   assert.match(builder, /sportpaleis-domain-rollback-child\.mjs/u);
   assert.match(builder, /sportpaleis-domain-rollback-verifier-child\.mjs/u);
   assert.match(builder, /sportpaleis-domain-backfill\.mjs/u);
+  assert.match(assurance, /new Set\(\["BACKFILLED", "ALREADY_BACKFILLED"\]\)\.has\(backfillEvidence\.status\)/u, "forward-only canary accepteert uitsluitend hashgelijke eerste of idempotente backfillstatus");
   assert.match(builder, /workspace-legacy-state-encode-worker\.mjs/u);
   assert.match(productionBuild, /new URL\("\.\/production-job-build-child\.mjs", import\.meta\.url\)/u);
   assert.match(builder, /contractSha256/u);
