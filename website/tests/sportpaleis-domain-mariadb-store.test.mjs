@@ -14,6 +14,13 @@ import { sha256CanonicalJson } from "../scripts/workspace-domain-state.mjs";
 import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/007-sportpaleis-domain-state.sql", import.meta.url);
+const brokerMigrationFiles = [701, 702, 703, 704, 705, 706, 707, 708].map((version) => ({
+  version,
+  file: new URL(`../sportpaleis-server/production-migrations/workspace/${version}-${[
+    "sportpaleis-domain-meta.sql", "sportpaleis-domain-state.sql", "sportpaleis-domain-reconciliation.sql", "sportpaleis-audit-event.sql",
+    "sportpaleis-domain-record.sql", "sportpaleis-order-history-event.sql", "sportpaleis-artifact-reference.sql", "sportpaleis-idempotency-record.sql",
+  ][version - 701]}`, import.meta.url),
+}));
 
 class DomainMemoryPool {
   constructor(legacy, checksum) {
@@ -76,7 +83,7 @@ class DomainMemoryConnection {
   }
   async query(sql, parameters = []) {
     this.pool.queries.push(sql);
-    if (sql.includes("FROM wbd_schema_migrations")) return [{ checksum: this.pool.checksum }];
+    if (sql.includes("FROM wbd_schema_migrations")) return Array.isArray(this.pool.checksum) ? structuredClone(this.pool.checksum) : [{ version: 7, checksum: this.pool.checksum }];
     if (sql.startsWith("SELECT schema_version, global_revision, legacy_source_revision")) return this.pool.meta ? [{ ...this.pool.meta }] : [];
     if (sql.startsWith("SELECT schema_version, global_revision, contract_version")) return this.pool.meta ? [{ ...this.pool.meta }] : [];
     if (sql.startsWith("SELECT global_revision FROM sp_workspace_domain_meta")) return this.pool.meta ? [{ global_revision: this.pool.meta.global_revision }] : [];
@@ -178,6 +185,20 @@ test("runtime-start weigert een ontbrekende offline backfill zonder state te mut
   await assert.rejects(store.initialize(), ({ code }) => code === "DOMAIN_BACKFILL_REQUIRED");
   assert.equal(pool.meta, null);
   assert.equal(pool.commits, 0);
+});
+
+test("runtime en backfill erkennen exact de acht hashgebonden brokerregistraties als equivalent aan migration 007", async () => {
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  const registrations = await Promise.all(brokerMigrationFiles.map(async ({ version, file }) => ({
+    version,
+    checksum: createHash("sha256").update(await readFile(file)).digest("hex"),
+  })));
+  const pool = new DomainMemoryPool(legacy, registrations);
+  const store = new SportpaleisDomainMariaDbStore({ pool, brokerMigrationFiles });
+  await store.backfillLegacySource();
+  await store.initialize();
+  assert.equal((await store.readSnapshot()).revision, legacy.revision);
+  assert.ok(pool.queries.some((sql) => sql.includes("version IN") && sql.includes("FOR UPDATE")));
 });
 
 test("startupinitialisatie is single-flight en herhaald idempotent", async () => {

@@ -28,6 +28,20 @@ import { diffStableRecords } from "./workspace-domain-storage-primitives.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultMigrationFile = path.resolve(scriptDirectory, "..", "sportpaleis-server", "production-migrations", "workspace", "007-sportpaleis-domain-state.sql");
+const defaultBrokerMigrationFiles = Object.freeze(Array.from({ length: 8 }, (_, index) => {
+  const version = 701 + index;
+  const file = [
+    "701-sportpaleis-domain-meta.sql",
+    "702-sportpaleis-domain-state.sql",
+    "703-sportpaleis-domain-reconciliation.sql",
+    "704-sportpaleis-audit-event.sql",
+    "705-sportpaleis-domain-record.sql",
+    "706-sportpaleis-order-history-event.sql",
+    "707-sportpaleis-artifact-reference.sql",
+    "708-sportpaleis-idempotency-record.sql",
+  ][index];
+  return Object.freeze({ version, file: path.resolve(scriptDirectory, "..", "sportpaleis-server", "production-migrations", "workspace", file) });
+}));
 const MIGRATION_COMPONENT = "sportpaleis-runtime-state";
 const REQUIRED_MIGRATION_VERSION = 7;
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
@@ -401,11 +415,16 @@ function createMetrics() {
 }
 
 export class SportpaleisDomainMariaDbStore {
-  constructor({ database, pool, migrationFile = defaultMigrationFile, startupPoolReadyTimeoutMs = STARTUP_POOL_READY_TIMEOUT_MS }) {
+  constructor({ database, pool, migrationFile = defaultMigrationFile, brokerMigrationFiles = defaultBrokerMigrationFiles, startupPoolReadyTimeoutMs = STARTUP_POOL_READY_TIMEOUT_MS }) {
     if (!pool && !database) throw new SportpaleisMariaDbStoreError("Workspace MariaDB-configuratie ontbreekt.", "DATABASE_CONFIG_MISSING");
     this.pool = pool ?? mariadb.createPool(databaseOptions(database));
     this.ownsPool = !pool;
     this.migrationFile = path.resolve(migrationFile);
+    this.brokerMigrationFiles = brokerMigrationFiles.map(({ version, file }) => ({
+      version: Number(version),
+      file: path.resolve(file instanceof URL ? fileURLToPath(file) : file),
+    }));
+    this.expectedMigrationRegistrationsPromise = null;
     this.startupPoolReadyTimeoutMs = startupPoolReadyTimeoutMs;
     this.domainCache = new Map();
     this.collectionCache = new Map();
@@ -437,16 +456,9 @@ export class SportpaleisDomainMariaDbStore {
 
   async #initializeOnce() {
     await this.#awaitInitialPoolIdle();
-    const migration = await readFile(this.migrationFile, "utf8");
     const connection = await this.#connection();
     try {
-      const registered = await connection.query(
-        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ?",
-        [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION],
-      );
-      const checksum = createHash("sha256").update(migration).digest("hex");
-      if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
-      if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+      await this.#assertRequiredMigrationRegistration(connection);
       const metaRows = await connection.query(
         "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?",
         [ORGANIZATION_ID],
@@ -460,6 +472,36 @@ export class SportpaleisDomainMariaDbStore {
       connection.release();
     }
     await this.#refresh(true);
+  }
+
+  async #expectedMigrationRegistrations() {
+    if (!this.expectedMigrationRegistrationsPromise) {
+      this.expectedMigrationRegistrationsPromise = Promise.all([
+        readFile(this.migrationFile).then((value) => ({ version: REQUIRED_MIGRATION_VERSION, checksum: createHash("sha256").update(value).digest("hex") })),
+        ...this.brokerMigrationFiles.map(({ version, file }) => readFile(file).then((value) => ({ version, checksum: createHash("sha256").update(value).digest("hex") }))),
+      ]);
+    }
+    return this.expectedMigrationRegistrationsPromise;
+  }
+
+  async #assertRequiredMigrationRegistration(queryable, { forUpdate = false } = {}) {
+    const expected = await this.#expectedMigrationRegistrations();
+    const placeholders = expected.map(() => "?").join(", ");
+    const registered = await queryable.query(
+      `SELECT version, checksum FROM wbd_schema_migrations WHERE component = ? AND version IN (${placeholders})${forUpdate ? " FOR UPDATE" : ""}`,
+      [MIGRATION_COMPONENT, ...expected.map(({ version }) => version)],
+    );
+    const byVersion = new Map(registered.map((row) => [Number(row.version ?? REQUIRED_MIGRATION_VERSION), row.checksum]));
+    const legacy = expected[0];
+    if (byVersion.size === 1 && byVersion.get(legacy.version) === legacy.checksum) return "LEGACY_007";
+    const broker = expected.slice(1);
+    if (byVersion.size === broker.length && broker.every(({ version, checksum }) => byVersion.get(version) === checksum)) return "BROKER_SPLIT_701_708";
+    const expectedVersions = new Set(expected.map(({ version }) => version));
+    const hasKnownRegistration = [...byVersion.keys()].some((version) => expectedVersions.has(version));
+    throw new SportpaleisMariaDbStoreError(
+      hasKnownRegistration ? "Domeinmigratie wijkt af van het releasecontract." : "Verplichte domeinmigratie ontbreekt.",
+      hasKnownRegistration ? "DATABASE_MIGRATION_CHECKSUM_MISMATCH" : "DATABASE_MIGRATION_MISSING",
+    );
   }
 
   async #awaitInitialPoolIdle() {
@@ -488,15 +530,12 @@ export class SportpaleisDomainMariaDbStore {
   // Releasebroker-only additive migration step. Runtime initialization is
   // deliberately read-only and refuses to perform this CPU/DB-heavy backfill.
   async backfillLegacySource() {
-    const migration = await readFile(this.migrationFile, "utf8");
-    const checksum = createHash("sha256").update(migration).digest("hex");
-    const [registered, existingMeta, sourceRows] = await Promise.all([
-      this.pool.query("SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ?", [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION]),
+    const [migrationAdmission, existingMeta, sourceRows] = await Promise.all([
+      this.#assertRequiredMigrationRegistration(this.pool),
       this.pool.query("SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?", [ORGANIZATION_ID]),
       this.pool.query("SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ?", [ORGANIZATION_ID]),
     ]);
-    if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
-    if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+    void migrationAdmission;
     if (sourceRows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
     if (existingMeta.length === 1) {
       if (Number(existingMeta[0].legacy_source_revision) !== Number(sourceRows[0].revision)) throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde na een eerdere backfill.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
@@ -512,12 +551,7 @@ export class SportpaleisDomainMariaDbStore {
     const connection = await this.#connection();
     try {
       await connection.beginTransaction();
-      const registered = await connection.query(
-        "SELECT checksum FROM wbd_schema_migrations WHERE component = ? AND version = ? FOR UPDATE",
-        [MIGRATION_COMPONENT, REQUIRED_MIGRATION_VERSION],
-      );
-      if (registered.length !== 1) throw new SportpaleisMariaDbStoreError("Verplichte domeinmigratie ontbreekt.", "DATABASE_MIGRATION_MISSING");
-      if (registered[0].checksum !== checksum) throw new SportpaleisMariaDbStoreError("Domeinmigratie wijkt af van het releasecontract.", "DATABASE_MIGRATION_CHECKSUM_MISMATCH");
+      await this.#assertRequiredMigrationRegistration(connection, { forUpdate: true });
       const metaRows = await connection.query(
         "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
         [ORGANIZATION_ID],
