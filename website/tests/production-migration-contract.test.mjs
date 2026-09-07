@@ -30,6 +30,30 @@ test("multi-statement domeinmigratie wordt veilig per statement uitgevoerd", asy
   assert.ok(statements.every((statement) => !statement.includes(";")));
 });
 
+test("releasebroker-verpakking splitst migration 007 bytegetrouw in acht enkelvoudige additieve DDL-stappen", async () => {
+  const directory = new URL("../sportpaleis-server/production-migrations/workspace/", import.meta.url);
+  const source = splitMigrationStatements(await readFile(new URL("007-sportpaleis-domain-state.sql", directory), "utf8"));
+  const brokerFiles = [
+    "701-sportpaleis-domain-meta.sql",
+    "702-sportpaleis-domain-state.sql",
+    "703-sportpaleis-domain-reconciliation.sql",
+    "704-sportpaleis-audit-event.sql",
+    "705-sportpaleis-domain-record.sql",
+    "706-sportpaleis-order-history-event.sql",
+    "707-sportpaleis-artifact-reference.sql",
+    "708-sportpaleis-idempotency-record.sql",
+  ];
+  const packaged = [];
+  for (const file of brokerFiles) {
+    const statements = splitMigrationStatements(await readFile(new URL(file, directory), "utf8"));
+    assert.equal(statements.length, 1, `${file} moet exact één DDL bevatten`);
+    assert.match(statements[0], /^CREATE TABLE IF NOT EXISTS\b/u);
+    assert.doesNotMatch(statements[0], /\b(DROP|TRUNCATE|RENAME|DELETE|UPDATE|REPLACE)\b/iu);
+    packaged.push(statements[0]);
+  }
+  assert.deepEqual(packaged, source);
+});
+
 test("SQL-splitter breekt niet op separators in strings, identifiers of comments", () => {
   const statements = splitMigrationStatements("-- comment;\nCREATE TABLE `a;b` (value VARCHAR(20) DEFAULT 'x;y'); /* c; */ INSERT INTO `a;b` VALUES ('z;z');");
   assert.deepEqual(statements, ["CREATE TABLE `a;b` (value VARCHAR(20) DEFAULT 'x;y')", "INSERT INTO `a;b` VALUES ('z;z')"]);
