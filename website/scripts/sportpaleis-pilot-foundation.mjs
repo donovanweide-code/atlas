@@ -15,7 +15,7 @@ import {
 } from "../config/sportpaleis-bedrukking-configuration.mjs";
 import { authoritativeProductionAssetById, SPORTPALEIS_AUTHORITATIVE_PRODUCTION_ASSETS } from "../config/sportpaleis-authoritative-production-assets.mjs";
 import { SPORTPALEIS_LIVE_PILOT_ARTICLES } from "../config/sportpaleis-live-pilot-catalog.mjs";
-import { createCutJobBatch, createProductionPreview, groupSemanticNumberObjects, SPORTPALEIS_MACHINE_CONSTRAINTS } from "../src/sportpaleis/direct-print/index.ts";
+import { boundsForContours, createCutJobBatch, createProductionPreview, groupSemanticNumberObjects, SPORTPALEIS_MACHINE_CONSTRAINTS, transformContours } from "../src/sportpaleis/direct-print/index.ts";
 import {
   CUTJOB_SVG_WRITER,
   PIONEERS_SENIOR_NUMBER_SOURCE_SET_ID,
@@ -8687,8 +8687,10 @@ function productionLineNestingSection(line) {
   return { key: "other", label: "Overige opdrukken", rank: 4 };
 }
 
-function productionLineNestingRotations(line) {
-  return productionLineNestingSection(line).key === "back-numbers" ? [90] : [0];
+export function productionPieceNestingRotations(piece) {
+  if (piece.nestingSection?.key !== "back-numbers") return [0];
+  const baseBounds = boundsForContours(transformContours(piece.contours, piece.productionRule.mirror, piece.productionRule.rotation));
+  return [baseBounds.width <= baseBounds.height ? 0 : 90];
 }
 
 function normalizedSourceValue(value) {
@@ -9861,11 +9863,13 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
     (resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).map((resolvedPiece) => ({
       ...resolvedPiece,
       nestingSection: productionLineNestingSection(line),
-      productionRule: { ...resolvedPiece.productionRule, allowedNestingRotations: productionLineNestingRotations(line) },
     }))).flat());
   const geometryMs = millisecondsSince(geometryStartedAt);
   const semanticGroupingStartedAt = performance.now();
-  const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm);
+  const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm).map((piece) => ({
+    ...piece,
+    productionRule: { ...piece.productionRule, allowedNestingRotations: productionPieceNestingRotations(piece) },
+  }));
   const semanticGroupingMs = millisecondsSince(semanticGroupingStartedAt);
   const nestingStartedAt = performance.now();
   const cutJobBatch = createCutJobBatch({

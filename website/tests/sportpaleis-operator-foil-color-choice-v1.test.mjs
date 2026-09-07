@@ -15,7 +15,7 @@ function assertCommonFinalLayout(job) {
   assert.ok(groups.length > 0);
   for (const placed of groups) {
     assert.ok(placed.provenance.nestingSection?.key, `${job.snapshot.productionGroup.foilColor} mist de gemeenschappelijke final-layoutsectie`);
-    assert.equal(placed.nestingRotationApplied, placed.provenance.nestingSection.key === "back-numbers" ? 90 : 0);
+    assert.equal(placed.nestingRotationApplied, placed.provenance.nestingSection.key === "back-numbers" && placed.sourceBoundsMm.width > placed.sourceBoundsMm.height ? 90 : 0);
   }
 }
 
