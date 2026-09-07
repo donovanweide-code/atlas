@@ -8,11 +8,11 @@ test("Sportpaleis runtime gebruikt domeinrecords en niet langer de legacy monoli
   assert.doesNotMatch(runtime, /new SportpaleisMariaDbStore/u);
 });
 
-test("Owner Workspace deelt niet de Sportpaleis-state en gebruikt een afzonderlijke domeincandidate", async () => {
+test("Sportpaleis-cutover houdt Owner Workspace op de bestaande opslag tot de afzonderlijke Owner-release", async () => {
   const runtime = await readFile(new URL("../scripts/workspace-runtime.mjs", import.meta.url), "utf8");
   const owner = await readFile(new URL("../scripts/wbd-owner-domain-mariadb-store.mjs", import.meta.url), "utf8");
-  assert.match(runtime, /new WbdOwnerDomainMariaDbStore/u);
-  assert.doesNotMatch(runtime, /new WbdOwnerMariaDbStore/u);
+  assert.match(runtime, /new WbdOwnerMariaDbStore/u);
+  assert.doesNotMatch(runtime, /new WbdOwnerDomainMariaDbStore/u);
   assert.match(owner, /FROM wbd_owner_state/u, "de legacybron blijft uitsluitend voor offline backfill beschikbaar");
   assert.doesNotMatch(owner, /sp_runtime_state/u);
   assert.match(owner, /createLazyWbdOwnerStateDraft/u);
