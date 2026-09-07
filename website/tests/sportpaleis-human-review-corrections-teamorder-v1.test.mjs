@@ -46,10 +46,10 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
   assert.equal(job.snapshot.layout.placements.length, 4);
   const initialsPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-initials-dw"));
   const backPlacements = job.snapshot.layout.placements.filter(({ lineId }) => lineId.includes("mixed-back-10"));
-  assert.ok(initialsPlacements.every(({ nestingSection }) => nestingSection.key === "initials"));
+  assert.ok(initialsPlacements.every(({ nestingSection }) => nestingSection.key === "front-small"));
   assert.ok(backPlacements.every(({ nestingSection }) => nestingSection.key === "back-numbers"));
   const physicalGroups = job.snapshot.layout.productionGeometry.groups;
-  const initialsBounds = physicalGroups.filter(({ provenance }) => provenance.nestingSection?.key === "initials").map(({ boundsMm }) => boundsMm);
+  const initialsBounds = physicalGroups.filter(({ provenance }) => provenance.nestingSection?.key === "front-small").map(({ boundsMm }) => boundsMm);
   const backBounds = physicalGroups.filter(({ provenance }) => provenance.nestingSection?.key === "back-numbers").map(({ boundsMm }) => boundsMm);
   assert.ok(Math.max(...initialsBounds.map(({ maxY }) => maxY)) + job.snapshot.layout.minimumGapMm <= Math.min(...backBounds.map(({ minY }) => minY)) + 0.001, "initialen blijven in een eigen fysieke band en worden niet tussen rugnummers genest");
   assert.equal(backPlacements.length, 2);
@@ -59,7 +59,9 @@ test("mixed compatible Rugnummer en Initialen blijven proposal → group → Plo
     const sourceSides = [sourceWidthMm, sourceHeightMm].sort((a, b) => a - b);
     const placedSides = [widthMm, heightMm].sort((a, b) => a - b);
     return sourceSides.some((side) => Math.abs(side - 200) < 0.01) && sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.01);
-  }), "de aangevraagde 200 mm maat blijft exact behouden; oriëntatie volgt de kortste veilige batchlayout");
+  }), "de aangevraagde 200 mm maat blijft exact behouden bij de vaste rugnummerrotatie");
+  assert.ok(initialsPlacements.every(({ nestingRotationApplied }) => nestingRotationApplied === 0));
+  assert.ok(backPlacements.every(({ nestingRotationApplied }) => nestingRotationApplied === 90));
   const svg = await readFile(path.join(root, "runtime", job.snapshot.artifact.path), "utf8");
   assert.match(svg, /<svg/u);
   assert.match(svg, /data-production-data-sha256/u);
@@ -89,7 +91,7 @@ test("één kleurbatch houdt Initialen, Rugnummers, Shortnummers en Namen in det
     const key = group.provenance.nestingSection.key;
     grouped.set(key, [...(grouped.get(key) ?? []), group]);
   }
-  const keys = ["initials", "back-numbers", "short-numbers", "names"];
+  const keys = ["front-small", "back-names", "small-numbers", "back-numbers"];
   assert.deepEqual([...grouped.keys()], keys);
   for (let index = 1; index < keys.length; index += 1) {
     const before = grouped.get(keys[index - 1]).map(({ boundsMm }) => boundsMm);
@@ -99,6 +101,7 @@ test("één kleurbatch houdt Initialen, Rugnummers, Shortnummers en Namen in det
   assert.equal(job.snapshot.scale, 1);
   assert.equal(job.snapshot.layout.objectCount, 4);
   assert.ok(job.snapshot.layout.productionGeometry.groups.every(({ mirrorApplied }) => mirrorApplied === job.snapshot.orientation.preMirrored));
+  assert.ok(job.snapshot.layout.productionGeometry.groups.every(({ provenance, nestingRotationApplied }) => nestingRotationApplied === (provenance.nestingSection.key === "back-numbers" ? 90 : 0)));
 });
 
 test("Winkel: voorbereiden/openen/downloaden voltooit niets; Bedrukt, expliciet Afronden en Opgehaald blijven apart", async (context) => {

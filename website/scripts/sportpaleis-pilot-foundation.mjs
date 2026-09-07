@@ -8643,8 +8643,19 @@ function productionClosureForOrder(state, order) {
 }
 
 function productionLineNestingSection(line) {
-  const rank = productionLineTypeRank(line);
-  return { key: ["initials", "back-numbers", "short-numbers", "names", "other"][rank], label: ["Initialen", "Rugnummers", "Shortnummers", "Namen / naambalken", "Overige opdrukken"][rank], rank };
+  const label = String(line.preview?.label ?? "").trim().toLocaleLowerCase("nl-NL");
+  const field = String(line.personalizationField ?? line.decorationIdentity?.decorationType ?? "").trim();
+  if (field === "initials" || field === "chestNumber" || line.type === "INITIALS" || String(line.placementRole ?? "").startsWith("INITIALS_") || label.startsWith("initialen") || label.startsWith("tussenvoegsel") || label.startsWith("borstnummer")) {
+    return { key: "front-small", label: "Initialen + borstnummers", rank: 0 };
+  }
+  if (field === "name" || line.type === "NAME" || label.startsWith("naam")) return { key: "back-names", label: "Rugnamen", rank: 1 };
+  if (field === "shortsNumber" || label.startsWith("shortnummer")) return { key: "small-numbers", label: "Shortnummers + kleine borstnummers", rank: 2 };
+  if (field === "backNumber" || line.type === "BACK_NUMBER" || label.startsWith("rugnummer")) return { key: "back-numbers", label: "Rugnummers", rank: 3 };
+  return { key: "other", label: "Overige opdrukken", rank: 4 };
+}
+
+function productionLineNestingRotations(line) {
+  return productionLineNestingSection(line).key === "back-numbers" ? [90] : [0];
 }
 
 function normalizedSourceValue(value) {
@@ -9813,9 +9824,12 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
   const [first] = resolved;
   if (!first || first.source.outputWriterId !== CUTJOB_SVG_WRITER.id || first.source.outputWriterVersion !== CUTJOB_SVG_WRITER.version) throw Object.assign(new Error(`Outputwriter ${[...writerIdentities][0] ?? "onbekend"} is niet geïnstalleerd.`), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_COMPATIBLE" });
   const geometryStartedAt = performance.now();
-  const useDecorationSections = new Set(resolved.map(({ line }) => productionLineTypeRank(line))).size > 1;
   const rawPieces = resolved.flatMap(({ line, piece, pieces: resolvePieces }) => Array.from({ length: line.quantity }, (_, copy) =>
-    (resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).map((resolvedPiece) => ({ ...resolvedPiece, ...(useDecorationSections ? { nestingSection: productionLineNestingSection(line) } : {}) }))).flat());
+    (resolvePieces ? resolvePieces(copy + 1) : [piece(copy + 1)]).map((resolvedPiece) => ({
+      ...resolvedPiece,
+      nestingSection: productionLineNestingSection(line),
+      productionRule: { ...resolvedPiece.productionRule, allowedNestingRotations: productionLineNestingRotations(line) },
+    }))).flat());
   const geometryMs = millisecondsSince(geometryStartedAt);
   const semanticGroupingStartedAt = performance.now();
   const pieces = groupSemanticNumberObjects(rawPieces, state.settings.productionDefaults.minimumGapMm);
