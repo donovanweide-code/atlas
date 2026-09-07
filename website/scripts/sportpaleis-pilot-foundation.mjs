@@ -3937,8 +3937,7 @@ export class SportpaleisPilotService {
     const result = await this.#productionMutation(async (state, effects) => {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "PREPARE_CURRENT_PRODUCTION_GROUP", async () => {
         const orders = selections.map(({ id, expectedRevision }) => {
-          const order = state.orders.find((candidate) => candidate.id === id);
-          if (!order) throw Object.assign(new Error(`${id}: order niet gevonden.`), { statusCode: 404, code: "ORDER_NOT_FOUND" });
+          const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, `${id}: order niet gevonden.`);
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
           const blocker = productionProposalBlockReason(order, state);
           if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });

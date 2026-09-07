@@ -727,6 +727,40 @@ test("rollbackbridge materialiseert onder revision- en hashlock exact één lega
   await assert.rejects(materializeLegacyRollbackState({ pool, expectedGlobalRevision: domainSnapshot.revision - 1, expectedDomainHash: evidence.stateSha256 }), /revision-drift/);
 });
 
+test("Nu maken materialiseert een mutable orderrecord vanuit de frozen domeinsnapshot", async (context) => {
+  const runtimeRoot = await mkdtemp(path.join(tmpdir(), "sp-domain-current-group-"));
+  context.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-07T07:00:00.000Z"));
+  legacy.users.push({ id: "current-group-operator", name: "Operator", initials: "OP", role: "operator", email: "current-group@example.test", status: "Actief", seatType: "customer", salesNumber: null, password: await createSportpaleisPasswordRecord("Domain-Current-Group-Test!") });
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const store = new SportpaleisDomainMariaDbStore({ pool });
+  const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve("."), runtimeArtifactRoot: runtimeRoot, allowedOrigin: "http://127.0.0.1" });
+  await store.backfillLegacySource();
+  await service.initialize();
+  const login = await service.login({ email: "current-group@example.test", password: "Domain-Current-Group-Test!" });
+  const bootstrap = await service.bootstrap(login.token);
+  const font = bootstrap.productionFonts.find(({ name }) => name === "Spain Euro 2016");
+  assert.ok(font);
+  const empty = { initials: "", initialsInfix: "", name: "", backNumber: "", chestNumber: "", backNumberSizeClass: "", shortsNumber: "" };
+  const order = (await service.createOrder(login.token, login.csrfToken, {
+    orderKind: "CUSTOM", customer: "Nu maken domeinfixture", customerEmail: "", customerPhone: "", standardPersonalization: empty,
+    productionLines: [{ id: "current-group-number-2", type: "NUMBER", content: "2", previewLabel: "2", widthMm: 80, heightMm: 80, quantity: 1, foilColor: "Wit", sourceId: font.id, provenance: "Nu maken frozen-draftregressie" }],
+    items: [{ product: "Vrije opdruk", association: "Vrije bedrukking", size: "", quantity: 1, personalization: "2", foilColor: "Wit", deviation: true, overrides: empty }],
+  }, "current-group-order")).value;
+  const request = { orders: [{ id: order.id, expectedRevision: order.revision }], foilColor: "Wit" };
+  const first = await service.prepareCurrentProductionGroup(login.token, login.csrfToken, request, "current-group-production");
+  const retry = await service.prepareCurrentProductionGroup(login.token, login.csrfToken, request, "current-group-production");
+  assert.equal(first.duplicate, false);
+  assert.equal(retry.duplicate, true);
+  assert.equal(retry.value.job.id, first.value.job.id);
+  const after = await store.readSnapshot();
+  const persisted = after.orders.find(({ id }) => id === order.id);
+  assert.ok(persisted.productionExecutionSnapshot?.executionHash);
+  assert.equal(after.productionJobs.filter(({ snapshot }) => snapshot.orderIds.includes(order.id)).length, 1);
+  assert.equal(after.productionProposals.filter(({ orders }) => orders.some(({ id }) => id === order.id)).length, 1);
+});
+
 test("grote Vrije productie en reject-only gebruiken recordtransacties zonder duplicaat of artifactmutatie", async (context) => {
   const runtimeRoot = await mkdtemp(path.join(tmpdir(), "sp-domain-production-"));
   context.after(() => rm(runtimeRoot, { recursive: true, force: true }));
