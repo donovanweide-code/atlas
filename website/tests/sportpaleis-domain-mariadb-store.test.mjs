@@ -130,10 +130,17 @@ class DomainMemoryConnection {
       this.pool.idempotency.set(identityHash, { organization_id: organizationId, identity_sha256: identityHash, identity_key: identity, global_revision: globalRevision, record_json: recordJson, record_sha256: recordHash });
       return { affectedRows: 1 };
     }
-    if (sql.startsWith("DELETE FROM sp_workspace_idempotency_record")) {
+    if (sql.startsWith("DELETE FROM sp_workspace_idempotency_record") && sql.includes("identity_sha256")) {
       this.pool.idempotency.delete(parameters[1]);
       return { affectedRows: 1 };
     }
+    if (sql === "DELETE FROM sp_workspace_order_history_event WHERE organization_id = ?") { const affectedRows = this.pool.history.size; this.pool.history.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_artifact_reference WHERE organization_id = ?") { const affectedRows = this.pool.artifacts.size; this.pool.artifacts.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_idempotency_record WHERE organization_id = ?") { const affectedRows = this.pool.idempotency.size; this.pool.idempotency.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_audit_event WHERE organization_id = ?") { const affectedRows = this.pool.audit.size; this.pool.audit.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_domain_record WHERE organization_id = ?") { const affectedRows = this.pool.records.size; this.pool.records.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_domain_state WHERE organization_id = ?") { const affectedRows = this.pool.domains.size; this.pool.domains.clear(); return { affectedRows }; }
+    if (sql === "DELETE FROM sp_workspace_domain_meta WHERE organization_id = ?") { const affectedRows = this.pool.meta ? 1 : 0; this.pool.meta = null; return { affectedRows }; }
     if (sql.startsWith("SELECT domain_key, domain_revision")) {
       const since = parameters.length > 1 ? Number(parameters[1]) : null;
       return [...this.pool.domains.values()].filter(({ global_revision }) => since === null || Number(global_revision) > since);
@@ -256,7 +263,7 @@ test("additieve backfill is hashgelijk en een kleine mutatie schrijft geen legac
   assert.equal((await store.readSnapshot()).audit[0].details.largeEvidence.length, 6 * 1024 * 1024);
 });
 
-test("herhaalde offline backfill is hash-idempotent en weigert legacy brondrift", async () => {
+test("offline backfill ververst legacy brondrift alleen vóór cutover en blijft daarna fail-closed", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
@@ -267,7 +274,20 @@ test("herhaalde offline backfill is hash-idempotent en weigert legacy brondrift"
   assert.equal(repeated.status, "ALREADY_BACKFILLED");
   assert.equal(repeated.legacySha256, first.legacySha256);
   assert.equal(repeated.composedSha256, first.composedSha256);
-  pool.legacy.revision += 1;
+  const refreshedLegacy = JSON.parse(pool.legacy.state_json);
+  refreshedLegacy.revision += 1;
+  refreshedLegacy.preferences.shadowRefresh = true;
+  pool.legacy = { revision: refreshedLegacy.revision, state_json: JSON.stringify(refreshedLegacy) };
+  const refreshed = await store.backfillLegacySource();
+  assert.equal(refreshed.status, "BACKFILLED");
+  assert.equal(refreshed.globalRevision, refreshedLegacy.revision);
+  assert.equal(refreshed.legacySha256, refreshed.composedSha256);
+  await store.initialize();
+  assert.equal((await store.read()).preferences.shadowRefresh, true);
+  pool.meta.cutover_mode = "DOMAIN_READS";
+  const forbiddenLegacy = JSON.parse(pool.legacy.state_json);
+  forbiddenLegacy.revision += 1;
+  pool.legacy = { revision: forbiddenLegacy.revision, state_json: JSON.stringify(forbiddenLegacy) };
   await assert.rejects(store.backfillLegacySource(), ({ code }) => code === "DOMAIN_BACKFILL_SOURCE_DRIFT");
 });
 

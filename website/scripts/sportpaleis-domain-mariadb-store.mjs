@@ -538,13 +538,15 @@ export class SportpaleisDomainMariaDbStore {
     void migrationAdmission;
     if (sourceRows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
     if (existingMeta.length === 1) {
-      if (Number(existingMeta[0].legacy_source_revision) !== Number(sourceRows[0].revision)) throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde na een eerdere backfill.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
-      const reconciliation = await this.pool.query(
-        "SELECT legacy_sha256, composed_sha256, status FROM sp_workspace_domain_reconciliation WHERE organization_id = ? AND legacy_revision = ? AND contract_version = ?",
-        [ORGANIZATION_ID, sourceRows[0].revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION],
-      );
-      if (reconciliation.length !== 1 || reconciliation[0].status !== "MATCH" || reconciliation[0].legacy_sha256 !== reconciliation[0].composed_sha256) throw new SportpaleisMariaDbStoreError("Bestaande backfill mist hashgelijk reconciliatiebewijs.", "DOMAIN_BACKFILL_EVIDENCE_INVALID");
-      return Object.freeze({ status: "ALREADY_BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(existingMeta[0].global_revision), contractVersion: Number(existingMeta[0].contract_version), legacySha256: reconciliation[0].legacy_sha256, composedSha256: reconciliation[0].composed_sha256 });
+      if (Number(existingMeta[0].legacy_source_revision) === Number(sourceRows[0].revision)) {
+        const reconciliation = await this.pool.query(
+          "SELECT legacy_sha256, composed_sha256, status FROM sp_workspace_domain_reconciliation WHERE organization_id = ? AND legacy_revision = ? AND contract_version = ?",
+          [ORGANIZATION_ID, sourceRows[0].revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION],
+        );
+        if (reconciliation.length !== 1 || reconciliation[0].status !== "MATCH" || reconciliation[0].legacy_sha256 !== reconciliation[0].composed_sha256) throw new SportpaleisMariaDbStoreError("Bestaande backfill mist hashgelijk reconciliatiebewijs.", "DOMAIN_BACKFILL_EVIDENCE_INVALID");
+        return Object.freeze({ status: "ALREADY_BACKFILLED", organizationId: ORGANIZATION_ID, globalRevision: Number(existingMeta[0].global_revision), contractVersion: Number(existingMeta[0].contract_version), legacySha256: reconciliation[0].legacy_sha256, composedSha256: reconciliation[0].composed_sha256 });
+      }
+      if (existingMeta[0].cutover_mode !== "SHADOW") throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde na de domeinread-cutover.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
     }
     const prepared = prepareLegacyBackfill(sourceRows[0]);
     this.metrics.fullLegacyLoads += 1;
@@ -556,12 +558,13 @@ export class SportpaleisDomainMariaDbStore {
         "SELECT schema_version, global_revision, legacy_source_revision, contract_version, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ? FOR UPDATE",
         [ORGANIZATION_ID],
       );
-      if (metaRows.length !== 0) throw new SportpaleisMariaDbStoreError("Gelijktijdige domeinbackfill gedetecteerd; herhaal de idempotente stap.", "DOMAIN_BACKFILL_CONCURRENT");
       const lockedSource = await connection.query(
         "SELECT revision FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE",
         [ORGANIZATION_ID],
       );
       if (lockedSource.length !== 1 || Number(lockedSource[0].revision) !== Number(prepared.legacy.revision)) throw new SportpaleisMariaDbStoreError("Legacy bron wijzigde tussen voorbereiding en commit.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
+      if (metaRows.length > 1 || (metaRows.length === 1 && metaRows[0].cutover_mode !== "SHADOW")) throw new SportpaleisMariaDbStoreError("Domeinbackfill kan alleen vóór de read-cutover worden ververst.", "DOMAIN_BACKFILL_SOURCE_DRIFT");
+      if (metaRows.length === 1) await this.#clearShadowBackfill(connection);
       const evidence = await this.#backfill(connection, prepared);
       await connection.commit();
       return evidence;
@@ -571,6 +574,20 @@ export class SportpaleisDomainMariaDbStore {
       throw new SportpaleisMariaDbStoreError("Domeinbackfill kon niet atomair worden uitgevoerd.", "DOMAIN_BACKFILL_FAILED", cause);
     } finally {
       connection.release();
+    }
+  }
+
+  async #clearShadowBackfill(connection) {
+    for (const table of [
+      "sp_workspace_order_history_event",
+      "sp_workspace_artifact_reference",
+      "sp_workspace_idempotency_record",
+      "sp_workspace_audit_event",
+      "sp_workspace_domain_record",
+      "sp_workspace_domain_state",
+      "sp_workspace_domain_meta",
+    ]) {
+      await connection.query(`DELETE FROM ${table} WHERE organization_id = ?`, [ORGANIZATION_ID]);
     }
   }
 
