@@ -85,10 +85,23 @@ try {
   assert.equal((await pages.Erik.request.get(`${origin}/api/sportpaleis/v1/work-items`)).status(), 403);
   await pages.Kevin.goto(`${base}/planning`); await pages.Kevin.locator(".wp-full").waitFor();
   assert.ok(await pages.Kevin.locator('a[href$="/planning"]').count());
+  const secondDevice = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const secondPage = await secondDevice.newPage();
+  await secondPage.goto(`${base}/overzicht`);
+  await secondPage.locator('[data-login-form] [name="email"]').fill("erik@example.test");
+  await secondPage.locator('[data-login-form] [name="password"]').fill(f.password);
+  await secondPage.locator('[data-login-form] button').filter({ hasText: "Inloggen" }).click();
+  await secondPage.locator(".sp-workspace").waitFor();
+  assert.equal((await secondPage.request.get(`${origin}/api/sportpaleis/v1/bootstrap`)).status(), 200);
+  assert.equal((await pages.Erik.request.get(`${origin}/api/sportpaleis/v1/bootstrap`)).status(), 200);
+  await f.service.logout(f.actors.Patrick.token, (await f.service.authenticate(f.actors.Patrick.token)).user, f.actors.Patrick.csrfToken);
+  await pages.Patrick.reload(); await pages.Patrick.locator("[data-login-form]").waitFor();
+  assert.match(await pages.Patrick.locator(".sp-login").innerText(), /sessie|inloggen/i);
+  assert.equal((await pages.Patrick.request.post(`${origin}/api/sportpaleis/v1/work-items`, { headers: { Origin: origin, "X-CSRF-Token": f.actors.Patrick.csrfToken }, data: { title: "Revoked browser write" } })).status(), 401);
   const after = await f.store.read(); assert.equal(JSON.stringify([after.orders, after.productionJobs, after.mailFoundation]), beforeBusiness);
   assert.deepEqual(errors, []);
   captureTimes.sort((a,b) => a-b);
-  const result = { status: "PASS", viewports, captureMs: { p50: captureTimes[2], max: captureTimes.at(-1) }, assignment: true, overdueUntilCompletion: true, completedByPatrick: true, appointment: true, ErikModuleDeniedSharedCompletionAllowed: true, KevinPlanning: true, productionMailMutation: false, pageErrors: errors, liveMutations: 0 };
+  const result = { status: "PASS", viewports, captureMs: { p50: captureTimes[2], max: captureTimes.at(-1) }, assignment: true, overdueUntilCompletion: true, completedByPatrick: true, appointment: true, ErikModuleDeniedSharedCompletionAllowed: true, KevinPlanning: true, personalSecondDeviceLogin: true, revokedRefreshRequiresLogin: true, revokedBrowserPlanningWriteDenied: true, productionMailMutation: false, pageErrors: errors, liveMutations: 0 };
   await writeFile(path.join(evidence, "result.json"), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally {
   await browser?.close(); if (server) await new Promise(resolve => { server.closeAllConnections(); server.close(resolve); });

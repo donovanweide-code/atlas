@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { assertPermission, validatePermissionPolicy } from "./workspace-permissions.mjs";
+import { withWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 
 // Explicit legacy entry-point reconciliation. Names/roles never grant authority.
 const groups = {
@@ -41,13 +42,14 @@ export const SPORTPALEIS_METHOD_CAPABILITIES = Object.freeze(Object.fromEntries(
 const activeCall = new AsyncLocalStorage();
 export function capabilityAuditContext() {
   const call = activeCall.getStore();
-  return call?.configured ? { actor: call.userId, permissionVersion: call.permissionVersion, capabilities: call.decisions || [], result: "SUCCESS" } : null;
+  return call ? { actor: call.userId, sessionId: call.sessionId, ...(call.configured ? { permissionVersion: call.permissionVersion, capabilities: call.decisions || [] } : { authority: "PERSONAL_SESSION" }), result: "SUCCESS" } : null;
 }
 export function hasCapabilityRoleAuthority(user) {
   const call = activeCall.getStore();
   return Boolean(call?.configured && call.userId === user.id && call.required.length);
 }
 function check(state, call) {
+  call.sessionAuthority?.(state);
   if (!state.workspacePermissions) {
     if (call.configured) throw Object.assign(new Error("Rechtenconfiguratie ontbreekt. Actie geblokkeerd."), { statusCode: 503, code: "PERMISSIONS_NOT_CONFIGURED" });
     return;
@@ -90,7 +92,7 @@ export function installSportpaleisCapabilityBoundary(service) {
     if (typeof service[name] !== "function") throw new TypeError(`Capability entry point missing: ${name}`);
     const method = service[name].bind(service);
     service[name] = async (token, ...args) => {
-      const { state, user } = await service.authenticate(token);
+      const { state, user, session } = await service.authenticate(token);
       // The self permission projection is intentionally available without management rights.
       const ownProjection = name === "permissionProjection" && !args[0] && !args[1];
       const requiredForCall = ownProjection ? [] : [...required];
@@ -102,9 +104,18 @@ export function installSportpaleisCapabilityBoundary(service) {
       if (name === "prepareTeamkitInternalProduction") requiredForCall.push("production.execute");
       const parent = activeCall.getStore();
       const call = { userId: user.id, configured: Boolean(state.workspacePermissions), required: [...new Set([...(parent?.userId === user.id ? parent.required : []), ...requiredForCall])] };
+      call.sessionId = session.idHash || session.id;
+      // Preserve the existing separate temporary-review authority; it is never
+      // converted into an employee identity or used to bypass its own policy.
+      call.sessionAuthority = session.authMethod === "TEMPORARY_REVIEW_GRANT"
+        ? snapshot => service.reviewDeveloperAccessPolicy.authenticateSession(structuredClone(snapshot), { sessionToken: token, tenantId: "sportpaleis" }, new Date())
+        : snapshot => {
+          const actor = service.permissionService.resolveActor(snapshot, token);
+          if (actor.userId !== user.id) throw Object.assign(new Error("Sessie-identiteit is gewijzigd. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });
+        };
       check(state, call);
       if (name === "updateUser" && state.workspacePermissions && args[2]?.role !== undefined) throw Object.assign(new Error("Wijzig toegang via presets en capabilities."), { statusCode: 409, code: "LEGACY_ROLE_CHANGE_DISABLED" });
-      return activeCall.run(call, () => method(token, ...args));
+      return activeCall.run(call, () => withWorkspaceMutationAuthority(snapshot => check(snapshot, call), () => method(token, ...args)));
     };
   }
 }

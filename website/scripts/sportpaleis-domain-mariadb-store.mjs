@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import mariadb from "mariadb";
+import { captureWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 
 import {
   decodeSportpaleisRuntimeState,
@@ -858,6 +859,7 @@ export class SportpaleisDomainMariaDbStore {
       }
       completePhase("lockMeta");
       const current = this.snapshot;
+      preparedCommand.authority?.(current);
       let result;
       let persistence;
       if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw retryableStoreError("De voorbereide handeling is verouderd; vernieuw en probeer veilig opnieuw.", "DOMAIN_PREPARED_SNAPSHOT_STALE", 409);
@@ -941,6 +943,9 @@ export class SportpaleisDomainMariaDbStore {
       if (Number(metaUpdate.affectedRows) !== 1) throw retryableStoreError("De Workspace wijzigde gelijktijdig; vernieuw en probeer veilig opnieuw.", "DATABASE_CONCURRENCY_CONFLICT", 409);
       completePhase("updateMeta");
       phase = "commit";
+      // Revision lock excludes competing revokes; the second check also catches
+      // expiry during persistence. Failure rolls back every pending write.
+      preparedCommand.authority?.(current);
       await connection.commit();
       completePhase("commit");
       this.domainCache = persistence.nextDomainCache;
@@ -997,6 +1002,8 @@ export class SportpaleisDomainMariaDbStore {
     if (refresh) await this.#refresh(false);
     const baseRevision = this.globalRevision;
     const baseSnapshot = this.snapshot;
+    const authority = captureWorkspaceMutationAuthority();
+    authority?.(baseSnapshot);
     const lazy = draftFactory(baseSnapshot);
     const preparedResult = await mutator(lazy.draft);
     if (preparedResult.unchanged === true) {
@@ -1011,7 +1018,7 @@ export class SportpaleisDomainMariaDbStore {
     this.metrics.preparedMutations += 1;
     this.metrics.preparedMutationMsTotal += preparationMs;
     this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
-    return { command: { baseRevision, persistence, value: preparedResult.value } };
+    return { command: { baseRevision, persistence, value: preparedResult.value, authority } };
   }
 
   #enqueueMutation(operation) {

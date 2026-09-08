@@ -1,6 +1,7 @@
 import { WorkItemService } from "./workspace-work-items.mjs";
 import { assertPermission, permissionDecision, validatePermissionPolicy } from "./workspace-permissions.mjs";
 import { projectWorkItems } from "../src/workspace-work-item.ts";
+import { withWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 
 const fail = (statusCode, message, code) => { throw Object.assign(new Error(message), { statusCode, code }); };
 const objectActions = ["planning.view", "planning.edit", "planning.note", "planning.complete"];
@@ -62,7 +63,8 @@ export class WorkspaceWorkItemStore {
     if (input.sharedWithTeams && (!Array.isArray(input.sharedWithTeams) || input.sharedWithTeams.length > 100)) fail(400, "Controleer de gedeelde teams.", "WORK_ITEM_VALIDATION");
   }
   async create(credential, input) {
-    const result = await this.store.mutate(async state => {
+    const check = state => { const scope = this.scope(state, credential); assertPermission(scope.policy, scope.actor, "planning.create"); this.assertAssignment(scope, input); };
+    const result = await withWorkspaceMutationAuthority(check, () => this.store.mutate(async state => {
       const scope = this.scope(state, credential);
       const authority = assertPermission(scope.policy, scope.actor, "planning.create"); this.assertAssignment(scope, input);
       const { domain, service } = this.inner(state, scope);
@@ -72,12 +74,19 @@ export class WorkspaceWorkItemStore {
       // Validate the supplied existing session again after asynchronous domain work, before returning the prepared mutation.
       this.resolveActor(state, credential);
       return { state, value: this.itemProjection(scope, item) };
-    });
+    }));
     return result.value;
   }
   async change(credential, id, action, input = {}) {
     if (!["edit", "note", "complete"].includes(action)) fail(400, "Onbekende actie.", "WORK_ITEM_ACTION_INVALID");
-    const result = await this.store.mutate(async state => {
+    const check = state => {
+      const scope = this.scope(state, credential);
+      const item = (state.workItems || []).find(item => item.id === id && this.allowed(scope, item, "planning.view"));
+      if (!item) fail(404, "Werkitem niet gevonden.", "WORK_ITEM_NOT_FOUND");
+      assertPermission(scope.policy, scope.actor, `planning.${action}`, workItemPermissionObject(item), this.now().getTime());
+      if (action === "edit") this.assertAssignment(scope, input, item);
+    };
+    const result = await withWorkspaceMutationAuthority(check, () => this.store.mutate(async state => {
       const scope = this.scope(state, credential);
       const item = (state.workItems || []).find(item => item.id === id && this.allowed(scope, item, "planning.view"));
       if (!item) fail(404, "Werkitem niet gevonden.", "WORK_ITEM_NOT_FOUND");
@@ -90,7 +99,7 @@ export class WorkspaceWorkItemStore {
       state.workItems = domain.items; state.workItemEvents = domain.events;
       this.resolveActor(state, credential);
       return { state, value: this.itemProjection(scope, updated) };
-    });
+    }));
     return result.value;
   }
 }

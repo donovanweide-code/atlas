@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { WorkspacePermissionService } from "./workspace-permission-service.mjs";
 import { WorkspaceWorkItemStore } from "./workspace-work-item-store.mjs";
+import { captureWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 import { compileEffectivePermissions } from "./workspace-permissions.mjs";
 import { installSportpaleisCapabilityBoundary, hasCapabilityRoleAuthority, capabilityAuditContext } from "./sportpaleis-capability-boundary.mjs";
 import {
@@ -1454,12 +1455,15 @@ export class SportpaleisFileStore {
   }
 
   async mutate(mutator) {
+    const authority = captureWorkspaceMutationAuthority();
     const run = async () => this.#withLock(async () => {
       const current = await this.read();
+      authority?.(current);
       const result = await mutator(structuredClone(current));
       if (result.unchanged === true) return { state: current, value: result.value };
       const next = validateState(result.state);
       next.revision = current.revision + 1;
+      authority?.(current);
       await this.#writeAtomic(next);
       return { state: next, value: result.value };
     });
@@ -2660,7 +2664,7 @@ export class SportpaleisPilotService {
       const token = typeof credential === "string" ? credential : credential?.token;
       const session = token && state.sessions.find(entry => safeEqualHex(entry.idHash, sha256(token)));
       const user = session && state.users.find(entry => entry.id === session.userId && entry.status === "Actief");
-      if (!session || !user || !Number.isFinite(Date.parse(session.expiresAt)) || Date.parse(session.expiresAt) <= Date.now()) throw Object.assign(new Error("Je sessie is verlopen of ingetrokken. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });
+      if (!session || session.revokedAt || !user || !Number.isFinite(Date.parse(session.expiresAt)) || Date.parse(session.expiresAt) <= Date.now()) throw Object.assign(new Error("Je sessie is verlopen of ingetrokken. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });
       if (typeof credential !== "string") {
         const supplied = credential?.csrfToken;
         const valid = typeof supplied === "string" && session.csrfHash && (supplied === `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` || safeEqualHex(sha256(supplied), session.csrfHash));
@@ -2969,10 +2973,12 @@ export class SportpaleisPilotService {
       authMethod: "PASSWORD",
     };
     await this.store.mutate(async (next) => {
+      const currentUser = next.users.find(candidate => candidate.id === user.id && candidate.status === "Actief");
+      if (!currentUser || JSON.stringify(currentUser.password) !== JSON.stringify(user.password)) throw Object.assign(new Error("Aanmeldgegevens zijn intussen gewijzigd. Log opnieuw in."), { statusCode: 401, code: "LOGIN_CREDENTIAL_CHANGED" });
       next.sessions = next.sessions.filter(({ expiresAt }) => new Date(expiresAt).getTime() > now.getTime());
       next.sessions.push(session);
       next.loginAttempts[attemptKey] = [];
-      audit(next, user.id, "Ingelogd", "Workspace");
+      audit(next, user.id, "Ingelogd", "Workspace", { sessionId: session.idHash, deviceMode: session.deviceMode, authMethod: session.authMethod });
       return { state: next, value: undefined };
     });
     return { token, csrfToken, user: publicUser(user), expiresAt: session.expiresAt, deviceMode: normalizedDeviceMode, cookieMaxAgeSeconds: Math.floor(ttlMs / 1000) };
@@ -3089,7 +3095,7 @@ export class SportpaleisPilotService {
       }
       throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
     }
-    if (new Date(session.expiresAt).getTime() <= now.getTime()) throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
+    if (session.revokedAt || !Number.isFinite(Date.parse(session.expiresAt)) || Date.parse(session.expiresAt) <= now.getTime()) throw Object.assign(new Error("Je sessie is verlopen of ingetrokken. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });
     const user = state.users.find(({ id }) => id === session.userId);
     if (!user || user.status !== "Actief") throw Object.assign(new Error("Gebruiker is niet actief."), { statusCode: 401, code: "UNAUTHENTICATED" });
     if (state.workspacePermissions) {
@@ -3162,6 +3168,8 @@ export class SportpaleisPilotService {
     const nextCsrf = randomBytes(24).toString("base64url");
     const nextSession = { idHash: sha256(nextToken), userId: target.id, csrfHash: sha256(nextCsrf), createdAt: iso(now), lastSeenAt: iso(now), expiresAt: new Date(now.getTime() + ttlMs).toISOString(), deviceMode, authMethod: usePin ? "PIN" : "PASSWORD" };
     await this.store.mutate(async (next) => {
+      const currentTarget = next.users.find(candidate => candidate.id === target.id && candidate.status === "Actief");
+      if (!currentTarget || currentTarget.role !== target.role || JSON.stringify(usePin ? currentTarget.quickPin : currentTarget.password) !== JSON.stringify(usePin ? target.quickPin : target.password)) throw Object.assign(new Error("Aanmeldgegevens zijn intussen gewijzigd. Log opnieuw in."), { statusCode: 401, code: "LOGIN_CREDENTIAL_CHANGED" });
       next.sessions = next.sessions.filter(({ idHash, expiresAt }) => idHash !== sha256(token) && new Date(expiresAt).getTime() > now.getTime());
       next.sessions.push(nextSession);
       next.loginAttempts[attemptKey] = [];

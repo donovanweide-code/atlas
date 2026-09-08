@@ -240,6 +240,40 @@ test("Planning-records gebruiken bestaande domeintransacties; revoke op tweede r
   await assert.rejects(secondService.workItems.get(actor.token, task.id), { statusCode: 401 });
 });
 
+test("session expiry at database lock or immediately before commit rolls back Planning atomically", async t => {
+  const realNow = Date.now();
+  t.mock.timers.enable({ apis: ["Date"], now: realNow });
+  for (const phase of ["lock", "commit"]) {
+    t.mock.timers.setTime(realNow);
+    const migration = await readFile(migrationFile, "utf8");
+    const legacy = createSportpaleisProductionBootstrap();
+    legacy.users.push({ id: "planner", name: "Planner", initials: "PL", role: "operator", email: "planner@example.test", status: "Actief", seatType: "customer", salesNumber: null, password: await createSportpaleisPasswordRecord("Expiry-Domain-2026!") });
+    legacy.workspacePermissions = createPermissionPolicy(legacy.organizationId, { planner: { presetId: "operations", overrides: {} } }, { enabledCapabilities: CAPABILITY_IDS });
+    const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+    const store = new SportpaleisDomainMariaDbStore({ pool }); await store.backfillLegacySource();
+    const service = new SportpaleisPilotService({ store }); await service.initialize();
+    const actor = await service.login({ email: "planner@example.test", password: "Expiry-Domain-2026!" });
+    const before = { revision: pool.meta.global_revision, records: structuredClone(pool.records), domains: structuredClone(pool.domains), commits: pool.commits };
+    const getConnection = pool.getConnection.bind(pool);
+    pool.getConnection = async () => {
+      const connection = await getConnection(); const query = connection.query.bind(connection);
+      connection.query = async (sql, parameters) => {
+        const result = await query(sql, parameters);
+        if (phase === "lock" && sql.includes("FOR UPDATE") || phase === "commit" && sql.startsWith("UPDATE sp_workspace_domain_meta SET global_revision")) t.mock.timers.setTime(Date.parse(actor.expiresAt));
+        return result;
+      };
+      return connection;
+    };
+    await assert.rejects(service.workItems.create({ token: actor.token, csrfToken: actor.csrfToken }, { title: `Expiry ${phase}` }), { statusCode: 401 });
+    assert.equal(pool.meta.global_revision, before.revision); assert.equal(pool.commits, before.commits);
+    assert.deepEqual(pool.records, before.records); assert.deepEqual(pool.domains, before.domains);
+    assert.ok(pool.rollbacks > 0);
+    pool.getConnection = getConnection; t.mock.timers.setTime(realNow);
+    const task = await service.workItems.create({ token: actor.token, csrfToken: actor.csrfToken }, { title: "Valid session still works" });
+    assert.equal(task.createdBy, "planner");
+  }
+});
+
 test("runtime-start weigert een ontbrekende offline backfill zonder state te muteren", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
