@@ -1,4 +1,5 @@
 import "./styles/sportpaleis-workspace.css";
+import { workspaceRouteCapability } from "./workspace-permission-navigation.ts";
 import "./styles/sportpaleis-proposal.css";
 import "./styles/sportpaleis-teamwear.css";
 import { articleImage } from "./sportpaleis/catalog-images.ts";
@@ -337,7 +338,7 @@ function shell(html: string, state: PilotBootstrap, current: string, title: stri
   const mailNav = state.mailboxRouting && ["admin", "operator"].includes(user.role) ? nav(`${BASE}/mail`, "Mail", current) : "";
   const workNav = `${nav(`${BASE}/overzicht`, "Vandaag", current)}${nav(`${BASE}/orders`, "Orders", current)}${teamwearNav}${visualStudioNav}${contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : ""}${mailNav}${contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : ""}${nav(`${BASE}/zoeken`, "Zoeken", current)}`;
   const orderActions = contexts.has("STORE") ? nav(`${BASE}/orders/nieuw`, "Bedrukken", current) : "";
-  const adminNav = user.role === "admin" ? `${nav(`${BASE}/beheer`, "Beheer", current)}` : user.role === "operator" ? `${nav(`${BASE}/beheer/artikelen`, "Artikelvolgorde", current)}` : "";
+  const adminNav = state.capabilities.admin ? `${nav(`${BASE}/beheer`, "Beheer", current)}` : user.role === "operator" ? `${nav(`${BASE}/beheer/artikelen`, "Artikelvolgorde", current)}` : "";
   const switchable = (state.switchableUsers ?? []).filter(({ id, status }) => id !== user.id && status === "Actief");
   const previewAccountAction = activeRolePreview ? `<button type="button" data-action="exit-role-preview">Terug naar Beheerder</button>` : user.role === "admin" ? `<a data-link href="${BASE}/beheer/rollen">Bekijk Workspace als…</a>` : "";
   const reviewMenuAction = state.capabilities.reviewMode ? `<a data-link href="${REVIEW_ROUTE}">Review nieuwe versie</a>` : "";
@@ -2039,6 +2040,8 @@ void operatorSettings;
 void customOrder;
 
 function page(state: PilotBootstrap, current: string): { title: string; html: string } {
+  const routeCapability = workspaceRouteCapability(current);
+  if (state.effectivePermissions && routeCapability && !state.effectivePermissions.decisions[routeCapability]?.allowed) return { title: "Geen toegang", html: empty("Dit onderdeel is niet beschikbaar voor jouw account") };
   const contexts = new Set(state.capabilities.workContexts ?? state.currentUser.workContexts ?? []);
   if (current === FULL_WORKSPACE_REVIEW_ROUTE) return state.capabilities.reviewMode
     ? { title: "Vandaag", html: overview(state) }
@@ -2078,6 +2081,7 @@ function page(state: PilotBootstrap, current: string): { title: string; html: st
   if (current === `${BASE}/feedback`) return { title: "Feedback", html: feedback(state) };
   if (current === `${BASE}/voorkeuren`) return { title: "Mijn weergave", html: preferences(state) };
   if (current === `${BASE}/beheer`) return { title: "Beheer", html: adminHomeV2(state) };
+  if (current === `${BASE}/beheer/gebruikers` && state.effectivePermissions) return { title: "Gebruikers & rechten", html: state.effectivePermissions.decisions["management.permissions"]?.allowed ? '<div data-permission-admin-root></div>' : empty("Geen toegang") };
   if (current === `${BASE}/beheer/gebruikers`) return { title: "Gebruikers", html: userAdminV3(state) };
   if (current === `${BASE}/beheer/werknemers`) return { title: "Werknemers", html: employeeAdmin(state) };
   if (current === `${BASE}/beheer/rollen`) return { title: "Rollen & werkplekken", html: rolePreview(state) };
@@ -2249,6 +2253,16 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
     syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
+    if (state.effectivePermissions) for (const link of app.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+      const target = new URL(link.href, location.href);
+      if (target.origin !== location.origin) continue;
+      const capability = workspaceRouteCapability(target.pathname);
+      if (capability && !state.effectivePermissions.decisions[capability]?.allowed) link.remove();
+    }
+    const permissionRoot = app.querySelector<HTMLElement>("[data-permission-admin-root]");
+    if (permissionRoot) void import("./workspace-permission-admin.ts").then(({ mountPermissionAdmin }) => {
+      if (permissionRoot.isConnected) void mountPermissionAdmin(permissionRoot, { csrfToken: state?.csrfToken || "", onChange: () => window.dispatchEvent(new Event("workspace-permissions-changed")) });
+    });
     bindMobileNavigationBackdrop(app.querySelector<HTMLButtonElement>(".sp-nav-backdrop"), () => closeMobileNavigation());
     if (current === REVIEW_ROUTE && viewState.capabilities.reviewMode) {
       const root = app.querySelector<HTMLElement>("[data-review-candidate-root]");
@@ -2405,6 +2419,7 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     if (!state.orders.some((order) => order.id === id)) state.orders.push(await api.order(id));
   };
   let latestLoadPerformance: { bootstrapMs: number; routeProjectionMs: number; clientProjectionMs: number } | null = null;
+  window.addEventListener("workspace-permissions-changed", () => { void load().then(() => render()); });
   const load = async (): Promise<void> => {
     const bootstrapStartedAt = performance.now();
     try {

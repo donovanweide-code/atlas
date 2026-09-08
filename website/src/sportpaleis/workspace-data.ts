@@ -1690,6 +1690,8 @@ export function currentUser(state: SportpaleisWorkspaceState): SportpaleisUser {
 }
 
 export function canAccessAdmin(state: SportpaleisWorkspaceState): boolean {
+  const permissions = (state as SportpaleisWorkspaceState & { effectivePermissions?: { decisions: Record<string, { allowed: boolean }> } }).effectivePermissions;
+  if (permissions) return permissions.decisions["management.view"]?.allowed === true;
   return currentUser(state).role === "admin";
 }
 import { SPORTPALEIS_MACHINE_CONSTRAINTS } from "./direct-print/production-constraints.ts";

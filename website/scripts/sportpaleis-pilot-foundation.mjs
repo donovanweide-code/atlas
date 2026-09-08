@@ -4,6 +4,9 @@ import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, rmSy
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { WorkspacePermissionService } from "./workspace-permission-service.mjs";
+import { compileEffectivePermissions } from "./workspace-permissions.mjs";
+import { installSportpaleisCapabilityBoundary, hasCapabilityRoleAuthority, capabilityAuditContext } from "./sportpaleis-capability-boundary.mjs";
 import {
   SPORTPALEIS_ASSOCIATIONS,
   SPORTPALEIS_BACK_NUMBER_PHYSICAL_HEIGHT_MM,
@@ -1547,6 +1550,8 @@ export class SportpaleisFileStore {
 }
 
 function audit(state, userId, action, subject, details = {}) {
+  const authorization = capabilityAuditContext();
+  if (authorization) details = { ...details, authorization };
   state.audit.unshift({ id: `audit-${randomBytes(8).toString("hex")}`, at: iso(), userId, action, subject, details });
 }
 
@@ -2412,6 +2417,7 @@ export function sportpaleisProductionInventoryView(state) {
 }
 
 function assertRole(user, allowed) {
+  if (hasCapabilityRoleAuthority(user)) return;
   if (user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType
     && user.candidateStateIsolated === true
     && user.scopes?.includes("candidate.ui.safe-interact")
@@ -2649,6 +2655,18 @@ function ingestWebshopDocumentIntoState(state, { sourceMessageId, receivedAt, in
 export class SportpaleisPilotService {
   constructor({ store, mailFoundation, websiteSource = createSportpaleisWebsiteSource(), releaseId = PILOT_RELEASE_ID, secureCookies = false, allowedOrigin = "http://127.0.0.1:5173", sessionTtlMs = SESSION_TTL_MS, demoMode = false, uploadsEnabled = true, productionAssetUploadsEnabled = uploadsEnabled, fontUploadsEnabled = uploadsEnabled, mailMode = "capture", mailboxConfiguration = { configured: false }, creativeStudioEnabled = true, artifactRoot = DEFAULT_ARTIFACT_ROOT, runtimeArtifactRoot = artifactRoot, installedProductionAssetRoot = INSTALLED_PRODUCTION_ASSET_ROOT, reviewPrincipalIds = [], activeReviewCandidateIds = [], reviewAccessIssuerPrincipalIds = [], reviewAccessIssuerSecret = "", reviewAccessEnabled = false, reviewAccessIsolatedState = false, prewarmProductionBuildIsolation = false }) {
     this.store = store;
+    this.permissionService = new WorkspacePermissionService({ store, resolveActor: (state, credential) => {
+      const token = typeof credential === "string" ? credential : credential?.token;
+      const session = token && state.sessions.find(entry => safeEqualHex(entry.idHash, sha256(token)));
+      const user = session && state.users.find(entry => entry.id === session.userId && entry.status === "Actief");
+      if (!session || !user || !Number.isFinite(Date.parse(session.expiresAt)) || Date.parse(session.expiresAt) <= Date.now()) throw Object.assign(new Error("Je sessie is verlopen of ingetrokken. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });
+      if (typeof credential !== "string") {
+        const supplied = credential?.csrfToken;
+        const valid = typeof supplied === "string" && session.csrfHash && (supplied === `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` || safeEqualHex(sha256(supplied), session.csrfHash));
+        if (!valid) throw Object.assign(new Error("Ongeldige beveiligingscode. Vernieuw de pagina."), { statusCode: 403, code: "CSRF_INVALID" });
+      }
+      return { tenantId: state.organizationId, userId: user.id };
+    } });
     this.mailFoundation = mailFoundation;
     this.websiteSource = websiteSource;
     this.releaseId = releaseId;
@@ -2692,6 +2710,7 @@ export class SportpaleisPilotService {
     this.productionMutationTail = Promise.resolve();
     this.isolatedProductionBuilds = typeof this.store.prepareAndCommit === "function";
     this.prewarmProductionBuildIsolation = prewarmProductionBuildIsolation === true;
+    installSportpaleisCapabilityBoundary(this);
   }
 
   async initialize() {
@@ -3071,6 +3090,12 @@ export class SportpaleisPilotService {
     if (new Date(session.expiresAt).getTime() <= now.getTime()) throw Object.assign(new Error("Sessie is verlopen."), { statusCode: 401, code: "SESSION_EXPIRED" });
     const user = state.users.find(({ id }) => id === session.userId);
     if (!user || user.status !== "Actief") throw Object.assign(new Error("Gebruiker is niet actief."), { statusCode: 401, code: "UNAUTHENTICATED" });
+    if (state.workspacePermissions) {
+      const effective = compileEffectivePermissions(state.workspacePermissions, user.id);
+      const has = id => effective.decisions[id]?.allowed === true;
+      const workContexts = [has("management.view") && "ORGANISATION", has("orders.create") && "STORE", has("webshop_intake.view") && "WEBSHOP", has("production.view") && "PRODUCTION", has("orders.view") && "ALL"].filter(Boolean);
+      return { state, session, user: { ...user, workContexts, featureExposure: { ...user.featureExposure, teamwearExperiencePilot: has("teamwear.view") } } };
+    }
     return { state, session, user };
   }
 
@@ -3081,6 +3106,10 @@ export class SportpaleisPilotService {
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     return { user: sessionUser, csrfToken, expiresAt: session.expiresAt, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", demo: Boolean(session.demo) };
   }
+
+  async permissionAdministration(token) { return this.permissionService.administration(token); }
+  async permissionProjection(token, userId = null, preview = false) { return this.permissionService.inspect(token, userId, preview); }
+  async updatePermissionConfiguration(token, csrfToken, input) { return this.permissionService.update({ token, csrfToken }, input); }
 
   async loginWithPersistedCsrf(input) {
     return this.login(input);
@@ -3251,18 +3280,20 @@ export class SportpaleisPilotService {
   }
 
   #projectBootstrap({ state, user, session }, requestedSurface = "overview") {
+    const effectivePermissions = state.workspacePermissions ? compileEffectivePermissions(state.workspacePermissions, user.id) : null;
+    const permitted = (capability, legacy = false) => effectivePermissions ? effectivePermissions.decisions[capability]?.allowed === true : legacy;
     const internalFullBootstrap = requestedSurface === INTERNAL_FULL_BOOTSTRAP;
     const bootstrapSurface = internalFullBootstrap ? "overview" : this.#bootstrapSurface(requestedSurface);
     const reviewDeveloper = user.principalType === WBD_REVIEW_DEVELOPER_PRINCIPAL.principalType;
     const reviewSafeInteract = reviewDeveloper && this.reviewAccessIsolatedState === true && user.scopes?.includes("candidate.ui.safe-interact");
-    const admin = user.role === "admin";
-    const productionWorkspace = admin || user.role === "operator";
+    const admin = permitted("management.view", user.role === "admin");
+    const productionWorkspace = permitted("production.view", admin || user.role === "operator");
     const sessionUser = session.demo ? { ...publicUser(user), name: user.role === "admin" ? "Kevin Demo" : user.role === "operator" ? "Patrick Demo" : "Winkelmedewerker Demo" } : publicUser(user);
     const finalCleanStartOrder = (order) => order.deletion?.byUserId === "system:final-clean-start"
       || (order.eventHistory ?? []).some((event) => event.source === "final-clean-start");
-    const includeOrders = internalFullBootstrap || ["overview", "orders", "production"].includes(bootstrapSurface);
-    const includeProduction = internalFullBootstrap || bootstrapSurface === "production";
-    const includeTeamwear = internalFullBootstrap || bootstrapSurface === "teamwear";
+    const includeOrders = permitted("orders.view", true) && (internalFullBootstrap || ["overview", "orders", "production"].includes(bootstrapSurface));
+    const includeProduction = permitted("production.view", true) && (internalFullBootstrap || bootstrapSurface === "production");
+    const includeTeamwear = permitted("teamwear.view", true) && (internalFullBootstrap || bootstrapSurface === "teamwear");
     const allOperationalOrders = includeOrders ? state.orders.filter((order) => !finalCleanStartOrder(order)) : [];
     const operationalOrderIds = new Set(allOperationalOrders.map(({ id }) => id));
     const terminalOrder = (order) => order.deletion
@@ -3282,6 +3313,7 @@ export class SportpaleisPilotService {
       revision: state.revision,
       currentUserId: user.id,
       currentUser: sessionUser,
+      effectivePermissions,
       bootstrapSurface,
       csrfToken: session.csrfHash ? `${BOOTSTRAP_CSRF_PREFIX}${session.csrfHash}` : undefined,
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
@@ -3294,7 +3326,7 @@ export class SportpaleisPilotService {
       mailbatches: structuredClone(state.mailbatches),
       websiteSync: admin ? publicSportpaleisWebsiteSync(state) : undefined,
       webshopIntake: productionWorkspace ? structuredClone({ ...state.webshopIntake, sources: (state.webshopIntake.sources ?? []).map(({ dataBase64: _dataBase64, ...source }) => source) }) : undefined,
-      mailboxRouting: productionWorkspace && !reviewDeveloper ? publicSportpaleisMailboxRouting(state.mailboxRouting, this.mailboxConfiguration) : undefined,
+      mailboxRouting: permitted("mail.view", productionWorkspace) && !reviewDeveloper ? publicSportpaleisMailboxRouting(state.mailboxRouting, this.mailboxConfiguration) : undefined,
       employeeDirectorySource: admin ? structuredClone(state.employeeDirectorySource) : undefined,
       productionElements: productionWorkspace ? structuredClone(state.productionElements.map((element) => {
         const decision = executableProductionAssetDecision(element);
@@ -3339,7 +3371,7 @@ export class SportpaleisPilotService {
         invoices: { status: "Geen factuurbron aangesloten", records: [], source: "Geen gevalideerde WBD-factuurrecords in Workspace" },
       } : undefined,
       audit: state.audit.filter((entry) => admin || entry.userId === user.id || String(entry.subject ?? "").startsWith("SP-") || entry.subject === "SNIJTEST-001").slice(0, 100).map(publicBootstrapAuditEntry),
-      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, creativeStudio: this.creativeStudioEnabled && ["admin", "operator"].includes(user.role), reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : admin && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
+      capabilities: { admin, operator: user.role === "operator", store: user.role === "store", support: user.role === "support", reviewDeveloper, workContexts: publicUser(user).workContexts, deviceMode: session.deviceMode ?? "SHARED", authMethod: session.authMethod ?? "PASSWORD", quickPinEnabled: state.users.some(({ quickPin }) => Boolean(quickPin?.hash)), teamwearExperiencePilot: user.featureExposure?.teamwearExperiencePilot === true, creativeStudio: this.creativeStudioEnabled && permitted("product_truth.propose", ["admin", "operator"].includes(user.role)), reviewMode: reviewModeAllowed(user, this.reviewPrincipalIds, this.reviewCandidates), demo: Boolean(session.demo), demoEnabled: this.demoMode, uploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.uploadsEnabled, productionAssetUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : this.productionAssetUploadsEnabled, fontUploadsEnabled: reviewSafeInteract ? true : reviewDeveloper ? false : permitted("product_truth.approve", admin) && this.fontUploadsEnabled, mailMode: reviewDeveloper ? "disabled" : this.mailMode, barcodeEnabled: false, barcodeHardwareValidated: false, hardwareSendEnabled: false },
       releaseId: this.releaseId,
     };
   }
@@ -10352,6 +10384,19 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const token = parseCookies(request)[SESSION_COOKIE];
       const csrf = request.headers["x-csrf-token"];
       const method = request.method ?? "GET";
+      if (route === "/api/sportpaleis/v1/permissions" && method === "GET") {
+        json(response, 200, await service.permissionProjection(token)); return true;
+      }
+      if (route === "/api/sportpaleis/v1/admin/permissions" && method === "GET") {
+        json(response, 200, await service.permissionAdministration(token)); return true;
+      }
+      const permissionUserMatch = route.match(/^\/api\/sportpaleis\/v1\/admin\/permissions\/users\/([^/]+)(\/preview)?$/);
+      if (permissionUserMatch && method === "GET") {
+        json(response, 200, await service.permissionProjection(token, decodeURIComponent(permissionUserMatch[1]), Boolean(permissionUserMatch[2]))); return true;
+      }
+      if (permissionUserMatch && !permissionUserMatch[2] && method === "PATCH") {
+        json(response, 200, await service.updatePermissionConfiguration(token, csrf, { ...await readJson(request), userId: decodeURIComponent(permissionUserMatch[1]) })); return true;
+      }
       if (route.startsWith("/api/sportpaleis/v1/public/proposals/")) {
         const bucketKey = sha256(`${request.socket.remoteAddress ?? "unknown"}:${route.split("/")[6] ?? "unknown"}`); const now = Date.now();
         const recent = (publicProposalBuckets.get(bucketKey) ?? []).filter((stamp) => now - stamp < 15 * 60 * 1_000);

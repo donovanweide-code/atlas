@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { SportpaleisFileStore, SportpaleisPilotService } from "../scripts/sportpaleis-pilot-foundation.mjs";
+import { createServer } from "node:http";
+import { SportpaleisFileStore, SportpaleisPilotService, createSportpaleisPilotRequestHandler } from "../scripts/sportpaleis-pilot-foundation.mjs";
 import { createPermissionPolicy } from "../scripts/workspace-permissions.mjs";
 import { WorkspacePermissionService } from "../scripts/workspace-permission-service.mjs";
 import { CAPABILITY_IDS } from "../src/workspace-permission-catalog.mjs";
+import { SPORTPALEIS_METHOD_CAPABILITIES } from "../scripts/sportpaleis-capability-boundary.mjs";
+import { createTestMailFoundation } from "./helpers/sportpaleis-delivery-evidence.mjs";
 
 // Existing development persistence and actual personal session issuance; never connects to LIVE.
 async function fixture(t) {
@@ -20,7 +23,7 @@ async function fixture(t) {
   const seedPasswords = { kevin: "Permission-Admin-2026!", patrick: "Permission-Operator-2026!", collega: "Permission-Store-2026!", "donovan-support": "Permission-Support-2026!" };
   const settings = { filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords };
   const store = new SportpaleisFileStore(settings);
-  const pilot = new SportpaleisPilotService({ store, artifactRoot: root }); await pilot.initialize();
+  const pilot = new SportpaleisPilotService({ store, artifactRoot: root, mailFoundation: createTestMailFoundation(root) }); await pilot.initialize();
   const admin = await pilot.login({ email: "kevin@sportpaleis.nl", password: seedPasswords.kevin });
   const operator = await pilot.login({ email: "patrick@sportpaleis.nl", password: seedPasswords.patrick });
   const state = await store.read();
@@ -73,4 +76,67 @@ test("queued management revoke blocks subsequent write without login or stale ca
   const pending = f.service.update(f.operator.token, { userId: f.operatorId, expectedVersion: 3, overrides: { "management.permissions": "allow" } });
   await revoke; await assert.rejects(pending, { statusCode: 403 });
   assert.equal((await f.service.inspect(f.operator.token)).effective.decisions["management.permissions"].allowed, false);
+});
+test("actual HTTP administration: valid session, CSRF, backend denial, preview and logout", async t => {
+  const f = await fixture(t); const handler = createSportpaleisPilotRequestHandler(f.pilot);
+  const server = createServer((req, res) => void handler(req, res));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const base = `http://127.0.0.1:${server.address().port}`; f.pilot.allowedOrigin = base;
+  const call = (suffix = "", { token = f.admin.token, csrf = f.admin.csrfToken, method = "GET", body } = {}) => fetch(`${base}/api/sportpaleis/v1/admin/permissions${suffix}`, { method, headers: { Cookie: `sportpaleis_session=${token}`, Origin: base, "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: body && JSON.stringify(body) });
+  assert.equal((await call()).status, 200);
+  assert.equal((await call("", { token: f.operator.token })).status, 403);
+  assert.equal((await call("", { token: "invalid" })).status, 401);
+  const input = { expectedVersion: 1, overrides: { "teamwear.view": "allow" } };
+  assert.equal((await call(`/users/${f.operatorId}`, { method: "PATCH", csrf: "invalid", body: input })).status, 403);
+  const changed = await call(`/users/${f.operatorId}`, { method: "PATCH", body: input }); assert.equal(changed.status, 200);
+  assert.equal((await changed.json()).version, 2);
+  const preview = await call(`/users/${f.operatorId}/preview`); assert.equal((await preview.json()).preview.readOnly, true);
+  assert.equal((await call(`/users/${f.operatorId}/preview`, { method: "PATCH", body: input })).status, 404);
+  const user = (await f.pilot.authenticate(f.admin.token)).user;
+  await f.pilot.logout(f.admin.token, user, f.admin.csrfToken);
+  assert.equal((await call(`/users/${f.operatorId}`, { method: "PATCH", body: { ...input, expectedVersion: 2 } })).status, 401);
+});
+test("every existing token-first service entry point has an explicit capability policy", async () => {
+  const source = await readFile(new URL("../scripts/sportpaleis-pilot-foundation.mjs", import.meta.url), "utf8");
+  // Customer proposal tokens and temporary review-grant classification have their own existing authorities.
+  const separateTokenAuthorities = new Set(["authenticate", "assertTemporaryReviewRequest", "publicTeamkitProposal", "savePublicTeamkitIntake", "savePublicTeamkitFeedback", "approvePublicTeamkitProposal", "publicTeamkitProposalSource", "publicTeamkitProposalPdf"]);
+  const methods = [...source.matchAll(/^  async ([A-Za-z][\w]*)\(token(?:,|\))/gm)].map(match => match[1]).filter(name => !separateTokenAuthorities.has(name));
+  assert.deepEqual(methods.filter(name => !Object.hasOwn(SPORTPALEIS_METHOD_CAPABILITIES, name)), []);
+  assert.ok(methods.length > 100);
+});
+test("existing service APIs obey dynamic capabilities even when legacy role remains admin/operator", async t => {
+  const f = await fixture(t);
+  await assert.rejects(f.pilot.assertTeamwearPilotAccess(f.operator.token), { statusCode: 403 });
+  await f.pilot.updatePermissionConfiguration(f.admin.token, f.admin.csrfToken, { userId: f.operatorId, expectedVersion: 1, overrides: { "teamwear.view": "allow", "production.complete": "deny" } });
+  assert.equal((await f.pilot.assertTeamwearPilotAccess(f.operator.token)).enabled, true);
+  await assert.rejects(f.pilot.completeProductionJob(f.operator.token, f.operator.csrfToken, "absent", {}), { statusCode: 403 });
+  await assert.rejects(f.pilot.deleteOrder(f.operator.token, f.operator.csrfToken, "absent", {}), { statusCode: 403 });
+  const projected = await f.pilot.bootstrap(f.operator.token, "overview");
+  assert.equal(projected.capabilities.teamwearExperiencePilot, true);
+  await f.pilot.updatePermissionConfiguration(f.admin.token, f.admin.csrfToken, { userId: f.adminId, expectedVersion: 2, presetId: "owner" });
+  assert.equal((await f.pilot.authenticate(f.admin.token)).user.role, "admin");
+  await assert.rejects(f.pilot.updateArticle(f.admin.token, f.admin.csrfToken, "absent", {}), { statusCode: 403 });
+  await assert.rejects(f.pilot.updateUser(f.admin.token, f.admin.csrfToken, f.operatorId, { role: "admin" }), { code: "LEGACY_ROLE_CHANGE_DISABLED" });
+  await assert.rejects(f.pilot.updateSettings(f.admin.token, f.admin.csrfToken, { productionDefaults: {} }), { statusCode: 403 });
+  await assert.rejects(f.pilot.deleteEmployee(f.admin.token, f.admin.csrfToken, "absent"), { statusCode: 403 });
+  await f.pilot.updateSettings(f.admin.token, f.admin.csrfToken, { processingDays: 3 });
+  const event = (await f.store.read()).audit[0];
+  assert.equal(event.details.authorization.actor, f.adminId);
+  assert.ok(event.details.authorization.capabilities.some(c => c.capability === "management.settings"));
+});
+test("Mail OFF preserves proven networkless order receipt; it never grants an external send", async t => {
+  const f = await fixture(t);
+  await f.store.mutate(state => { state.workspacePermissions.enabledCapabilities = state.workspacePermissions.enabledCapabilities.filter(id => !id.startsWith("mail.")); return { state }; });
+  const empty = { initials: "", initialsInfix: "", name: "", backNumber: "2", backNumberSizeClass: "SENIOR", shortsNumber: "" };
+  const order = (await f.pilot.createOrder(f.operator.token, f.operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Permission fixture", customerEmail: "permission@example.test", customerPhone: "0612345678", standardPersonalization: empty, items: [{ articleId: "sp-live-116386", size: "L", quantity: 1, deviation: false, overrides: { ...empty, backNumber: "", backNumberSizeClass: "" } }] }, "permission-order-create")).value;
+  const receipt = await f.pilot.captureOrderMail(f.operator.token, f.operator.csrfToken, order.id, { templateKey: "ORDER_RECEIVED" }, "permission-capture-receipt");
+  assert.equal(receipt.status, "CAPTURED");
+  assert.equal(f.pilot.mailFoundation.transport.externalNetworkEnabled, false);
+  const saved = await f.pilot.order(f.operator.token, order.id);
+  await f.pilot.advanceOrder(f.operator.token, f.operator.csrfToken, order.id, saved.revision, "permission-order-advance");
+  let externalCalls = 0;
+  f.pilot.mailFoundation.transport = { name: "smtp", externalNetworkEnabled: true, send: async () => { externalCalls++; throw new Error("External send must never be reached"); } };
+  await assert.rejects(f.pilot.captureOrderMail(f.operator.token, f.operator.csrfToken, order.id, { templateKey: "ORDER_RECEIVED" }, "permission-external-denied"), { statusCode: 403 });
+  assert.equal(externalCalls, 0);
 });

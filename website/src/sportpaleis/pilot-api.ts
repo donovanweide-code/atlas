@@ -59,6 +59,7 @@ export class PilotApiError extends Error {
 export type BootstrapSurface = "overview" | "orders" | "production" | "library" | "teamwear" | "admin";
 
 export interface PilotBootstrap extends SportpaleisWorkspaceState {
+  effectivePermissions?: import("../workspace-permission-admin.ts").EffectivePermissions | null;
   bootstrapSurface?: BootstrapSurface;
   currentUser: SportpaleisUser;
   switchableUsers: SportpaleisUser[];

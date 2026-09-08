@@ -12,6 +12,8 @@ import { materializeLegacyRollbackState } from "../scripts/sportpaleis-domain-ro
 import { decodeSportpaleisRuntimeState } from "../scripts/sportpaleis-mariadb-store.mjs";
 import { sha256CanonicalJson } from "../scripts/workspace-domain-state.mjs";
 import { productionJobBuildLoad } from "../src/sportpaleis/production-job-build.mjs";
+import { createPermissionPolicy } from "../scripts/workspace-permissions.mjs";
+import { CAPABILITY_IDS } from "../src/workspace-permission-catalog.mjs";
 
 const migrationFile = new URL("../sportpaleis-server/production-migrations/workspace/007-sportpaleis-domain-state.sql", import.meta.url);
 const brokerMigrationFiles = [701, 702, 703, 704, 705, 706, 707, 708].map((version) => ({
@@ -183,6 +185,30 @@ class DomainMemoryConnection {
     throw new Error(`Onverwachte domeinquery: ${sql}`);
   }
 }
+
+test("capabilityconfig blijft duurzaam op de domeinopslag; tweede runtime ziet revoke zonder privilegecache", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  legacy.users.push({ id: "permission-admin", name: "Admin", initials: "AD", role: "admin", email: "permission-admin@example.test", status: "Actief", seatType: "customer", salesNumber: null, password: await createSportpaleisPasswordRecord("Permission-Domain-2026!") });
+  legacy.users.push({ id: "permission-worker", name: "Worker", initials: "WO", role: "operator", email: "permission-worker@example.test", status: "Actief", seatType: "customer", salesNumber: null, password: await createSportpaleisPasswordRecord("Permission-Worker-2026!") });
+  legacy.workspacePermissions = createPermissionPolicy(legacy.organizationId, { "permission-admin": { presetId: "developer", overrides: {} }, "permission-worker": { presetId: "operations", overrides: {} } }, { enabledCapabilities: CAPABILITY_IDS });
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const first = new SportpaleisDomainMariaDbStore({ pool }); await first.backfillLegacySource();
+  const firstService = new SportpaleisPilotService({ store: first }); await firstService.initialize();
+  const admin = await firstService.login({ email: "permission-admin@example.test", password: "Permission-Domain-2026!" });
+  const worker = await firstService.login({ email: "permission-worker@example.test", password: "Permission-Worker-2026!" });
+  const second = new SportpaleisDomainMariaDbStore({ pool }); const secondService = new SportpaleisPilotService({ store: second }); await secondService.initialize();
+  const businessBefore = sha256CanonicalJson((await first.read()).orders);
+  assert.equal((await secondService.permissionProjection(worker.token)).effective.decisions["production.complete"].allowed, true);
+  await firstService.updatePermissionConfiguration(admin.token, admin.csrfToken, { userId: "permission-worker", expectedVersion: 1, overrides: { "production.complete": "deny", "teamwear.view": "allow" } });
+  assert.equal((await secondService.permissionProjection(worker.token)).effective.decisions["production.complete"].allowed, false);
+  await assert.rejects(secondService.completeProductionJob(worker.token, worker.csrfToken, "absent", {}), { statusCode: 403 });
+  const restarted = new SportpaleisDomainMariaDbStore({ pool }); await restarted.initialize();
+  const state = await restarted.read();
+  assert.equal(state.workspacePermissions.version, 2); assert.equal(state.workspacePermissions.audit[0].actor, "permission-admin");
+  assert.equal(sha256CanonicalJson(state.orders), businessBefore);
+  assert.equal(pool.queries.some(sql => sql.startsWith("UPDATE sp_runtime_state")), false);
+});
 
 test("runtime-start weigert een ontbrekende offline backfill zonder state te muteren", async () => {
   const migration = await readFile(migrationFile, "utf8");

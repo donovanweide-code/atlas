@@ -665,13 +665,14 @@ function publicAttempt(attempt) {
 }
 
 export class MailFoundation {
-  constructor({ organizations, store, transport, renderer = new DeclarativeTemplateRenderer(), now = () => new Date() }) {
+  constructor({ organizations, store, transport, renderer = new DeclarativeTemplateRenderer(), now = () => new Date(), authorizationDecision = null }) {
     this.organizations = new Map(Object.entries(organizations));
     this.store = store;
     this.transport = transport;
     this.renderer = renderer;
     this.now = now;
     this.rateBuckets = new Map();
+    this.authorizationDecision = authorizationDecision;
   }
 
   organizationSummary(organizationId) {
@@ -864,7 +865,8 @@ export class MailFoundation {
 
   async #authorize(organization, actor, action, templateKey, contextType = "unknown", contextId = "unknown") {
     const roles = organization.permissions?.[action]?.[templateKey ?? "*"] ?? organization.permissions?.[action]?.["*"] ?? [];
-    if (!actor?.id || !roles.includes(actor.role)) {
+    const decision = this.authorizationDecision ? await this.authorizationDecision({ organizationId: organization.id, actor, action, templateKey, contextType, contextId }) : null;
+    if (!actor?.id || !(decision === true || decision === null && roles.includes(actor.role))) {
       await this.#event(MAIL_EVENTS.DENIED, { organization, contextType: String(contextType ?? "unknown"), contextId: String(contextId ?? "unknown"), template: { key: templateKey ?? "unknown" } }, actor ?? { id: "anonymous", role: "none", name: "Onbekend" }, { action });
       throw new MailFoundationError("PERMISSION_DENIED", "Onvoldoende rechten voor deze mailactie.", 403);
     }
