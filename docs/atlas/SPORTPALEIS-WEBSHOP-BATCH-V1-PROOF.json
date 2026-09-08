@@ -1,0 +1,74 @@
+{
+  "status": "PASS",
+  "sourceSha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+  "sourceOrderCount": 137,
+  "batchOrders": 9,
+  "batchItems": 18,
+  "onlyPrinting": true,
+  "goldenPatterns": [
+    "2635358543",
+    "2635358614",
+    "2635358648",
+    "2635358683"
+  ],
+  "defaultSort": "OLDEST_FIRST",
+  "overrideSurvivesRestart": true,
+  "excludeRestore": true,
+  "staleEditRejected": true,
+  "partialHandoff": true,
+  "confirmationIdempotentAfterRestart": true,
+  "existingProductionValidator": "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V3",
+  "metrics": {
+    "pdfParseMs": 2047.5194999999994,
+    "structuredMs": 111.4349000000002,
+    "firstBatchMs": 2158.9543999999996,
+    "rssDeltaBytes": 1290240,
+    "sourceBytes": 759353,
+    "pageCount": 138,
+    "persistedPdfs": 0,
+    "persistedFullTexts": 0,
+    "batchReadyMs": 2352.8577000000005,
+    "overrideRoundtripMs": 14.846199999999953
+  },
+  "sqliteBytes": 24576,
+  "persistedPdfs": 0,
+  "persistedFullTexts": 0,
+  "browser": {
+    "viewports": [
+      {
+        "width": 390,
+        "height": 844,
+        "noHorizontalOverflow": true,
+        "searchAndSelection": true,
+        "editDialogUsable": true
+      },
+      {
+        "width": 320,
+        "height": 720,
+        "noHorizontalOverflow": true,
+        "searchAndSelection": true,
+        "editDialogUsable": true
+      }
+    ],
+    "assertions": [
+      "printing-only",
+      "oldest-first",
+      "client-search",
+      "multi-selection",
+      "edit-persists-after-reload",
+      "exclude-restore",
+      "explicit-contract-dry-run",
+      "completed-not-offered-again"
+    ],
+    "networkRequestsDuringSearch": 0,
+    "metrics": {
+      "searchMs": 0.800000011920929,
+      "selectionMs": 0.699999988079071,
+      "editOpenMs": 27.5,
+      "editSaveMs": 27.19999998807907
+    },
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "status": "PASS"
+  }
+}

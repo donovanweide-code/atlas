@@ -1,0 +1,15 @@
+{
+  "version": "WEBSHOP_BATCH_INTAKE_V1",
+  "scope": "Local on-demand review; no LIVE mutations",
+  "pdfTextParseMaxMs": 2500,
+  "structuredExtractionMaxMs": 250,
+  "firstUsableBatchMaxMs": 5000,
+  "searchRenderMaxMs": 50,
+  "selectionRenderMaxMs": 50,
+  "editOpenMaxMs": 50,
+  "editSaveMaxMs": 750,
+  "parentRssDeltaMaxBytes": 268435456,
+  "persistedPdfBlobs": 0,
+  "persistedFullPdfTexts": 0,
+  "note": "Budgets fixed before acceptance measurements; do not relax to pass. Source-worker security limits from 82e7a08 remain in force. These are local acceptance timings, not a production SLA."
+}

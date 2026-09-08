@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Webshop bedrukking · Sportpaleis</title><link rel="stylesheet" href="/batch.css"><script type="module" src="/batch.js"></script></head>
+<body>
+<header class="brandbar"><a href="/" class="brand"><span class="brandmark">SP</span> SPORTPALEIS <span class="workspace">/ Werkvoorraad</span></a><span class="review-label">Lokale proef</span></header>
+<main>
+  <div class="page-heading"><div><p class="eyebrow">VAN BESTELLING NAAR BEDRUKKING</p><h1>Webshop bedrukking</h1><p class="intro">Alleen artikelen met bestelde opdruk. Controleer, pas aan en zet samen klaar.</p></div><button id="load" class="primary" disabled>Laad batch</button></div>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <div class="review-note">Deze proef maakt geen echte PlotJob. Je ziet wel welke regels door de bestaande productiecontrole komen.</div>
+  <section id="workspace" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <label class="search">Zoek bestelnummer<input id="search" type="search" placeholder="Bijvoorbeeld 2635358683" autocomplete="off"><span class="hint">Ook artikelnummer, omschrijving of vereniging</span></label>
+      <label>Volgorde<select id="sort"><option value="oldest">Oudste eerst</option><option value="newest">Nieuwste eerst</option><option value="number">Bestelnummer</option><option value="color">Kleur</option><option value="review">Controle nodig eerst</option></select></label>
+      <label>Toon<select id="filter"><option value="active">Actieve batch</option><option value="review">Controle nodig</option><option value="selected">Geselecteerd</option><option value="excluded">Uitgesloten</option><option value="completed">Voorbereid in proef</option><option value="all">Alle bedrukte regels</option></select></label>
+    </div>
+    <div class="list-controls"><label class="check-label"><input id="select-visible" type="checkbox"> Alles zichtbaar selecteren</label><button id="clear" class="text-button">Selectie wissen</button><span id="result-count"></span></div>
+    <div id="rows" aria-label="Bedrukte artikelregels"></div>
+    <div id="source-warnings"></div>
+  </section>
+  <section id="empty" class="empty"><span class="empty-symbol">↗</span><h2>Je bedrukwerk, direct bij elkaar</h2><p>Laad de aangeleverde webshopbatch. Alleen artikelen met expliciete personalisatie verschijnen hier.</p><p class="hint">Geen onbedrukte artikelen. Geen pagina’s om door te bladeren.</p></section>
+</main>
+<footer id="selection-bar" hidden><div><strong id="selection-count">0 geselecteerd</strong><span id="selection-detail">Kies de regels die je wilt voorbereiden.</span></div><button id="prepare" class="primary" disabled>Voorbereiden voor PlotJob <span aria-hidden="true">→</span></button></footer>
+<dialog id="edit-dialog" aria-labelledby="edit-title"><form id="edit-form"><div class="dialog-heading"><div><p class="eyebrow" id="edit-order"></p><h2 id="edit-title">Artikelregel aanpassen</h2></div><button type="button" class="close" data-close="edit-dialog" aria-label="Sluiten">×</button></div><div id="edit-fields"></div><label class="check-label structural"><input type="checkbox" id="structural"> Dit lijkt een terugkerende bronfout</label><p class="hint">Je wijziging geldt alleen voor deze regel. Een terugkerende fout wordt apart gemarkeerd; productieregels veranderen niet automatisch.</p><p id="edit-error" role="alert"></p><div class="dialog-actions"><button type="button" id="reset-source">Herstel bronwaarde</button><button type="submit" class="primary">Wijziging bewaren</button></div></form></dialog>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-heading"><div><p class="eyebrow">CONTROLEER JE SELECTIE</p><h2 id="confirm-title">Klaarzetten voor PlotJob</h2></div><button type="button" class="close" data-close="confirm-dialog" aria-label="Sluiten">×</button></div><div id="summary"></div><p class="review-note">Met de knop hieronder bevestig je uitsluitend een proef. Er start geen productie.</p><p id="confirm-error" role="alert"></p><div class="dialog-actions"><button type="button" data-close="confirm-dialog">Terug naar batch</button><button type="button" id="confirm" class="primary">Maak PlotJob — proef</button></div></dialog>
+</body></html>
