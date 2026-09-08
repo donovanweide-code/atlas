@@ -1,0 +1,434 @@
+{
+  "before": {
+    "sourceCommit": "855071b",
+    "label": "before",
+    "samples": [
+      {
+        "orderNumber": "2635358683",
+        "sourceAccessMs": 2.8133000000007087,
+        "parseMs": 702.402,
+        "reconstructMs": 6.318499999999403,
+        "catalogImageMatchMs": 0.14640000000144937,
+        "productTruthMs": 0.4014999999999418,
+        "openMs": 712.4108999999999,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.5999999642372131,
+        "fetchAndDecodeMs": 716.5,
+        "browserOpenMs": 717,
+        "serverTiming": "handler;dur=712.996, serialize;dur=0.030",
+        "images": 3,
+        "items": 5
+      },
+      {
+        "orderNumber": "2635358543",
+        "sourceAccessMs": 1.9271000000007916,
+        "parseMs": 700.8326999999999,
+        "reconstructMs": 7.247100000000501,
+        "catalogImageMatchMs": 0.1426000000001295,
+        "productTruthMs": 0.5199000000011438,
+        "openMs": 710.8993,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.699999988079071,
+        "fetchAndDecodeMs": 713.8999999761581,
+        "browserOpenMs": 714.5,
+        "serverTiming": "handler;dur=711.107, serialize;dur=0.032",
+        "images": 3,
+        "items": 6
+      },
+      {
+        "orderNumber": "2635358614",
+        "sourceAccessMs": 1.7843999999995503,
+        "parseMs": 697.3698999999997,
+        "reconstructMs": 6.466300000000047,
+        "catalogImageMatchMs": 0.07540000000153668,
+        "productTruthMs": 0.4349999999994907,
+        "openMs": 706.3284000000003,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.5999999642372131,
+        "fetchAndDecodeMs": 710.3000000119209,
+        "browserOpenMs": 710.8999999761581,
+        "serverTiming": "handler;dur=706.520, serialize;dur=0.028",
+        "images": 3,
+        "items": 3
+      },
+      {
+        "orderNumber": "2635358648",
+        "sourceAccessMs": 2.2534000000005108,
+        "parseMs": 688.0325000000003,
+        "reconstructMs": 6.752700000000004,
+        "catalogImageMatchMs": 0.08449999999902502,
+        "productTruthMs": 0.4881999999988693,
+        "openMs": 697.8119000000006,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.5,
+        "fetchAndDecodeMs": 700.9000000357628,
+        "browserOpenMs": 701.3000000119209,
+        "serverTiming": "handler;dur=697.992, serialize;dur=0.029",
+        "images": 4,
+        "items": 5
+      },
+      {
+        "orderNumber": "2635358566",
+        "sourceAccessMs": 1.5213000000003376,
+        "parseMs": 690.3209999999999,
+        "reconstructMs": 5.915100000000166,
+        "catalogImageMatchMs": 0.140400000002046,
+        "productTruthMs": 0.4879999999975553,
+        "openMs": 698.7900999999993,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.6000000238418579,
+        "fetchAndDecodeMs": 702.5,
+        "browserOpenMs": 703.1000000238419,
+        "serverTiming": "handler;dur=699.003, serialize;dur=0.024",
+        "images": 2,
+        "items": 2
+      },
+      {
+        "orderNumber": "2635358683",
+        "sourceAccessMs": 0.23229999999966822,
+        "parseMs": 0,
+        "reconstructMs": 0,
+        "catalogImageMatchMs": 0.18660000001182198,
+        "productTruthMs": 0.44790000000284635,
+        "openMs": 1.0701000000008207,
+        "cached": true,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.5,
+        "fetchAndDecodeMs": 4.5,
+        "browserOpenMs": 4.900000035762787,
+        "serverTiming": "handler;dur=1.223, serialize;dur=0.035",
+        "images": 3,
+        "items": 5
+      }
+    ],
+    "coldBrowserP50Ms": 710.8999999761581,
+    "coldBrowserP95Ms": 717,
+    "parseShare": 0.9865912439440462,
+    "storage": {
+      "pdf": 0,
+      "fullText": 0,
+      "fullOrderArchive": 0
+    }
+  },
+  "after": {
+    "sourceCommit": "855071b",
+    "label": "after",
+    "samples": [
+      {
+        "orderNumber": "2635358683",
+        "sourceAccessMs": 2.438000000000102,
+        "parseMs": 415.71399999999994,
+        "reconstructMs": 1.2087000000001353,
+        "catalogImageMatchMs": 0.18639999999595602,
+        "productTruthMs": 0.5958000000000538,
+        "openMs": 420.6829000000007,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 1.0999999642372131,
+        "fetchAndDecodeMs": 425.60000002384186,
+        "browserOpenMs": 426.69999998807907,
+        "serverTiming": "handler;dur=421.284, serialize;dur=0.044",
+        "images": 3,
+        "items": 5
+      },
+      {
+        "orderNumber": "2635358543",
+        "sourceAccessMs": 2.454599999999118,
+        "parseMs": 367.08140000000003,
+        "reconstructMs": 0.8760000000002037,
+        "catalogImageMatchMs": 0.17780000000129803,
+        "productTruthMs": 0.3798000000024331,
+        "openMs": 371.1788999999999,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.6000000238418579,
+        "fetchAndDecodeMs": 376,
+        "browserOpenMs": 376.5,
+        "serverTiming": "handler;dur=371.409, serialize;dur=0.032",
+        "images": 3,
+        "items": 6
+      },
+      {
+        "orderNumber": "2635358614",
+        "sourceAccessMs": 1.3982999999998356,
+        "parseMs": 378.5063999999993,
+        "reconstructMs": 0.5816999999997279,
+        "catalogImageMatchMs": 0.1551000000017666,
+        "productTruthMs": 0.38249999999789,
+        "openMs": 381.2469000000001,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.3999999761581421,
+        "fetchAndDecodeMs": 384.4000000357628,
+        "browserOpenMs": 384.80000001192093,
+        "serverTiming": "handler;dur=381.438, serialize;dur=0.028",
+        "images": 3,
+        "items": 3
+      },
+      {
+        "orderNumber": "2635358648",
+        "sourceAccessMs": 2.70890000000054,
+        "parseMs": 345.9243999999999,
+        "reconstructMs": 0.9422999999997046,
+        "catalogImageMatchMs": 0.1823999999996886,
+        "productTruthMs": 0.41829999999845313,
+        "openMs": 350.41290000000026,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.7000000476837158,
+        "fetchAndDecodeMs": 355.2999999523163,
+        "browserOpenMs": 356,
+        "serverTiming": "handler;dur=350.855, serialize;dur=0.032",
+        "images": 4,
+        "items": 5
+      },
+      {
+        "orderNumber": "2635358566",
+        "sourceAccessMs": 2.548200000000179,
+        "parseMs": 360.90700000000015,
+        "reconstructMs": 0.5730999999996129,
+        "catalogImageMatchMs": 0.13400000000183354,
+        "productTruthMs": 0.37330000000019936,
+        "openMs": 364.71780000000035,
+        "cached": false,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.3999999761581421,
+        "fetchAndDecodeMs": 367.19999998807907,
+        "browserOpenMs": 367.60000002384186,
+        "serverTiming": "handler;dur=364.883, serialize;dur=0.019",
+        "images": 2,
+        "items": 2
+      },
+      {
+        "orderNumber": "2635358683",
+        "sourceAccessMs": 0.21959999999944557,
+        "parseMs": 0,
+        "reconstructMs": 0,
+        "catalogImageMatchMs": 0.19349999999849388,
+        "productTruthMs": 0.47479999999814027,
+        "openMs": 1.1015999999999622,
+        "cached": true,
+        "persistedFullOrders": 0,
+        "browserRenderMs": 0.5,
+        "fetchAndDecodeMs": 4.199999988079071,
+        "browserOpenMs": 4.699999988079071,
+        "serverTiming": "handler;dur=1.314, serialize;dur=0.034",
+        "images": 3,
+        "items": 5
+      }
+    ],
+    "coldBrowserP50Ms": 376.5,
+    "coldBrowserP95Ms": 426.69999998807907,
+    "parseShare": 0.9893518798516745,
+    "storage": {
+      "pdf": 0,
+      "fullText": 0,
+      "fullOrderArchive": 0
+    }
+  },
+  "http": {
+    "status": "PASS",
+    "performanceChecks": [
+      [
+        "pdfParseMs",
+        744.1813000000002,
+        2500
+      ],
+      [
+        "structuredMs",
+        43.04970000000003,
+        250
+      ],
+      [
+        "batchReadyMs",
+        883.7194,
+        5000
+      ],
+      [
+        "rssDeltaBytes",
+        9228288,
+        268435456
+      ],
+      [
+        "orderDetailMs",
+        313.25260000000026,
+        3000
+      ],
+      [
+        "cachedOrderDetailMs",
+        0.8280999999997221,
+        100
+      ],
+      [
+        "overrideRoundtripMs",
+        17.52599999999984,
+        750
+      ]
+    ],
+    "performanceFailures": [],
+    "sourceSha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+    "sourceOrderCount": 137,
+    "batchOrders": 9,
+    "batchItems": 18,
+    "onlyPrinting": true,
+    "goldenPatterns": [
+      "2635358543",
+      "2635358614",
+      "2635358648",
+      "2635358683"
+    ],
+    "defaultSort": "OLDEST_FIRST",
+    "overrideSurvivesRestart": true,
+    "excludeRestore": true,
+    "staleEditRejected": true,
+    "partialHandoff": true,
+    "confirmationIdempotentAfterRestart": true,
+    "v11": {
+      "thumbnailMatches": 16,
+      "thumbnailBytes": 2316,
+      "totalThumbnailBytes": 30204,
+      "thumbnailRenderMs": 202.67779999999993,
+      "detailItems": 5,
+      "detailPrinted": 2,
+      "detailThumbnailMatches": 3,
+      "contextThumbnailMatches": 1,
+      "sameThumbnailCache": true,
+      "detailOpenMs": 313.25260000000026,
+      "cachedDetailMs": 0.8280999999997221,
+      "senior": {
+        "value": "SENIOR",
+        "automatic": true,
+        "source": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+        "heightMm": 200
+      },
+      "freeEntryFailClosed": true,
+      "correctionEventPrepared": true,
+      "fullOrderArchive": 0
+    },
+    "existingProductionValidator": "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V3",
+    "metrics": {
+      "pdfParseMs": 744.1813000000002,
+      "structuredMs": 43.04970000000003,
+      "firstBatchMs": 787.2310000000002,
+      "rssDeltaBytes": 9228288,
+      "sourceBytes": 759353,
+      "pageCount": 138,
+      "persistedPdfs": 0,
+      "persistedFullTexts": 0,
+      "persistedFullOrders": 0,
+      "batchParses": 1,
+      "detailParses": 0,
+      "thumbnailBuilds": 0,
+      "batchReadyMs": 883.7194,
+      "overrideRoundtripMs": 17.52599999999984
+    },
+    "sqliteBytes": 24576,
+    "persistedPdfs": 0,
+    "persistedFullTexts": 0
+  },
+  "concurrency": {
+    "status": "PASS",
+    "readSessions": 10,
+    "interactiveSessions": 5,
+    "distinctCookiesAndActors": true,
+    "independentSelections": true,
+    "editConflict": "200 + 409",
+    "excludeRestoreConflict": "200 + 409 then explicit retry",
+    "singleHandoffReceipt": true,
+    "noModuleGlobalBatchState": true,
+    "coldLoadMetrics": {
+      "pdfParseMs": 799.2705999999998,
+      "structuredMs": 39.1889000000001,
+      "firstBatchMs": 838.4594999999999,
+      "rssDeltaBytes": 21618688,
+      "sourceBytes": 759353,
+      "pageCount": 138,
+      "persistedPdfs": 0,
+      "persistedFullTexts": 0,
+      "persistedFullOrders": 0,
+      "batchParses": 1,
+      "detailParses": 0,
+      "thumbnailBuilds": 0,
+      "batchReadyMs": 947.4223999999999
+    },
+    "batchParses": 1,
+    "detailParses": 1,
+    "latency": {
+      "coldLoad": {
+        "samples": 10,
+        "p50Ms": 969.4870999999998,
+        "p95Ms": 976.0050000000001
+      },
+      "read": {
+        "samples": 100,
+        "p50Ms": 12.121900000000096,
+        "p95Ms": 23.940399999999954
+      },
+      "detail": {
+        "samples": 10,
+        "p50Ms": 338.49980000000005,
+        "p95Ms": 343.6563000000001
+      },
+      "edit": {
+        "samples": 2,
+        "p50Ms": 9.26640000000043,
+        "p95Ms": 9.579200000000128
+      },
+      "excludeRestore": {
+        "samples": 3,
+        "p50Ms": 5.778199999999742,
+        "p95Ms": 5.836800000000039
+      },
+      "handoff": {
+        "samples": 2,
+        "p50Ms": 17.008600000000115,
+        "p95Ms": 17.085300000000643
+      },
+      "search": {
+        "samples": 5,
+        "p50Ms": 1.5,
+        "p95Ms": 1.699999988079071
+      },
+      "selection": {
+        "samples": 5,
+        "p50Ms": 2.400000035762787,
+        "p95Ms": 2.600000023841858
+      },
+      "browserEdit": {
+        "samples": 5,
+        "p50Ms": 136.23590000000058,
+        "p95Ms": 140.0670999999993
+      }
+    },
+    "bottleneck": "Batch-wide revision fence intentionally conflicts concurrent writes; explicit refresh required. Cold detail requests share one serial parse."
+  },
+  "stageMedians": {
+    "before": {
+      "sourceAccessMs": 1.9271000000007916,
+      "parseMs": 697.3698999999997,
+      "reconstructMs": 6.466300000000047,
+      "catalogImageMatchMs": 0.140400000002046,
+      "productTruthMs": 0.4879999999975553,
+      "openMs": 706.3284000000003,
+      "fetchAndDecodeMs": 710.3000000119209,
+      "browserRenderMs": 0.5999999642372131,
+      "browserOpenMs": 710.8999999761581
+    },
+    "after": {
+      "sourceAccessMs": 2.454599999999118,
+      "parseMs": 367.08140000000003,
+      "reconstructMs": 0.8760000000002037,
+      "catalogImageMatchMs": 0.17780000000129803,
+      "productTruthMs": 0.38249999999789,
+      "openMs": 371.1788999999999,
+      "fetchAndDecodeMs": 376,
+      "browserRenderMs": 0.6000000238418579,
+      "browserOpenMs": 376.5
+    }
+  }
+}

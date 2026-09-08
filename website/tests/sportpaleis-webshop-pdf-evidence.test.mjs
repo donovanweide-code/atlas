@@ -226,3 +226,23 @@ test("concurrent real extractions keep identities separate, reject page 501 and 
   failClosed(await extractPdfEvidence(request(pdf(["one", "two"]), { limits: { maxTextItems: 1 } })), "PDF_TEXT_LIMIT");
   assert.deepEqual(pdfEvidenceWorkerStats(), { active: 0, queued: 0 });
 });
+
+
+test("order-detail page scope preserves original numbering, identity and all existing fail-closed limits", async () => {
+  const bytes = pdf(["Eerste pagina", "Tweede pagina", "Derde pagina"]);
+  const full = await extractPdfEvidence(request(bytes));
+  const selected = await extractPdfEvidence(request(bytes, { pageNumbers: [2, 3] }));
+  assert.equal(selected.status, "EVIDENCE_READY");
+  assert.equal(selected.evidence.pageCount, 3);
+  assert.equal(selected.evidence.completeness, "SELECTED_PAGES_ONLY");
+  assert.deepEqual(selected.evidence.pages, full.evidence.pages.slice(1));
+  assert.notEqual(selected.evidence.extractionId, full.evidence.extractionId);
+  for (const pageNumbers of [[], [0], [2, 1], [1, 1], [1.5], [501], "1"]) failClosed(await extractPdfEvidence(request(bytes, { pageNumbers })), "PDF_PAGE_SELECTION_INVALID");
+  failClosed(await extractPdfEvidence(request(bytes, { pageNumbers: [4] })), "PDF_PAGE_SELECTION_INVALID");
+  failClosed(await extractPdfEvidence(request(bytes, { pageNumbers: [1], limits: { maxPages: 2 } })), "PDF_PAGE_LIMIT");
+  const mixed = pdf(["Text", ""]);
+  failClosed(await extractPdfEvidence(request(mixed)), "PDF_OCR_REQUIRED");
+  failClosed(await extractPdfEvidence(request(mixed, { pageNumbers: [2] })), "PDF_OCR_REQUIRED");
+  const scope = await extractPdfEvidence(request(mixed, { pageNumbers: [1] }));
+  assert.equal(scope.evidence.completeness, "SELECTED_PAGES_ONLY");
+});

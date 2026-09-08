@@ -32,7 +32,7 @@ function rowsOf(page) {
   return rows;
 }
 
-export function projectWebshopPrintBatch(result, { orderNumber = null } = {}) {
+export function projectWebshopPrintBatch(result, { orderNumber = null, sourceOrderIndex = null } = {}) {
   if (result?.status !== "EVIDENCE_READY") throw Object.assign(new Error(result?.quarantine?.code === "PDF_OCR_REQUIRED" ? "Deze bron heeft OCR nodig." : "De bron kon niet worden uitgelezen."), { code: result?.quarantine?.code ?? "PDF_UNAVAILABLE" });
   const groups = [];
   for (const page of result.evidence.pages) {
@@ -98,11 +98,11 @@ export function projectWebshopPrintBatch(result, { orderNumber = null } = {}) {
       const explicitQuantity = !labeledArticle || article.sourceLines.some((line) => /^Aantal\s*:\s*\d+\s*$/iu.test(line));
       const fields = { articleNumber: article.articleNumber, description: article.description, size: article.size, color: article.color, quantity: explicitQuantity ? article.quantity : null,
         personalizations: personalization.map(({ type, value }) => ({ type, value })) };
-      const id = batchHash([BATCH_VERSION, result.source.tenantId, result.attachmentSha256, group.reference, orderIndex, articleIndex, article.articleNumber]);
+      const id = batchHash([BATCH_VERSION, result.source.tenantId, result.attachmentSha256, group.reference, (sourceOrderIndex ?? orderIndex), articleIndex, article.articleNumber]);
       const issues = [];
       if (!orderDate) issues.push({ field: "orderDate", message: "Besteldatum controleren." });
       if (group.ambiguousRepeatedHeader || groups.filter(({ reference }) => reference === group.reference).length > 1) issues.push({ field: "orderNumber", message: "Bestelnummer staat meer dan één keer in de bron." });
-      items.push({ id, orderNumber: group.reference, orderDate, originalDate, sourceIndex: items.length, sourceLineId: article.sourceLineId,
+      items.push({ id, orderNumber: group.reference, orderDate, originalDate, sourceOrderIndex: (sourceOrderIndex ?? orderIndex), sourceIndex: items.length, sourceLineId: article.sourceLineId,
         sourceHash: result.attachmentSha256, sourcePages: [...new Set(group.parts.map(({ page }) => page))],
         club: explicitField(/(?:^|\n)(?:Club|Vereniging)\s*:\s*([^\n\t]+)/iu), team: explicitField(/(?:^|\n)Team\s*:\s*([^\n\t]+)/iu),
         printingRequired: personalization.length > 0, source: fields, values: structuredClone(fields), printEvidence: personalization, issues, override: null });

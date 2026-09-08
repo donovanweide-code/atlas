@@ -68,7 +68,7 @@ export function createPdfWorkerPool({ spawn = spawnPdfProcess, concurrency = 2, 
                 return;
               }
               if (message?.type !== "result" || typeof message.result?.ok !== "boolean") finish({ ok: false, code: "PDF_WORKER_PROTOCOL" });
-              else finish(validateResult(message.result, payload.limits));
+              else finish(validateResult(message.result, payload.limits, payload.pageNumbers));
             });
             heartbeatTimer = setTimeout(() => finish({ ok: false, code: "PDF_HEARTBEAT_LOST" }), 15_000);
             child.send(payload, (error) => { if (error) finish({ ok: false, code: "PDF_WORKER_ERROR" }); });
@@ -82,18 +82,18 @@ export function createPdfWorkerPool({ spawn = spawnPdfProcess, concurrency = 2, 
   };
 }
 
-function validateResult(result, limits = { maxPages: 500, maxTextChars: 1_000_000, maxTextItems: 100_000 }) {
+function validateResult(result, limits = { maxPages: 500, maxTextChars: 1_000_000, maxTextItems: 100_000 }, pageNumbers) {
   const invalid = { ok: false, code: "PDF_WORKER_PROTOCOL" };
   if (!result.ok) {
-    const codes = ["PDF_EMPTY", "PDF_PAGE_LIMIT", "PDF_TEXT_LIMIT", "PDF_MEMORY_LIMIT", "PDF_OCR_REQUIRED", "PDF_PASSWORD_PROTECTED", "PDF_UNREADABLE"];
+    const codes = ["PDF_EMPTY", "PDF_PAGE_SELECTION_INVALID", "PDF_PAGE_LIMIT", "PDF_TEXT_LIMIT", "PDF_MEMORY_LIMIT", "PDF_OCR_REQUIRED", "PDF_PASSWORD_PROTECTED", "PDF_UNREADABLE"];
     return codes.includes(result.code) ? { ok: false, code: result.code } : invalid;
   }
   const evidence = result.evidence;
-  if (!evidence || !Number.isSafeInteger(evidence.pageCount) || evidence.pageCount < 1 || evidence.pageCount > limits.maxPages || !Array.isArray(evidence.pages) || evidence.pages.length !== evidence.pageCount) return invalid;
+  if (!evidence || !Number.isSafeInteger(evidence.pageCount) || evidence.pageCount < 1 || evidence.pageCount > limits.maxPages || !Array.isArray(evidence.pages) || evidence.pages.length !== (pageNumbers?.length ?? evidence.pageCount)) return invalid;
   let characters = 0, count = 0;
   const pages = [];
   for (const [index, page] of evidence.pages.entries()) {
-    if (page?.page !== index + 1 || typeof page.text !== "string" || !page.text.trim() || !Array.isArray(page.items)) return invalid;
+    if (page?.page !== (pageNumbers?.[index] ?? index + 1) || page.page > evidence.pageCount || typeof page.text !== "string" || !page.text.trim() || !Array.isArray(page.items)) return invalid;
     characters += page.text.length; count += page.items.length;
     if (characters > limits.maxTextChars || count > limits.maxTextItems) return invalid;
     const items = [];
@@ -107,7 +107,7 @@ function validateResult(result, limits = { maxPages: 500, maxTextChars: 1_000_00
     if (items.map((item) => item.originalValue + (item.hasEOL ? "\n" : " ")).join("") !== page.text) return invalid;
     pages.push({ page: page.page, text: page.text, items });
   }
-  return { ok: true, evidence: { pageCount: pages.length, pages } };
+  return { ok: true, evidence: { pageCount: evidence.pageCount, pages } };
 }
 
 function spawnPdfProcess() {

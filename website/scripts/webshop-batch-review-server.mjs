@@ -44,12 +44,14 @@ export async function createWebshopBatchReview({ sourcePath, statePath, port = 0
     })();
     try { await pendingLoad; } finally { pendingLoad = null; }
   }
-  function catalogPresentation(item) {
+  function catalogPresentation(item, timing) {
+    const started = performance.now();
     const match = adapter.catalog(item);
     if (match?.imageKey) imageKeys.add(match.imageKey);
+    if (timing) timing.catalogImageMatchMs += performance.now() - started;
     return match ? { ...match, thumbnail: /^[a-z0-9-]+$/u.test(match.imageKey) ? `/thumbnail/${match.imageKey}` : null } : null;
   }
-  async function view() {
+  async function view(timing) {
     if (!batch) throw error("Laad eerst de batch.", "BATCH_NOT_LOADED", 409);
     const snapshot = store.snapshot(batch.sourceHash);
     const completed = new Set(snapshot.completedIds);
@@ -57,10 +59,12 @@ export async function createWebshopBatchReview({ sourcePath, statePath, port = 0
     for (const original of batch.items) {
       const override = snapshot.overrides[original.id] ?? null;
       const item = { ...original, values: { ...original.source, ...override?.changes }, override };
+      const lookupStarted = performance.now();
       const evaluated = await adapter.evaluate(item);
+      if (timing) timing.productTruthMs += performance.now() - lookupStarted;
       const { contract: _contract, ...production } = evaluated;
       const candidate = override?.structuralRuleCandidate ? { version: "ORDER_CORRECTION_CANDIDATE_V1", type: "STRUCTURAL_RULE_CANDIDATE", sourceHash: batch.sourceHash, itemId: item.id, orderNumber: item.orderNumber, changes: override.changes, actor: override.actor, occurredAt: override.updatedAt, promotion: "NOT_AUTHORIZED" } : null;
-      items.push({ ...item, catalog: catalogPresentation(item), correctionCandidate: candidate, club: item.club ?? production.club ?? null, production, excluded: override?.excluded ?? false,
+      items.push({ ...item, catalog: catalogPresentation(item, timing), correctionCandidate: candidate, club: item.club ?? production.club ?? null, production, excluded: override?.excluded ?? false,
         reviewed: override?.reviewed ?? false, completed: completed.has(item.id), corrected: Boolean(override && Object.keys(override.changes).length) });
     }
     return { ...batch, items, revision: snapshot.revision, metrics: { ...metrics, ...counters }, mode: "LOCAL_DRY_RUN" };
@@ -116,33 +120,45 @@ export async function createWebshopBatchReview({ sourcePath, statePath, port = 0
   }
   async function orderDetail(number) {
     const started = performance.now();
+    const timing = { sourceAccessMs: 0, parseMs: 0, reconstructMs: 0, catalogImageMatchMs: 0, productTruthMs: 0 };
     if (!batch || !batch.items.some((row) => row.orderNumber === number)) throw error("Bestelling niet beschikbaar.");
     const metadata = await stat(sourcePath);
     if (metadata.size > 8 * 1024 * 1024 || `${metadata.size}:${metadata.mtimeMs}` !== sourceStamp) throw error("De bron is gewijzigd. Vernieuw eerst de batch.", "SOURCE_CHANGED", 409);
+    timing.sourceAccessMs = performance.now() - started;
     const sourceHash = batch.sourceHash;
+    const anchor = batch.items.find((row) => row.orderNumber === number);
     const key = `${sourceHash}:${number}`;
     const cached = details.has(key);
     if (!cached) {
+      const readStarted = performance.now();
       const bytes = await readFile(sourcePath);
       if (batchHash(bytes) !== sourceHash) throw error("De bron is gewijzigd. Vernieuw eerst de batch.", "SOURCE_CHANGED", 409);
+      timing.sourceAccessMs += performance.now() - readStarted;
       counters.detailParses += 1;
-      const evidence = await extractPdfEvidence({ bytes, attachmentSha256: sourceHash, source: { tenantId: "sportpaleis", mailboxId: "local-supplied-source", messageId: "local-source-review", attachmentId: "supplied-webshop-pdf" } });
-      const projected = projectWebshopPrintBatch(evidence, { orderNumber: number });
+      const parseStarted = performance.now();
+      const evidence = await extractPdfEvidence({ bytes, attachmentSha256: sourceHash, pageNumbers: anchor.issues.some((issue) => issue.field === "orderNumber") ? undefined : anchor.sourcePages, source: { tenantId: "sportpaleis", mailboxId: "local-supplied-source", messageId: "local-source-review", attachmentId: "supplied-webshop-pdf" } });
+      timing.parseMs = performance.now() - parseStarted;
+      const reconstructStarted = performance.now();
+      const projected = projectWebshopPrintBatch(evidence, { orderNumber: number, sourceOrderIndex: anchor.issues.some((issue) => issue.field === "orderNumber") ? null : anchor.sourceOrderIndex });
+      timing.reconstructMs = performance.now() - reconstructStarted;
       if (projected.sourceWarnings.length || !projected.items.length) throw error("Deze bestelling kon niet volledig worden gelezen.");
       if (batch.sourceHash !== sourceHash) throw error("De batch is gewijzigd. Open de bestelling opnieuw.");
       if (details.size >= 8) details.delete(details.keys().next().value);
       details.set(key, projected.items);
     }
-    const current = await view();
-    const rows = details.get(key).map((source) => source.printingRequired ? current.items.find((row) => row.id === source.id) ?? source : { ...source, catalog: catalogPresentation(source) });
-    return { orderNumber: number, orderDate: rows[0].orderDate, itemCount: rows.length, printingCount: rows.filter((r) => r.printingRequired).length, items: rows, metrics: { openMs: performance.now() - started, cached, persistedFullOrders: 0 } };
+    const current = await view(timing);
+    const rows = details.get(key).map((source) => source.printingRequired ? current.items.find((row) => row.id === source.id) ?? source : { ...source, catalog: catalogPresentation(source, timing) });
+    return { orderNumber: number, orderDate: rows[0].orderDate, itemCount: rows.length, printingCount: rows.filter((r) => r.printingRequired).length, items: rows, metrics: { ...timing, openMs: performance.now() - started, cached, persistedFullOrders: 0 } };
   }
   const server = createServer(async (req, res) => {
+    const requestStarted = performance.now();
     const origin = `http://127.0.0.1:${server.address().port}`;
     const send = (status, value, type = "application/json") => {
-      res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+      const serializeStarted = performance.now();
+      const serialized = type === "application/json" ? JSON.stringify(value) : value;
+      res.writeHead(status, { "Server-Timing": `handler;dur=${(serializeStarted-requestStarted).toFixed(3)}, serialize;dur=${(performance.now()-serializeStarted).toFixed(3)}`, "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'" });
-      res.end(type === "application/json" ? JSON.stringify(value) : value);
+      res.end(serialized);
     };
     try {
       if (req.headers.host !== `127.0.0.1:${server.address().port}`) throw error("Onbekende reviewhost.", "HOST_REJECTED", 403);

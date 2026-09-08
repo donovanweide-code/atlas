@@ -132,3 +132,19 @@ test("V1.1 full context projection preserves original item identities without ad
   assert.equal(detail.items[1].printingRequired, false);
   assert.equal(detail.items[1].source.quantity, 2);
 });
+
+
+test("page-scoped order detail preserves batch IDs with continuation and neighbouring orders", () => {
+  const one = sourceLines("2635358681", "25-08-2026", ["Initialen: AA"]);
+  const two = sourceLines("2635358683", "26-08-2026", ["Initialen: BB"]);
+  const continuation = two.slice(2).map((line) => line === "Initialen: BB" ? "Initialen: CC" : line);
+  for (const input of [evidence([one, two, continuation]), evidence([[...one, ...two], continuation])]) {
+    const batch = projectWebshopPrintBatch(input);
+    const expected = batch.items.filter((r) => r.orderNumber === "2635358683");
+    const anchor = expected[0];
+    const scoped = { ...input, evidence: { pages: input.evidence.pages.filter((p) => anchor.sourcePages.includes(p.page)) } };
+    const actual = projectWebshopPrintBatch(scoped, { orderNumber: anchor.orderNumber, sourceOrderIndex: anchor.sourceOrderIndex });
+    assert.deepEqual(actual.items.map((r) => r.id), expected.map((r) => r.id));
+    assert.deepEqual(actual.items.map((r) => r.source), expected.map((r) => r.source));
+  }
+});

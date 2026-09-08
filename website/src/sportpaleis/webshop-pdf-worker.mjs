@@ -1,6 +1,6 @@
 // Process entrypoint; accepts one bounded job and never persists document content.
 process.on("disconnect", () => process.exit(0));
-process.once("message", async ({ bytes, limits }) => {
+process.once("message", async ({ bytes, limits, pageNumbers }) => {
   let task;
   const send = (result) => process.send?.({ type: "result", result });
   const memoryLimit = () => process.memoryUsage().rss > limits.maxRssBytes;
@@ -20,7 +20,9 @@ process.once("message", async ({ bytes, limits }) => {
     if (document.numPages > limits.maxPages) throw Object.assign(new Error(), { code: "PDF_PAGE_LIMIT" });
     const pages = [];
     let characters = 0, itemCount = 0;
-    for (let number = 1; number <= document.numPages; number += 1) {
+    const selectedPages = pageNumbers ?? Array.from({ length: document.numPages }, (_, index) => index + 1);
+    if (selectedPages.some((n) => n > document.numPages)) throw Object.assign(new Error(), { code: "PDF_PAGE_SELECTION_INVALID" });
+    for (const number of selectedPages) {
       guard();
       const page = await document.getPage(number);
       const stream = page.streamTextContent({ disableNormalization: true }).getReader();
@@ -49,9 +51,9 @@ process.once("message", async ({ bytes, limits }) => {
       page.cleanup();
     }
     guard();
-    send({ ok: true, evidence: { pageCount: pages.length, pages } });
+    send({ ok: true, evidence: { pageCount: document.numPages, pages } });
   } catch (error) {
-    const allowed = new Set(["PDF_EMPTY", "PDF_PAGE_LIMIT", "PDF_TEXT_LIMIT", "PDF_MEMORY_LIMIT", "PDF_OCR_REQUIRED"]);
+    const allowed = new Set(["PDF_EMPTY", "PDF_PAGE_SELECTION_INVALID", "PDF_PAGE_LIMIT", "PDF_TEXT_LIMIT", "PDF_MEMORY_LIMIT", "PDF_OCR_REQUIRED"]);
     const code = allowed.has(error?.code) ? error.code : error?.name === "PasswordException" ? "PDF_PASSWORD_PROTECTED" : "PDF_UNREADABLE";
     send({ ok: false, code });
   } finally {

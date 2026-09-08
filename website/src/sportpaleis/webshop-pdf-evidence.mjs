@@ -39,13 +39,20 @@ export async function extractPdfEvidence(input = {}) {
   if (input.filename !== undefined && (typeof input.filename !== "string" || !/\.pdf$/iu.test(input.filename))) return quarantine("PDF_TYPE_INVALID", source, attachmentSha256);
   if (!bytes.subarray(0, 8).toString("ascii").match(/^%PDF-[12]\.\d/u)) return quarantine("PDF_TYPE_INVALID", source, attachmentSha256);
   if (input.signal !== undefined && !(input.signal instanceof AbortSignal)) return quarantine("PDF_SIGNAL_INVALID", source, attachmentSha256);
-  const result = await pool.run({ bytes, limits }, { signal: input.signal, timeoutMs: limits.timeoutMs });
+  // Optional bounded page scope is for already identified order-detail pages.
+  // It never claims that unselected pages have been validated.
+  let pageNumbers;
+  if (input.pageNumbers !== undefined) {
+    if (!Array.isArray(input.pageNumbers) || !input.pageNumbers.length || input.pageNumbers.length > limits.maxPages || input.pageNumbers.some((n, i, values) => !Number.isSafeInteger(n) || n < 1 || n > limits.maxPages || (i > 0 && n <= values[i - 1]))) return quarantine("PDF_PAGE_SELECTION_INVALID", source, attachmentSha256);
+    pageNumbers = [...input.pageNumbers];
+  }
+  const result = await pool.run({ bytes, limits, pageNumbers }, { signal: input.signal, timeoutMs: limits.timeoutMs });
   if (!result?.ok) return quarantine(result?.code ?? "PDF_WORKER_ERROR", source, attachmentSha256);
-  const extractionId = digest(JSON.stringify([PDF_EVIDENCE_VERSION, ...identityKeys.map((key) => source[key]), attachmentSha256]));
+  const extractionId = digest(JSON.stringify([PDF_EVIDENCE_VERSION, ...identityKeys.map((key) => source[key]), attachmentSha256, ...(pageNumbers ? [pageNumbers] : [])]));
   return {
     version: PDF_EVIDENCE_VERSION, status: "EVIDENCE_READY", source, attachmentSha256,
     evidence: { extractionId, method: "PDF_EMBEDDED_TEXT", normalization: "NONE", confidence: "UNASSESSED",
-      completeness: "TEXT_LAYER_ONLY_UNVERIFIED", pageCount: result.evidence.pageCount, pages: result.evidence.pages },
+      completeness: pageNumbers ? "SELECTED_PAGES_ONLY" : "TEXT_LAYER_ONLY_UNVERIFIED", ...(pageNumbers ? { pageNumbers } : {}), pageCount: result.evidence.pageCount, pages: result.evidence.pages },
     proposals: [], quarantine: null,
   };
 }
