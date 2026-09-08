@@ -139,19 +139,20 @@ test('vector 11 en 87: twee exemplaren behouden unieke glyphprovenance per compl
   assert.deepEqual(groups.map(({ provenance }) => provenance.semanticGroup.value).sort(), ['11', '11', '87', '87']);
 });
 
-for (const adopt of [false, true]) test(`WIT Bedrukt behoudt ZWART en BLAUW: ${adopt ? 'adoptie in bestaand voorstel' : 'BLAUW nog READY buiten voorstel'}`, async (context) => {
+for (const adopt of [false, true]) test(`Operator: WIT Bedrukt behoudt ZWART en BLAUW: ${adopt ? 'adoptie in bestaand voorstel' : 'BLAUW nog READY buiten voorstel'}`, async (context) => {
   const { service, admin, create } = await fixture(context);
+  const operator = await service.login({ email: 'patrick@sportpaleis.nl', password: 'Composition-Operator-2026!' });
   const first = await create(`white-black-${adopt}`, ['Wit', 'Zwart']);
   const proposal = (await service.createProductionProposal(admin.token, admin.csrfToken, { orders: [{ id: first.id, expectedRevision: first.revision }] }, `proposal-${adopt}`)).value;
   const next = await create(`blue-${adopt}`, adopt ? ['Wit', 'Blauw'] : ['Blauw']);
   const white = proposal.groups.find(({ foilColor }) => foilColor === 'Wit');
   const whiteJob = adopt
     ? (await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: next.id, expectedRevision: next.revision }], foilColor: 'Wit' }, `color-continuity-adopt-${adopt}`)).value.job
-    : (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: proposal.id, proposalGroupId: white.id, orders: white.orders }, `color-continuity-white-${adopt}`)).value;
+    : (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: proposal.id, proposalGroupId: white.id, orders: white.orders }, `color-continuity-white-${adopt}`)).value;
   if (adopt) assert.equal(whiteJob.snapshot.orderIds.length, 2);
-  const before = await service.bootstrap(admin.token);
-  const completion = await service.completeProductionJob(admin.token, admin.csrfToken, whiteJob.id, `complete-white-${adopt}`);
-  const state = await service.bootstrap(admin.token);
+  const before = await service.bootstrap(operator.token);
+  const completion = await service.completeProductionJob(operator.token, operator.csrfToken, whiteJob.id, `complete-white-${adopt}`);
+  const state = await service.bootstrap(operator.token);
   const ids = new Set([first.id, next.id]);
   const scope = (input) => ({ ...input, orders: input.orders.filter(({ id }) => ids.has(id)), productionProposals: input.productionProposals.filter(({ orders }) => orders.some(({ id }) => ids.has(id))) });
   const scoped = scope(state);
@@ -184,25 +185,62 @@ for (const adopt of [false, true]) test(`WIT Bedrukt behoudt ZWART en BLAUW: ${a
     const incompleteAdoption = structuredClone(scoped);
     incompleteAdoption.productionProposals.find(({ id }) => id === saved.id).groups = saved.groups.filter(({ foilColor }) => foilColor !== 'Blauw');
     const incompleteHtml = renderSportpaleisWorkspacePageForEvidence(incompleteAdoption, '/workspace/sportpaleis/productie').html;
-    assert.match(incompleteHtml, /data-unrepresented-open-production-color="blauw"[\s\S]*?Blijft open/u, 'ook onvolledig geadopteerd werk blijft expliciet zichtbaar');
+    assert.match(incompleteHtml, /Snel produceren · BLAUW/u, 'onvolledig geadopteerd geldig werk wordt automatisch opnieuw beschikbaar');
+    assert.doesNotMatch(incompleteHtml, /productiecontrole nodig|Controleer SP-/u);
+    const sourceBlocked = structuredClone(scoped);
+    const blockedLine = sourceBlocked.orders.find(({ id }) => id === next.id).productionLines.find(({ foilColor }) => foilColor === 'Blauw');
+    blockedLine.validation = { status: 'BLOCKED', reason: 'De exacte nummerbron ontbreekt. Koppel de bevestigde nummerbron.' };
+    const blockedHtml = renderSportpaleisWorkspacePageForEvidence(sourceBlocked, '/workspace/sportpaleis/productie').html;
+    assert.match(blockedHtml, /De exacte nummerbron ontbreekt/u);
+    assert.match(blockedHtml, /Herstel de bron van deze opdruk/u);
+    assert.doesNotMatch(blockedHtml, />BLAUW nu produceren</u);
+    const inactive = structuredClone(scoped);
+    inactive.activeProductionFoilColors = inactive.activeProductionFoilColors.filter((color) => color !== 'Blauw');
+    const inactiveHtml = renderSportpaleisWorkspacePageForEvidence(inactive, '/workspace/sportpaleis/productie').html;
+    assert.match(inactiveHtml, /Foliekleur BLAUW is niet actief/u);
+    assert.doesNotMatch(inactiveHtml, />BLAUW nu produceren</u);
   }
-  const blackJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: saved.id, proposalGroupId: black.id, orders: black.orders }, `color-continuity-black-${adopt}`)).value;
-  const blackActive = scope(await service.bootstrap(admin.token));
+  const blackJob = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: saved.id, proposalGroupId: black.id, orders: black.orders }, `color-continuity-black-${adopt}`)).value;
+  const blackActive = scope(await service.bootstrap(operator.token));
   assert.deepEqual(openProductionColorContexts(blackActive).map(({ foilColor }) => foilColor).sort(), ['Blauw', 'Zwart']);
   assert.equal(blackActive.productionJobs.find(({ id }) => id === blackJob.id).status, 'AWAITING_HUMAN_CHECK');
   const waitingHtml = renderSportpaleisWorkspacePageForEvidence(blackActive, '/workspace/sportpaleis/productie').html;
   assert.match(waitingHtml, /NOG TE PRODUCEREN[\s\S]*?<strong>BLAUW<\/strong>/u, 'BLAUW blijft expliciet zichtbaar tijdens ZWART');
   await save('colors-' + (adopt ? 'adoption' : 'direct') + '-black-active.html', '<!doctype html><meta charset="utf-8"><title>ZWART actief; BLAUW open</title>' + waitingHtml);
-  await service.completeProductionJob(admin.token, admin.csrfToken, blackJob.id, `complete-black-${adopt}`);
-  const afterBlack = scope(await service.bootstrap(admin.token));
+  await service.completeProductionJob(operator.token, operator.csrfToken, blackJob.id, `complete-black-${adopt}`);
+  const afterBlack = scope(await service.bootstrap(operator.token));
   let blueJob;
   if (adopt) {
     const current = afterBlack.productionProposals.find(({ id }) => id === saved.id).groups.find(({ foilColor }) => foilColor === 'Blauw');
-    blueJob = (await service.createProductionJob(admin.token, admin.csrfToken, { proposalId: saved.id, proposalGroupId: current.id, orders: current.orders }, `color-continuity-blue-job-${adopt}`)).value;
+    blueJob = (await service.createProductionJob(operator.token, operator.csrfToken, { proposalId: saved.id, proposalGroupId: current.id, orders: current.orders }, `color-continuity-blue-job-${adopt}`)).value;
   } else {
     const current = afterBlack.orders.find(({ id }) => id === next.id);
     blueJob = (await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: current.id, expectedRevision: current.revision }], foilColor: 'Blauw' }, `color-continuity-blue-job-${adopt}`)).value.job;
   }
   assert.equal(blueJob.snapshot.productionGroup.foilColor, 'Blauw');
   await save(`colors-${adopt ? 'adoption' : 'direct'}.json`, { before: openProductionColorContexts(scope(before)), afterWhite: openProductionColorContexts(scoped), directAvailableAfterWhite: direct.map(([color]) => color), blueStatusAfterWhite: blue.productionStatus, afterBlackSelected: openProductionColorContexts(blackActive), blueJob: { id: blueJob.id, color: blueJob.snapshot.productionGroup.foilColor }, completionProjection: { orders: completion.projection.orders.map(({ id, productionStatus }) => ({ id, productionStatus })), groups: completion.projection.productionProposals.flatMap(({ groups }) => groups.map(({ foilColor, status }) => ({ foilColor, status }))) } });
+});
+
+test('Geldige resterende opdruk zonder OPEN groep wordt vanuit PARTIALLY_PRODUCED opnieuw gevormd zonder Bedrukt werk te herhalen', async (context) => {
+  const { service, store, admin, create } = await fixture(context);
+  const operator = await service.login({ email: 'patrick@sportpaleis.nl', password: 'Composition-Operator-2026!' });
+  const order = await create('missing-open-blue', ['Wit', 'Blauw']);
+  const { job, proposal } = (await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }], foilColor: 'Wit' }, 'orphan-white')).value;
+  await service.completeProductionJob(operator.token, operator.csrfToken, job.id, 'orphan-white-done');
+  await store.mutate((state) => { const p = state.productionProposals.find(({ id }) => id === proposal.id); p.groups = p.groups.filter(({ foilColor }) => foilColor !== 'Blauw'); return { state, value: null }; });
+  const before = await service.bootstrap(operator.token);
+  const current = before.orders.find(({ id }) => id === order.id);
+  assert.equal(current.productionStatus, 'PARTIALLY_PRODUCED');
+  const scoped = { ...before, orders: [current], productionProposals: before.productionProposals.filter(({ id }) => id === proposal.id) };
+  assert.deepEqual(directReadyProductionColorGroups(scoped).map(([color]) => color), ['Blauw']);
+  const input = { orders: [{ id: current.id, expectedRevision: current.revision }], foilColor: 'Blauw' };
+  const next = (await service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, input, 'orphan-blue-production')).value;
+  assert.equal(next.job.snapshot.productionGroup.foilColor, 'Blauw');
+  assert.ok(next.job.snapshot.productionLines.every(({ content }) => content === '11'));
+  assert.equal(next.job.snapshot.layout.objectCount, 2);
+  assert.equal(next.proposal.groups.length, 1, 'afgeronde WIT niet opnieuw gegroepeerd');
+  assert.equal((await service.prepareCurrentProductionGroup(operator.token, operator.csrfToken, input, 'orphan-blue-production')).value.job.id, next.job.id);
+  const after = await service.bootstrap(operator.token);
+  assert.deepEqual(after.productionJobs.find(({ id }) => id === job.id).snapshot, before.productionJobs.find(({ id }) => id === job.id).snapshot);
+  assert.equal(after.productionJobs.filter(({ id }) => id === next.job.id).length, 1);
 });

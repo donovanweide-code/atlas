@@ -47,7 +47,7 @@ function lineColor(order: WorkspaceOrder, lineId: string): string {
 function isCurrentlyProductionReadyLine(order: WorkspaceOrder, lineId: string): boolean {
   if (Array.isArray(order.productionReadyLineIds)) return order.productionReadyLineIds.includes(lineId);
   if (Array.isArray(order.productionBlockedLineIds)) return !order.productionBlockedLineIds.includes(lineId);
-  return true;
+  return order.productionLines?.find(({ id }) => id === lineId)?.validation?.status !== "BLOCKED";
 }
 
 export interface OpenProductionColorContext {
@@ -105,12 +105,13 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
 
 /** Physical next steps use the entire open queue, independent of the page filter. */
 export function directReadyProductionColorGroups(state: Pick<PilotBootstrap, "orders" | "productionProposals" | "productionJobs">, projection = createOpenProductionProjectionIndex(state)): [string, WorkspaceOrder[]][] {
-  const proposedOrderIds = new Set((state.productionProposals ?? []).flatMap(({ groups }) => (groups ?? []).flatMap((group) =>
-    unprintedProductionGroup(state, group, projection)?.orders.map(({ id }) => id) ?? [])));
+  const proposedLineKeys = new Set((state.productionProposals ?? []).flatMap(({ groups }) => (groups ?? []).flatMap((group) =>
+    unprintedProductionGroup(state, group, projection)?.productionLineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`) ?? [])));
   return openProductionColorContexts(state, projection).map(({ foilColor, orderIds, productionLineRefs }) => [foilColor, orderIds
     .map((id) => projection.orders.get(id))
-    .filter((order): order is WorkspaceOrder => Boolean(order && order.productionStatus === "READY" && !proposedOrderIds.has(order.id)))
-    .map((order) => ({ ...order, productionLines: order.productionLines?.filter(({ id }) => productionLineRefs.some((ref) => ref.orderId === order.id && ref.lineId === id)) }))] as [string, WorkspaceOrder[]])
+    .filter((order): order is WorkspaceOrder => Boolean(order && ['READY', 'PARTIALLY_PRODUCED', 'IN_PRODUCTION'].includes(String(order.productionStatus))))
+    .map((order) => ({ ...order, productionLines: order.productionLines?.filter(({ id }) => !proposedLineKeys.has(`${order.id}|${id}`) && isCurrentlyProductionReadyLine(order, id) && productionLineRefs.some((ref) => ref.orderId === order.id && ref.lineId === id)) }))
+    .filter((order) => Boolean(order.productionLines?.length))] as [string, WorkspaceOrder[]])
     .filter(([, orders]) => orders.length > 0);
 }
 
