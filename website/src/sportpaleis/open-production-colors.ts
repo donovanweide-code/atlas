@@ -92,7 +92,7 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
   }
 
   for (const order of orders.values()) {
-    if (!['READY', 'IN_PRODUCTION'].includes(String(order.productionStatus ?? ""))) continue;
+    if (!['READY', 'IN_PRODUCTION', 'PARTIALLY_PRODUCED'].includes(String(order.productionStatus ?? ""))) continue;
     for (const line of order.productionLines ?? []) {
       const key = `${order.id}|${line.id}`;
       if (referenced.has(key) || printed.get(order.id)?.has(key) || !isCurrentlyProductionReadyLine(order, line.id)) continue;
@@ -101,6 +101,17 @@ export function openProductionColorContexts(state: Pick<PilotBootstrap, "orders"
   }
 
   return [...contexts.values()].sort((left, right) => left.foilColor.localeCompare(right.foilColor, "nl-NL"));
+}
+
+/** Physical next steps use the entire open queue, independent of the page filter. */
+export function directReadyProductionColorGroups(state: Pick<PilotBootstrap, "orders" | "productionProposals" | "productionJobs">, projection = createOpenProductionProjectionIndex(state)): [string, WorkspaceOrder[]][] {
+  const proposedOrderIds = new Set((state.productionProposals ?? []).flatMap(({ groups }) => (groups ?? []).flatMap((group) =>
+    unprintedProductionGroup(state, group, projection)?.orders.map(({ id }) => id) ?? [])));
+  return openProductionColorContexts(state, projection).map(({ foilColor, orderIds, productionLineRefs }) => [foilColor, orderIds
+    .map((id) => projection.orders.get(id))
+    .filter((order): order is WorkspaceOrder => Boolean(order && order.productionStatus === "READY" && !proposedOrderIds.has(order.id)))
+    .map((order) => ({ ...order, productionLines: order.productionLines?.filter(({ id }) => productionLineRefs.some((ref) => ref.orderId === order.id && ref.lineId === id)) }))] as [string, WorkspaceOrder[]])
+    .filter(([, orders]) => orders.length > 0);
 }
 
 export function unprintedProductionGroup(state: Pick<PilotBootstrap, "orders" | "productionJobs">, group: ProductionGroup, projection = createOpenProductionProjectionIndex(state)): ProductionGroup | null {

@@ -161,7 +161,7 @@ test("Pioneers 37 gebruikt voor rug, borst en short exact dezelfde authoritative
   assert.equal(back.source.variantId, shorts.source.variantId);
   const master = (await store.read()).productionElements.find(({ id }) => id === back.source.id);
   const variant = master.variants.find(({ id }) => id === back.source.variantId);
-  const glyphHashes = [back, chest, shorts].map((line) => productionAssetPieces({ asset: master, variant, line, order: created, foilColor: "Wit" }).map(({ assetIdentity }) => assetIdentity.geometryHash));
+  const glyphHashes = [back, chest, shorts].map((line) => productionAssetPieces({ asset: master, variant, line, order: created, foilColor: "Wit" }).flatMap(({ semanticGroup }) => semanticGroup.physicalMembers.map(({ assetIdentity }) => assetIdentity.geometryHash)));
   assert.deepEqual(glyphHashes[1], glyphHashes[0]);
   assert.deepEqual(glyphHashes[2], glyphHashes[0]);
   assert.deepEqual(glyphHashes[0], [master.numberGlyphs["3"].geometryHash, master.numberGlyphs["7"].geometryHash]);

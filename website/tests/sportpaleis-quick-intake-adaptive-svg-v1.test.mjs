@@ -148,24 +148,17 @@ test("authoritative hockey-SVG blijft leidend in normale orders met 200/75 mm en
     const digitPieces = productionAssetPieces({ asset: storedAsset, variant: { heightMm: 200 }, line, order: numberOrder, foilColor: "Wit" });
     const before = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: numberOrder.id, revision: 1, attemptIdPrefix: `before-${number}`, createdAt: "2026-08-24T00:00:00.000Z", pieces: [composedPiece], nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
     const after = createCutJobBatch({ organizationId: "sport-2000-sportpaleis-bv", orderId: numberOrder.id, revision: 1, attemptIdPrefix: `after-${number}`, createdAt: "2026-08-24T00:00:00.000Z", pieces: digitPieces, nesting: { absoluteMaxWidthMm: 450, preferredWorkingWidthMm: 440, minimumCutGapMm: 6.4, edgeMarginMm: 5 } }).jobs[0];
-    assert.equal(digitPieces.length, 2);
-    assert.ok(after.nesting.usedLengthMm < before.nesting.usedLengthMm, `${number}: fysiek gesplitste digits moeten minder baanlengte gebruiken`);
-    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.value), [number, number]);
-    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.digit).sort(), Array.from(number).sort());
-    assert.deepEqual(after.productionGeometry.groups.map(({ provenance }) => provenance.semanticGroup.digitIndex).sort(), [0, 1]);
-    assert.ok(after.productionGeometry.groups.every(({ provenance, mirrorApplied, sourceBoundsMm, boundsMm }) => {
-      const sourceSides = [sourceBoundsMm.width, sourceBoundsMm.height].sort((left, right) => left - right);
-      const placedSides = [boundsMm.width, boundsMm.height].sort((left, right) => left - right);
-      return provenance.semanticGroup.garmentCompositionSpacingMm === NUMBER_GLYPH_SPACING_MM
-        && provenance.assetIdentity.assetId === asset.id
-        && provenance.assetIdentity.assetVersion === asset.version
-        && provenance.vectorProfile === `${asset.id}@${asset.version}#${provenance.assetIdentity.geometryHash}`
-        && mirrorApplied === true
-        && sourceSides.every((side, index) => Math.abs(side - placedSides[index]) < 0.001);
-    }));
-    assert.ok(minimumContourSetDistanceMm(after.productionGeometry.groups[0].contours, after.productionGeometry.groups[1].contours) >= 6.4 - 0.000001);
-    const saving = before.nesting.usedLengthMm - after.nesting.usedLengthMm;
-    context.diagnostic(`multi-digit-${number}: before=${before.nesting.usedLengthMm}mm; after=${after.nesting.usedLengthMm}mm; saved=${saving}mm; saving=${Number((saving / before.nesting.usedLengthMm * 100).toFixed(2))}%`);
+    assert.equal(digitPieces.length, 1);
+    assert.equal(after.productionGeometry.groups.length, 1);
+    const placed = after.productionGeometry.groups[0];
+    assert.equal(placed.provenance.semanticGroup.value, number);
+    assert.deepEqual(placed.physicalMembers.map(({ digit }) => digit), [...number]);
+    assert.ok(placed.physicalMembers.every(({ assetIdentity }) => assetIdentity.assetId === asset.id && assetIdentity.assetVersion === asset.version));
+    assert.equal(placed.provenance.semanticGroup.garmentCompositionSpacingMm, NUMBER_GLYPH_SPACING_MM);
+    assert.equal(placed.mirrorApplied, true);
+    assert.ok(Math.abs(placed.sourceBoundsMm.width - before.productionGeometry.groups[0].sourceBoundsMm.width) < 0.003);
+    assert.ok(Math.abs(placed.sourceBoundsMm.height - before.productionGeometry.groups[0].sourceBoundsMm.height) < 0.003);
+    context.diagnostic(number + ': one complete number, source proportions and spacing retained');
   }
   const back = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey rug", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, backNumber: "18", backNumberSizeClass: "SENIOR" }, items: [{ articleId: "fixture-hockey-back", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-back-18")).value;
   const shorts = (await service.createOrder(operator.token, operator.csrfToken, { orderKind: "INDIVIDUAL", customer: "Hockey short", customerEmail: "", customerPhone: "0612345678", standardPersonalization: { ...empty, shortsNumber: "23" }, items: [{ articleId: "fixture-hockey-short", size: "M", quantity: 1, deviation: false, overrides: empty }] }, "hockey-auto-short-23")).value;

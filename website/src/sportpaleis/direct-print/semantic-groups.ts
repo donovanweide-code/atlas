@@ -11,7 +11,7 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
   const grouped = new Map<string, CutObject[]>();
   const passthrough: CutObject[] = [];
   for (const object of objects) {
-    if (object.semanticGroup?.kind !== "MULTI_DIGIT_NUMBER" || object.semanticGroup.digitCount < 2) {
+    if (object.semanticGroup?.kind !== "MULTI_DIGIT_NUMBER" || object.semanticGroup.digitCount < 2 || object.semanticGroup.physicalMembers?.length) {
       passthrough.push(object);
       continue;
     }
@@ -25,10 +25,15 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
     const first = ordered[0];
     const semantic = first.semanticGroup!;
     if (ordered.length !== semantic.digitCount) throw new Error(`Rugnummer ${semantic.value} mist één of meer fysieke cijfers.`);
-    if (ordered.some(({ material, productionRule, semanticGroup }) => material.code !== first.material.code
+    if (ordered.some(({ material, productionRule, semanticGroup, assetIdentity }, index) => material.code !== first.material.code
       || productionRule.mirror !== first.productionRule.mirror
       || productionRule.rotation !== first.productionRule.rotation
-      || semanticGroup?.value !== semantic.value)) throw new Error(`Rugnummer ${semantic.value} bevat incompatibele fysieke cijfers.`);
+      || semanticGroup?.value !== semantic.value
+      || semanticGroup?.digitIndex !== index
+      || semanticGroup?.digit !== semantic.value[index]
+      || semanticGroup?.garmentCompositionSpacingMm !== semantic.garmentCompositionSpacingMm
+      || assetIdentity?.assetId !== first.assetIdentity?.assetId
+      || assetIdentity?.assetVersion !== first.assetIdentity?.assetVersion)) throw new Error(`Rugnummer ${semantic.value} bevat incompatibele fysieke cijfers.`);
 
     const contourSpacingMm = Number.isFinite(semantic.garmentCompositionSpacingMm)
       ? semantic.garmentCompositionSpacingMm
@@ -50,9 +55,7 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
         sourceBoundsMm: boundsForContours(normalized),
         ...(member.assetIdentity ? { assetIdentity: member.assetIdentity } : {}),
       });
-      // De 30 mm hoort bij het uiteindelijke persen op het kledingstuk. In het
-      // snijbestand blijft de set herkenbaar in de juiste volgorde, maar gebruikt
-      // hij uitsluitend de authoritative veilige contourafstand.
+      // De authoritative contourafstand is onderdeel van de compositie.
       cursorX = quantizeMm(cursorX + memberBounds.width + contourSpacingMm);
     }
     const compositeBounds = boundsForContours(contours);

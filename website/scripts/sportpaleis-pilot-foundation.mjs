@@ -8754,7 +8754,7 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
   if (!digits || digits.length < 2) return [piece(line.content)];
 
   const semanticId = `${order.id}:${line.id}:number:${line.content}:copy-${copy}`;
-  return digits.map((digit, digitIndex) => ({
+  return groupSemanticNumberObjects(digits.map((digit, digitIndex) => ({
     ...piece(digit, `${baseId}-digit-${digitIndex + 1}-${digit}`),
     label: `${line.preview?.label ?? `Rugnummer ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length}) · exemplaar ${copy}/${line.quantity}`,
     printType: "Beheerde vectornummerbron · afzonderlijk cijfer",
@@ -8778,7 +8778,7 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
       geometryHash: font.sha256,
       sourceKind: "MANAGED_FONT",
     },
-  }));
+  })));
 }
 
 function productionLineWriterIdentity(state, line) {
@@ -9831,7 +9831,13 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
             .map((piece) => ({
               ...piece,
               id: `${piece.id}-copy-${copy}`,
-              ...(piece.semanticGroup ? { semanticGroup: { ...piece.semanticGroup, id: `${piece.semanticGroup.id}:copy-${copy}`, copyIndex: copy, copyCount: line.quantity } } : {}),
+              ...(piece.semanticGroup ? { semanticGroup: {
+                ...piece.semanticGroup, id: `${piece.semanticGroup.id}:copy-${copy}`, copyIndex: copy, copyCount: line.quantity,
+                ...(piece.semanticGroup.physicalMembers ? { physicalMembers: piece.semanticGroup.physicalMembers.map((member) => ({
+                  ...member, sourceObjectId: `${member.sourceObjectId}-copy-${copy}`,
+                  ...(member.assetIdentity ? { assetIdentity: { ...member.assetIdentity, sourceKind: "PRODUCTION_ASSET" } } : {}),
+                })) } : {}),
+              } } : {}),
               ...(piece.assetIdentity ? { assetIdentity: { ...piece.assetIdentity, sourceKind: "PRODUCTION_ASSET" } } : {}),
             }));
         },

@@ -70,7 +70,7 @@ test("standaard dubbele nummers gebruiken 18 mm contourafstand en uitsluitend Pi
   const assets = state.productionElements.filter(({ lifecycleStatus, applications }) => lifecycleStatus === "PRODUCTION_READY" && applications?.some(({ kind, placement }) => kind === "NUMBER_SET" && /rug|shirt/iu.test(placement)));
   assert.ok(assets.length >= 2);
   assert.equal(NUMBER_GLYPH_SPACING_MM, 18);
-  for (const asset of assets) for (const value of ["10", "17", "22", "28"]) {
+  for (const asset of assets) for (const value of ["10", "11", "17", "22", "23", "28", "44", "67", "87"]) {
     const expectedSpacingMm = asset.verifiedSourceKey === "pioneers-rug-senior-200" ? PIONEERS_NUMBER_GLYPH_SPACING_MM : NUMBER_GLYPH_SPACING_MM;
     const piece = productionAssetPiece({ asset, variant: asset.variants[0], line: { id: `line-${value}`, content: value, widthMm: 0, heightMm: 200, preview: { label: value } }, order: { id: "ASSURANCE", association: asset.contexts[0]?.label ?? "Sportpaleis", items: [] }, foilColor: "Wit" });
     const digitBounds = [];
