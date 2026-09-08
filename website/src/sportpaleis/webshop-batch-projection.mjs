@@ -32,7 +32,7 @@ function rowsOf(page) {
   return rows;
 }
 
-export function projectWebshopPrintBatch(result) {
+export function projectWebshopPrintBatch(result, { orderNumber = null } = {}) {
   if (result?.status !== "EVIDENCE_READY") throw Object.assign(new Error(result?.quarantine?.code === "PDF_OCR_REQUIRED" ? "Deze bron heeft OCR nodig." : "De bron kon niet worden uitgelezen."), { code: result?.quarantine?.code ?? "PDF_UNAVAILABLE" });
   const groups = [];
   for (const page of result.evidence.pages) {
@@ -65,6 +65,7 @@ export function projectWebshopPrintBatch(result) {
   const sourceWarnings = [];
   let sourceArticleCount = 0;
   for (const [orderIndex, group] of groups.entries()) {
+    if (orderNumber && group.reference !== orderNumber) continue;
     const textPages = group.parts.map(({ rows }) => rows.map(({ cells }) => cells.map(({ text }) => text).join("\t")).join("\n"));
     const orderText = textPages.join("\n");
     const dateValues = [...new Set([...orderText.matchAll(/Besteldatum\s*:\s*(\d{2}-\d{2}-\d{4})/giu)].map((m) => m[1]))];
@@ -92,7 +93,7 @@ export function projectWebshopPrintBatch(result) {
         }
       }
       // HARD BOUNDARY: an ordinary article or a club/product description is not printing evidence.
-      if (!personalization.length) continue;
+      if (!personalization.length && !orderNumber) continue;
       const labeledArticle = /^(?:Artikelnummer|Artikelnr\.?|Artikel nr\.?)\s*:/iu.test(article.sourceLines?.[0] ?? "");
       const explicitQuantity = !labeledArticle || article.sourceLines.some((line) => /^Aantal\s*:\s*\d+\s*$/iu.test(line));
       const fields = { articleNumber: article.articleNumber, description: article.description, size: article.size, color: article.color, quantity: explicitQuantity ? article.quantity : null,
@@ -104,7 +105,7 @@ export function projectWebshopPrintBatch(result) {
       items.push({ id, orderNumber: group.reference, orderDate, originalDate, sourceIndex: items.length, sourceLineId: article.sourceLineId,
         sourceHash: result.attachmentSha256, sourcePages: [...new Set(group.parts.map(({ page }) => page))],
         club: explicitField(/(?:^|\n)(?:Club|Vereniging)\s*:\s*([^\n\t]+)/iu), team: explicitField(/(?:^|\n)Team\s*:\s*([^\n\t]+)/iu),
-        source: fields, values: structuredClone(fields), printEvidence: personalization, issues, override: null });
+        printingRequired: personalization.length > 0, source: fields, values: structuredClone(fields), printEvidence: personalization, issues, override: null });
     }
   }
   items.sort((a, b) => (a.orderDate ?? "9999").localeCompare(b.orderDate ?? "9999") || a.orderNumber.localeCompare(b.orderNumber, "nl", { numeric: true }) || a.sourceIndex - b.sourceIndex);
@@ -115,6 +116,8 @@ export function projectWebshopPrintBatch(result) {
 
 export function validateBatchValues(values) {
   const issues = [];
+  if (values.sizeProfile !== undefined && !["AUTO", "JUNIOR", "SENIOR", "CUSTOM"].includes(values.sizeProfile)) issues.push({ field: "sizeProfile", message: "Kies Junior, Senior of Vrij invoeren." });
+  if (values.customProfile !== undefined && (typeof values.customProfile !== "string" || values.customProfile.length > 120)) issues.push({ field: "customProfile", message: "Profielomschrijving controleren." });
   for (const field of ["articleNumber", "description", "size", "color"]) if (typeof values[field] !== "string" || !values[field].trim() || values[field].length > 240) issues.push({ field, message: ({ articleNumber: "Artikelnummer", description: "Omschrijving", size: "Maat", color: "Kleur" })[field] + " controleren." });
   if (!Number.isInteger(values.quantity) || values.quantity < 1 || values.quantity > 999) issues.push({ field: "quantity", message: "Aantal moet tussen 1 en 999 liggen." });
   if (!Array.isArray(values.personalizations) || !values.personalizations.length || values.personalizations.length > 12) issues.push({ field: "personalizations", message: "Bedrukking ontbreekt." });

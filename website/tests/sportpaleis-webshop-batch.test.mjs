@@ -105,3 +105,30 @@ test("existing contract gives deterministic validated dry-run and isolates bad r
   const wrongColor = await createBatchPlotJobDryRun().evaluate({ ...row, values: { ...row.values, color: "Niet-bestaande-kleur" } });
   assert.equal(wrongColor.status, "REVIEW_REQUIRED"); assert.equal(wrongColor.contract, null);
 });
+
+
+test("V1.1 profiles use existing truth, respect one-off choice and never authorize custom profiles", async () => {
+  const adapter = createBatchPlotJobDryRun(), originalTruth = adapter.truthHash;
+  const row = { id: "profile-test", issues: [], values: { articleNumber: "116597", description: "FC Almere Wedstrijdshirt", size: "XL", color: "GROEN", quantity: 1, personalizations: [{ type: "BACK_NUMBER", value: "88" }] } };
+  const senior = await adapter.evaluate(row);
+  assert.equal(senior.sizeProfile.value, "SENIOR"); assert.equal(senior.sizeProfile.automatic, true);
+  const junior = await adapter.evaluate({ ...row, values: { ...row.values, size: "128" } });
+  assert.equal(junior.status, "READY"); assert.equal(junior.sizeProfile.value, "JUNIOR");
+  const manual = await adapter.evaluate({ ...row, values: { ...row.values, sizeProfile: "JUNIOR" } });
+  assert.equal(manual.sizeProfile.value, "JUNIOR"); assert.equal(manual.sizeProfile.automatic, false);
+  assert.equal(manual.contract.items[0].variants[0].personalizationValues.backNumberSizeClass, "JUNIOR");
+  const custom = await adapter.evaluate({ ...row, values: { ...row.values, sizeProfile: "CUSTOM", customProfile: "Eenmalig afwijkend" } });
+  assert.equal(custom.status, "REVIEW_REQUIRED"); assert.equal(custom.contract, null);
+  assert.equal(adapter.truthHash, originalTruth);
+  assert.equal((await adapter.evaluate(row)).sizeProfile.value, "SENIOR");
+});
+
+test("V1.1 full context projection preserves original item identities without admitting unprinted items", () => {
+  const source = evidence([sourceLines("2635358683", "26-08-2026", ["Initialen: AB", "Artikelnummer: 999999", "Omschrijving: Kousen", "Maat: M", "Kleur: ROOD", "Aantal: 2"])]);
+  const batch = projectWebshopPrintBatch(source);
+  const detail = projectWebshopPrintBatch(source, { orderNumber: "2635358683" });
+  assert.equal(batch.itemCount, 1); assert.equal(detail.itemCount, 2);
+  assert.equal(detail.items[0].id, batch.items[0].id);
+  assert.equal(detail.items[1].printingRequired, false);
+  assert.equal(detail.items[1].source.quantity, 2);
+});

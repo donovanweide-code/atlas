@@ -1,0 +1,235 @@
+{
+  "http": {
+    "status": "PERFORMANCE_FAILED",
+    "performanceChecks": [
+      [
+        "pdfParseMs",
+        3244.4528,
+        2500
+      ],
+      [
+        "structuredMs",
+        171.29600000000028,
+        250
+      ],
+      [
+        "batchReadyMs",
+        3790.4759999999997,
+        5000
+      ],
+      [
+        "rssDeltaBytes",
+        2441216,
+        268435456
+      ],
+      [
+        "orderDetailMs",
+        3017.966700000001,
+        3000
+      ],
+      [
+        "cachedOrderDetailMs",
+        4.349099999999453,
+        100
+      ],
+      [
+        "overrideRoundtripMs",
+        37.62960000000021,
+        750
+      ]
+    ],
+    "performanceFailures": [
+      [
+        "pdfParseMs",
+        3244.4528,
+        2500
+      ],
+      [
+        "orderDetailMs",
+        3017.966700000001,
+        3000
+      ]
+    ],
+    "sourceSha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+    "sourceOrderCount": 137,
+    "batchOrders": 9,
+    "batchItems": 18,
+    "onlyPrinting": true,
+    "goldenPatterns": [
+      "2635358543",
+      "2635358614",
+      "2635358648",
+      "2635358683"
+    ],
+    "defaultSort": "OLDEST_FIRST",
+    "overrideSurvivesRestart": true,
+    "excludeRestore": true,
+    "staleEditRejected": true,
+    "partialHandoff": true,
+    "confirmationIdempotentAfterRestart": true,
+    "v11": {
+      "thumbnailMatches": 16,
+      "thumbnailBytes": 2316,
+      "totalThumbnailBytes": 30204,
+      "thumbnailRenderMs": 471.5704999999998,
+      "detailItems": 5,
+      "detailPrinted": 2,
+      "detailThumbnailMatches": 3,
+      "contextThumbnailMatches": 1,
+      "sameThumbnailCache": true,
+      "detailOpenMs": 3017.966700000001,
+      "cachedDetailMs": 4.349099999999453,
+      "senior": {
+        "value": "SENIOR",
+        "automatic": true,
+        "source": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+        "heightMm": 200
+      },
+      "freeEntryFailClosed": true,
+      "correctionEventPrepared": true,
+      "fullOrderArchive": 0
+    },
+    "existingProductionValidator": "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V3",
+    "metrics": {
+      "pdfParseMs": 3244.4528,
+      "structuredMs": 171.29600000000028,
+      "firstBatchMs": 3415.7488000000003,
+      "rssDeltaBytes": 2441216,
+      "sourceBytes": 759353,
+      "pageCount": 138,
+      "persistedPdfs": 0,
+      "persistedFullTexts": 0,
+      "persistedFullOrders": 0,
+      "batchParses": 1,
+      "detailParses": 0,
+      "thumbnailBuilds": 0,
+      "batchReadyMs": 3790.4759999999997,
+      "overrideRoundtripMs": 37.62960000000021
+    },
+    "sqliteBytes": 24576,
+    "persistedPdfs": 0,
+    "persistedFullTexts": 0
+  },
+  "browser": {
+    "viewports": [
+      {
+        "width": 390,
+        "height": 844,
+        "noHorizontalOverflow": true,
+        "searchAndSelection": true,
+        "editDialogUsable": true
+      },
+      {
+        "width": 320,
+        "height": 720,
+        "noHorizontalOverflow": true,
+        "searchAndSelection": true,
+        "editDialogUsable": true
+      }
+    ],
+    "assertions": [
+      "16-lazy-thumbnails",
+      "full-order-5-items-3-context-only",
+      "authoritative-senior",
+      "free-entry-persists-and-stays-fail-closed",
+      "free-entry-repairs-number",
+      "printing-only",
+      "oldest-first",
+      "client-search",
+      "multi-selection",
+      "edit-persists-after-reload",
+      "exclude-restore",
+      "explicit-contract-dry-run",
+      "completed-not-offered-again"
+    ],
+    "networkRequestsDuringSearch": 0,
+    "detailThumbnailMatches": 3,
+    "orderDetailMs": 2851.800000011921,
+    "metrics": {
+      "searchMs": 1,
+      "editOpenMs": 5.699999988079071,
+      "editSaveMs": 20.200000047683716,
+      "selectionMs": 1.5
+    },
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "status": "PASS"
+  },
+  "concurrency": {
+    "status": "PASS",
+    "readSessions": 10,
+    "interactiveSessions": 5,
+    "distinctCookiesAndActors": true,
+    "independentSelections": true,
+    "editConflict": "200 + 409",
+    "excludeRestoreConflict": "200 + 409 then explicit retry",
+    "singleHandoffReceipt": true,
+    "noModuleGlobalBatchState": true,
+    "batchParses": 1,
+    "detailParses": 1,
+    "latency": {
+      "coldLoad": {
+        "samples": 10,
+        "p50Ms": 3460.8018,
+        "p95Ms": 3475.953700000001
+      },
+      "read": {
+        "samples": 100,
+        "p50Ms": 37.93759999999929,
+        "p95Ms": 64.29250000000138
+      },
+      "detail": {
+        "samples": 10,
+        "p50Ms": 2996.2212,
+        "p95Ms": 3022.4491
+      },
+      "edit": {
+        "samples": 2,
+        "p50Ms": 27.343400000001566,
+        "p95Ms": 27.52599999999802
+      },
+      "excludeRestore": {
+        "samples": 3,
+        "p50Ms": 21.111100000001898,
+        "p95Ms": 21.29160000000047
+      },
+      "handoff": {
+        "samples": 2,
+        "p50Ms": 13.791199999999662,
+        "p95Ms": 14.085699999999633
+      },
+      "search": {
+        "samples": 5,
+        "p50Ms": 4.599999964237213,
+        "p95Ms": 4.600000023841858
+      },
+      "selection": {
+        "samples": 5,
+        "p50Ms": 5,
+        "p95Ms": 5.599999964237213
+      },
+      "browserEdit": {
+        "samples": 5,
+        "p50Ms": 311.9362000000001,
+        "p95Ms": 329.3439999999973
+      }
+    },
+    "bottleneck": "Batch-wide revision fence intentionally conflicts concurrent writes; explicit refresh required. Cold detail requests share one serial parse."
+  },
+  "imageParityBeforeAfter": [
+    {
+      "label": "before",
+      "batchMs": 4003.7626999999993,
+      "pdfMs": 3375.5337,
+      "detailMs": 3282.204600000001,
+      "detailImages": 2
+    },
+    {
+      "label": "after",
+      "batchMs": 3607.5810999999994,
+      "pdfMs": 3147.8891000000003,
+      "detailMs": 3367.345300000001,
+      "detailImages": 3
+    }
+  ]
+}

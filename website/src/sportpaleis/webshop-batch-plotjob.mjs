@@ -16,15 +16,21 @@ export function createBatchPlotJobDryRun() {
   const service = new SportpaleisPilotService({ store, websiteSource: {}, mailMode: "capture", uploadsEnabled: false,
     installedProductionAssetRoot: null, prewarmProductionBuildIsolation: false });
   const truthHash = batchHash([state.articles, state.associations, state.productionProfiles, state.productionFonts, state.foilRolls]);
+  const catalog = (row) => {
+    const matches = state.articles.filter((a) => a.active !== false && String(a.articleNumber) === row.values.articleNumber && (!row.club || a.association === row.club));
+    const article = matches.length === 1 ? matches[0] : null;
+    return article ? { id: article.id, name: article.name, imageKey: article.imageKey, sizes: article.availableSizes ?? [] } : null;
+  };
   const cache = new Map();
   let tail = Promise.resolve();
   async function evaluate(row) {
-    const key = batchHash([row.id, row.values, row.issues, truthHash]);
+    const key = batchHash([row.id, row.values, row.issues, row.club, truthHash]);
     if (cache.has(key)) return structuredClone(await cache.get(key));
     const operation = tail.then(async () => {
       const issues = [...row.issues, ...validateBatchValues(row.values)];
+      if (row.values.sizeProfile === "CUSTOM") issues.push({ field: "sizeProfile", message: "Vrij profiel vastgelegd. Een goedgekeurde productiebron moet nog worden gekoppeld.", code: "CUSTOM_PROFILE_AUTHORITY_REQUIRED" });
       const matches = state.articles.filter((article) => article.active !== false && String(article.articleNumber) === row.values.articleNumber && (!row.club || article.association === row.club));
-      if (matches.length !== 1) issues.push({ field: "articleNumber", message: "Artikel niet eenduidig gekoppeld aan de productcatalogus.", code: "ARTICLE_MATCH_REQUIRED" });
+      if (matches.length !== 1) issues.push({ field: "articleNumber", message: matches.length ? "Artikel hoort bij meerdere verenigingen. Controleer het artikelnummer." : "Artikel niet herkend. Vul de ordergegevens aan.", code: "ARTICLE_MATCH_REQUIRED" });
       if (issues.length) return { status: "REVIEW_REQUIRED", issues, truthHash, contract: null };
       const article = matches[0];
       const normalizeColor = (value) => String(value ?? "").trim().replace(/\s+/gu, " ").toLocaleUpperCase("nl-NL");
@@ -45,6 +51,7 @@ export function createBatchPlotJobDryRun() {
         else overrides[field] = p.value;
       }
       if (issues.length) return { status: "REVIEW_REQUIRED", issues, truthHash, contract: null };
+      if (overrides.backNumber && ["JUNIOR", "SENIOR"].includes(row.values.sizeProfile)) overrides.backNumberSizeClass = row.values.sizeProfile;
       try {
         // The existing contract applies its own size-class, colour, profile and
         // price/placement rules; this adapter never copies those rules.
@@ -76,11 +83,15 @@ export function createBatchPlotJobDryRun() {
           articleId: article.id, articleNumber: row.values.articleNumber, articleColor: row.values.color, size: row.values.size,
           association: article.association, productType, quantity: row.values.quantity, foilColor: order.items[0].foilColor,
           items: order.items, productionLines: order.productionLines, validation };
-        const findings = validation.findings.map(({ reason, message, code }) => ({ field: "production", message: reason ?? message ?? "Productiebron of maat controleren.", code }));
+        const resolvedProfile = order.items[0].variants[0]?.backNumberProduction;
+        const sizeProfile = resolvedProfile?.sizeClass && ["SOURCE_CONFIGURED", "VALIDATED"].includes(resolvedProfile.status)
+          ? { value: resolvedProfile.sizeClass, automatic: !["JUNIOR", "SENIOR"].includes(row.values.sizeProfile), source: resolvedProfile.source, heightMm: resolvedProfile.physicalHeightMm }
+          : { value: row.values.sizeProfile ?? "AUTO", automatic: false, source: null };
+        const findings = validation.findings.map(({ reason, message, code }) => ({ field: "production", message: /FONT/u.test(code ?? "") ? "Productielettertype ontbreekt of is nog niet bevestigd." : "Productiebron of maatvoering nog niet bevestigd.", code }));
         return { status: validation.status === "VALID" ? "READY" : "REVIEW_REQUIRED", issues: findings,
-          club: article.association, productType, foilColor: order.items[0].foilColor, truthHash, contract };
+          sizeProfile, club: article.association, productType, foilColor: order.items[0].foilColor, truthHash, contract };
       } catch (error) {
-        return { status: "REVIEW_REQUIRED", issues: [{ field: "production", message: error.message, code: error.code ?? "CONTRACT_REJECTED" }], truthHash, contract: null };
+        return { status: "REVIEW_REQUIRED", issues: [{ field: "production", message: error.code === "ARTICLE_SIZE_UNAVAILABLE" ? "Maat niet bekend voor dit artikel. Pas de maat aan." : error.code === "BACK_NUMBER_SIZE_CLASS_REQUIRED" ? "Junior/Senior niet bepaalbaar. Kies het juiste profiel." : "Productiebron of plaatsing nog niet bevestigd. Controleer deze regel.", code: error.code ?? "CONTRACT_REJECTED" }], truthHash, contract: null };
       } finally {
         state.orders = []; state.audit = []; state.idempotency = {}; state.nextOrderSequence = 1;
       }
@@ -90,5 +101,5 @@ export function createBatchPlotJobDryRun() {
     if (cache.size > 128) cache.delete(cache.keys().next().value);
     return structuredClone(await operation);
   }
-  return { evaluate, truthHash, persistentOrders: 0, productionJobsCreated: 0 };
+  return { evaluate, catalog, truthHash, persistentOrders: 0, productionJobsCreated: 0 };
 }
