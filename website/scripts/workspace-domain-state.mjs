@@ -24,7 +24,7 @@ export const SPORTPALEIS_STATE_DOMAINS = Object.freeze({
   ]),
   artifacts: Object.freeze(["productionJobs"]),
   mailbox: Object.freeze(["mailbatches", "webshopIntake", "mailboxRouting", "mailFoundation"]),
-  platform: Object.freeze([]),
+  platform: Object.freeze(["workspacePermissions", "workItems", "workItemEvents"]),
 });
 
 const METADATA_KEYS = new Set([
@@ -53,7 +53,7 @@ export const SPORTPALEIS_RECORD_COLLECTIONS = Object.freeze(new Set([
   "feedback", "associations", "articles", "productionProfiles", "foilRolls", "productionElements",
   "productionFonts", "productionElementRequirements", "visualCompositions", "creativeVectorDrafts",
   "productionAssetSources", "orders", "productionJobs", "productionProposals", "teamkitProposals",
-  "quickProductionIntakes", "mailbatches",
+  "quickProductionIntakes", "mailbatches", "workItems", "workItemEvents",
 ]));
 
 export function sportpaleisRecordIdentity(collectionKey, record) {

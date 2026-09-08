@@ -210,6 +210,36 @@ test("capabilityconfig blijft duurzaam op de domeinopslag; tweede runtime ziet r
   assert.equal(pool.queries.some(sql => sql.startsWith("UPDATE sp_runtime_state")), false);
 });
 
+test("Planning-records gebruiken bestaande domeintransacties; revoke op tweede runtime blokkeert prepared write", async () => {
+  const migration = await readFile(migrationFile, "utf8");
+  const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));
+  legacy.users.push({ id: "planner", name: "Planner", initials: "PL", role: "operator", email: "planner@example.test", status: "Actief", seatType: "customer", salesNumber: null, password: await createSportpaleisPasswordRecord("Planning-Domain-2026!") });
+  legacy.workspacePermissions = createPermissionPolicy(legacy.organizationId, { planner: { presetId: "operations", overrides: {} } }, { enabledCapabilities: CAPABILITY_IDS });
+  const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
+  const first = new SportpaleisDomainMariaDbStore({ pool }); await first.backfillLegacySource();
+  const firstService = new SportpaleisPilotService({ store: first }); await firstService.initialize();
+  const actor = await firstService.login({ email: "planner@example.test", password: "Planning-Domain-2026!" });
+  const credential = { token: actor.token, csrfToken: actor.csrfToken };
+  const task = await firstService.workItems.create(credential, { title: "Database planning", dueDate: "2026-09-08" });
+  assert.ok([...pool.records.values()].some(row => row.collection_key === "workItems" && row.record_id === task.id));
+  assert.equal(JSON.parse(pool.domains.get("platform").payload_json).workItems, undefined);
+  const second = new SportpaleisDomainMariaDbStore({ pool }); const secondService = new SportpaleisPilotService({ store: second }); await secondService.initialize();
+  assert.equal((await secondService.workItems.get(actor.token, task.id)).title, task.title);
+  let preparedSignal; let continueCommit;
+  const prepared = new Promise(resolve => { preparedSignal = resolve; }); const resume = new Promise(resolve => { continueCommit = resolve; });
+  const originalMutate = second.mutate.bind(second);
+  second.mutate = mutator => originalMutate(async state => { const result = await mutator(state); preparedSignal(); await resume; return result; });
+  const pending = secondService.workItems.change(credential, task.id, "note", { revision: task.revision, text: "Mag na revoke niet committen" });
+  await prepared;
+  await first.mutate(state => { state.sessions = state.sessions.filter(session => session.userId !== "planner"); return { state }; });
+  continueCommit();
+  await assert.rejects(pending, { code: "DOMAIN_SNAPSHOT_STALE", statusCode: 409 });
+  const restarted = new SportpaleisDomainMariaDbStore({ pool }); await restarted.initialize();
+  const saved = await restarted.read(); assert.equal(saved.workItems[0].notes.length, 0); assert.equal(saved.workItems[0].revision, 1);
+  assert.equal(pool.queries.some(sql => sql.startsWith("UPDATE sp_runtime_state")), false);
+  await assert.rejects(secondService.workItems.get(actor.token, task.id), { statusCode: 401 });
+});
+
 test("runtime-start weigert een ontbrekende offline backfill zonder state te muteren", async () => {
   const migration = await readFile(migrationFile, "utf8");
   const legacy = createSportpaleisProductionBootstrap(new Date("2026-09-05T06:00:00.000Z"));

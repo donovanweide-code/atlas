@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { WorkspacePermissionService } from "./workspace-permission-service.mjs";
+import { WorkspaceWorkItemStore } from "./workspace-work-item-store.mjs";
 import { compileEffectivePermissions } from "./workspace-permissions.mjs";
 import { installSportpaleisCapabilityBoundary, hasCapabilityRoleAuthority, capabilityAuditContext } from "./sportpaleis-capability-boundary.mjs";
 import {
@@ -2711,6 +2712,7 @@ export class SportpaleisPilotService {
     this.isolatedProductionBuilds = typeof this.store.prepareAndCommit === "function";
     this.prewarmProductionBuildIsolation = prewarmProductionBuildIsolation === true;
     installSportpaleisCapabilityBoundary(this);
+    this.workItems = new WorkspaceWorkItemStore({ store: this.store, resolveActor: this.permissionService.resolveActor });
   }
 
   async initialize() {
@@ -10384,6 +10386,17 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const token = parseCookies(request)[SESSION_COOKIE];
       const csrf = request.headers["x-csrf-token"];
       const method = request.method ?? "GET";
+      if (route === "/api/sportpaleis/v1/work-items" || route.startsWith("/api/sportpaleis/v1/work-items/")) {
+        const credential = method === "GET" ? token : { token, csrfToken: csrf };
+        response.setHeader("Cache-Control", "private, no-store");
+        if (route === "/api/sportpaleis/v1/work-items" && method === "GET") { json(response, 200, await service.workItems.list(credential)); return true; }
+        if (route === "/api/sportpaleis/v1/work-items/shared" && method === "GET") { json(response, 200, await service.workItems.list(credential, { sharedOnly: true })); return true; }
+        if (route === "/api/sportpaleis/v1/work-items" && method === "POST") { json(response, 201, await service.workItems.create(credential, await readJson(request))); return true; }
+        const itemMatch = route.match(/^\/api\/sportpaleis\/v1\/work-items\/([^/]+)(?:\/(edit|note|complete))?$/);
+        if (itemMatch && !itemMatch[2] && method === "GET") { json(response, 200, await service.workItems.get(credential, decodeURIComponent(itemMatch[1]))); return true; }
+        if (itemMatch?.[2] && method === "POST") { json(response, 200, await service.workItems.change(credential, decodeURIComponent(itemMatch[1]), itemMatch[2], await readJson(request))); return true; }
+        json(response, 405, { message: "Actie niet toegestaan." }); return true;
+      }
       if (route === "/api/sportpaleis/v1/permissions" && method === "GET") {
         json(response, 200, await service.permissionProjection(token)); return true;
       }

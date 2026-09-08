@@ -133,6 +133,8 @@ const exactWorkspaceRoutes = new Set([
   `${workspaceBoundary}/kennis`,
   `${workspaceBoundary}/tijdlijn`,
   sportpaleisHome,
+  `${sportpaleisBoundary}/planning`,
+  `${sportpaleisBoundary}/gedeeld-werk`,
   `${sportpaleisBoundary}/activeren`,
   `${sportpaleisBoundary}/orders`,
   `${sportpaleisBoundary}/orders/nieuw`,
@@ -208,7 +210,7 @@ export function isKnownWorkspaceRoute(pathname) {
 
 function isCanonicalSportpaleisRoute(pathname) {
   const normalized = normalizePathname(pathname);
-  return ["/overzicht", "/zoeken", "/winkel", "/webshop", "/mail", "/alles", "/orders", "/voorstellen", "/voorstel", "/studio", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren", "/reviews"]
+  return ["/overzicht", "/planning", "/gedeeld-werk", "/zoeken", "/winkel", "/webshop", "/mail", "/alles", "/orders", "/voorstellen", "/voorstel", "/studio", "/productie", "/context", "/feedback", "/voorkeuren", "/beheer", "/activeren", "/reviews"]
     .some((root) => normalized === root || normalized.startsWith(`${root}/`));
 }
 
