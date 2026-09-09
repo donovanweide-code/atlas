@@ -8,8 +8,12 @@ import { detachSportpaleisRecordCollections, partitionSportpaleisState } from ".
 
 const root = process.env.WORKSPACE_ROLLBACK_ROOT;
 if (!root) throw new Error("WORKSPACE_ROLLBACK_ROOT must name the immutable previous release source worktree.");
-const expected = "c03d8604cb1ce232c73a34f8996d0ad193f17024";
-assert.equal(execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(), expected);
+const expected = "7313492e0d93e0e952469f4409a538781defb66c";
+assert.equal(execFileSync("git", ["-C", root, "rev-parse", "SPW-RECOVERY-PLANNING-STORAGE-20260909^{commit}"], { encoding: "utf8" }).trim(), expected);
+// Evidence-only commits may follow the executable tag; imported authority files
+// must remain byte-identical to the frozen recovery source and worktree clean.
+assert.equal(execFileSync("git", ["-C", root, "status", "--porcelain"], { encoding: "utf8" }).trim(), "");
+assert.equal(execFileSync("git", ["-C", root, "diff", expected, "--", "website/scripts", "website/src", "website/config"], { encoding: "utf8" }).trim(), "");
 const previous = await import(pathToFileURL(path.join(root, "website/scripts/workspace-domain-state.mjs")).href);
 const cleanups = []; const fixture = await createPlanningFixture({ after: cleanup => cleanups.push(cleanup) });
 try {

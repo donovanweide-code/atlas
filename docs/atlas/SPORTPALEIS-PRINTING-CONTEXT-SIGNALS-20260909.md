@@ -4,7 +4,7 @@ Built separately from central authority `38f0c2a21333a587eeba81abad7a7765070cca9
 
 ## Behavior
 
-The unit is **bedrukkingorders**, provisionally following the communicated default while the optional unit question is unanswered. The two source totals count open printing orders; “Vandaag afgerond” counts registered printing orders with authoritative production completion evidence dated today in Europe/Amsterdam. Quantities, pages and individual prints are not separate counts. An order with twelve shirts counts once.
+The unit is **bedrukkingorders**, explicitly confirmed by Donovan: one printing order is one count, including completed orders. Article quantities and separate-print quantities remain available in the underlying item/production-line records for later secondary insight; they are not mixed into these KPIs or displayed prominently. The two source totals count open printing orders; “Vandaag afgerond” counts registered printing orders with authoritative production completion evidence dated today in Europe/Amsterdam. Quantities, pages and individual prints are not separate counts. An order with twelve shirts counts once.
 
 `WorkspaceOrder.printingOrigin` records version, `KASSABEDRUKKING` or `WEBSHOP_BEDRUKKING`, tenant, actor, timestamp and canonical source order identity. The field is assigned server-side at new order creation. Browser-supplied origin metadata is not copied. Existing historical records, migrations, reads and edits are not backfilled. No stored counter, additional collection, analytics datastore or Work Item field was introduced.
 

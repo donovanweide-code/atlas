@@ -194,6 +194,7 @@ async function main() {
       path.join(websiteRoot, "scripts", "sportpaleis-permission-rollout.mjs"),
       path.join(websiteRoot, "src", "workspace-sequence.ts"),
       path.join(websiteRoot, "src", "workspace-permission-catalog.mjs"),
+      path.join(websiteRoot, "src", "workspace-context-signal-catalog.mjs"),
       path.join(websiteRoot, "src", "workspace-work-item.ts"),
     ],
     allowedRoots: [
@@ -202,6 +203,7 @@ async function main() {
       path.join(websiteRoot, "src", "sportpaleis"),
       path.join(websiteRoot, "src", "workspace-sequence.ts"),
       path.join(websiteRoot, "src", "workspace-permission-catalog.mjs"),
+      path.join(websiteRoot, "src", "workspace-context-signal-catalog.mjs"),
       path.join(websiteRoot, "src", "workspace-work-item.ts"),
     ],
   });

@@ -336,9 +336,11 @@ test("additieve backfill is hashgelijk en een kleine mutatie schrijft geen legac
   legacy.audit[0].details.largeEvidence = "x".repeat(6 * 1024 * 1024);
   const pool = new DomainMemoryPool(legacy, createHash("sha256").update(migration).digest("hex"));
   const store = new SportpaleisDomainMariaDbStore({ pool });
-  await store.backfillLegacySource();
+  const backfill = await store.backfillLegacySource();
+  assert.equal(backfill.legacySha256, backfill.composedSha256);
   await store.initialize();
-  assert.deepEqual(await store.read(), legacy);
+  // Initialization admits the additive Planning collections; every legacy field stays exact.
+  assert.deepEqual(await store.read(), { ...legacy, workItems: [], workItemEvents: [] });
   const legacyWritesBefore = pool.queries.filter((sql) => sql.startsWith("UPDATE sp_runtime_state")).length;
   const queryCountBefore = pool.queries.length;
   await store.mutate(async (state) => {
