@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { assertPermission, assertProtectedAccountManagement, validatePermissionPolicy } from "./workspace-permissions.mjs";
 import { withWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
+import { createMutableWbdReviewDeveloperAccessProjection } from "./wbd-review-developer-access.mjs";
 
 // Explicit legacy entry-point reconciliation. Names/roles never grant authority.
 const groups = {
@@ -110,7 +111,7 @@ export function installSportpaleisCapabilityBoundary(service) {
       // Preserve the existing separate temporary-review authority; it is never
       // converted into an employee identity or used to bypass its own policy.
       call.sessionAuthority = session.authMethod === "TEMPORARY_REVIEW_GRANT"
-        ? snapshot => service.reviewDeveloperAccessPolicy.authenticateSession(structuredClone(snapshot), { sessionToken: token, tenantId: "sportpaleis" }, new Date())
+        ? snapshot => service.reviewDeveloperAccessPolicy.authenticateSession(createMutableWbdReviewDeveloperAccessProjection(snapshot), { sessionToken: token, tenantId: "sportpaleis" }, new Date())
         : snapshot => {
           const actor = service.permissionService.resolveActor(snapshot, token);
           if (actor.userId !== user.id) throw Object.assign(new Error("Sessie-identiteit is gewijzigd. Log opnieuw in."), { statusCode: 401, code: "SESSION_EXPIRED" });

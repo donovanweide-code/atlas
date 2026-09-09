@@ -3340,7 +3340,7 @@ export class SportpaleisPilotService {
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: includeOrders ? structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) }))) : [],
+      orders: includeOrders ? structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order), includeExecutionEvidence: internalFullBootstrap }))) : [],
       orderHistory: { total: includeOrders ? sortedOperationalOrders.length : 0, loaded: includeOrders ? bootstrapOrders.length : 0, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],
@@ -8428,11 +8428,16 @@ function productionLinesForOrder(state, order) {
   return reconciliation.status === "PROVEN" ? reconciliation.productionLines : [];
 }
 
-function publicOrderWithProductionTruth(state, order, { includeReconciliation = true } = {}) {
+function publicOrderWithProductionTruth(state, order, { includeReconciliation = true, includeExecutionEvidence = true } = {}) {
   const productionReconciliation = includeReconciliation ? reconcileExistingOrderProductionTruth(state, order) : null;
   const productionLines = productionLinesForOrder(state, order);
   const projected = { ...order, ...(productionLines.length ? { productionLines } : {}), ...(includeReconciliation ? { productionReconciliation } : {}) };
-  return { ...projected, ...productionStatusForOrder(state, projected) };
+  const result = { ...projected, ...productionStatusForOrder(state, projected) };
+  if (includeExecutionEvidence) return result;
+  // These immutable server-side proofs have dedicated order/detail APIs. Compute
+  // current production truth before narrowing the list response; never alter storage.
+  const { productionExecutionSnapshot: _snapshot, productionExecutionHistory: _history, ...summary } = result;
+  return summary;
 }
 
 const deriveCatalogProductionLines = resolveCanonicalProductionLines;
