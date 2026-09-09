@@ -1,4 +1,4 @@
-import { SportpaleisMariaDbStore } from "./sportpaleis-mariadb-store.mjs";
+import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { productionDatabaseCredentialsFromEnvironment } from "./workspace-runtime-config.mjs";
 import {
   compareSportpaleisWebsiteSnapshot,
@@ -10,7 +10,7 @@ import {
 const mode = process.argv.includes("--dry-run") ? "DRY_RUN"
   : process.argv.includes("--activate") ? "ACTIVATE"
     : "SCHEDULED";
-const store = new SportpaleisMariaDbStore({
+const store = new SportpaleisDomainMariaDbStore({
   database: productionDatabaseCredentialsFromEnvironment(process.env).workspace,
 });
 const source = createSportpaleisWebsiteSource();

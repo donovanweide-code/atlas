@@ -39,8 +39,15 @@ assert.match(restoreBackupSha256 ?? "", /^[a-f0-9]{64}$/u, "restore-backuphash o
 assert.ok(backfillEvidenceFile, "offline backfillevidence ontbreekt");
 assert.ok(activeCandidateIds.length && issuerIds.length && issuerSecret.length >= 43, "reviewconfiguratie ontbreekt");
 const backfillEvidence = JSON.parse(await readFile(backfillEvidenceFile, "utf8"));
-assert.ok(new Set(["BACKFILLED", "ALREADY_BACKFILLED"]).has(backfillEvidence.status), "canary vereist een geslaagde idempotente offline backfill");
-assert.equal(backfillEvidence.legacySha256, backfillEvidence.composedSha256, "offline backfill is niet hashgelijk");
+if (backfillEvidence.status === "DOMAIN_AUTHORITY_VERIFIED") {
+  assert.equal(backfillEvidence.authority, "DOMAIN");
+  assert.equal(backfillEvidence.legacyImported, false);
+  assert.match(backfillEvidence.domainSha256 ?? "", /^[a-f0-9]{64}$/u);
+  assert.match(backfillEvidence.planHash ?? "", /^[a-f0-9]{64}$/u);
+} else {
+  assert.ok(new Set(["BACKFILLED", "ALREADY_BACKFILLED"]).has(backfillEvidence.status), "canary vereist bewezen storage authority");
+  assert.equal(backfillEvidence.legacySha256, backfillEvidence.composedSha256, "offline backfill is niet hashgelijk");
+}
 
 const sha = (value) => createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
 const assuranceEntrypointSha256 = sha(await readFile(fileURLToPath(import.meta.url)));
