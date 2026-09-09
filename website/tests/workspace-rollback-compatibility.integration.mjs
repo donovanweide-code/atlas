@@ -8,8 +8,8 @@ import { detachSportpaleisRecordCollections, partitionSportpaleisState } from ".
 
 const root = process.env.WORKSPACE_ROLLBACK_ROOT;
 if (!root) throw new Error("WORKSPACE_ROLLBACK_ROOT must name the immutable previous release source worktree.");
-const expected = "7313492e0d93e0e952469f4409a538781defb66c";
-assert.equal(execFileSync("git", ["-C", root, "rev-parse", "SPW-RECOVERY-PLANNING-STORAGE-20260909^{commit}"], { encoding: "utf8" }).trim(), expected);
+const expected = "573fab416d16a1689ef0ea54dffa9d372b9fd21a";
+assert.equal(execFileSync("git", ["-C", root, "rev-parse", "SPW-RECOVERY-DOMAIN-AUTHORITY-20260909^{commit}"], { encoding: "utf8" }).trim(), expected);
 // Evidence-only commits may follow the executable tag; imported authority files
 // must remain byte-identical to the frozen recovery source and worktree clean.
 assert.equal(execFileSync("git", ["-C", root, "status", "--porcelain"], { encoding: "utf8" }).trim(), "");
