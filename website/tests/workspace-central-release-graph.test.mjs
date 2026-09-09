@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { collectRuntimeDependencyGraph } from "../scripts/release-runtime-graph.mjs";
+
+test("central runtime and initial configuration ship all dependencies inside the immutable website artifact", async () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const graph = await collectRuntimeDependencyGraph({ websiteRoot: root,
+    entrypoints: ["scripts/workspace-runtime.mjs", "scripts/sportpaleis-permission-rollout.mjs"].map(file => path.join(root, file)),
+    allowedRoots: ["scripts", "config", "src/sportpaleis", "src/workspace-sequence.ts", "src/workspace-permission-catalog.mjs", "src/workspace-work-item.ts"].map(file => path.join(root, file)),
+  });
+  const paths = graph.map(entry => entry.archive);
+  for (const file of ["app/config/sportpaleis-permission-rollout.mjs", "app/scripts/workspace-mutation-authority.mjs", "app/scripts/workspace-work-item-store.mjs", "app/src/workspace-work-item.ts", "app/src/workspace-permission-catalog.mjs"]) assert.ok(paths.includes(file), file);
+  assert.equal(paths.some(file => file.includes("shared-planning-review") || file.includes("webshop-batch-review")), false);
+});

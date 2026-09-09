@@ -1,4 +1,5 @@
-import { SPORTPALEIS_PERMISSION_TENANT, SPORTPALEIS_INITIAL_PROFILES } from "../../app/config/sportpaleis-permission-rollout.mjs";
+import { createHash, randomUUID } from "node:crypto";
+import { SPORTPALEIS_PERMISSION_TENANT, SPORTPALEIS_INITIAL_PROFILES } from "../config/sportpaleis-permission-rollout.mjs";
 import { CAPABILITY_IDS } from "../src/workspace-permission-catalog.mjs";
 import { createPermissionPolicy, compileEffectivePermissions } from "./workspace-permissions.mjs";
 
@@ -24,4 +25,22 @@ export function planSportpaleisPermissionMigration(state, { planningReady = fals
   const policy = createPermissionPolicy(SPORTPALEIS_PERMISSION_TENANT, users, { enabledCapabilities });
   if (intakeReady) for (const id of ["user-25812f676558376d", "user-13960f8a3cae2eff"]) for (const capability of CAPABILITY_IDS.filter(id => id.startsWith("webshop_intake."))) policy.users[id].overrides[capability] = "allow";
   return { status: blockers.length ? "BLOCKED" : "READY_FOR_EXPLICIT_CONFIG_APPLY", sourceRevision: state.revision, blockers, mapping, policy: blockers.length ? null : policy, effective: blockers.length ? [] : Object.keys(users).map(id => compileEffectivePermissions(policy, id)), gates: { planningReady, mailReady, intakeReady, teamwearReady }, mutations: 0 };
+}
+
+export const permissionPolicyHash = policy => createHash("sha256").update(JSON.stringify(policy)).digest("hex");
+
+/** Operator-only initial configuration, never an HTTP bypass or recurring seed. */
+export async function applySportpaleisPermissionMigration(store, { expectedRevision, expectedPolicyHash, releaseId, gates }) {
+  if (!Number.isSafeInteger(expectedRevision) || !/^[a-f0-9]{64}$/.test(expectedPolicyHash || "") || !/^[A-Z0-9][A-Z0-9._-]{5,127}$/.test(releaseId || "")) throw new Error("Exacte revision, policyhash en release-ID vereist.");
+  const result = await store.mutate(state => {
+    if (state.revision !== expectedRevision) throw Object.assign(new Error("Workspace gewijzigd; maak een nieuw read-only plan."), { statusCode: 409, code: "MIGRATION_REVISION_CONFLICT" });
+    const plan = planSportpaleisPermissionMigration(state, gates);
+    if (plan.status !== "READY_FOR_EXPLICIT_CONFIG_APPLY" || permissionPolicyHash(plan.policy) !== expectedPolicyHash) throw Object.assign(new Error("Initieel rechtenplan komt niet overeen; geen wijzigingen toegepast."), { code: "MIGRATION_AUTHORITY_MISMATCH" });
+    const at = new Date().toISOString();
+    plan.policy.audit.push({ id: randomUUID(), actor: "system:release-config", action: "PERMISSION_POLICY_INITIALIZED", object: { type: "TENANT", id: state.organizationId }, at, source: "EXPLICIT_CENTRAL_RELEASE_GO", releaseId, previous: null, next: structuredClone(plan.policy.users), result: "SUCCESS", version: 1 });
+    state.workspacePermissions = plan.policy;
+    state.audit.unshift({ id: `audit-${randomUUID()}`, at, userId: "system:release-config", action: "Initiële Workspace-rechten ingesteld", subject: state.organizationId, details: { releaseId, approvedBy: "Donovan (central release GO)", policyHash: expectedPolicyHash, mappings: plan.mapping, gates: plan.gates } });
+    return { state, value: { status: "APPLIED", version: 1, policyHash: expectedPolicyHash, releaseId, mapping: plan.mapping, gates: plan.gates } };
+  });
+  return { ...result.value, revision: result.state.revision };
 }
