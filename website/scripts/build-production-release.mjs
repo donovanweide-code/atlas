@@ -192,6 +192,7 @@ async function main() {
       path.join(websiteRoot, "scripts", "sportpaleis-prelive-order-cleanup.mjs"),
       path.join(websiteRoot, "scripts", "sportpaleis-teamwear-pilot-control.mjs"),
       path.join(websiteRoot, "scripts", "sportpaleis-permission-rollout.mjs"),
+      path.join(websiteRoot, "scripts", "sportpaleis-domain-cutover-cli.mjs"),
       path.join(websiteRoot, "src", "workspace-sequence.ts"),
       path.join(websiteRoot, "src", "workspace-permission-catalog.mjs"),
       path.join(websiteRoot, "src", "workspace-context-signal-catalog.mjs"),

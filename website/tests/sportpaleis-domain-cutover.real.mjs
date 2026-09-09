@@ -1,0 +1,115 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';
+import {performance} from 'node:perf_hooks';
+import {pathToFileURL} from 'node:url';
+import mariadb from 'mariadb';
+import {SportpaleisDomainMariaDbStore} from '../scripts/sportpaleis-domain-mariadb-store.mjs';
+import {decodeSportpaleisRuntimeState} from '../scripts/sportpaleis-mariadb-store.mjs';
+import {sha256CanonicalJson as hash} from '../scripts/workspace-domain-state.mjs';
+import {planDomainAuthorityCutover,applyDomainAuthorityCutover} from '../scripts/sportpaleis-domain-cutover.mjs';
+import {SportpaleisPilotService,createSportpaleisPasswordRecord} from '../scripts/sportpaleis-pilot-foundation.mjs';
+import {planSportpaleisPermissionMigration} from '../scripts/sportpaleis-permission-migration.mjs';
+import {createSportpaleisWebsiteSource,stageSportpaleisWebsiteSync} from '../scripts/sportpaleis-website-sync.mjs';
+
+const db=process.env.CUTOVER_TEST_DATABASE, root=process.env.CUTOVER_TEST_ROOT;
+assert.match(db??'',/^spw_cutover_test_[a-z0-9_]+$/);assert.ok(root?.startsWith('/tmp/spw-domain-cutover-'));
+const pool=mariadb.createPool({socketPath:'/run/mysqld/mysqld.sock',user:'root',database:db,connectionLimit:8,bigIntAsNumber:true,timezone:'Z'});
+const stores=[];const create=Class=>{const s=new (Class??SportpaleisDomainMariaDbStore)({pool});stores.push(s);return s;};
+const digest=state=>Object.fromEntries(['orders','productionJobs','productionProposals','sessions','reviewDeveloperAccess','idempotency','workspacePermissions','workItems','workItemEvents'].map(k=>[k,hash(state[k]??null)]));
+const samples={read:[],write:[],bootstrap:[],baselineBootstrap:[],syncWrite:[]};
+const measure=async(key,fn)=>{const start=performance.now();const value=await fn();samples[key].push(performance.now()-start);return value;};
+const result={status:'RUNNING',liveMutations:0};
+try{
+ const store=create();await store.initialize();const initial=await store.read();
+ assert.equal(initial.orders.length,146);assert.equal(initial.productionJobs.length,84);
+ const sourceRows=await pool.query('SELECT revision,state_json FROM sp_runtime_state WHERE organization_id=?',[initial.organizationId]);
+ const legacy=decodeSportpaleisRuntimeState(sourceRows[0].state_json);const initialLegacy=hash(legacy),before=digest(initial);
+ await assert.rejects(store.backfillLegacySource(),{code:'DOMAIN_AUTHORITY_RECONCILIATION_REQUIRED'});
+ const plan=planDomainAuthorityCutover(initial,legacy);assert.equal(plan.patches.length,16);
+ // Same prepared plan against a changed reference must roll back before any domain write.
+ const original=pool.getConnection.bind(pool);let referenceFault=true;
+ pool.getConnection=async()=>{const connection=await original();const query=connection.query.bind(connection);connection.query=(sql,args)=>referenceFault&&sql.includes('state_json FROM sp_runtime_state')&&sql.includes('FOR UPDATE')?Promise.resolve([{...sourceRows[0],revision:Number(sourceRows[0].revision)+1}]):query(sql,args);return connection;};
+ await assert.rejects(applyDomainAuthorityCutover(store,legacy,{expectedRevision:plan.expectedRevision,expectedPlanHash:plan.planHash}),{code:'DOMAIN_LEGACY_REFERENCE_DRIFT'});
+ referenceFault=false;pool.getConnection=original;
+ assert.deepEqual(digest(await store.read()),before);
+ const started=performance.now();await applyDomainAuthorityCutover(store,legacy,{expectedRevision:plan.expectedRevision,expectedPlanHash:plan.planHash});result.cutoverMs=performance.now()-started;
+ const after=await store.read();assert.deepEqual(digest(after),before);
+ assert.equal(after.orders.find(o=>o.id==='SP-2026-0133').deletion.status,'DELETED');
+ for(const patch of plan.patches)assert.equal(hash(after[patch.collection].find(r=>r.id===patch.id)),patch.targetSha256);
+ const revision=after.revision;const retry=await applyDomainAuthorityCutover(store,legacy,{expectedRevision:plan.expectedRevision,expectedPlanHash:plan.planHash});
+ assert.equal(retry.value.status,'ALREADY_RECONCILED');assert.equal((await store.read()).revision,revision);
+ assert.equal((await store.backfillLegacySource()).status,'DOMAIN_AUTHORITY_VERIFIED');
+ result.conflicts=plan.resolved;result.initialCounts={orders:146,jobs:84,proposals:initial.productionProposals.length};result.preservedHashes=before;
+ for(const [label,location]of [['recovery',process.env.CUTOVER_RECOVERY_ROOT],['forward',process.env.CUTOVER_FORWARD_ROOT]]){
+   const {SportpaleisDomainMariaDbStore:Class}=await import(pathToFileURL(location+'/scripts/sportpaleis-domain-mariadb-store.mjs'));
+   const reader=create(Class);await reader.initialize();assert.deepEqual(digest(await reader.read()),before);
+   await reader.mutate(state=>{state.preferences.cutoverRecoveryProbe=label;return {state};});
+   const restart=create();await restart.initialize();assert.deepEqual(digest(await restart.read()),before);
+   assert.equal((await restart.backfillLegacySource()).status,'DOMAIN_AUTHORITY_VERIFIED');result[label]=true;
+ }
+ await store.read();
+ const password='Isolated-Cutover-Fixture-2026!',passwordHash=await createSportpaleisPasswordRecord(password);
+ await store.mutate(state=>{state.users=state.users.map((user,index)=>({...user,email:`cutover-${index}@example.test`,password:passwordHash}));state.sessions=[];
+   const migration=planSportpaleisPermissionMigration(state,{planningReady:true});assert.equal(migration.status,'READY_FOR_EXPLICIT_CONFIG_APPLY');state.workspacePermissions=migration.policy;return {state};});
+ const service=new SportpaleisPilotService({store,artifactRoot:root+'/artifacts'});await service.initialize();
+ const people=(await store.read()).users;const patrick=people.find(p=>p.id==='user-13960f8a3cae2eff'),erik=people.find(p=>p.id==='user-5d0a69561429c36f');
+ const actor=await service.login({email:patrick.email,password});const denied=await service.login({email:erik.email,password});
+ const baselineModule=await import(pathToFileURL(process.env.CUTOVER_FORWARD_ROOT+'/scripts/sportpaleis-pilot-foundation.mjs'));
+ const baselineStoreModule=await import(pathToFileURL(process.env.CUTOVER_FORWARD_ROOT+'/scripts/sportpaleis-domain-mariadb-store.mjs'));
+ const baselineStore=create(baselineStoreModule.SportpaleisDomainMariaDbStore);await baselineStore.initialize();
+ const baselineService=new baselineModule.SportpaleisPilotService({store:baselineStore,artifactRoot:root+'/artifacts'});await baselineService.initialize();
+ await assert.rejects(service.workItems.create({token:actor.token,csrfToken:'wrong'},{title:'Denied CSRF'}));
+ await assert.rejects(service.workItems.create({token:denied.token,csrfToken:denied.csrfToken},{title:'Denied capability'}),{statusCode:403});
+ const fakeTenant=structuredClone(legacy);fakeTenant.organizationId='another-tenant';assert.throws(()=>planDomainAuthorityCutover(initial,fakeTenant));
+ for(let i=0;i<20;i++)await measure('read',()=>store.read());
+ for(let i=0;i<10;i++){await measure('baselineBootstrap',()=>baselineService.bootstrap(actor.token));await measure('bootstrap',()=>service.bootstrap(actor.token));}
+ for(let i=0;i<10;i++)await measure('write',()=>store.mutate(state=>{state.preferences.cutoverSample=i;return {state};}));
+ const syncStore=create();await syncStore.initialize();
+ const current=await syncStore.read();const ids=new Set(current.articles.filter(a=>a.profileId&&a.profileId!=='profile-none').map(a=>a.articleNumber??a.id.replace(/^sp-live-/,'')));
+ const source=await createSportpaleisWebsiteSource().snapshot(new Date(),{knownProductionArticleIds:ids,relevanceIndex:current.websiteSync.sourceRelevanceIndex});
+ const applySync=async(target,snapshot)=>{await target.read();return target.mutate(state=>{
+   if(state.websiteSync.sourceFingerprint===snapshot.fingerprint)return {state,unchanged:true,value:'NO_CHANGES'};
+   return {state,value:stageSportpaleisWebsiteSync(state,snapshot)};
+ });};
+ const businessBefore=digest(await store.read());
+ await applySync(syncStore,source);
+ const syncedRevision=(await syncStore.read()).revision;assert.equal((await applySync(syncStore,source)).value,'NO_CHANGES');assert.equal((await syncStore.read()).revision,syncedRevision);
+ const fixtureSource=i=>{const snapshot=structuredClone(source);const association=snapshot.associations[0];association.name+=` [ISOLATED SOURCE REVISION ${i}]`;
+   const {fingerprint,...body}=association;association.fingerprint=createHash('sha256').update(JSON.stringify(body)).digest('hex');snapshot.fingerprint=createHash('sha256').update(JSON.stringify(snapshot.associations)).digest('hex');return snapshot;};
+ for(let i=0;i<10;i++){
+   const previous=(await syncStore.read()).revision;
+   await measure('syncWrite',()=>applySync(syncStore,fixtureSource(i)));
+   assert.equal((await syncStore.read()).revision,previous+1,'Measured sync must really write');
+ }
+ result.syncMeasurement='10 explicit isolated source revisions; public source snapshot retained separately';
+ const second=create();await second.initialize();await syncStore.read();let arrived=0,release;const barrier=new Promise(resolve=>release=resolve);
+ const competingSource=fixtureSource('concurrent');
+ const write=target=>target.mutate(async state=>{stageSportpaleisWebsiteSync(state,competingSource);if(++arrived===2)release();await barrier;return {state};});
+ const concurrent=await Promise.allSettled([write(syncStore),write(second)]);
+ assert.equal(concurrent.filter(x=>x.status==='fulfilled').length,1);assert.equal(concurrent.filter(x=>x.status==='rejected').length,1);
+ assert.equal(concurrent.find(x=>x.status==='rejected').reason.statusCode,409);result.revisionConflictVisible=true;
+ assert.equal((await applySync(second,competingSource)).value,'NO_CHANGES');result.concurrentSyncRetryIdempotent=true;
+ await store.read();const beforeOrder=(await store.read()).orders.length;
+ const empty={initials:'',initialsInfix:'',name:'',backNumber:'2',backNumberSizeClass:'SENIOR',shortsNumber:''};
+ const input={orderKind:'INDIVIDUAL',customer:'CUTOVER ISOLATED FIXTURE',customerEmail:'fixture@example.test',customerPhone:'0612345678',standardPersonalization:empty,items:[{articleId:'sp-live-116386',size:'L',quantity:1,deviation:false,overrides:{...empty,backNumber:'',backNumberSizeClass:''}}]};
+ const overlap=await Promise.allSettled([applySync(syncStore,source),service.createOrder(actor.token,actor.csrfToken,input,'cutover-real-order'),baselineService.bootstrap(actor.token)]);
+ for(const value of overlap.filter(value=>value.status==='rejected'))assert.equal(value.reason.statusCode,409);
+ if(overlap[0].status==='rejected')await applySync(syncStore,source);
+ const created=overlap[1].status==='fulfilled'?overlap[1].value:await service.createOrder(actor.token,actor.csrfToken,input,'cutover-real-order');
+ result.syncWorkspaceConcurrency={operations:3,retryableConflicts:overlap.filter(value=>value.status==='rejected').length};
+ assert.equal((await service.createOrder(actor.token,actor.csrfToken,input,'cutover-real-order')).duplicate,true);assert.equal((await store.read()).orders.length,beforeOrder+1);
+ assert.equal(created.value.printingOrigin.source,'KASSABEDRUKKING');
+ const task=await service.workItems.create({token:actor.token,csrfToken:actor.csrfToken},{title:'CUTOVER isolated task'});
+ await store.mutate(state=>{state.sessions=state.sessions.filter(s=>s.idHash!==createHash('sha256').update(actor.token).digest('hex'));return {state};});
+ const revokedRevision=(await store.read()).revision;
+ await assert.rejects(service.workItems.create({token:actor.token,csrfToken:actor.csrfToken},{title:'Revoked write'}),{statusCode:401});
+ assert.equal((await store.read()).revision,revokedRevision);result.security={csrf:true,capability:true,tenant:true,revokedSession:true};
+ const end=await store.read();for(const key of ['productionJobs','productionProposals'])assert.equal(hash(end[key]),businessBefore[key]);
+ assert.equal(end.orders.find(o=>o.id==='SP-2026-0133').deletion.status,'DELETED');
+ const legacyEnd=await pool.query('SELECT state_json FROM sp_runtime_state WHERE organization_id=?',[initial.organizationId]);assert.equal(hash(decodeSportpaleisRuntimeState(legacyEnd[0].state_json)),initialLegacy);
+ result.legacyUnchanged=true;result.syncFingerprint=end.websiteSync.sourceFingerprint;result.orderId=created.value.id;result.taskId=task.id??task.value?.id;
+ const percentile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))];
+ result.performance=Object.fromEntries(Object.entries(samples).map(([key,values])=>[key,{samples:values.length,p50ms:percentile(values,.5),p95ms:percentile(values,.95)}]));
+ result.finalRevision=end.revision;result.status='PASS';await writeFile(root+'/evidence/result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}finally{for(const store of stores)await store.close();await pool.end();}

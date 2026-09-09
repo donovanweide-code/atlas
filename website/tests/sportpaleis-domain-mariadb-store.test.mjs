@@ -380,7 +380,7 @@ test("offline backfill ververst legacy brondrift alleen vóór cutover en blijft
   const forbiddenLegacy = JSON.parse(pool.legacy.state_json);
   forbiddenLegacy.revision += 1;
   pool.legacy = { revision: forbiddenLegacy.revision, state_json: JSON.stringify(forbiddenLegacy) };
-  await assert.rejects(store.backfillLegacySource(), ({ code }) => code === "DOMAIN_BACKFILL_SOURCE_DRIFT");
+  await assert.rejects(store.backfillLegacySource(), ({ code }) => code === "DOMAIN_AUTHORITY_RECONCILIATION_REQUIRED");
 });
 
 test("auditappend schrijft alleen nieuwe immutable event en geen volledige auditpayload", async () => {

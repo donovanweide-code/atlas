@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import mariadb from "mariadb";
 import { captureWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
+import { verifyDomainAuthorityReference } from "./sportpaleis-domain-authority.mjs";
 
 import {
   decodeSportpaleisRuntimeState,
@@ -538,6 +539,15 @@ export class SportpaleisDomainMariaDbStore {
     ]);
     void migrationAdmission;
     if (sourceRows.length !== 1) throw new SportpaleisMariaDbStoreError("Legacy migratiebron ontbreekt.", "DATABASE_STATE_MISSING");
+    if (existingMeta.length === 1 && existingMeta[0].cutover_mode === "DOMAIN_READS") {
+      await this.initialize();
+      const current = await this.read();
+      const legacy = decodeSportpaleisRuntimeState(sourceRows[0].state_json);
+      if (Number(legacy.revision) !== Number(sourceRows[0].revision)) throw new SportpaleisMariaDbStoreError("Legacy referentierevisie is inconsistent.", "DATABASE_REVISION_MISMATCH");
+      // This is an admission check, never another backfill. Any divergence
+      // requires an explicit reviewed reconciliation; domain records are not replaced.
+      return verifyDomainAuthorityReference(current, legacy, existingMeta[0]);
+    }
     if (existingMeta.length === 1) {
       if (Number(existingMeta[0].legacy_source_revision) === Number(sourceRows[0].revision)) {
         const reconciliation = await this.pool.query(
@@ -860,6 +870,14 @@ export class SportpaleisDomainMariaDbStore {
       completePhase("lockMeta");
       const current = this.snapshot;
       preparedCommand.authority?.(current);
+      if (preparedCommand.legacyReference) {
+        const source = await connection.query("SELECT revision, state_json FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE", [ORGANIZATION_ID]);
+        const expected = preparedCommand.legacyReference;
+        if (source.length !== 1 || Number(source[0].revision) !== expected.revision
+          || sha256CanonicalJson(decodeSportpaleisRuntimeState(source[0].state_json)) !== expected.sha256) {
+          throw retryableStoreError("Legacy referentie wijzigde tijdens reconciliation; er is niets opgeslagen.", "DOMAIN_LEGACY_REFERENCE_DRIFT", 409);
+        }
+      }
       let result;
       let persistence;
       if (Number(preparedCommand.baseRevision) !== Number(this.globalRevision)) throw retryableStoreError("De voorbereide handeling is verouderd; vernieuw en probeer veilig opnieuw.", "DOMAIN_PREPARED_SNAPSHOT_STALE", 409);
@@ -1018,7 +1036,8 @@ export class SportpaleisDomainMariaDbStore {
     this.metrics.preparedMutations += 1;
     this.metrics.preparedMutationMsTotal += preparationMs;
     this.metrics.preparedMutationMsMax = Math.max(this.metrics.preparedMutationMsMax, preparationMs);
-    return { command: { baseRevision, persistence, value: preparedResult.value, authority } };
+    return { command: { baseRevision, persistence, value: preparedResult.value, authority,
+      ...(preparedResult.legacyReference ? { legacyReference: structuredClone(preparedResult.legacyReference) } : {}) } };
   }
 
   #enqueueMutation(operation) {
