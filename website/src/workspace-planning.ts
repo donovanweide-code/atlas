@@ -7,7 +7,7 @@ const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, char => 
 const dayLabel = (value: string | null) => value ? new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", weekday: "short", timeZone: "Europe/Amsterdam" }).format(new Date(`${value}T12:00:00Z`)) : "Zonder datum";
 const stamp = (value: string) => new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam" }).format(new Date(value));
 const API = `${import.meta.env.VITE_WORKSPACE_REVIEW_BASE || ""}/api/sportpaleis/v1/work-items`;
-export function mountPlanning(root: HTMLElement, options: { user: User; csrf?: string; base: string; full: boolean; readOnly?: boolean; sharedOnly?: boolean }) {
+export function mountPlanning(root: HTMLElement, options: { user: User; csrf?: string; base: string; full: boolean; readOnly?: boolean; sharedOnly?: boolean; mountContext?: (slot: HTMLElement) => void }) {
   let disposed = false; let view: View = { users: [], items: [], serverTime: new Date().toISOString(), moduleAllowed: false, canCreate: false, canAssign: false, canShare: false }; let current: string | null = null;
   let tab = "today"; let person = "all"; let filterDay = ""; let formType: "TASK" | "APPOINTMENT" | null = null; let error = ""; let notice = ""; let busy = false;
   let offset = 0;
@@ -51,7 +51,7 @@ export function mountPlanning(root: HTMLElement, options: { user: User; csrf?: s
     if (options.sharedOnly) root.querySelectorAll<HTMLAnchorElement>(`a[href="${options.base}/planning"]`).forEach(link => { link.href = `${options.base}/gedeeld-werk`; link.textContent = "Gedeeld werk bekijken →"; });
     if (options.readOnly) root.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement>("form input, form button, form select, form textarea, [data-wp-complete], [data-wp-new]").forEach(field => { field.disabled = true; });
   };
-  const draw = () => { render(); applyPermissions(); };
+  const draw = () => { render(); applyPermissions(); if (options.mountContext && !current && !formType) { const slot = document.createElement("div"); root.querySelector(".wp-hero")?.after(slot); options.mountContext(slot); } };
   const save = async (operation: () => Promise<unknown>, message: string, close = false) => {
     if (busy || options.readOnly) return; busy = true; error = "";
     root.querySelectorAll<HTMLButtonElement>('button[type="submit"], form button, [data-wp-complete]').forEach(button => { button.disabled = true; });

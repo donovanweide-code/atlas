@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { createPermissionPolicy, updateUserPermissions } from "../scripts/workspace-permissions.mjs";
+import { CAPABILITY_IDS } from "../src/workspace-permission-catalog.mjs";
+const root = process.argv[2]; assert.ok(root && path.isAbsolute(root), "Absolute frozen recovery website root required");
+const storage = await import(pathToFileURL(path.join(root, "scripts/workspace-domain-state.mjs")).href);
+const permissions = await import(pathToFileURL(path.join(root, "scripts/workspace-permissions.mjs")).href);
+let policy = createPermissionPolicy("fixture", { admin: { presetId: "developer", overrides: {} }, worker: { presetId: "operations", overrides: {} } }, { enabledCapabilities: CAPABILITY_IDS });
+policy = updateUserPermissions(policy, { tenantId: "fixture", userId: "admin" }, { userId: "worker", expectedVersion: 1, displayPriorities: { "printing.counter": "PRIMARY" }, presetDisplayPriorities: { "printing.webshop": "HIDDEN" } });
+const state = { organizationId: "fixture", schemaVersion: 1, revision: 1, orders: [{ id: "fixture-order", printingOrigin: { version: 1, source: "KASSABEDRUKKING", tenantId: "fixture", recordedAt: "2026-09-09T08:00:00Z", actorId: "worker", sourceIdentity: "fixture-order" } }], workspacePermissions: policy, workItems: [], workItemEvents: [] };
+assert.deepEqual(storage.composeSportpaleisState(storage.partitionSportpaleisState(state)), state);
+assert.equal(storage.sportpaleisRecordIdentity("orders", state.orders[0]), "fixture-order");
+permissions.validatePermissionPolicy(policy);
+const changed = permissions.updateUserPermissions(policy, { tenantId: "fixture", userId: "admin" }, { userId: "worker", expectedVersion: policy.version, overrides: { "planning.view": "deny" } });
+assert.deepEqual(changed.users.worker.displayPriorities, policy.users.worker.displayPriorities);
+assert.deepEqual(changed.presets.operations.displayPriorities, policy.presets.operations.displayPriorities);
+console.log(JSON.stringify({ status: "PASS", recoveryStorageRoundTrip: true, recoveryPermissionValidation: true, recoveryWritePreservesDisplayMetadata: true, newCollections: 0 }));

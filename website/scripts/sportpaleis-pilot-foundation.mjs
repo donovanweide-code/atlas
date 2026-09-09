@@ -8,6 +8,7 @@ import { WorkspacePermissionService } from "./workspace-permission-service.mjs";
 import { WorkspaceWorkItemStore } from "./workspace-work-item-store.mjs";
 import { captureWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 import { compileEffectivePermissions } from "./workspace-permissions.mjs";
+import { registerCounterPrintingOrigin, projectPrintingSignals } from "./sportpaleis-printing-signals.mjs";
 import { installSportpaleisCapabilityBoundary, hasCapabilityRoleAuthority, capabilityAuditContext } from "./sportpaleis-capability-boundary.mjs";
 import {
   SPORTPALEIS_ASSOCIATIONS,
@@ -2005,6 +2006,7 @@ function createWorkspaceOrderRecord(state, user, payload, options = {}) {
     productionLines,
   };
   assertOrderProductionDecorationCardinality(state, order);
+  if (!teamkitContext) registerCounterPrintingOrigin(state, order, user);
   if (teamkitContext) order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "TEAMKIT_APPROVED_ORDER_CREATED", at: createdAt, userId: user.id, userName: user.name, source: "human-go", details: { ...teamkitContext } });
   const automaticValidationBlocker = productionProposalBlockReason({ ...order, stage: "CONTROL" }, state);
   if (!automaticValidationBlocker) order.eventHistory.push({ id: `event-${randomBytes(6).toString("hex")}`, type: "ORDER_VALIDATED", at: createdAt, userId: user.id, userName: user.name, source: "automatic-validation" });
@@ -3195,6 +3197,15 @@ export class SportpaleisPilotService {
 
   async bootstrap(token, surface = INTERNAL_FULL_BOOTSTRAP) {
     return this.#projectBootstrap(await this.authenticate(token), surface);
+  }
+
+  async contextSignals(token) {
+    const { user, state } = await this.authenticate(token);
+    const policy = state.workspacePermissions;
+    if (!policy) return { unit: "orders", signals: [] };
+    const allowed = compileEffectivePermissions(policy, user.id).allowed;
+    return projectPrintingSignals({ orders: state.orders, tenantId: state.organizationId, policy, userId: user.id, allowed,
+      completedAt: order => productionClosureForOrder(state, order).status === "CONFIRMED" ? order.productionCompletionEvidence?.confirmedAt : null });
   }
 
   async bootstrapSerialized(token, surface = "overview") {
@@ -10518,6 +10529,9 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       if (route === "/api/sportpaleis/v1/bootstrap" && method === "GET") {
         serializedJson(response, 200, await service.bootstrapSerialized(token, requestUrl.searchParams.get("surface") ?? "overview"));
         return true;
+      }
+      if (route === "/api/sportpaleis/v1/context-signals" && method === "GET") {
+        json(response, 200, await service.contextSignals(token)); return true;
       }
       if (route === "/api/sportpaleis/v1/reviews" && method === "GET") {
         json(response, 200, await service.reviewManifest(token));

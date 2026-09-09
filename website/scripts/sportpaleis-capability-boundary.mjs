@@ -10,7 +10,7 @@ const groups = {
   "management.delete": "deleteEmployee",
   "management.permissions": "permissionAdministration permissionProjection updatePermissionConfiguration",
   "management.settings": "updateSettings updateFoilRoll createFoilRoll",
-  "orders.view": "orderHistory order resolveBarcode previewOrderMail orderMailHistory",
+  "orders.view": "orderHistory order resolveBarcode previewOrderMail orderMailHistory contextSignals",
   "orders.create": "createOrder",
   "orders.edit": "updateOrder addOrderNote recordCommunicationStatus recordOperationalEvent",
   "orders.complete": "advanceOrder confirmPickup",

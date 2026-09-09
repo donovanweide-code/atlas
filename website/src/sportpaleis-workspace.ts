@@ -2052,8 +2052,8 @@ function page(state: PilotBootstrap, current: string): { title: string; html: st
     : { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (current.startsWith(`${BASE}/reviews/`)) return { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (!state.effectivePermissions && state.currentUser.role === "store" && (current.startsWith(`${BASE}/productie`) || current.startsWith(`${BASE}/beheer`) || current === `${BASE}/context` || current === `${BASE}/feedback` || current === `${BASE}/voorkeuren`)) return { title: "Geen toegang", html: empty("Deze pagina hoort niet bij de winkelrol") };
-  if (current === `${BASE}/planning` || current === `${BASE}/gedeeld-werk`) return { title: "Planning", html: '<div data-planning-root></div>' };
-  if (current === `${BASE}/overzicht`) return { title: "Vandaag", html: `${state.effectivePermissions ? '<div data-planning-root></div>' : ""}${overview(state)}` };
+  if (current === `${BASE}/planning` || current === `${BASE}/gedeeld-werk`) return { title: "Planning", html: '<div data-context-signals-root></div><div data-planning-root></div>' };
+  if (current === `${BASE}/overzicht`) return { title: "Vandaag", html: `<div data-context-signals-root></div>${state.effectivePermissions ? '<div data-planning-root></div>' : ""}${overview(state)}` };
   if (current === `${BASE}/zoeken`) return { title: "Zoeken", html: workspaceSearch(state) };
   if (current === `${BASE}/winkel`) return contexts.has("STORE") ? { title: "Winkel", html: winkel(state) } : { title: "Geen toegang", html: empty("Winkelcontext is niet toegestaan") };
   if (current === `${BASE}/webshop`) return contexts.has("WEBSHOP") ? { title: "Webshop", html: webshopImport(state) } : { title: "Geen toegang", html: empty("Webshopcontext is niet toegestaan") };
@@ -2258,9 +2258,12 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
     syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
     const planningRoot = app.querySelector<HTMLElement>("[data-planning-root]");
+    const signalRoot = app.querySelector<HTMLElement>("[data-context-signals-root]");
+    const mountSignals = !activeRolePreview && !viewState.readOnlyFallback && viewState.effectivePermissions?.decisions["orders.view"]?.allowed ? (slot: HTMLElement) => { void import("./workspace-context-signals.ts").then(({ mountContextSignals }) => { if (slot.isConnected) void mountContextSignals(slot); }); } : undefined;
+    if (signalRoot && !planningRoot) mountSignals?.(signalRoot);
     if (planningRoot) void import("./workspace-planning.ts").then(({ mountPlanning }) => {
       if (!planningRoot.isConnected || reviewLoadSequence !== reviewCandidateLoadSequence) return;
-      planningCleanup = mountPlanning(planningRoot, { user: viewState.currentUser, csrf: viewState.csrfToken, base: BASE, full: current !== `${BASE}/overzicht`, sharedOnly: current === `${BASE}/gedeeld-werk` || !viewState.effectivePermissions?.decisions["planning.view"]?.allowed, readOnly: Boolean(activeRolePreview || viewState.readOnlyFallback) });
+      planningCleanup = mountPlanning(planningRoot, { user: viewState.currentUser, csrf: viewState.csrfToken, base: BASE, full: current !== `${BASE}/overzicht`, sharedOnly: current === `${BASE}/gedeeld-werk` || !viewState.effectivePermissions?.decisions["planning.view"]?.allowed, readOnly: Boolean(activeRolePreview || viewState.readOnlyFallback), mountContext: mountSignals });
     });
     if (state.effectivePermissions) for (const link of app.querySelectorAll<HTMLAnchorElement>("a[href]")) {
       const target = new URL(link.href, location.href);

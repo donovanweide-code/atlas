@@ -492,6 +492,8 @@ export interface CommercialAdministration {
 
 export interface WorkspaceOrder {
   id: string;
+  /** Server-registered origin for new printing work; never inferred for historical orders. */
+  printingOrigin?: { version: 1; source: "KASSABEDRUKKING" | "WEBSHOP_BEDRUKKING"; tenantId: string; recordedAt: string; actorId: string; sourceIdentity: string; activation?: { releaseId: string; activatedAt: string } };
   revision: number;
   customer: string;
   customerEmail?: string;

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { CAPABILITIES, CAPABILITY_IDS, DEFAULT_PERMISSION_PRESETS } from "../src/workspace-permission-catalog.mjs";
+import { validateDisplayPriorities, effectiveSignalDisplay } from "../src/workspace-context-signal-catalog.mjs";
 
 const deny = (message, statusCode = 403, code = "CAPABILITY_DENIED") => { throw Object.assign(new Error(message), { statusCode, code }); };
 const known = id => Object.hasOwn(CAPABILITIES, id);
@@ -15,6 +16,7 @@ export function validatePermissionPolicy(policy) {
   for (const user of Object.values(policy.users)) {
     if (!record(user) || !Object.hasOwn(policy.presets, user.presetId) || !record(user.overrides) || Object.entries(user.overrides).some(([id, value]) => !known(id) || !["allow", "deny"].includes(value))) deny("Ongeldige gebruikersrechten.", 400);
   }
+  for (const item of [...Object.values(policy.users), ...Object.values(policy.presets)]) validateDisplayPriorities(item.displayPriorities);
   for (const team of policy.teams) if (!team.id || !Array.isArray(team.memberIds) || !Array.isArray(team.capabilities) || team.capabilities.some(id => !known(id))) deny("Ongeldig team.", 400);
   for (const grant of policy.grants) {
     if (!grant.id || !Object.hasOwn(policy.users, grant.userId) || !Array.isArray(grant.capabilities) || grant.capabilities.some(id => !known(id)) || grant.tenantId !== policy.tenantId) deny("Ongeldige tijdelijke grant.", 400);
@@ -47,7 +49,7 @@ export function compileEffectivePermissions(policy, userId, now = Date.now()) {
     decisions[id] = { allowed, source };
   }
   const expiry = policy.grants.filter(grant => grant.userId === userId).flatMap(grant => [grant.startsAt, grant.expiresAt]).filter(value => value && Date.parse(value) > now).map(Date.parse);
-  return { tenantId: policy.tenantId, userId, version: policy.version, presetId: user?.presetId || null, presetLabel: preset?.label || "Geen preset", overrideCount: Object.keys(user?.overrides || {}).length, decisions, allowed: Object.keys(decisions).filter(id => decisions[id].allowed), validUntil: expiry.length ? Math.min(...expiry) : null };
+  return { tenantId: policy.tenantId, userId, version: policy.version, presetId: user?.presetId || null, presetLabel: preset?.label || "Geen preset", overrideCount: Object.keys(user?.overrides || {}).length, displayPriorities: effectiveSignalDisplay(policy, userId), decisions, allowed: Object.keys(decisions).filter(id => decisions[id].allowed), validUntil: expiry.length ? Math.min(...expiry) : null };
 }
 export function permissionDecision(policy, { tenantId, userId, preview = false }, capability, object = null, now = Date.now()) {
   const blocked = source => ({ allowed: false, source, capability, version: policy.version });
@@ -90,8 +92,11 @@ export function updateUserPermissions(policy, context, input, now = new Date()) 
   if (!Object.hasOwn(policy.users, input.userId)) deny("Gebruiker niet gevonden.", 404);
   assertProtectedAccountManagement(policy, context, input.userId, now.getTime());
   const previous = structuredClone(policy.users[input.userId]);
-  const next = { ...previous, presetId: input.presetId ?? previous.presetId, overrides: input.reset ? {} : input.overrides ?? previous.overrides };
-  const candidate = structuredClone(policy); candidate.users[input.userId] = next; validatePermissionPolicy(candidate);
+  const next = { ...previous, presetId: input.presetId ?? previous.presetId, overrides: input.reset ? {} : input.overrides ?? previous.overrides, displayPriorities: input.reset ? {} : input.displayPriorities ?? previous.displayPriorities ?? {} };
+  const candidate = structuredClone(policy); candidate.users[input.userId] = next;
+  const previousPresetDisplay = structuredClone(candidate.presets[next.presetId]?.displayPriorities ?? {});
+  if (input.presetDisplayPriorities !== undefined && Object.hasOwn(candidate.presets, next.presetId)) candidate.presets[next.presetId].displayPriorities = structuredClone(validateDisplayPriorities(input.presetDisplayPriorities));
+  validatePermissionPolicy(candidate);
   const actor = compileEffectivePermissions(policy, context.userId, now.getTime());
   const before = compileEffectivePermissions(policy, input.userId, now.getTime()); const after = compileEffectivePermissions(candidate, input.userId, now.getTime());
   const technical = actor.decisions["developer.manage"].allowed;
@@ -102,7 +107,7 @@ export function updateUserPermissions(policy, context, input, now = new Date()) 
   const hadAdmin = Object.keys(policy.users).some(id => compileEffectivePermissions(policy, id, now.getTime()).decisions["management.permissions"].allowed);
   if (hadAdmin && !Object.keys(candidate.users).some(id => compileEffectivePermissions(candidate, id, now.getTime()).decisions["management.permissions"].allowed)) deny("De laatste beheerder van rechten kan niet worden verwijderd.");
   candidate.version++;
-  candidate.audit.push({ id: randomUUID(), actor: context.userId, action: "PERMISSIONS_CHANGED", object: { type: "USER", id: input.userId }, at: now.toISOString(), capability: authority.capability, source: authority.source, result: "SUCCESS", previous, next: structuredClone(next), version: candidate.version });
+  candidate.audit.push({ id: randomUUID(), actor: context.userId, action: "PERMISSIONS_CHANGED", object: { type: "USER", id: input.userId }, at: now.toISOString(), capability: authority.capability, source: authority.source, result: "SUCCESS", previous, next: structuredClone(next), ...(input.presetDisplayPriorities !== undefined ? { presetDisplayChange: { presetId: next.presetId, previous: previousPresetDisplay, next: structuredClone(candidate.presets[next.presetId].displayPriorities) } } : {}), version: candidate.version });
   return candidate;
 }
 export function migrateLegacyPermissions(tenantId, legacyUsers, { roleMapping, enabledCapabilities = [] }) {

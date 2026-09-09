@@ -1,0 +1,10 @@
+.workspace-signals { margin: 0 0 1.25rem; padding: 1rem 1.1rem; border: 1px solid #e4e6df; border-radius: 18px; background: #fafbf7; color: #1c302d; }
+.workspace-signals__label { margin: 0 0 .65rem; font-size: .78rem; font-weight: 700; }
+.workspace-signals__label span { font-weight: 400; color: #62716d; }
+.workspace-signals__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: .7rem; margin-bottom: .6rem; }
+.workspace-signals__cards article { padding: 1rem; background: #fff; border: 1px solid #dce5df; border-radius: 13px; display: grid; gap: .25rem; }
+.workspace-signals__cards strong { font-size: 2rem; line-height: 1.2; }
+.workspace-signals__cards small { color: #62716d; }
+.workspace-signals__chips { display: flex; flex-wrap: wrap; gap: .5rem .9rem; font-size: .88rem; }
+.workspace-signals__chips span { overflow-wrap: anywhere; }
+.workspace-signals__chips strong { margin-left: .2rem; }
