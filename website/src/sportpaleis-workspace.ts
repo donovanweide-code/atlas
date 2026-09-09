@@ -334,10 +334,9 @@ function shell(html: string, state: PilotBootstrap, current: string, title: stri
   const candidateMode = fullWorkspaceCandidateActive();
   const contexts = new Set(state.capabilities.workContexts ?? user.workContexts ?? []);
   const teamwearNav = state.capabilities.teamwearExperiencePilot ? nav(`${BASE}/voorstellen`, "Teamwear", current) : "";
-  const planningNav = state.effectivePermissions?.decisions["planning.view"]?.allowed ? nav(`${BASE}/planning`, "Planning", current) : "";
   const visualStudioNav = state.capabilities.creativeStudio ? nav(`${BASE}/studio`, "Creative Studio", current) : "";
   const mailNav = state.mailboxRouting && ["admin", "operator"].includes(user.role) ? nav(`${BASE}/mail`, "Mail", current) : "";
-  const workNav = `${nav(`${BASE}/overzicht`, "Vandaag", current)}${nav(`${BASE}/orders`, "Orders", current)}${planningNav}${teamwearNav}${visualStudioNav}${contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : ""}${mailNav}${contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : ""}${nav(`${BASE}/zoeken`, "Zoeken", current)}`;
+  const workNav = `${nav(`${BASE}/overzicht`, "Vandaag", current)}${nav(`${BASE}/orders`, "Orders", current)}${teamwearNav}${visualStudioNav}${contexts.has("WEBSHOP") ? nav(`${BASE}/webshop`, "Webshop", current) : ""}${mailNav}${contexts.has("PRODUCTION") ? nav(`${BASE}/productie`, "Productie", current) : ""}${nav(`${BASE}/zoeken`, "Zoeken", current)}`;
   const orderActions = contexts.has("STORE") ? nav(`${BASE}/orders/nieuw`, "Bedrukken", current) : "";
   const adminNav = state.capabilities.admin ? `${nav(`${BASE}/beheer`, "Beheer", current)}` : user.role === "operator" ? `${nav(`${BASE}/beheer/artikelen`, "Artikelvolgorde", current)}` : "";
   const switchable = (state.switchableUsers ?? []).filter(({ id, status }) => id !== user.id && status === "Actief");
@@ -2052,8 +2051,8 @@ function page(state: PilotBootstrap, current: string): { title: string; html: st
     : { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (current.startsWith(`${BASE}/reviews/`)) return { title: "Geen toegang", html: empty("Deze review is niet beschikbaar") };
   if (!state.effectivePermissions && state.currentUser.role === "store" && (current.startsWith(`${BASE}/productie`) || current.startsWith(`${BASE}/beheer`) || current === `${BASE}/context` || current === `${BASE}/feedback` || current === `${BASE}/voorkeuren`)) return { title: "Geen toegang", html: empty("Deze pagina hoort niet bij de winkelrol") };
-  if (current === `${BASE}/planning` || current === `${BASE}/gedeeld-werk`) return { title: "Planning", html: '<div data-planning-root></div>' };
-  if (current === `${BASE}/overzicht`) return { title: "Vandaag", html: `${state.effectivePermissions ? '<div data-planning-root></div>' : ""}${overview(state)}` };
+  if (current === `${BASE}/planning` || current === `${BASE}/gedeeld-werk`) return { title: "Recovery", html: empty("Planning is niet beschikbaar in deze herstelversie. Opgeslagen werk blijft behouden.") };
+  if (current === `${BASE}/overzicht`) return { title: "Overzicht", html: overview(state) };
   if (current === `${BASE}/zoeken`) return { title: "Zoeken", html: workspaceSearch(state) };
   if (current === `${BASE}/winkel`) return contexts.has("STORE") ? { title: "Winkel", html: winkel(state) } : { title: "Geen toegang", html: empty("Winkelcontext is niet toegestaan") };
   if (current === `${BASE}/webshop`) return contexts.has("WEBSHOP") ? { title: "Webshop", html: webshopImport(state) } : { title: "Geen toegang", html: empty("Webshopcontext is niet toegestaan") };
@@ -2177,7 +2176,6 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
   const api = new SportpaleisPilotApi(); let state: PilotBootstrap | undefined; let searchIndex: WorkspaceSearchItem[] = []; let notice = ""; let activationNotice = ""; let demoEnabled = false;
   let reviewCandidateCleanup: (() => void) | null = null;
   let reviewCandidateLoadSequence = 0;
-  let planningCleanup: (() => void) | null = null;
   let orderSearchSequence = 0;
   let teamwearCatalogSearchSequence = 0;
   let sharedSyncInFlight = false; let sharedSyncFormDirty = false; let deferredSharedRevision: number | null = null; let productionTransitionEpoch = 0;
@@ -2249,7 +2247,6 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     } catch (error) { container.textContent = message(error); }
   };
   const render = (options: { preserveScroll?: boolean; focusArticleId?: string } = {}): void => {
-    planningCleanup?.(); planningCleanup = null;
     reviewCandidateCleanup?.(); reviewCandidateCleanup = null; const reviewLoadSequence = ++reviewCandidateLoadSequence;
     const savedScroll = options.preserveScroll ? { x: scrollX, y: scrollY } : undefined;
     if (!state) { const current = path(); app.innerHTML = current === `${BASE}/activeren` ? activationPage(activationNotice) : current === `${BASE}/review-toegang` ? reviewAccessPage(activationNotice) : current === `${BASE}/wachtwoord-vergeten` ? recoveryRequestPage(activationNotice) : current === `${BASE}/wachtwoord-herstellen` ? recoveryCompletePage(activationNotice) : login(notice, demoEnabled); return; }
@@ -2257,11 +2254,6 @@ export function mountSportpaleisWorkspaceApplication(app: HTMLDivElement): void 
     const current = path(); const viewState = activeRolePreview ? rolePreviewState(state, activeRolePreview) : state; const viewSearchIndex = activeRolePreview ? buildWorkspaceSearchIndex(viewState, BASE) : searchIndex; const view = page(viewState, current);
     app.innerHTML = workspaceTerminology(shell(`${notice ? `<div class="sp-action-notice">${esc(notice)}</div>` : ""}${view.html}`, viewState, current, view.title));
     syncMobileNavigationForViewport(mobileNavigationElements(), matchMedia("(max-width: 760px)").matches);
-    const planningRoot = app.querySelector<HTMLElement>("[data-planning-root]");
-    if (planningRoot) void import("./workspace-planning.ts").then(({ mountPlanning }) => {
-      if (!planningRoot.isConnected || reviewLoadSequence !== reviewCandidateLoadSequence) return;
-      planningCleanup = mountPlanning(planningRoot, { user: viewState.currentUser, csrf: viewState.csrfToken, base: BASE, full: current !== `${BASE}/overzicht`, sharedOnly: current === `${BASE}/gedeeld-werk` || !viewState.effectivePermissions?.decisions["planning.view"]?.allowed, readOnly: Boolean(activeRolePreview || viewState.readOnlyFallback) });
-    });
     if (state.effectivePermissions) for (const link of app.querySelectorAll<HTMLAnchorElement>("a[href]")) {
       const target = new URL(link.href, location.href);
       if (target.origin !== location.origin) continue;
