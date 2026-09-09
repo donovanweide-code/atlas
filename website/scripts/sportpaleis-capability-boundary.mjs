@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { assertPermission, validatePermissionPolicy } from "./workspace-permissions.mjs";
+import { assertPermission, assertProtectedAccountManagement, validatePermissionPolicy } from "./workspace-permissions.mjs";
 import { withWorkspaceMutationAuthority } from "./workspace-mutation-authority.mjs";
 
 // Explicit legacy entry-point reconciliation. Names/roles never grant authority.
@@ -61,6 +61,7 @@ function check(state, call) {
   if (!user) throw Object.assign(new Error("Gebruiker niet actief."), { statusCode: 401, code: "UNAUTHENTICATED" });
   call.permissionVersion = state.workspacePermissions.version;
   call.decisions = call.required.map(capability => assertPermission(state.workspacePermissions, { userId: call.userId, tenantId: state.organizationId }, capability));
+  if (call.targetUserId) assertProtectedAccountManagement(state.workspacePermissions, { userId: call.userId, tenantId: state.organizationId }, call.targetUserId);
 }
 export function installSportpaleisCapabilityBoundary(service) {
   const store = service.store;
@@ -105,6 +106,7 @@ export function installSportpaleisCapabilityBoundary(service) {
       const parent = activeCall.getStore();
       const call = { userId: user.id, configured: Boolean(state.workspacePermissions), required: [...new Set([...(parent?.userId === user.id ? parent.required : []), ...requiredForCall])] };
       call.sessionId = session.idHash || session.id;
+      if (["issuePasswordReset", "setQuickPin", "updateUser", "cancelInvitedUser", "reissueInvitedUser"].includes(name)) call.targetUserId = args[1];
       // Preserve the existing separate temporary-review authority; it is never
       // converted into an employee identity or used to bypass its own policy.
       call.sessionAuthority = session.authMethod === "TEMPORARY_REVIEW_GRANT"

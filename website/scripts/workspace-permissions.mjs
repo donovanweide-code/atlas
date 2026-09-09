@@ -75,10 +75,20 @@ export function assertPermission(policy, context, capability, object = null, now
   if (!decision.allowed) deny(`${CAPABILITIES[capability]?.label || "Actie"} niet toegestaan: ${decision.source}.`);
   return decision;
 }
+export function assertProtectedAccountManagement(policy, context, targetUserId, now = Date.now()) {
+  const actor = compileEffectivePermissions(policy, context.userId, now);
+  if (actor.decisions["developer.manage"].allowed) return;
+  const target = Object.hasOwn(policy.users, targetUserId) ? policy.users[targetUserId] : null;
+  if (!target) return;
+  const potential = new Set([...(policy.presets[target.presetId]?.capabilities || []), ...Object.keys(target.overrides || {}).filter(id => target.overrides[id] === "allow"), ...compileEffectivePermissions(policy, targetUserId, now).allowed]);
+  if ([...potential].some(id => CAPABILITIES[id]?.risk === "critical" && target.overrides?.[id] !== "deny")) deny("Een account met technische authority kan alleen door Developer/Admin worden beheerd.", 403, "TECHNICAL_ACCOUNT_PROTECTED");
+}
+
 export function updateUserPermissions(policy, context, input, now = new Date()) {
   const authority = assertPermission(policy, context, "management.permissions", null, now.getTime());
   if (input.expectedVersion !== policy.version) deny("Rechten zijn intussen gewijzigd. Vernieuw voordat je opslaat.", 409, "PERMISSION_VERSION_CONFLICT");
   if (!Object.hasOwn(policy.users, input.userId)) deny("Gebruiker niet gevonden.", 404);
+  assertProtectedAccountManagement(policy, context, input.userId, now.getTime());
   const previous = structuredClone(policy.users[input.userId]);
   const next = { ...previous, presetId: input.presetId ?? previous.presetId, overrides: input.reset ? {} : input.overrides ?? previous.overrides };
   const candidate = structuredClone(policy); candidate.users[input.userId] = next; validatePermissionPolicy(candidate);

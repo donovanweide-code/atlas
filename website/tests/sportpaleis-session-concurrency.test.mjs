@@ -6,6 +6,17 @@ import { SPORTPALEIS_METHOD_CAPABILITIES } from "../scripts/sportpaleis-capabili
 
 const hash = token => createHash("sha256").update(token).digest("hex");
 
+test("business owner cannot take over or demote a technical account through credential administration", async t => {
+  const f = await createPlanningFixture(t); const { Kevin, Donovan, Patrick } = f.actors;
+  const before = JSON.stringify(await f.store.read());
+  for (const [method, input] of [["issuePasswordReset", undefined], ["setQuickPin", { pin: "1234" }], ["updateUser", { status: "Inactief" }], ["cancelInvitedUser", undefined], ["reissueInvitedUser", undefined]]) await assert.rejects(f.service[method](Kevin.token, Kevin.csrfToken, Donovan.id, input), { code: "TECHNICAL_ACCOUNT_PROTECTED" });
+  await assert.rejects(f.service.updatePermissionConfiguration(Kevin.token, Kevin.csrfToken, { userId: Donovan.id, expectedVersion: 1, presetId: "owner" }), { code: "TECHNICAL_ACCOUNT_PROTECTED" });
+  assert.equal(JSON.stringify(await f.store.read()), before);
+  await f.service.requestPasswordReset({ email: "patrick@example.test" });
+  const normal = await f.service.issuePasswordReset(Kevin.token, Kevin.csrfToken, Patrick.id);
+  assert.ok(normal, "normal employee account administration remains available to owner");
+});
+
 test("personal multi-device sessions remain independent; logout, reconnect, concurrent login and provenance", async t => {
   const f = await createPlanningFixture(t);
   for (const name of ["Patrick", "Erik", "Kevin", "Donovan"]) {
