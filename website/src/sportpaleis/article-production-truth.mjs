@@ -1,5 +1,6 @@
 // Explicit article authority, supplied by Donovan on 2026-09-08.
-// These rules precede generic club/profile defaults without changing dimensions.
+// These rules precede generic club/profile defaults.
+import { frontNameTruthForArticle } from './front-name-production-truth.mjs';
 export const ARTICLE_PRODUCTION_TRUTH = Object.freeze({
   '116386': Object.freeze({ id: 'ARTICLE-116386-NUMBER-COPIES-20260908', field: 'backNumber', outputCopiesPerItem: 2 }),
   '137294': Object.freeze({ id: 'ARTICLE-137294-NUMBER-SPAIN-20260908', field: 'backNumber', fontProfile: 'Spain' }),
@@ -8,6 +9,9 @@ export const ARTICLE_PRODUCTION_TRUTH = Object.freeze({
 });
 
 export function articleProductionTruth(articleNumber, field) {
+  if (field === 'name' && frontNameTruthForArticle(articleNumber)?.association === 'Almere Pioneers') {
+    return { id: 'PIONEERS-FRONT-NAME-WIDTH-20260910', field: 'name', placement: 'FRONT', fixedWidthMm: 90 };
+  }
   const rule = ARTICLE_PRODUCTION_TRUTH[String(articleNumber ?? '').trim()];
   return rule?.field === field ? rule : null;
 }

@@ -35,7 +35,7 @@ export function groupSemanticNumberObjects(objects: readonly CutObject[], physic
       || assetIdentity?.assetId !== first.assetIdentity?.assetId
       || assetIdentity?.assetVersion !== first.assetIdentity?.assetVersion)) throw new Error(`Rugnummer ${semantic.value} bevat incompatibele fysieke cijfers.`);
 
-    const contourSpacingMm = Number.isFinite(semantic.garmentCompositionSpacingMm)
+    const contourSpacingMm = typeof semantic.garmentCompositionSpacingMm === "number" && Number.isFinite(semantic.garmentCompositionSpacingMm)
       ? semantic.garmentCompositionSpacingMm
       : physicalRecognitionGapMm;
     let cursorX = 0;

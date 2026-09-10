@@ -83,7 +83,8 @@ export interface SemanticProductionGroup {
   /** 1-based exemplaar binnen de quantity van dezelfde semantische productieregel. */
   copyIndex?: number;
   copyCount?: number;
-  garmentCompositionSpacingMm: number;
+  garmentCompositionSpacingMm?: number;
+  spacingAuthority?: "SOURCE_NATIVE_SPACING_AUTHORITY" | "SOURCE_SPECIFIC_SPACING_AUTHORITY" | "FALLBACK_SPACING_AUTHORITY" | "PIONEERS_SPACING_AUTHORITY";
   /** De herkenbare cijfers waaruit dit fysieke rugnummerexemplaar bestaat. */
   physicalMembers?: readonly SemanticPhysicalMember[];
 }

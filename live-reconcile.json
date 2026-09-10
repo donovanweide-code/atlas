@@ -1,0 +1,163 @@
+{
+  "observedAt": "2026-09-10T20:41:41.655Z",
+  "root": "/srv/wbd/releases/SPW-OPERATOR-ARTICLE-TRUTH-20260908-C03D860",
+  "releaseId": "SPW-OPERATOR-ARTICLE-TRUTH-20260908-C03D860",
+  "commit": "c03d8604cb1ce232c73a34f8996d0ad193f17024",
+  "hashes": {
+    "src/sportpaleis/production-assets.mjs": "dcf31300e7decfc54f71b7b0c43584864d7f72fce578546fd3a919091ef50d74",
+    "src/sportpaleis/verified-production-number-sources.mjs": "50d53fd8ff1f05cdc833897409f1fedd13ee5758e704465b679f91de375c448b",
+    "src/sportpaleis/direct-print/semantic-groups.ts": "7364f6c630353062022daba4055d0aa0191ad20d65280b23a652150e22ae1f3c",
+    "src/sportpaleis/managed-font-production.mjs": "cb2a062c0b5df0566b6850efbf79e8b1a319ea1ce42add7fb59f76d3500cbcfd",
+    "scripts/sportpaleis-pilot-foundation.mjs": "de4b1325f558c83e46f295e706d62559c819105c8cffdc74abac37d7aabe90d1"
+  },
+  "sources": [
+    {
+      "key": "hockey-rug-200",
+      "sourceSha256": "4F30D058BE23E208EBA9FA40A5779A9E0FA826FDAEAA34F51029ADF57F887293",
+      "numberComposition": {
+        "freeContourSpacingMm": 18,
+        "measurement": "CONTOUR_TO_CONTOUR",
+        "glyphHeightMm": 200,
+        "widthMode": "DERIVED_FROM_GLYPH_CONTOURS"
+      },
+      "glyphMetricFields": [
+        "candidateId",
+        "geometryHash",
+        "widthUnits",
+        "heightUnits",
+        "contours"
+      ],
+      "proofs": [
+        {
+          "content": "11",
+          "heightMm": 200,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "14",
+          "heightMm": 200,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "44",
+          "heightMm": 200,
+          "gapMm": 18.000000000000014,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "key": "pioneers-short-80",
+      "sourceSha256": "E89630E0450B35F10AE1D0DA1C231AF98E5E6D96B887DE3DE9629F2A2FF29860",
+      "numberComposition": {
+        "freeContourSpacingMm": 18,
+        "measurement": "CONTOUR_TO_CONTOUR",
+        "glyphHeightMm": 80,
+        "widthMode": "DERIVED_FROM_GLYPH_CONTOURS"
+      },
+      "glyphMetricFields": [
+        "candidateId",
+        "geometryHash",
+        "widthUnits",
+        "heightUnits",
+        "contours"
+      ],
+      "proofs": [
+        {
+          "content": "11",
+          "heightMm": 80,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "14",
+          "heightMm": 80,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "44",
+          "heightMm": 80,
+          "gapMm": 18,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "key": "hockey-short-75",
+      "sourceSha256": "17859D2173CFC5A75B488CEA75033A92D22EBAE036C989EE226DA6E40B43F015",
+      "numberComposition": {
+        "freeContourSpacingMm": 18,
+        "measurement": "CONTOUR_TO_CONTOUR",
+        "glyphHeightMm": 75,
+        "widthMode": "DERIVED_FROM_GLYPH_CONTOURS"
+      },
+      "glyphMetricFields": [
+        "candidateId",
+        "geometryHash",
+        "widthUnits",
+        "heightUnits",
+        "contours"
+      ],
+      "proofs": [
+        {
+          "content": "11",
+          "heightMm": 75,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "14",
+          "heightMm": 75,
+          "gapMm": 18,
+          "mirror": true
+        },
+        {
+          "content": "44",
+          "heightMm": 75,
+          "gapMm": 18,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "key": "pioneers-rug-senior-200",
+      "sourceSha256": "5CC303321ADCB7BF9F0722E6BDFE8CCAD6BBABA28139AF77DB08CA3C478BD709",
+      "numberComposition": {
+        "freeContourSpacingMm": 5,
+        "measurement": "CONTOUR_TO_CONTOUR",
+        "glyphHeightMm": 200,
+        "widthMode": "DERIVED_FROM_GLYPH_CONTOURS"
+      },
+      "glyphMetricFields": [
+        "candidateId",
+        "geometryHash",
+        "widthUnits",
+        "heightUnits",
+        "contours"
+      ],
+      "proofs": [
+        {
+          "content": "11",
+          "heightMm": 200,
+          "gapMm": 5,
+          "mirror": true
+        },
+        {
+          "content": "14",
+          "heightMm": 200,
+          "gapMm": 5,
+          "mirror": true
+        },
+        {
+          "content": "44",
+          "heightMm": 200,
+          "gapMm": 5,
+          "mirror": true
+        }
+      ]
+    }
+  ]
+}

@@ -5873,7 +5873,7 @@ export class SportpaleisPilotService {
         ...(hasProductionSize ? { sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm } } : {}),
         defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
         ...(productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
-        ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
+        ...(numberGlyphs ? { numberGlyphs, numberComposition: { authority: "FALLBACK_SPACING_AUTHORITY", freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
         sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED", conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION" }, physicallyProvenContour: null },
         revision: 1,
         variants: [{ id: `variant-${registrationId.slice(-12)}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
@@ -7948,7 +7948,7 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
             outputWriterId: versionedSource.outputWriterId,
             outputWriterVersion: versionedSource.outputWriterVersion,
           } : managedFont ? { kind: "FONT", id: managedFont.id, version: managedFont.version, sha256: managedFont.sha256 } : { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) },
-          widthMm: Math.round(widthMm * 1000) / 1000,
+          widthMm: articleRule?.fixedWidthMm ?? Math.round(widthMm * 1000) / 1000,
           heightMm: Math.round(heightMm * 1000) / 1000,
           quantity: variant.quantity * (articleRule?.outputCopiesPerItem ?? 1),
           ...(articleRule ? { articleProductionRule: { ...articleRule, authority: "HUMAN_PRODUCT_TRUTH_20260908" } } : {}),
@@ -8356,6 +8356,7 @@ function projectArticleProductionTruth(state, order, lines) {
       if (font) { result.source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 }; result.preview = { ...result.preview, kind: "LIVE_FONT" }; }
       else result.validation = { status: "BLOCKED", reason: `Artikel ${item.articleNumber} vereist de exacte SPAIN-nummerbron; deze bron is niet beschikbaar. Koppel de authoritative Spain Euro 2016-fontbron.` };
     }
+    if (rule.fixedWidthMm) result.widthMm = rule.fixedWidthMm;
     if (rule.outputCopiesPerItem) {
       const occurrences = new Set(line.variantIds ?? [line.variantId].filter(Boolean));
       const variants = (item.variants ?? []).filter(({ id, personalizationValues }) => occurrences.has(id) && String(personalizationValues?.[line.personalizationField] ?? '').trim() === String(line.content));
@@ -8781,7 +8782,7 @@ function managedFontPhysicalOrientation() {
   return "SOURCE";
 }
 
-function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
+export function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
   const digits = line.type === "NUMBER" && /^\d{2,4}$/u.test(line.content) ? Array.from(line.content) : null;
   const sourceOrderId = line.productionSupplement?.customerOrderLine === false ? `SUPPLEMENT:${line.id}` : order.id;
   const baseId = `${sourceOrderId}-${line.itemId ?? "unbound"}-${line.id}-${line.content}-${copy}`;
@@ -8797,14 +8798,23 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
     association: item?.association ?? order.association,
     foilColor,
     requestedHeightAxis: managedFontPhysicalOrientation(line),
+    fixedWidthMm: line.articleProductionRule?.id === "PIONEERS-FRONT-NAME-WIDTH-20260910" ? 90 : null,
   });
   if (!digits || digits.length < 2) return [piece(line.content)];
 
   const semanticId = `${order.id}:${line.id}:number:${line.content}:copy-${copy}`;
-  return groupSemanticNumberObjects(digits.map((digit, digitIndex) => ({
-    ...piece(digit, `${baseId}-digit-${digitIndex + 1}-${digit}`),
-    label: `${line.preview?.label ?? `Rugnummer ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length}) · exemplaar ${copy}/${line.quantity}`,
-    printType: "Beheerde vectornummerbron · afzonderlijk cijfer",
+  const composed = piece(line.content);
+  const assetIdentity = { assetId: font.id, assetVersion: font.version, geometryHash: font.sha256, sourceKind: "MANAGED_FONT" };
+  const physicalMembers = digits.map((digit, digitIndex) => {
+    const contours = composed.contours.filter(({ id }) => id.startsWith(`${baseId}-g${digitIndex + 1}-`));
+    if (!contours.length) throw Object.assign(new Error("De native nummercompositie mist een herkenbaar cijfer."), { code: "PRODUCTION_FONT_GLYPH_MISSING", statusCode: 409 });
+    const box = boundsForContours(contours);
+    return { sourceObjectId: `${baseId}-digit-${digitIndex + 1}-${digit}`, digit, digitIndex, contourIds: contours.map(({ id }) => id), relativePlacementMm: { x: box.minX, y: box.minY }, sourceBoundsMm: { ...box, minX: 0, minY: 0, maxX: box.width, maxY: box.height }, assetIdentity };
+  });
+  return [{
+    ...composed,
+    id: `${semanticId}:physical-group`,
+    label: `${line.preview?.label ?? `Nummer ${line.content}`} · exemplaar ${copy}/${line.quantity}`,
     semanticGroup: {
       id: semanticId,
       kind: "MULTI_DIGIT_NUMBER",
@@ -8812,20 +8822,15 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
       ...(line.itemId ? { itemId: line.itemId } : {}),
       ...(item?.productionProfileId ? { productionProfileId: item.productionProfileId } : {}),
       value: line.content,
-      digit,
-      digitIndex,
+      digit: digits[0],
+      digitIndex: 0,
       digitCount: digits.length,
       copyIndex: copy,
       copyCount: line.quantity,
-      garmentCompositionSpacingMm: NUMBER_GLYPH_SPACING_MM,
+      spacingAuthority: "SOURCE_NATIVE_SPACING_AUTHORITY",
+      physicalMembers,
     },
-    assetIdentity: {
-      assetId: font.id,
-      assetVersion: font.version,
-      geometryHash: font.sha256,
-      sourceKind: "MANAGED_FONT",
-    },
-  })));
+  }];
 }
 
 function productionLineWriterIdentity(state, line) {

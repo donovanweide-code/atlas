@@ -999,7 +999,8 @@ export interface ProductionJobSnapshot {
       vectorProfile?: string | null; nestingSection?: { key: string; label: string; rank: number } | null; sourceOrderId?: string;
       semanticGroup?: {
         id: string; kind: "MULTI_DIGIT_NUMBER"; sourceLineId: string; itemId?: string; productionProfileId?: string;
-        value: string; digit: string; digitIndex: number; digitCount: number; copyIndex?: number; copyCount?: number; garmentCompositionSpacingMm: number;
+        value: string; digit: string; digitIndex: number; digitCount: number; copyIndex?: number; copyCount?: number; garmentCompositionSpacingMm?: number;
+        spacingAuthority?: string;
         physicalMembers?: readonly {
           sourceObjectId: string; digit: string; digitIndex: number; contourIds: readonly string[];
           relativePlacementMm: { x: number; y: number };

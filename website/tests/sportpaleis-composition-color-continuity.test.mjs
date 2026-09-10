@@ -10,6 +10,7 @@ import { verifiedProductionNumberSources } from '../src/sportpaleis/verified-pro
 import { boundsForContours, createCutJobBatch, groupSemanticNumberObjects } from '../src/sportpaleis/direct-print/index.ts';
 import { directReadyProductionColorGroups, openProductionColorContexts, unprintedProductionGroup } from '../src/sportpaleis/open-production-colors.ts';
 import { createTestMailFoundation } from './helpers/sportpaleis-delivery-evidence.mjs';
+import { createManagedFontProductionPiece } from '../src/sportpaleis/managed-font-production.mjs';
 
 const values = ['11', '23', '44', '67', '87'];
 const near = (a, b, tolerance = 0.003) => assert.ok(Math.abs(a - b) <= tolerance, `${a} != ${b}`);
@@ -103,7 +104,8 @@ async function fixture(context) {
 }
 
 test('fontnummer 11 en bestaande voorbeelden blijven per exemplaar één productieobject in de echte export', async (context) => {
-  const { root, service, admin, create } = await fixture(context);
+  const { root, service, admin, create, font } = await fixture(context);
+  const bytes = await readFile(path.resolve(import.meta.dirname, '../public', `.${font.sourceUrl}`));
   const order = await create('font-proof', ['Wit'], [...values, ...'0123456789']);
   const result = (await service.prepareCurrentProductionGroup(admin.token, admin.csrfToken, { orders: [{ id: order.id, expectedRevision: order.revision }], foilColor: 'Wit' }, 'font-proof-job')).value;
   const job = result.job;
@@ -115,7 +117,11 @@ test('fontnummer 11 en bestaande voorbeelden blijven per exemplaar één product
     for (const placed of selected) {
       assert.deepEqual(placed.physicalMembers.map(({ digit }) => digit), [...value]);
       const [a, b] = placed.physicalMembers.map(({ boundsMm }) => boundsMm);
-      near(placed.nestingRotationApplied ? Math.max(b.minY - a.maxY, a.minY - b.maxY) : Math.max(b.minX - a.maxX, a.minX - b.maxX), 18);
+      const native = createManagedFontProductionPiece({ fontRecord: font, bytes, content: value, widthMm: 100, heightMm: 200, id: 'native-reference', foilColor: 'Wit' });
+      const first = boundsForContours(native.contours.filter(({ id }) => id.startsWith('native-reference-g1-')));
+      const second = boundsForContours(native.contours.filter(({ id }) => id.startsWith('native-reference-g2-')));
+      near(placed.nestingRotationApplied ? Math.max(b.minY - a.maxY, a.minY - b.maxY) : Math.max(b.minX - a.maxX, a.minX - b.maxX), second.minX - first.maxX);
+      assert.equal(placed.provenance.semanticGroup.spacingAuthority, 'SOURCE_NATIVE_SPACING_AUTHORITY');
       near(placed.sourceBoundsMm.height, 200);
       assert.equal(placed.mirrorApplied, true);
     }
