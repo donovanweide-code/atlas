@@ -1,0 +1,112 @@
+{
+  "status": "BLOCKED",
+  "code": "DOMAIN_BACKFILL_SOURCE_DRIFT",
+  "candidate": {
+    "releaseId": "SPW-WEBSHOP-BLUE-20260914",
+    "commit": "ee498f54615db1b7b16a5394e1354d17763e3f2c",
+    "tag": "SPW-WEBSHOP-BLUE-20260914",
+    "baseFreezeCommit": "76a7aaf72bcf44cb4e01b51e434c410093445565",
+    "artifact": "SPW-WEBSHOP-BLUE-20260914.tar.gz",
+    "artifactBytes": 24796220,
+    "artifactSha256": "a01c148742acd884711e8e0a96322ea4ac2e0bb7ea177a56f5419eaa804d4704",
+    "externalManifestSha256": "c7609f63f1d291d90a4408f400a5618ff0494e7379b13cb3edfe2e3c651dd2e6",
+    "embeddedManifestSha256": "e6908018a10afab204f8aca8f030eddf176efb291ca0f32ebc0f95c778fe9f18"
+  },
+  "localAcceptance": "PASS",
+  "tests": {
+    "passed": 119,
+    "total": 119
+  },
+  "serverAssurance": {
+    "phase": "RESTORE_BACKFILL",
+    "sportpaleis": "BLOCKED",
+    "owner": "NOT_RUN",
+    "revisions": [
+      {
+        "database": "wbd_canary_webshop_blue_20260914",
+        "meta": [
+          {
+            "schema_version": 18,
+            "global_revision": 9793,
+            "legacy_source_revision": 9655,
+            "contract_version": 1,
+            "cutover_mode": "DOMAIN_READS"
+          }
+        ],
+        "legacy": [
+          {
+            "revision": 9660
+          }
+        ],
+        "reconciliation": [
+          {
+            "legacy_revision": 9655,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          },
+          {
+            "legacy_revision": 9646,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          },
+          {
+            "legacy_revision": 9561,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          }
+        ]
+      },
+      {
+        "database": "wbd_workspace",
+        "meta": [
+          {
+            "schema_version": 18,
+            "global_revision": 9797,
+            "legacy_source_revision": 9655,
+            "contract_version": 1,
+            "cutover_mode": "DOMAIN_READS"
+          }
+        ],
+        "legacy": [
+          {
+            "revision": 9661
+          }
+        ],
+        "reconciliation": [
+          {
+            "legacy_revision": 9655,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          },
+          {
+            "legacy_revision": 9646,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          },
+          {
+            "legacy_revision": 9561,
+            "contract_version": 1,
+            "status": "MATCH",
+            "hashes_equal": 1
+          }
+        ]
+      }
+    ]
+  },
+  "cleanup": {
+    "canaryDatabasesRemaining": 0,
+    "canaryDirectoryRemaining": false,
+    "liveMutations": 0
+  },
+  "live": {
+    "deployed": false,
+    "smoke": "NOT_RUN",
+    "autoIntake": "NOT_READY",
+    "customerMailAudit": "NOT_RUN"
+  }
+}
