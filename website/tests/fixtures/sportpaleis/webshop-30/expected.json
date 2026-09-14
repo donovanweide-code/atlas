@@ -88,6 +88,18 @@
             "7"
           ]
         ]
+      },
+      {
+        "sku": "141598",
+        "size": "140",
+        "color": "WIT",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "34"
+          ]
+        ]
       }
     ]
   },
@@ -286,6 +298,18 @@
             "7"
           ]
         ]
+      },
+      {
+        "sku": "141598",
+        "size": "L",
+        "color": "WIT",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "34"
+          ]
+        ]
       }
     ]
   },
@@ -482,6 +506,18 @@
           [
             "Rugnummer",
             "7"
+          ]
+        ]
+      },
+      {
+        "sku": "141598",
+        "size": "L",
+        "color": "WIT",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "34"
           ]
         ]
       }

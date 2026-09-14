@@ -1,0 +1,182 @@
+{
+  "status": "LOCAL_ACCEPTANCE_PASS_RELEASE_GATES_PENDING",
+  "baseCommit": "d58785616f1cc3862ac13cd35cf5a38f55d0e232",
+  "liveBase": {
+    "releaseId": "SPW-PRACTICAL-NUMBER-INPUT-20260910",
+    "commit": "76a7aaf72bcf44cb4e01b51e434c410093445565",
+    "revision": 9797
+  },
+  "blueAuthority": [
+    {
+      "id": "sp-live-141598",
+      "articleNumber": "141598",
+      "name": "SC Buitenboys WEDSTRIJD SHIRT",
+      "association": "SC Buitenboys",
+      "foilColorOverride": "Blauw",
+      "profileId": "profile-source-sc-buitenboys-backNumber",
+      "revision": 7
+    }
+  ],
+  "liveOrderEvidence": [
+    {
+      "orderId": "SP-2026-0167",
+      "itemId": "item-75b812d78645",
+      "articleId": "sp-live-141598",
+      "foilColor": "Blauw",
+      "productionProfileId": "profile-source-sc-buitenboys-backNumber"
+    },
+    {
+      "orderId": "SP-2026-0153",
+      "itemId": "item-9a4e4df3930b",
+      "articleId": "sp-live-141598",
+      "foilColor": "Blauw",
+      "productionProfileId": "profile-source-sc-buitenboys-backNumber"
+    },
+    {
+      "orderId": "SP-2026-0146",
+      "itemId": "item-102fc270f70a",
+      "articleId": "sp-live-141598",
+      "foilColor": "Blauw",
+      "productionProfileId": "profile-source-sc-buitenboys-backNumber"
+    }
+  ],
+  "batch": {
+    "orders": 30,
+    "items": 39,
+    "colors": [
+      "Wit",
+      "Blauw",
+      "Zwart"
+    ],
+    "parseMs": 732.6451000000002,
+    "creationMs": 48896.9263,
+    "ordersPerMinute": 36.81212984547047,
+    "detailP50": 1100.2141000000047,
+    "detailP95": 1316.8138999999937,
+    "ids": [
+      "SP-2026-0106",
+      "SP-2026-0107",
+      "SP-2026-0108",
+      "SP-2026-0109",
+      "SP-2026-0110",
+      "SP-2026-0111",
+      "SP-2026-0112",
+      "SP-2026-0113",
+      "SP-2026-0114",
+      "SP-2026-0115",
+      "SP-2026-0116",
+      "SP-2026-0117",
+      "SP-2026-0118",
+      "SP-2026-0119",
+      "SP-2026-0120",
+      "SP-2026-0121",
+      "SP-2026-0122",
+      "SP-2026-0123",
+      "SP-2026-0124",
+      "SP-2026-0125",
+      "SP-2026-0126",
+      "SP-2026-0127",
+      "SP-2026-0128",
+      "SP-2026-0129",
+      "SP-2026-0130",
+      "SP-2026-0131",
+      "SP-2026-0132",
+      "SP-2026-0133",
+      "SP-2026-0134",
+      "SP-2026-0135"
+    ],
+    "storage": {
+      "duplicatePdf": 0,
+      "fullText": 0,
+      "fullOrderArchive": 0
+    },
+    "physicalOutput": false,
+    "blueRuleAvailable": true
+  },
+  "tests": {
+    "passed": 119,
+    "total": 119,
+    "build": "PASS"
+  },
+  "concurrency": {
+    "status": "PASS",
+    "readSessions": 10,
+    "interactiveSessions": 5,
+    "distinctCookiesAndActors": true,
+    "independentSelections": true,
+    "editConflict": "200 + 409",
+    "excludeRestoreConflict": "200 + 409 then explicit retry",
+    "singleHandoffReceipt": true,
+    "noModuleGlobalBatchState": true,
+    "coldLoadMetrics": {
+      "pdfParseMs": 719.8002000000001,
+      "structuredMs": 41.62950000000001,
+      "firstBatchMs": 761.4297000000001,
+      "rssDeltaBytes": 19906560,
+      "sourceBytes": 759353,
+      "pageCount": 138,
+      "persistedPdfs": 0,
+      "persistedFullTexts": 0,
+      "persistedFullOrders": 0,
+      "batchParses": 1,
+      "detailParses": 0,
+      "thumbnailBuilds": 0,
+      "batchReadyMs": 852.4642000000001
+    },
+    "batchParses": 1,
+    "detailParses": 1,
+    "latency": {
+      "coldLoad": {
+        "samples": 10,
+        "p50Ms": 873.2242000000001,
+        "p95Ms": 874.4645
+      },
+      "read": {
+        "samples": 100,
+        "p50Ms": 11.164800000000014,
+        "p95Ms": 24.766599999999926
+      },
+      "detail": {
+        "samples": 10,
+        "p50Ms": 320.2930000000001,
+        "p95Ms": 330.49749999999995
+      },
+      "edit": {
+        "samples": 2,
+        "p50Ms": 20.150499999999738,
+        "p95Ms": 20.37289999999939
+      },
+      "excludeRestore": {
+        "samples": 3,
+        "p50Ms": 15.35819999999967,
+        "p95Ms": 15.370700000000397
+      },
+      "handoff": {
+        "samples": 2,
+        "p50Ms": 4.8901999999998225,
+        "p95Ms": 4.983100000000377
+      },
+      "search": {
+        "samples": 5,
+        "p50Ms": 1.399999976158142,
+        "p95Ms": 1.9000000357627869
+      },
+      "selection": {
+        "samples": 5,
+        "p50Ms": 1.0999999642372131,
+        "p95Ms": 1.199999988079071
+      },
+      "browserEdit": {
+        "samples": 5,
+        "p50Ms": 95.88180000000011,
+        "p95Ms": 108.64640000000054
+      }
+    },
+    "bottleneck": "Batch-wide revision fence intentionally conflicts concurrent writes; explicit refresh required. Cold detail requests share one serial parse."
+  },
+  "orderdetail": {
+    "p50Ms": 299.10000002384186,
+    "p95Ms": 302.10000002384186
+  },
+  "liveMutations": 0
+}

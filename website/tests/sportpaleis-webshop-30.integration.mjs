@@ -31,6 +31,14 @@ test("30 webshop PDF orders traverse canonical production and pickup lifecycle",
   const store = new SportpaleisFileStore(config);
   const service = new SportpaleisPilotService({ store, artifactRoot: path.resolve(import.meta.dirname, ".."), runtimeArtifactRoot: path.join(root, "runtime"), mailboxConfiguration: { configured: true } });
   await service.initialize();
+  // Existing catalog authority, also confirmed read-only in LIVE (article revision 7).
+  // Do not seed a foil override here: losing the real rule must fail acceptance.
+  const blueArticle = (await store.read()).articles.find((a)=>a.articleNumber === "141598");
+  assert.equal(blueArticle.association, "SC Buitenboys");
+  assert.equal(blueArticle.foilColorOverride, "Blauw");
+  assert.equal(blueArticle.profileId, "profile-source-sc-buitenboys-backNumber");
+  const truthBefore = await store.read();
+  const truthHash = sha256(Buffer.from(JSON.stringify([truthBefore.articles, truthBefore.productionProfiles])));
   const actor = await service.login({ email: "kevin@sportpaleis.nl", password: config.seedPasswords.kevin });
   const source = mail({ uid: 1, messageId: "<30-fixture@example.invalid>", subject: "Webshop acceptance", text: "Software acceptance only", attachments: [{ filename: "acceptance.pdf", contentType: "application/pdf", bytes }] });
   const start = performance.now();
@@ -46,6 +54,19 @@ test("30 webshop PDF orders traverse canonical production and pickup lifecycle",
     const wanted=expected.find((o)=>o.externalReference===match.externalReference);
     assert.deepEqual(result.value.items.map((i)=>[i.articleNumber,i.size,i.quantity]),wanted.items.map((i)=>[i.sku,i.size,i.quantity]));
     assert.equal(result.value.productionStatus,"READY");
+    for (const item of result.value.items.filter((i)=>i.articleNumber === "141598")) {
+      assert.equal(item.foilColor, "Blauw");
+      assert.equal(item.productionProfileId, "profile-source-sc-buitenboys-backNumber");
+      const lines = result.value.productionLines.filter((line)=>line.itemId === item.id);
+      assert.ok(lines.length > 0);
+      for (const line of lines) {
+        assert.equal(line.content, "34");
+        assert.equal(line.source.kind, "FONT");
+        assert.equal(line.source.id, "font-985b2931e85cec60");
+        assert.ok(line.source.sha256, "Authoritative production source must be resolved");
+        assert.equal(line.decorationIdentity.foilColor, "Blauw");
+      }
+    }
     for(const item of wanted.items) for(const [,value] of item.personalization) assert.ok(result.value.productionLines.some((line)=>line.content===value),`Missing personalization ${value}`);
     for(const item of result.value.items) for(const variant of item.variants) if(variant.personalizationValues.backNumber) assert.equal(variant.personalizationValues.backNumberSizeClass, /^\d+$/u.test(item.size)?"JUNIOR":"SENIOR");
     ids.push(result.value.id);
@@ -59,14 +80,31 @@ test("30 webshop PDF orders traverse canonical production and pickup lifecycle",
   const lineColor=(order,line)=>line.foilColor ?? order.items.find((item)=>item.id===line.itemId)?.foilColor;
   const colors=[...new Set(orders.flatMap((o)=>o.productionLines.map((l)=>lineColor(o,l))))];
   console.log("colors",colors);
+  assert.deepEqual([...colors].sort(), ["Blauw", "Wit", "Zwart"]);
+  assert.equal(orders.flatMap((o)=>o.items).filter((i)=>i.articleNumber === "141598").length, 3);
+  const completedLineKeys = new Set();
   for(const color of colors){
     const current=(await service.bootstrap(actor.token)).orders.filter((o)=>ids.includes(o.id)&&o.productionLines.some((l)=>lineColor(o,l)===color));
-    const result=await service.prepareCurrentProductionGroup(actor.token,actor.csrfToken,{orders:current.map((o)=>({id:o.id,expectedRevision:o.revision})),foilColor:color},`30-prepare-${color}`);
-    const job=result.value.job;
+    // A multi-color order already reserves its next group in the same proposal.
+    // Follow the normal Print/Plot continuation instead of creating another proposal.
+    const productionState = await store.read();
+    const existing = productionState.productionProposals.flatMap((proposal)=>proposal.status === "OPEN"
+      ? proposal.groups.filter((group)=>group.status === "OPEN" && group.foilColor === color && group.orders.every((o)=>ids.includes(o.id))).map((group)=>({proposal,group})) : []);
+    assert.ok(existing.length <= 1);
+    const job = existing.length
+      ? (await service.createProductionJob(actor.token,actor.csrfToken,{proposalId:existing[0].proposal.id,proposalGroupId:existing[0].group.id,orders:existing[0].group.orders},`30-continue-${color}`)).value
+      : (await service.prepareCurrentProductionGroup(actor.token,actor.csrfToken,{orders:current.map((o)=>({id:o.id,expectedRevision:o.revision})),foilColor:color},`30-prepare-${color}`)).value.job;
     assert.ok(job.snapshot.layout.closedContourCount>0);
     assert.equal(job.snapshot.productionGroup.foilColor,color);
     assert.deepEqual([...job.snapshot.orderIds].sort(), current.map((order)=>order.id).sort());
     assert.ok(job.snapshot.orderIds.every((id)=>ids.includes(id)));
+    const refs = job.snapshot.productionLines;
+    const expectedKeys = current.flatMap((order)=>order.productionLines.filter((line)=>lineColor(order,line) === color).map((line)=>`${order.id}|${line.id}`)).sort();
+    assert.deepEqual(refs.map((ref)=>`${ref.orderId}|${ref.id}`).sort(), expectedKeys);
+    for (const key of expectedKeys) {
+      assert.ok(!completedLineKeys.has(key), "No line may enter two color groups");
+      completedLineKeys.add(key);
+    }
     await service.completeProductionJob(actor.token,actor.csrfToken,job.id,`30-complete-${color}`);
     const remainingColors = colors.slice(colors.indexOf(color)+1);
     const afterColor = (await service.bootstrap(actor.token)).orders.filter((order)=>ids.includes(order.id));
@@ -88,6 +126,8 @@ test("30 webshop PDF orders traverse canonical production and pickup lifecycle",
   }
   await service.ingestSportpaleisMailboxSnapshot(snapshot([source]));
   const final=await store.read();
+  assert.equal(sha256(Buffer.from(JSON.stringify([final.articles, final.productionProfiles]))), truthHash);
+  assert.equal(completedLineKeys.size, orders.reduce((n,o)=>n+o.productionLines.length,0));
   assert.equal(final.orders.filter((o)=>ids.includes(o.id)).length,30);
   assert.equal(final.webshopIntake.matches.length,30);
   const completedOrder=await service.order(actor.token,ids[0]);
