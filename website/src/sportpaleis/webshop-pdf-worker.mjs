@@ -2,7 +2,9 @@
 process.on("disconnect", () => process.exit(0));
 process.once("message", async ({ bytes, limits, pageNumbers }) => {
   let task;
-  const send = (result) => process.send?.({ type: "result", result });
+  // A large evidence message must finish flushing before disconnect. Under
+  // concurrent parses an immediate disconnect can otherwise truncate the IPC.
+  const send = (result) => new Promise((resolve) => process.send?.({ type: "result", result }, () => resolve()));
   const memoryLimit = () => process.memoryUsage().rss > limits.maxRssBytes;
   const guard = () => { if (memoryLimit()) throw Object.assign(new Error(), { code: "PDF_MEMORY_LIMIT" }); };
   const heartbeat = setInterval(() => {
@@ -51,11 +53,11 @@ process.once("message", async ({ bytes, limits, pageNumbers }) => {
       page.cleanup();
     }
     guard();
-    send({ ok: true, evidence: { pageCount: document.numPages, pages } });
+    await send({ ok: true, evidence: { pageCount: document.numPages, pages } });
   } catch (error) {
     const allowed = new Set(["PDF_EMPTY", "PDF_PAGE_SELECTION_INVALID", "PDF_PAGE_LIMIT", "PDF_TEXT_LIMIT", "PDF_MEMORY_LIMIT", "PDF_OCR_REQUIRED"]);
     const code = allowed.has(error?.code) ? error.code : error?.name === "PasswordException" ? "PDF_PASSWORD_PROTECTED" : "PDF_UNREADABLE";
-    send({ ok: false, code });
+    await send({ ok: false, code });
   } finally {
     clearInterval(heartbeat);
     await task?.destroy().catch(() => {});

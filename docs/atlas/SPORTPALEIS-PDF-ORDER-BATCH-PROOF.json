@@ -1,0 +1,100 @@
+{
+  "status": "PASS",
+  "performanceChecks": [
+    [
+      "pdfParseMs",
+      709.7390999999998,
+      2500
+    ],
+    [
+      "structuredMs",
+      72.00550000000021,
+      250
+    ],
+    [
+      "batchReadyMs",
+      946.9019000000003,
+      5000
+    ],
+    [
+      "rssDeltaBytes",
+      8851456,
+      268435456
+    ],
+    [
+      "orderDetailMs",
+      312.9586000000004,
+      3000
+    ],
+    [
+      "cachedOrderDetailMs",
+      3.050999999999931,
+      100
+    ],
+    [
+      "overrideRoundtripMs",
+      17.775899999999638,
+      750
+    ]
+  ],
+  "performanceFailures": [],
+  "sourceSha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+  "sourceOrderCount": 137,
+  "batchOrders": 9,
+  "batchItems": 18,
+  "onlyPrinting": true,
+  "goldenPatterns": [
+    "2635358543",
+    "2635358614",
+    "2635358648",
+    "2635358683"
+  ],
+  "defaultSort": "OLDEST_FIRST",
+  "overrideSurvivesRestart": true,
+  "excludeRestore": true,
+  "staleEditRejected": true,
+  "partialHandoff": true,
+  "confirmationIdempotentAfterRestart": true,
+  "v11": {
+    "thumbnailMatches": 16,
+    "thumbnailBytes": 2316,
+    "totalThumbnailBytes": 30204,
+    "thumbnailRenderMs": 262.9704999999999,
+    "detailItems": 5,
+    "detailPrinted": 2,
+    "detailThumbnailMatches": 3,
+    "contextThumbnailMatches": 1,
+    "sameThumbnailCache": true,
+    "detailOpenMs": 312.9586000000004,
+    "cachedDetailMs": 3.050999999999931,
+    "senior": {
+      "value": "SENIOR",
+      "automatic": true,
+      "source": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "heightMm": 200
+    },
+    "freeEntryFailClosed": true,
+    "correctionEventPrepared": true,
+    "fullOrderArchive": 0
+  },
+  "existingProductionValidator": "SPORTPALEIS_FINAL_PRODUCTION_VALIDATOR_V3",
+  "metrics": {
+    "pdfParseMs": 709.7390999999998,
+    "structuredMs": 72.00550000000021,
+    "firstBatchMs": 781.7446,
+    "rssDeltaBytes": 8851456,
+    "sourceBytes": 759353,
+    "pageCount": 138,
+    "persistedPdfs": 0,
+    "persistedFullTexts": 0,
+    "persistedFullOrders": 0,
+    "batchParses": 1,
+    "detailParses": 0,
+    "thumbnailBuilds": 0,
+    "batchReadyMs": 946.9019000000003,
+    "overrideRoundtripMs": 17.775899999999638
+  },
+  "sqliteBytes": 24576,
+  "persistedPdfs": 0,
+  "persistedFullTexts": 0
+}

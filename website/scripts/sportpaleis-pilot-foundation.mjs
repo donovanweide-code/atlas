@@ -41,6 +41,7 @@ import { buildProductionJobSnapshotIsolated, MAX_DIRECT_PRODUCTION_WORKER_INPUT_
 import { COPY_ON_WRITE_BASE_SNAPSHOT } from "./workspace-domain-storage-primitives.mjs";
 import { verifiedProductionNumberSources } from "../src/sportpaleis/verified-production-number-sources.mjs";
 import { OWNER_SUPPLIED_FONT_EVIDENCE } from "../src/sportpaleis/front-name-production-truth.mjs";
+import { articleProductionProfile, articleProductionTruth } from "../src/sportpaleis/article-production-truth.mjs";
 import { buildSportpaleisProductCatalog, querySportpaleisProductCatalog } from "../src/sportpaleis/product-catalog.ts";
 import { canonicalTeamkitArticleSurfaceTruth, canonicalTeamkitProductType, canonicalTeamkitSurfaceTruth } from "../src/sportpaleis/teamkit-product-surfaces.mjs";
 import { resolveCatalogPersonalizationPrice } from "../src/sportpaleis/catalog-personalization-pricing.mjs";
@@ -290,7 +291,7 @@ export function canonicalProductionProfileForDecoration(state, item, field) {
   const fieldProfileId = `profile-source-${profileSlug(item.association)}-${productionField}`;
   const fieldProfile = state.productionProfiles.find(({ id, supports }) => id === fieldProfileId && supports?.includes(productionField));
   const profile = baseProfile?.supports?.includes(productionField) ? baseProfile : fieldProfile ?? baseProfile ?? null;
-  return { field, productionField, profile, fieldProfileId };
+  return { field, productionField, profile: articleProductionProfile(profile, item.articleNumber, field), fieldProfileId };
 }
 for (const association of SPORTPALEIS_ASSOCIATIONS) {
   for (const [field, label, dimensionKey] of sourceProfileFields) {
@@ -3954,13 +3955,19 @@ export class SportpaleisPilotService {
         const orders = selections.map(({ id, expectedRevision }) => {
           const order = mutableStateRecord(state, "orders", (candidate) => candidate.id === id, `${id}: order niet gevonden.`);
           if (order.revision !== Number(expectedRevision)) throw Object.assign(new Error(`${order.id}: intussen gewijzigd; ververs de orderselectie.`), { statusCode: 409, code: "REVISION_CONFLICT", currentRevision: order.revision });
-          const blocker = productionProposalBlockReason(order, state);
+          const blocker = productionProposalBlockReason(order.stage === "PRINT" && order.productionExecutionSnapshot ? { ...order, stage: "CONTROL" } : order, state);
           if (blocker) throw Object.assign(new Error(`${order.id}: ${blocker}`), { statusCode: 409, code: "ORDER_NOT_READY" });
           return order;
         });
         const overlapping = openProductionProposalOverlap(state, orders.map(({ id }) => id));
-        if (overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
-        const groups = buildProductionProposalGroups(state, orders);
+        const representedLineKeys = new Set((state.productionProposals ?? []).flatMap((proposal) => (proposal.groups ?? []).filter((group) =>
+          proposal.status === "OPEN" && group.status === "OPEN"
+          || state.productionJobs.some((job) => job.id === group.productionJobId && ["AWAITING_HUMAN_CHECK", "COMPLETED"].includes(job.status)))
+          .flatMap(({ productionLineRefs }) => productionLineRefs.map(({ orderId, lineId }) => `${orderId}|${lineId}`))));
+        for (const order of orders) for (const event of order.eventHistory ?? []) if (event.type === "PRODUCTION_GROUP_PRINTED") for (const ref of event.details?.productionLineRefs ?? []) representedLineKeys.add(`${ref.orderId}|${ref.lineId}`);
+        const groups = buildProductionProposalGroups(state, orders, { excludedLineKeys: representedLineKeys });
+        if (!groups.length && overlapping) throw Object.assign(new Error(`Er bestaat al een open productievoorstel ${overlapping.proposalNumber} voor deze fysieke orderwaarheid.`), { statusCode: 409, code: "PRODUCTION_PROPOSAL_ALREADY_OPEN", proposalId: overlapping.id });
+        if (!groups.length) throw Object.assign(new Error("Alle gevalideerde opdrukken zijn al Bedrukt of opgenomen in een bestaande fysieke groep."), { statusCode: 409, code: "PRODUCTION_GROUP_NOT_AVAILABLE" });
         const eligibleLineRefs = groups.flatMap(({ productionLineRefs }) => productionLineRefs);
         for (const order of orders) materializeProductionExecutionSnapshot(state, order, user, { reason: "PRODUCTION_GROUP_PREPARE", eligibleLineRefs });
         const requestedNewGroups = groups.filter(({ foilColor }) => normalizedProductionFoilColor(foilColor) === normalizedProductionFoilColor(requestedFoilColor));
@@ -4445,6 +4452,54 @@ export class SportpaleisPilotService {
       const outcome = await idempotentAsync(state, idempotencyKey, user.id, "CREATE_ORDER", async () => createWorkspaceOrderRecord(state, user, payload), payload);
       return { state, value: outcome };
     }, { allowedScalarKeys: ["nextOrderSequence"] });
+    return result.value;
+  }
+
+  async webshopPdfOrder(token, csrfToken, payload) {
+    const { user } = await this.authenticate(token);
+    await this.#assertCsrf(token, csrfToken);
+    assertRole(user, ["admin", "operator", "store"]);
+    const reject = (message, code = "WEBSHOP_ORDER_REVIEW_REQUIRED") => { throw Object.assign(new Error(message), { statusCode: 409, code }); };
+    if (!["preview", "accept"].includes(payload.action)) reject("Kies controleren of order aanmaken.");
+    if (typeof payload.pdfBase64 !== "string" || payload.pdfBase64.length > 11_184_812 || !/^[A-Za-z0-9+/]+={0,2}$/u.test(payload.pdfBase64)) reject("Kies een geldige PDF van maximaal 8 MB.");
+    // The worker is loaded only for intake, never during general bootstrap.
+    const [{ extractPdfEvidence }, { projectWebshopPrintBatch, batchHash }, { normalizeWebshopOrder }] = await Promise.all([
+      import("../src/sportpaleis/webshop-pdf-evidence.mjs"), import("../src/sportpaleis/webshop-batch-projection.mjs"), import("../src/sportpaleis/webshop-order-input.mjs"),
+    ]);
+    const bytes = Buffer.from(payload.pdfBase64, "base64");
+    const sha256 = batchHash(bytes);
+    // Uploaded source identity is server-derived; no claimed mailbox authority.
+    const source = { tenantId: "sportpaleis", mailboxId: "operator-upload", messageId: `sha256:${sha256}`, attachmentId: sha256 };
+    const evidence = await extractPdfEvidence({ bytes, attachmentSha256: sha256, source });
+    if (evidence.status !== "EVIDENCE_READY") reject(evidence.quarantine?.code === "PDF_OCR_REQUIRED" ? "Deze PDF heeft geen bruikbare tekstlaag en vraagt OCR." : "De PDF kon niet veilig worden gelezen.", evidence.quarantine?.code ?? "PDF_UNAVAILABLE");
+    const batch = projectWebshopPrintBatch(evidence);
+    const prepare = (state) => {
+      const normalized = normalizeWebshopOrder(state, batch, payload.orderNumber, payload);
+      // Renaming the same attachment must not turn a retry into a new order.
+      const inputHash = batchHash([sha256, { ...normalized.input, provenance: undefined }]);
+      const existing = state.orders.filter((order) => order.sourceContext?.source === "WEBSHOP_XPRT" && order.sourceContext.externalReference === payload.orderNumber);
+      if (existing.length) {
+        const order = existing[0];
+        if (existing.length !== 1 || order.sourceContext.webshopPdf?.sha256 !== sha256 || order.sourceContext.webshopPdf?.inputHash !== inputHash) reject("Deze webshopbestelling bestaat al met andere brongegevens. Open de bestaande order.", "WEBSHOP_SOURCE_CONFLICT");
+        return { duplicate: true, value: publicOrderWithProductionTruth(state, order) };
+      }
+      const reviewHash = batchHash([inputHash, state.articles, state.associations, state.productionProfiles, state.productionFonts, state.productionElements, state.foilRolls]);
+      if (payload.action === "accept" && payload.expectedReviewHash !== reviewHash) reject("De ordergegevens of productieregels zijn gewijzigd. Controleer de bestelling opnieuw.", "WEBSHOP_REVIEW_CONFLICT");
+      // Same core as createOrder. Mutation + final truth gate + source receipt are
+      // committed together, or the store rolls the entire operation back.
+      const order = createWorkspaceOrderRecord(state, user, normalized.input);
+      const validation = validateFinalProductionTruth(state, order, order.productionLines);
+      if (validation.status !== "VALID") reject("Productiebron of maatvoering is nog niet bevestigd. Controleer deze bestelling.");
+      order.sourceContext.webshopPdf = { ...normalized.reference, inputHash, acceptedBy: user.id, acceptedAt: order.createdAt };
+      const value = publicOrderWithProductionTruth(state, order);
+      if (value.productionStatus !== "READY") reject(value.productionStatusReason || "Deze bestelling is nog niet klaar voor productie. Controleer de productiegegevens.");
+      return { duplicate: false, reviewHash, value };
+    };
+    if (payload.action === "preview") return { ...prepare(structuredClone(await this.store.read())), preview: true };
+    const result = await this.store.mutate(async (state) => {
+      const value = prepare(state);
+      return { state, value, unchanged: value.duplicate };
+    });
     return result.value;
   }
 
@@ -5866,7 +5921,7 @@ export class SportpaleisPilotService {
         ...(hasProductionSize ? { sizePolicy: { mode: requestedSizePolicy, aspectRatioLocked: true, defaultWidthMm: widthMm, defaultHeightMm: heightMm, minWidthMm, maxWidthMm } } : {}),
         defaultFoilColor: optional(payload.defaultFoilColor, 40) || null,
         ...(productionMethod === "PHYSICAL_TRANSFER" ? { physicalTransfer: { supplier: null, location: null, stock: null, reserved: null } } : {}),
-        ...(numberGlyphs ? { numberGlyphs, numberComposition: { freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
+        ...(numberGlyphs ? { numberGlyphs, numberComposition: { authority: "FALLBACK_SPACING_AUTHORITY", freeContourSpacingMm: NUMBER_GLYPH_SPACING_MM, measurement: "CONTOUR_TO_CONTOUR" } } : {}),
         sourceLayers: { visualSource: null, vectorSource: { filename: source.original.filename, mimeType: source.original.mimeType, sha256: source.original.sha256 }, validatedCutContour: { sourceId: source.id, version: source.version, sha256: geometryHash, fidelityStatus: source.fidelity?.status ?? "REFERENCE_REQUIRED", conversionMethod: source.conversion?.method ?? "ORIGINAL_PDF_INTERPRETATION" }, physicallyProvenContour: null },
         revision: 1,
         variants: [{ id: `variant-${registrationId.slice(-12)}`, label: requiredText(payload.variantLabel ?? "Standaard", "Variant", 120), widthMm, heightMm, productionMode: productionMethod === "SELF_PRODUCED" ? "INTERNAL_PLOT" : "EXTERNAL", currentStock: null, minimumStock: null, targetStock: null }],
@@ -7497,7 +7552,10 @@ function assertOrderProductionDecorationCardinality(state, order) {
     const value = normalizeProductionContent(type, raw);
     if (!value) continue;
     const key = JSON.stringify([item.id, item.articleNumber, field, value]);
-    expected.set(key, Number(expected.get(key) ?? 0) + Number(variant.quantity));
+    const rule = articleProductionTruth(item.articleNumber, field);
+    const projectedLine = order.productionLines?.find((line) => line.itemId === item.id && line.personalizationField === field && line.content === value);
+    const copies = !order.productionExecutionSnapshot || projectedLine?.articleProductionRule?.id === rule?.id ? rule?.outputCopiesPerItem ?? 1 : 1;
+    expected.set(key, Number(expected.get(key) ?? 0) + Number(variant.quantity) * copies);
   }
   const actual = new Map();
   for (const line of catalogLines) {
@@ -7897,7 +7955,8 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
         const configuredHeight = profileFieldPhysicalHeightMm(association, profile, field, variant);
         const configuredNumberHeightMissing = field === "chestNumber" && !usesInitialsProfileForChestNumber && !(configuredHeight > 0);
         const requestedHeightMm = configuredHeight > 0 ? configuredHeight : field === "initialsInfix" || configuredNumberHeightMissing ? 0 : 30;
-        const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber ? associationNumberSet(state, item.association, { field, profileId: profile?.id, requestedHeightMm }) : { association: null, asset: null, ambiguous: false };
+        const articleRule = articleProductionTruth(item.articleNumber, field);
+        const linkedNumberSet = isNumber && !usesInitialsProfileForChestNumber && !articleRule?.fontProfile ? associationNumberSet(state, item.association, { field, profileId: profile?.id, requestedHeightMm }) : { association: null, asset: null, ambiguous: false };
         const applicationSourceSetId = profileSourceSetAppliesToField(profile, field) ? profile.productionSourceSetId : null;
         const versionedSource = linkedNumberSet.asset ? null : resolveProductionSource({
           sourceSetId: applicationSourceSetId,
@@ -7937,9 +7996,10 @@ export function resolveCanonicalProductionLines(state, orderId, items) {
             outputWriterId: versionedSource.outputWriterId,
             outputWriterVersion: versionedSource.outputWriterVersion,
           } : managedFont ? { kind: "FONT", id: managedFont.id, version: managedFont.version, sha256: managedFont.sha256 } : { kind: "PROFILE", id: profile?.id ?? "profile-data-gap", version: String(profile?.revision ?? 1) },
-          widthMm: Math.round(widthMm * 1000) / 1000,
+          widthMm: articleRule?.fixedWidthMm ?? Math.round(widthMm * 1000) / 1000,
           heightMm: Math.round(heightMm * 1000) / 1000,
-          quantity: variant.quantity,
+          quantity: variant.quantity * (articleRule?.outputCopiesPerItem ?? 1),
+          ...(articleRule ? { articleProductionRule: { ...articleRule, authority: "HUMAN_PRODUCT_TRUTH_20260908" } } : {}),
           preview: { kind: linkedNumberSet.asset || versionedSource ? "ASSET_REFERENCE" : managedFont ? "LIVE_FONT" : "PROFILE_REFERENCE", label: `${field === "backNumber" ? "Rugnummer" : field === "chestNumber" ? "Borstnummer" : field === "shortsNumber" ? "Shortnummer" : field === "initials" ? "Initialen" : field === "initialsInfix" ? "Tussenvoegsel" : "Naam"} ${content}`, aspectRatioLocked: Boolean(linkedNumberSet.asset || versionedSource) },
           provenance: `${item.sourceProvenance} · ${profile?.name ?? "profiel ontbreekt"} · exemplaar ${variant.id}${linkedNumberSet.asset ? ` · gekoppelde SVG-nummerset ${linkedNumberSet.asset.id}@${linkedNumberSet.asset.version}` : ""}`,
           proofStatus: linkedNumberSet.asset ? productionElementProof(linkedNumberSet.asset) : versionedSource?.sourceProofStatus ?? (managedFont ? "CONFIGURED" : "DATA_GAP"),
@@ -8146,7 +8206,7 @@ export function reconcileExistingOrderProductionTruth(state, order) {
   const decisions = existingOrderReconciliationDecisions(order);
   const immutableSnapshotLines = order.productionExecutionSnapshot?.productionLines;
   if (immutableSnapshotLines?.length || order.productionLines?.length) {
-    const productionLines = structuredClone(immutableSnapshotLines?.length ? immutableSnapshotLines : order.productionLines);
+    const productionLines = projectArticleProductionTruth(state, order, immutableSnapshotLines?.length ? immutableSnapshotLines : order.productionLines);
     const baseValidation = validateFinalProductionTruth(state, { ...order, productionLines }, productionLines, { allowHistoricalSourceSnapshot: Boolean(immutableSnapshotLines) || ["PRINT", "DONE"].includes(order.stage) });
     const snapshotIntegrity = immutableSnapshotLines?.length ? verifyProductionExecutionSnapshot(order) : { valid: true };
     const validationFindings = snapshotIntegrity.valid ? baseValidation.findings : [...baseValidation.findings, finalProductionFinding("EXECUTION_SNAPSHOT", snapshotIntegrity.reason, { code: snapshotIntegrity.code ?? "PRODUCTION_EXECUTION_SNAPSHOT_HASH_MISMATCH", evidence: JSON.stringify(snapshotIntegrity) })];
@@ -8320,9 +8380,45 @@ export function reconcileExistingOrderProductionTruth(state, order) {
   return { version: EXISTING_ORDER_RECONCILIATION_VERSION, status, sourceKind: "HISTORICAL_ORDER_PROJECTION", historicalSourceHash, projectionHash, productionLines, findings, evidence, ...(decisions.length ? { decisions } : {}) };
 }
 
+function projectArticleProductionTruth(state, order, lines) {
+  if (!lines.some((line) => articleProductionTruth(order.items?.find(({ id }) => id === line.itemId)?.articleNumber, line.personalizationField))) return structuredClone(lines);
+  // Existing physical jobs remain immutable. Only work that has not yet been
+  // prepared/printed receives the current article authority in its next job.
+  const physicalLines = new Map();
+  for (const job of state.productionJobs ?? []) {
+    if (job.kind === "REPLOT" || !["COMPLETED", "AWAITING_HUMAN_CHECK"].includes(job.status)) continue;
+    for (const line of job.snapshot?.productionLines ?? []) if (line.orderId === order.id) physicalLines.set(line.id, line);
+  }
+  const printedIds = new Set((order.eventHistory ?? []).filter(({ type }) => type === "PRODUCTION_GROUP_PRINTED").flatMap(({ details }) => (details?.productionLineRefs ?? []).filter(({ orderId }) => orderId === order.id).map(({ lineId }) => lineId)));
+  return lines.map((line) => {
+    const item = order.items?.find(({ id }) => id === line.itemId);
+    const rule = articleProductionTruth(item?.articleNumber, line.personalizationField);
+    if (!rule) return structuredClone(line);
+    const physical = physicalLines.get(line.id);
+    if (physical) return structuredClone({ ...line, source: physical.source, quantity: physical.quantity, ...(physical.articleProductionRule ? { articleProductionRule: physical.articleProductionRule } : {}) });
+    if (printedIds.has(line.id)) return structuredClone(line);
+    const result = structuredClone(line);
+    if (rule.fontProfile) {
+      const profile = articleProductionProfile(state.productionProfiles.find(({ id }) => id === (line.decorationIdentity?.productionProfileId ?? item.productionProfileId)), item.articleNumber, line.personalizationField);
+      const font = configuredManagedFont(state, profile);
+      if (font) { result.source = { kind: "FONT", id: font.id, version: font.version, sha256: font.sha256 }; result.preview = { ...result.preview, kind: "LIVE_FONT" }; }
+      else result.validation = { status: "BLOCKED", reason: `Artikel ${item.articleNumber} vereist de exacte SPAIN-nummerbron; deze bron is niet beschikbaar. Koppel de authoritative Spain Euro 2016-fontbron.` };
+    }
+    if (rule.fixedWidthMm) result.widthMm = rule.fixedWidthMm;
+    if (rule.outputCopiesPerItem) {
+      const occurrences = new Set(line.variantIds ?? [line.variantId].filter(Boolean));
+      const variants = (item.variants ?? []).filter(({ id, personalizationValues }) => occurrences.has(id) && String(personalizationValues?.[line.personalizationField] ?? '').trim() === String(line.content));
+      const units = variants.length ? variants.reduce((sum, variant) => sum + Number(variant.quantity), 0) : Number(line.quantity) / (line.articleProductionRule?.outputCopiesPerItem ?? 1);
+      result.quantity = units * rule.outputCopiesPerItem;
+    }
+    result.articleProductionRule = { ...rule, authority: "HUMAN_PRODUCT_TRUTH_20260908" };
+    return result;
+  });
+}
+
 function productionLinesForOrder(state, order) {
-  if (order.productionExecutionSnapshot?.productionLines?.length) return verifyProductionExecutionSnapshot(order).valid ? order.productionExecutionSnapshot.productionLines : [];
-  if (order.productionLines?.length) return order.productionLines;
+  if (order.productionExecutionSnapshot?.productionLines?.length) return verifyProductionExecutionSnapshot(order).valid ? projectArticleProductionTruth(state, order, order.productionExecutionSnapshot.productionLines) : [];
+  if (order.productionLines?.length) return projectArticleProductionTruth(state, order, order.productionLines);
   if (["PRINT", "DONE"].includes(order.stage)) return [];
   const reconciliation = reconcileExistingOrderProductionTruth(state, order);
   return reconciliation.status === "PROVEN" ? reconciliation.productionLines : [];
@@ -8330,7 +8426,7 @@ function productionLinesForOrder(state, order) {
 
 function publicOrderWithProductionTruth(state, order, { includeReconciliation = true } = {}) {
   const productionReconciliation = includeReconciliation ? reconcileExistingOrderProductionTruth(state, order) : null;
-  const productionLines = order.productionExecutionSnapshot?.productionLines?.length ? order.productionExecutionSnapshot.productionLines : order.productionLines?.length ? order.productionLines : includeReconciliation ? productionLinesForOrder(state, order) : [];
+  const productionLines = productionLinesForOrder(state, order);
   const projected = { ...order, ...(productionLines.length ? { productionLines } : {}), ...(includeReconciliation ? { productionReconciliation } : {}) };
   return { ...projected, ...productionStatusForOrder(state, projected) };
 }
@@ -8734,7 +8830,7 @@ function managedFontPhysicalOrientation() {
   return "SOURCE";
 }
 
-function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
+export function managedFontProductionPieces({ font, bytes, line, order, item, foilColor, copy }) {
   const digits = line.type === "NUMBER" && /^\d{2,4}$/u.test(line.content) ? Array.from(line.content) : null;
   const sourceOrderId = line.productionSupplement?.customerOrderLine === false ? `SUPPLEMENT:${line.id}` : order.id;
   const baseId = `${sourceOrderId}-${line.itemId ?? "unbound"}-${line.id}-${line.content}-${copy}`;
@@ -8750,14 +8846,23 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
     association: item?.association ?? order.association,
     foilColor,
     requestedHeightAxis: managedFontPhysicalOrientation(line),
+    fixedWidthMm: line.articleProductionRule?.id === "PIONEERS-FRONT-NAME-WIDTH-20260910" ? 90 : null,
   });
   if (!digits || digits.length < 2) return [piece(line.content)];
 
   const semanticId = `${order.id}:${line.id}:number:${line.content}:copy-${copy}`;
-  return digits.map((digit, digitIndex) => ({
-    ...piece(digit, `${baseId}-digit-${digitIndex + 1}-${digit}`),
-    label: `${line.preview?.label ?? `Rugnummer ${line.content}`} · cijfer ${digit} (${digitIndex + 1}/${digits.length}) · exemplaar ${copy}/${line.quantity}`,
-    printType: "Beheerde vectornummerbron · afzonderlijk cijfer",
+  const composed = piece(line.content);
+  const assetIdentity = { assetId: font.id, assetVersion: font.version, geometryHash: font.sha256, sourceKind: "MANAGED_FONT" };
+  const physicalMembers = digits.map((digit, digitIndex) => {
+    const contours = composed.contours.filter(({ id }) => id.startsWith(`${baseId}-g${digitIndex + 1}-`));
+    if (!contours.length) throw Object.assign(new Error("De native nummercompositie mist een herkenbaar cijfer."), { code: "PRODUCTION_FONT_GLYPH_MISSING", statusCode: 409 });
+    const box = boundsForContours(contours);
+    return { sourceObjectId: `${baseId}-digit-${digitIndex + 1}-${digit}`, digit, digitIndex, contourIds: contours.map(({ id }) => id), relativePlacementMm: { x: box.minX, y: box.minY }, sourceBoundsMm: { ...box, minX: 0, minY: 0, maxX: box.width, maxY: box.height }, assetIdentity };
+  });
+  return [{
+    ...composed,
+    id: `${semanticId}:physical-group`,
+    label: `${line.preview?.label ?? `Nummer ${line.content}`} · exemplaar ${copy}/${line.quantity}`,
     semanticGroup: {
       id: semanticId,
       kind: "MULTI_DIGIT_NUMBER",
@@ -8765,20 +8870,15 @@ function managedFontProductionPieces({ font, bytes, line, order, item, foilColor
       ...(line.itemId ? { itemId: line.itemId } : {}),
       ...(item?.productionProfileId ? { productionProfileId: item.productionProfileId } : {}),
       value: line.content,
-      digit,
-      digitIndex,
+      digit: digits[0],
+      digitIndex: 0,
       digitCount: digits.length,
       copyIndex: copy,
       copyCount: line.quantity,
-      garmentCompositionSpacingMm: NUMBER_GLYPH_SPACING_MM,
+      spacingAuthority: "SOURCE_NATIVE_SPACING_AUTHORITY",
+      physicalMembers,
     },
-    assetIdentity: {
-      assetId: font.id,
-      assetVersion: font.version,
-      geometryHash: font.sha256,
-      sourceKind: "MANAGED_FONT",
-    },
-  }));
+  }];
 }
 
 function productionLineWriterIdentity(state, line) {
@@ -8960,7 +9060,8 @@ function canonicalLineSemantics(state, order, item, line, snapshot = null) {
   const allowedTypes = field === "initials" ? ["INITIALS"] : field === "name" ? ["TEXT"] : ["backNumber", "chestNumber"].includes(field) ? ["NUMBER"] : field === "shortsNumber" ? (/^\d{1,4}$/u.test(String(line.content)) ? ["NUMBER"] : ["TEXT"]) : null;
   const profileId = line.decorationIdentity?.productionProfileId ?? item?.productionProfileId;
   const profiles = snapshot?.productionProfiles ?? state.productionProfiles;
-  const profile = profiles.find(({ id }) => id === profileId);
+  const storedProfile = profiles.find(({ id }) => id === profileId);
+  const profile = !snapshot || line.articleProductionRule ? articleProductionProfile(storedProfile, item?.articleNumber, field) : storedProfile;
   const associations = snapshot?.associationTruth ?? state.associations;
   const association = associations.find(({ id, name }) => id === item?.association || name === item?.association);
   const variant = (item?.variants ?? []).find(({ id }) => id === line.variantId)
@@ -9391,7 +9492,7 @@ function openProductionProposalOverlap(state, orderIds) {
   return (state.productionProposals ?? []).find(({ status, orders }) => status === "OPEN" && (orders ?? []).some(({ id }) => selected.has(id))) ?? null;
 }
 
-function buildProductionProposalGroups(state, orders) {
+function buildProductionProposalGroups(state, orders, { excludedLineKeys = new Set() } = {}) {
   const grouped = new Map();
   for (const order of orders) {
     const eligibility = productionEligibilityForOrder(state, order);
@@ -9399,6 +9500,7 @@ function buildProductionProposalGroups(state, orders) {
     const effectiveOrder = { ...order, productionLines: eligibility.productionLines };
     if (!productionLines.length) throw Object.assign(new Error(`${order.id}: geen gevalideerde productieregels voor een productievoorstel.`), { statusCode: 409, code: "PRODUCTION_VECTOR_ARTIFACT_UNAVAILABLE", findings: eligibility.findings });
     for (const line of productionLines) {
+      if (excludedLineKeys.has(`${order.id}|${line.id}`)) continue;
       assertPioneersNumberSource(state, effectiveOrder, line);
       assertScBuitenboysShortSource(state, effectiveOrder, line);
       const writer = productionLineWriterIdentity(state, line);
@@ -9831,7 +9933,13 @@ function buildVersionedProductionArtifact(state, orders, productionLines, jobNum
             .map((piece) => ({
               ...piece,
               id: `${piece.id}-copy-${copy}`,
-              ...(piece.semanticGroup ? { semanticGroup: { ...piece.semanticGroup, id: `${piece.semanticGroup.id}:copy-${copy}`, copyIndex: copy, copyCount: line.quantity } } : {}),
+              ...(piece.semanticGroup ? { semanticGroup: {
+                ...piece.semanticGroup, id: `${piece.semanticGroup.id}:copy-${copy}`, copyIndex: copy, copyCount: line.quantity,
+                ...(piece.semanticGroup.physicalMembers ? { physicalMembers: piece.semanticGroup.physicalMembers.map((member) => ({
+                  ...member, sourceObjectId: `${member.sourceObjectId}-copy-${copy}`,
+                  ...(member.assetIdentity ? { assetIdentity: { ...member.assetIdentity, sourceKind: "PRODUCTION_ASSET" } } : {}),
+                })) } : {}),
+              } } : {}),
               ...(piece.assetIdentity ? { assetIdentity: { ...piece.assetIdentity, sourceKind: "PRODUCTION_ASSET" } } : {}),
             }));
         },
@@ -10480,6 +10588,10 @@ export function createSportpaleisPilotRequestHandler(service, { onError } = {}) 
       const creativeVectorFileMatch = route.match(/^\/api\/sportpaleis\/v1\/creative-vector-drafts\/([^/]+)\/(source|derivative)$/);
       if (creativeVectorFileMatch && method === "GET") {
         binary(response, 200, await service.creativeVectorDraftFile(token, decodeURIComponent(creativeVectorFileMatch[1]), creativeVectorFileMatch[2]));
+        return true;
+      }
+      if (route === "/api/sportpaleis/v1/webshop-intakes/pdf-order" && method === "POST") {
+        json(response, 200, await service.webshopPdfOrder(token, csrf, await readJson(request)));
         return true;
       }
       if (route === "/api/sportpaleis/v1/webshop-intakes/mail-document" && method === "POST") {

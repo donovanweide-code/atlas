@@ -379,6 +379,10 @@ export class SportpaleisPilotApi {
     return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/matches/${encodeURIComponent(matchId)}/accept`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-match-${matchId}`) }, body: JSON.stringify(input) }));
   }
 
+  async webshopPdfOrder(input: { action: "preview" | "accept"; pdfBase64: string; filename: string; orderNumber: string; expectedReviewHash?: string }): Promise<{ duplicate: boolean; reviewHash?: string; value: WorkspaceOrder }> {
+    return responseBody(await this.#mutatingFetch(`${API}/webshop-intakes/pdf-order`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+  }
+
   async recordWebshopOrderPrint(orderId: string): Promise<{ duplicate: boolean; value: unknown }> {
     return responseBody(await this.#mutatingFetch(`${API}/webshop-orders/${encodeURIComponent(orderId)}/print`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey(`webshop-print-${orderId}`) } }));
   }

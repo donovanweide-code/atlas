@@ -215,7 +215,7 @@ function productionRotationForRequestedHeightAxis(requestedHeightAxis) {
   return rotation;
 }
 
-export function createManagedFontProductionPiece({ fontRecord, bytes, content, widthMm, heightMm, id, sourceOrderId, product, association, foilColor, requestedHeightAxis = "SOURCE" }) {
+export function createManagedFontProductionPiece({ fontRecord, bytes, content, widthMm, heightMm, id, sourceOrderId, product, association, foilColor, requestedHeightAxis = "SOURCE", fixedWidthMm = null }) {
   const sourceBytes = Buffer.from(bytes);
   const actualHash = sha256(sourceBytes);
   if (actualHash !== fontRecord.sha256 || fontRecord.status !== "TECHNICALLY_VALID") {
@@ -223,7 +223,8 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
   }
   if (!(Number(widthMm) > 0) || !(Number(heightMm) > 0)) throw managedFontError("Een productiefont vereist positieve fysieke afmetingen.");
 
-  const geometryIdentity = JSON.stringify([actualHash, String(content), Number(heightMm), FONT_OUTLINE_TOLERANCE_MM]);
+  if (fixedWidthMm !== null && !(Number(fixedWidthMm) > 0)) throw managedFontError("Een vaste breedte vereist een positieve fysieke maat.");
+  const geometryIdentity = JSON.stringify([actualHash, String(content), Number(heightMm), FONT_OUTLINE_TOLERANCE_MM, fixedWidthMm]);
   let cachedGeometry = managedFontGeometryCache.get(geometryIdentity);
   let productionContours;
   let contourBounds;
@@ -242,7 +243,9 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     // Physical text size is height-led. Applying one scale factor to both axes
     // preserves the exact font outline; width is a contour result, never an
     // independent text transform.
-    const scale = Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY);
+    const scale = fixedWidthMm === null
+      ? Number(heightMm) / (positioned.bounds.maxY - positioned.bounds.minY)
+      : Number(fixedWidthMm) / (positioned.bounds.maxX - positioned.bounds.minX);
     const contours = [];
     for (let glyphIndex = 0; glyphIndex < positioned.glyphs.length; glyphIndex += 1) {
       const glyph = positioned.glyphs[glyphIndex];
@@ -257,6 +260,11 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     productionContours = normalizeAndValidateManagedFontContours(contours);
     contourBounds = boundsForContours(productionContours);
     if (!(contourBounds.width > 0) || !(contourBounds.height > 0)) throw managedFontError("De fontcontour heeft geen bruikbare fysieke afmetingen.");
+    if (fixedWidthMm !== null) {
+      const correction = Number(fixedWidthMm) / contourBounds.width;
+      productionContours = productionContours.map(contour => ({ ...contour, points: contour.points.map(({ x, y }) => ({ x: x * correction, y: y * correction })) }));
+      contourBounds = boundsForContours(productionContours);
+    }
     cachedGeometry = {
       bounds: Object.freeze({ ...contourBounds }),
       contours: Object.freeze(productionContours.map((contour) => Object.freeze({ idSuffix: contour.id.slice(String(id).length), closed: contour.closed, points: Object.freeze(contour.points.map((point) => Object.freeze({ ...point }))) }))),
@@ -273,7 +281,7 @@ export function createManagedFontProductionPiece({ fontRecord, bytes, content, w
     association,
     printType: "Beheerd productiefont",
     requestedPhysicalSizeMm: { widthMm: contourBounds.width, heightMm: contourBounds.height },
-    sizing: { mode: "HEIGHT_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm), requestedHeightAxis },
+    sizing: { mode: fixedWidthMm === null ? "HEIGHT_UNIFORM" : "WIDTH_UNIFORM", requestedHeightMm: Number(heightMm), derivedWidthMm: contourBounds.width, legacyRequestedWidthMm: Number(widthMm), requestedHeightAxis, ...(fixedWidthMm === null ? {} : { fixedWidthMm: Number(fixedWidthMm), derivedHeightMm: contourBounds.height }) },
     vectorProfile: `${fontRecord.id}@${fontRecord.version}#${fontRecord.sha256}`,
     material: { code: `foil-${String(foilColor || "onbekend").toLocaleLowerCase("nl-NL").replace(/[^a-z0-9]+/g, "-")}`, foilColor: foilColor || "Onbekend" },
     contours: productionContours,

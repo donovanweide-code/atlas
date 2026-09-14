@@ -230,8 +230,8 @@ export function parseSportpaleisDividePdfText({ pages, layoutPages = [], sourceD
     const orderDate = segment.rawText.match(/(?:Besteldatum|Orderdatum)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
     const positionalMetadata = positionedOrderMetadata(layoutPages, segment.pageNumbers);
     const customer = segment.rawText.match(/(?:Klant(?:naam)?|Naam klant)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customer;
-    const customerPhone = segment.rawText.match(/Telefoon\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customerPhone;
-    const customerEmail = segment.rawText.match(/E-mail\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? positionalMetadata.customerEmail;
+    const customerPhone = positionalMetadata.customerPhone ?? segment.rawText.match(/Telefoon\s*:\s*([^\n\t]+)/iu)?.[1]?.trim() ?? null;
+    const customerEmail = positionalMetadata.customerEmail ?? segment.rawText.match(/E-mail\s*:\s*([^\n\t]+)/iu)?.[1]?.trim() ?? null;
     const association = segment.rawText.match(/(?:Vereniging|Club|Team)\s*:\s*([^\n]+)/iu)?.[1]?.trim() ?? null;
     let articles;
     try { articles = parseArticleBlocks(segment.rawText, association ?? ""); }

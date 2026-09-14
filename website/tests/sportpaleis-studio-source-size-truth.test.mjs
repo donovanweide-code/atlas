@@ -46,10 +46,10 @@ test("één canonical 0–9-bron componeert alleen de gevraagde cijfers op de ge
   const order = { id: "SP-CANONICAL-NUMBER", association: "Sportpaleis", items: [] };
   const line = { id: "number-34", content: "34", widthMm: 0, heightMm: 200, preview: { label: "Rugnummer 34" } };
   const pieces = productionAssetPieces({ asset, variant: { heightMm: 200 }, line, order, foilColor: "Wit" });
-  assert.equal(pieces.length, 2);
-  assert.deepEqual(pieces.map(({ semanticGroup }) => semanticGroup.digit), ["3", "4"]);
+  assert.equal(pieces.length, 1);
+  assert.deepEqual(pieces[0].semanticGroup.physicalMembers.map(({ digit }) => digit), ["3", "4"]);
   assert.ok(pieces.every(({ requestedPhysicalSizeMm }) => requestedPhysicalSizeMm.heightMm === 200));
-  assert.ok(pieces.every(({ assetIdentity }) => assetIdentity.assetId === asset.id));
+  assert.ok(pieces[0].semanticGroup.physicalMembers.every(({ assetIdentity }) => assetIdentity.assetId === asset.id));
 
   const short = productionAssetPiece({ asset, variant: { heightMm: 75 }, line: { ...line, id: "short-34", heightMm: 75 }, order, foilColor: "Wit" });
   assert.equal(short.requestedPhysicalSizeMm.heightMm, 75);

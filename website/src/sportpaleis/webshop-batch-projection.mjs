@@ -105,6 +105,7 @@ export function projectWebshopPrintBatch(result, { orderNumber = null, sourceOrd
       items.push({ id, orderNumber: group.reference, orderDate, originalDate, sourceOrderIndex: (sourceOrderIndex ?? orderIndex), sourceIndex: items.length, sourceLineId: article.sourceLineId,
         sourceHash: result.attachmentSha256, sourcePages: [...new Set(group.parts.map(({ page }) => page))],
         club: explicitField(/(?:^|\n)(?:Club|Vereniging)\s*:\s*([^\n\t]+)/iu), team: explicitField(/(?:^|\n)Team\s*:\s*([^\n\t]+)/iu),
+        customerContext: { customer: parsed.customer, customerEmail: parsed.customerEmail, customerPhone: parsed.customerPhone },
         printingRequired: personalization.length > 0, source: fields, values: structuredClone(fields), printEvidence: personalization, issues, override: null });
     }
   }

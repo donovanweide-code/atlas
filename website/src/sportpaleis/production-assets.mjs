@@ -4,15 +4,30 @@ import { inflateSync } from "node:zlib";
 
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { inspectProductionAssetSvg } from "./production-assets-svg.mjs";
+import { groupSemanticNumberObjects } from "./direct-print/semantic-groups.ts";
 
 const POINT_TO_MM = 25.4 / 72;
-export const NUMBER_GLYPH_SPACING_MM = 18;
+export const FALLBACK_NUMBER_GLYPH_SPACING_MM = 18;
+// Compatibility export for SVG-only callers; never a font tracking rule.
+export const NUMBER_GLYPH_SPACING_MM = FALLBACK_NUMBER_GLYPH_SPACING_MM;
 export const PIONEERS_NUMBER_GLYPH_SPACING_MM = 5;
 
 export function productionNumberGlyphSpacingMm(asset) {
-  return asset?.verifiedSourceKey === "pioneers-rug-senior-200"
-    ? PIONEERS_NUMBER_GLYPH_SPACING_MM
-    : NUMBER_GLYPH_SPACING_MM;
+  if (asset?.verifiedSourceKey === "pioneers-rug-senior-200") return PIONEERS_NUMBER_GLYPH_SPACING_MM;
+  const composition = asset?.numberComposition;
+  if (composition?.authority === "SOURCE_SPECIFIC_SPACING_AUTHORITY"
+    && composition.measurement === "CONTOUR_TO_CONTOUR"
+    && Number.isFinite(composition.freeContourSpacingMm) && composition.freeContourSpacingMm >= 0) return composition.freeContourSpacingMm;
+  return FALLBACK_NUMBER_GLYPH_SPACING_MM;
+}
+
+export function productionNumberSpacingAuthority(asset) {
+  if (asset?.verifiedSourceKey === "pioneers-rug-senior-200") return "PIONEERS_SPACING_AUTHORITY";
+  const composition = asset?.numberComposition;
+  return composition?.authority === "SOURCE_SPECIFIC_SPACING_AUTHORITY"
+    && composition.measurement === "CONTOUR_TO_CONTOUR"
+    && Number.isFinite(composition.freeContourSpacingMm) && composition.freeContourSpacingMm >= 0
+    ? "SOURCE_SPECIFIC_SPACING_AUTHORITY" : "FALLBACK_SPACING_AUTHORITY";
 }
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const MAX_CONTOURS = 20_000;
@@ -665,9 +680,8 @@ export function productionAssetPiece({ asset, variant, line, order, foilColor })
 }
 
 /**
- * Resolve one semantic production line to independently nestable physical
- * objects. A number-set preview remains composed with the garment spacing,
- * while the plot artifact may place each exact glyph independently.
+ * Resolve a number before handing it to any orientation or nesting consumer.
+ * Glyphs are internal members; the complete number is one production object.
  */
 export function productionAssetPieces({ asset, variant, line, order, foilColor }) {
   const numberSet = asset.applications?.some(({ kind }) => kind === "NUMBER_SET");
@@ -680,7 +694,7 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
   const digits = Array.from(line.content);
   const semanticId = `${order.id}:${line.id}:number:${line.content}`;
   const orderItem = order.items.find(({ id }) => id === line.itemId);
-  return digits.map((digit, digitIndex) => {
+  return groupSemanticNumberObjects(digits.map((digit, digitIndex) => {
     const glyph = asset.numberGlyphs[digit];
     if (!glyph?.contours?.length || !(glyph.heightUnits > 0)) throw assetError(`Cijfer ${digit} ontbreekt in de beheerde nummerbron.`, "PRODUCTION_ASSET_GLYPH_MISSING", 409);
     const scale = requestedHeight / glyph.heightUnits;
@@ -711,6 +725,7 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
         digitIndex,
         digitCount: digits.length,
         garmentCompositionSpacingMm: glyphSpacingMm,
+        spacingAuthority: productionNumberSpacingAuthority(asset),
       },
       assetIdentity: {
         assetId: asset.id,
@@ -722,5 +737,5 @@ export function productionAssetPieces({ asset, variant, line, order, foilColor }
       contours,
       productionRule: { mirror: true, rotation: 0, allowedNestingRotations: [0, 90] },
     };
-  });
+  }));
 }

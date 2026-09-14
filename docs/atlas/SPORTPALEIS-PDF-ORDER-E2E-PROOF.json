@@ -1,0 +1,65 @@
+{
+  "canary": "SP-2026-0106",
+  "externalReference": "2635358683",
+  "sha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+  "pages": [
+    122
+  ],
+  "sourceItemIds": [
+    "6b4386a6a60de99984bbd0edce1cf68f56ebeea3c1f04a3f6f3c03d594654213",
+    "ef37a6399dd4e5419024494a4299c2eff7be69523e0dac96ab8bd31641febc64"
+  ],
+  "canonicalInputHash": "cb323fa1150ebb27d8e224d93769a53efeef28736fe7d27a957c5a66faaed7dd",
+  "items": [
+    {
+      "id": "item-6dce47fa5153",
+      "articleNumber": "116597",
+      "productionProfileId": "profile-source-fc-almere-backNumber",
+      "size": "XL",
+      "quantity": 1
+    },
+    {
+      "id": "item-9183215b89a5",
+      "articleNumber": "141521",
+      "productionProfileId": "profile-source-fc-almere-shortsNumber",
+      "size": "L",
+      "quantity": 1
+    }
+  ],
+  "productionLines": [
+    {
+      "id": "catalog-line-5f202fe8c40a",
+      "itemId": "item-6dce47fa5153",
+      "content": "88",
+      "source": {
+        "kind": "FONT",
+        "id": "font-985b2931e85cec60",
+        "version": "985B2931E85C",
+        "sha256": "985B2931E85CEC60F0D661E7F9FF05CE32C959C41D4E2116E22A1ADA129C03BF"
+      },
+      "heightMm": 200,
+      "quantity": 1
+    },
+    {
+      "id": "catalog-line-e237633a765e",
+      "itemId": "item-9183215b89a5",
+      "content": "88",
+      "source": {
+        "kind": "FONT",
+        "id": "font-985b2931e85cec60",
+        "version": "985B2931E85C",
+        "sha256": "985B2931E85CEC60F0D661E7F9FF05CE32C959C41D4E2116E22A1ADA129C03BF"
+      },
+      "heightMm": 75,
+      "quantity": 1
+    }
+  ],
+  "productionStatus": "READY",
+  "contourCount": 12,
+  "storage": {
+    "fullPdf": 0,
+    "fullText": 0,
+    "fullOrderArchive": 0
+  },
+  "physicalOutput": false
+}
