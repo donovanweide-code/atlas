@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { readFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +13,14 @@ export async function createWebshopOrderReview({ root, port = 0 } = {}) {
   await mkdir(root, { recursive: true });
   const password = "Local-Canary-Only-2026!";
   const store = new SportpaleisFileStore({ filePath: path.join(root, "state.json"), backupDirectory: path.join(root, "backups"), seedPasswords: { kevin: password, patrick: password, collega: password, "donovan-support": password } });
-  const service = new SportpaleisPilotService({ store, websiteSource: {}, mailMode: "capture", artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), prewarmProductionBuildIsolation: false, releaseId: "PDF-ORDER-E2E-LOCAL-REVIEW" });
+  const legacyOverridePath = fileURLToPath(new URL("../../.codex-tmp/webshop-batch-review/overrides.sqlite", import.meta.url));
+  const webshopBatchOverrideProvider = (sourceHash, orderNumber) => {
+    if (!existsSync(legacyOverridePath)) return null;
+    const database = new DatabaseSync(legacyOverridePath, { readOnly: true });
+    try { return { sourceHash, overrides: Object.fromEntries(database.prepare("SELECT id, changes, excluded FROM overrides WHERE source_hash=? AND order_number=?").all(sourceHash, orderNumber).map((row) => [row.id, { changes: JSON.parse(row.changes), excluded: Boolean(row.excluded) }])) }; }
+    finally { database.close(); }
+  };
+  const service = new SportpaleisPilotService({ store, webshopBatchOverrideProvider, websiteSource: {}, mailMode: "capture", artifactRoot: root, runtimeArtifactRoot: path.join(root, "runtime"), prewarmProductionBuildIsolation: false, releaseId: "PDF-ORDER-E2E-LOCAL-REVIEW" });
   await service.initialize();
   const handler = createSportpaleisPilotRequestHandler(service);
   const dist = fileURLToPath(new URL("../dist-workspace/", import.meta.url));

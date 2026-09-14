@@ -1,0 +1,596 @@
+[
+  {
+    "externalReference": "9930000000",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "XL",
+        "color": "GROEN",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Rugnummer",
+            "88"
+          ]
+        ]
+      },
+      {
+        "sku": "141521",
+        "size": "L",
+        "color": "ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Shortnummer",
+            "88"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000001",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "140",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "DE VRIES"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000002",
+    "items": [
+      {
+        "sku": "131247",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam (rug)",
+            "VAN DER MEER"
+          ]
+        ]
+      },
+      {
+        "sku": "131252",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Initialen",
+            "LR"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000003",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "140",
+        "color": "GROEN",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "7"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000004",
+    "items": [
+      {
+        "sku": "100664",
+        "size": "L",
+        "color": "WIT/ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Rugnummer",
+            "23"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000005",
+    "items": [
+      {
+        "sku": "116386",
+        "size": "M",
+        "color": "ROOD",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "11"
+          ],
+          [
+            "Borstnummer",
+            "11"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000006",
+    "items": [
+      {
+        "sku": "116388",
+        "size": "140",
+        "color": "ROOD",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Borstnummer",
+            "8"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000007",
+    "items": [
+      {
+        "sku": "131252",
+        "size": "L",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Initialen",
+            "D.T"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000008",
+    "items": [
+      {
+        "sku": "141521",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Shortnummer",
+            "2"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000009",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "VAN DIJK"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000010",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "XL",
+        "color": "GROEN",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "88"
+          ]
+        ]
+      },
+      {
+        "sku": "141521",
+        "size": "L",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Shortnummer",
+            "88"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000011",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "140",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "DE VRIES"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000012",
+    "items": [
+      {
+        "sku": "131247",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Naam (rug)",
+            "VAN DER MEER"
+          ]
+        ]
+      },
+      {
+        "sku": "131252",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Initialen",
+            "LR"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000013",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "140",
+        "color": "GROEN",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "7"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000014",
+    "items": [
+      {
+        "sku": "100664",
+        "size": "L",
+        "color": "WIT/ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "23"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000015",
+    "items": [
+      {
+        "sku": "116386",
+        "size": "M",
+        "color": "ROOD",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "11"
+          ],
+          [
+            "Borstnummer",
+            "11"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000016",
+    "items": [
+      {
+        "sku": "116388",
+        "size": "140",
+        "color": "ROOD",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Borstnummer",
+            "8"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000017",
+    "items": [
+      {
+        "sku": "131252",
+        "size": "L",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Initialen",
+            "D.T"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000018",
+    "items": [
+      {
+        "sku": "141521",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Shortnummer",
+            "2"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000019",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "VAN DIJK"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000020",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "XL",
+        "color": "GROEN",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Rugnummer",
+            "88"
+          ]
+        ]
+      },
+      {
+        "sku": "141521",
+        "size": "L",
+        "color": "ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Shortnummer",
+            "88"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000021",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "140",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "DE VRIES"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000022",
+    "items": [
+      {
+        "sku": "131247",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam (rug)",
+            "VAN DER MEER"
+          ]
+        ]
+      },
+      {
+        "sku": "131252",
+        "size": "M",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Initialen",
+            "LR"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000023",
+    "items": [
+      {
+        "sku": "116597",
+        "size": "140",
+        "color": "GROEN",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "7"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000024",
+    "items": [
+      {
+        "sku": "100664",
+        "size": "L",
+        "color": "WIT/ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Rugnummer",
+            "23"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000025",
+    "items": [
+      {
+        "sku": "116386",
+        "size": "M",
+        "color": "ROOD",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Rugnummer",
+            "11"
+          ],
+          [
+            "Borstnummer",
+            "11"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000026",
+    "items": [
+      {
+        "sku": "116388",
+        "size": "140",
+        "color": "ROOD",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Borstnummer",
+            "8"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000027",
+    "items": [
+      {
+        "sku": "131252",
+        "size": "L",
+        "color": "MARINE",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Initialen",
+            "D.T"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000028",
+    "items": [
+      {
+        "sku": "141521",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 2,
+        "personalization": [
+          [
+            "Shortnummer",
+            "2"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "externalReference": "9930000029",
+    "items": [
+      {
+        "sku": "138505",
+        "size": "M",
+        "color": "ZWART",
+        "quantity": 1,
+        "personalization": [
+          [
+            "Naam opdruk",
+            "VAN DIJK"
+          ]
+        ]
+      }
+    ]
+  }
+]

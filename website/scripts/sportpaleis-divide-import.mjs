@@ -52,7 +52,10 @@ function splitOrderSegments(pages) {
   let active = null;
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
     const text = String(pages[pageIndex] ?? "").replace(/\r\n?/gu, "\n");
-    const matches = [...text.matchAll(ORDER_REFERENCE)];
+    // An explicitly labelled order reference is authoritative regardless of its
+    // year/prefix. Keep the legacy bare 26… format only when labels are absent.
+    const labelled = [...text.matchAll(/^Bestelnummer\s*:\s*(\d{6,20})\s*$/gimu)];
+    const matches = labelled.length ? labelled.map((match) => ({ 1: match[1], index: match.index + match[0].indexOf(match[1]) })) : [...text.matchAll(ORDER_REFERENCE)];
     if (!matches.length) {
       if (!active && text.trim()) throw Object.assign(new Error(`Pagina ${pageIndex + 1} heeft geen herleidbaar 26…-bestelnummer.`), { code: "DIVIDE_ORDER_BOUNDARY_AMBIGUOUS" });
       if (active) { active.rawText += `\n${text}`; active.pageNumbers.push(pageIndex + 1); }

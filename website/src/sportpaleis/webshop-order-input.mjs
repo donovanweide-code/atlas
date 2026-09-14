@@ -32,24 +32,41 @@ export function normalizeWebshopPrintItem(state, row) {
   return { status: "READY", issues: [], article, productType, item: { articleId: article.id, size: row.values.size, quantity: row.values.quantity, deviation: true, overrides } };
 }
 
-export function normalizeWebshopOrder(state, batch, orderNumber, { filename, corrections = {} } = {}) {
+export function normalizeWebshopOrder(state, batch, orderNumber, { filename, corrections = {}, batchOverrides } = {}) {
   const fail = (message) => { throw Object.assign(new Error(message), { statusCode: 409, code: "WEBSHOP_ORDER_REVIEW_REQUIRED" }); };
   if (!/^\d{6,20}$/u.test(orderNumber ?? "")) fail("Vul een geldig bestelnummer in.");
   if (batch.sourceWarnings.some((warning) => warning.orderNumber === orderNumber)) fail("De bestelling kon niet volledig worden gelezen.");
   const rows = batch.items.filter((row) => row.orderNumber === orderNumber && row.printingRequired);
   if (!rows.length) fail("Geen bedrukte artikelen gevonden voor dit bestelnummer.");
   if (!corrections || typeof corrections !== "object" || Array.isArray(corrections)) fail("Controleer de ordercorrecties.");
+  if (batchOverrides !== undefined) {
+    if (!batchOverrides || batchOverrides.sourceHash !== batch.sourceHash || !batchOverrides.overrides || typeof batchOverrides.overrides !== "object" || Array.isArray(batchOverrides.overrides)) fail("Batchcorrecties horen niet betrouwbaar bij deze bron.");
+    if (Object.keys(batchOverrides.overrides).some((id) => !batch.items.some((row) => row.id === id))) fail("Een batchcorrectie kon niet aan de oorspronkelijke regel worden gekoppeld.");
+    const merged = { ...corrections };
+    for (const row of rows) {
+      const override = batchOverrides.overrides[row.id];
+      if (!override) continue;
+      if (!override.changes || typeof override.changes !== "object" || Array.isArray(override.changes) || typeof override.excluded !== "boolean") fail("Controleer de batchcorrectie.");
+      // An explicit second correction must never silently replace an earlier one.
+      if (Object.hasOwn(merged, row.id)) fail("Er zijn twee correcties voor dezelfde regel. Controleer de werkwaarde.");
+      merged[row.id] = { ...override.changes, excluded: override.excluded };
+    }
+    corrections = merged;
+  }
   if (Object.keys(corrections).some((id) => !rows.some((row) => row.id === id))) fail("Correctie hoort niet bij deze bestelling.");
   const changes = [];
   const mapped = rows.map((row) => {
     const patch = corrections[row.id] ?? {};
-    if (typeof patch !== "object" || Array.isArray(patch)) fail("Controleer de ordercorrectie.");
-    if (Object.keys(patch).some((key) => !["size", "color", "quantity", "personalizations", "sizeProfile"].includes(key))) fail("Deze correctie wordt niet ondersteund.");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) fail("Controleer de ordercorrectie.");
+    if (Object.keys(patch).some((key) => !["articleNumber", "description", "size", "color", "quantity", "personalizations", "sizeProfile", "customProfile", "excluded"].includes(key))) fail("Deze correctie wordt niet ondersteund.");
+    if (patch.excluded !== undefined && typeof patch.excluded !== "boolean") fail("Controleer de uitsluiting.");
     if (Object.keys(patch).length) changes.push({ sourceItemId: row.id, changes: patch });
+    if (patch.excluded === true) return null;
     const result = normalizeWebshopPrintItem(state, { ...row, values: { ...row.values, ...patch } });
     if (result.status !== "READY") fail(result.issues.map(({ message }) => message).join(" "));
     return result;
-  });
+  }).filter(Boolean);
+  if (!mapped.length) fail("Alle bedrukte regels zijn uitgesloten. Er wordt geen order aangemaakt.");
   const reference = { sha256: batch.sourceHash, filename: String(filename ?? "order.pdf").replace(/[\r\n]/gu, " ").slice(0, 120), externalReference: orderNumber,
     pages: [...new Set(rows.flatMap((row) => row.sourcePages))], itemIds: rows.map((row) => row.id), orderDate: rows[0].orderDate,
     idempotencyKey: batchHash(["WEBSHOP_PDF_ORDER_V1", batch.sourceHash, orderNumber]), ...(changes.length ? { corrections: changes } : {}) };

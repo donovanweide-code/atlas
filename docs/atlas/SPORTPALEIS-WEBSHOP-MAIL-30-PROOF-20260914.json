@@ -1,0 +1,193 @@
+{
+  "status": "BLOCKED_PRODUCT_TRUTH_BLUE",
+  "baseCandidate": "1f0edff1e0d55d6eada5b47aa9a583f64a647743",
+  "liveObserved": {
+    "date": "2026-09-14",
+    "releaseId": "SPW-PRACTICAL-NUMBER-INPUT-20260910",
+    "commit": "76a7aaf72bcf44cb4e01b51e434c410093445565",
+    "revision": 9797,
+    "blueProfiles": [],
+    "yellowProfiles": "HBSA field profiles; no directly linked catalog articles",
+    "intakeSources": 0,
+    "intakeMatches": 0,
+    "imapConfigured": true,
+    "pollIntervalSeconds": 120,
+    "pollEvidenceUtc": [
+      "2026-09-14T19:04:18.011Z",
+      "2026-09-14T19:18:17.999Z"
+    ],
+    "pollResult": "duplicates=1; UNKNOWN; no new source",
+    "liveMutations": false
+  },
+  "realPdf": {
+    "sha256": "411f0dab404eae3d0a394b2076639a378bd81e3bb55430ae78675d795f84b7d2",
+    "pages": 138,
+    "ordersWithPrinting": 9,
+    "printedItems": 18,
+    "canary": "2635358683",
+    "localOrder": "SP-2026-0106"
+  },
+  "thirtyOrderSoftwareProof": {
+    "orders": 30,
+    "items": 36,
+    "colors": [
+      "Wit",
+      "Zwart"
+    ],
+    "parseMs": 837.8708999999999,
+    "creationMs": 49901.525499999996,
+    "ordersPerMinute": 36.07104155563341,
+    "detailP50": 1127.0241999999998,
+    "detailP95": 1309.90419999999,
+    "ids": [
+      "SP-2026-0106",
+      "SP-2026-0107",
+      "SP-2026-0108",
+      "SP-2026-0109",
+      "SP-2026-0110",
+      "SP-2026-0111",
+      "SP-2026-0112",
+      "SP-2026-0113",
+      "SP-2026-0114",
+      "SP-2026-0115",
+      "SP-2026-0116",
+      "SP-2026-0117",
+      "SP-2026-0118",
+      "SP-2026-0119",
+      "SP-2026-0120",
+      "SP-2026-0121",
+      "SP-2026-0122",
+      "SP-2026-0123",
+      "SP-2026-0124",
+      "SP-2026-0125",
+      "SP-2026-0126",
+      "SP-2026-0127",
+      "SP-2026-0128",
+      "SP-2026-0129",
+      "SP-2026-0130",
+      "SP-2026-0131",
+      "SP-2026-0132",
+      "SP-2026-0133",
+      "SP-2026-0134",
+      "SP-2026-0135"
+    ],
+    "storage": {
+      "duplicatePdf": 0,
+      "fullText": 0,
+      "fullOrderArchive": 0
+    },
+    "physicalOutput": false,
+    "blueRuleAvailable": false
+  },
+  "quietOrderDetail": {
+    "p50Ms": 317.5,
+    "p95Ms": 331.9000000357628,
+    "storage": {
+      "pdf": 0,
+      "fullText": 0,
+      "fullOrderArchive": 0
+    }
+  },
+  "concurrency": {
+    "status": "PASS",
+    "readSessions": 10,
+    "interactiveSessions": 5,
+    "distinctCookiesAndActors": true,
+    "independentSelections": true,
+    "editConflict": "200 + 409",
+    "excludeRestoreConflict": "200 + 409 then explicit retry",
+    "singleHandoffReceipt": true,
+    "noModuleGlobalBatchState": true,
+    "coldLoadMetrics": {
+      "pdfParseMs": 780.9238,
+      "structuredMs": 47.510699999999815,
+      "firstBatchMs": 828.4344999999998,
+      "rssDeltaBytes": 19496960,
+      "sourceBytes": 759353,
+      "pageCount": 138,
+      "persistedPdfs": 0,
+      "persistedFullTexts": 0,
+      "persistedFullOrders": 0,
+      "batchParses": 1,
+      "detailParses": 0,
+      "thumbnailBuilds": 0,
+      "batchReadyMs": 992.1704
+    },
+    "batchParses": 1,
+    "detailParses": 1,
+    "latency": {
+      "coldLoad": {
+        "samples": 10,
+        "p50Ms": 1017.6363000000001,
+        "p95Ms": 1027.6186000000002
+      },
+      "read": {
+        "samples": 100,
+        "p50Ms": 22.401100000000042,
+        "p95Ms": 30.579399999999623
+      },
+      "detail": {
+        "samples": 10,
+        "p50Ms": 473.4539,
+        "p95Ms": 483.0895999999998
+      },
+      "edit": {
+        "samples": 2,
+        "p50Ms": 19.057999999999993,
+        "p95Ms": 19.49619999999959
+      },
+      "excludeRestore": {
+        "samples": 3,
+        "p50Ms": 19.159599999999955,
+        "p95Ms": 23.221599999999853
+      },
+      "handoff": {
+        "samples": 2,
+        "p50Ms": 16.78520000000026,
+        "p95Ms": 20.115099999999984
+      },
+      "search": {
+        "samples": 5,
+        "p50Ms": 1.699999988079071,
+        "p95Ms": 1.800000011920929
+      },
+      "selection": {
+        "samples": 5,
+        "p50Ms": 2.100000023841858,
+        "p95Ms": 2.200000047683716
+      },
+      "browserEdit": {
+        "samples": 5,
+        "p50Ms": 176.77289999999994,
+        "p95Ms": 188.85170000000016
+      }
+    },
+    "bottleneck": "Batch-wide revision fence intentionally conflicts concurrent writes; explicit refresh required. Cold detail requests share one serial parse."
+  },
+  "tests": {
+    "regression": 103,
+    "e2e": 15,
+    "thirtyOrder": 1,
+    "passed": 119,
+    "failed": 0
+  },
+  "overrides": {
+    "reviewDatabaseRows": 0,
+    "reviewServerRunningAtAudit": false,
+    "productionRelevantFields": true,
+    "automaticLocalReviewProvider": true,
+    "durableLiveRowsToMigrate": 0
+  },
+  "liveDeployed": false,
+  "customerMailAudit": "NOT_RUN_UNTIL_FULL_ACCEPTANCE_PASS",
+  "fixtures": {
+    "acceptance.pdf": {
+      "bytes": 20833,
+      "sha256": "7698389900a6d5faa70153353c4afb321ef685cbdc6ab9a7feda884bd25fee4a"
+    },
+    "expected.json": {
+      "bytes": 10785,
+      "sha256": "1b269a9faff5b26290f2e001e11c124f96656360d01f1192204356cfe8132370"
+    }
+  }
+}

@@ -14,6 +14,13 @@ function evidence(pages) {
 }
 const sourceLines = (number, date, extra = []) => [`Besteldatum: ${date}`, `Bestelnummer: ${number}`, "Artikelnummer: 131240", "Omschrijving: Shirt", "Maat: L", "Kleur: ZWART", "Aantal: 1", ...extra];
 
+test("labelled references are not year-bound and other 26-prefixed numbers do not split an order", () => {
+  const batch = projectWebshopPrintBatch(evidence([sourceLines("9930000000", "14-09-2026", ["Initialen: AB", "Telefoon: 2612345678"])]));
+  assert.equal(batch.sourceWarnings.length, 0);
+  assert.equal(batch.itemCount, 1);
+  assert.equal(batch.items[0].orderNumber, "9930000000");
+});
+
 test("only explicit printing items enter batch; dates before order heading remain attached and sort oldest first", () => {
   const batch = projectWebshopPrintBatch(evidence([
     sourceLines("2635358683", "26-08-2026", ["Initialen: AB", "Artikelnummer: 999999", "Omschrijving: Onbedrukt shirt", "Maat: M", "Kleur: ROOD", "Aantal: 2"]),
