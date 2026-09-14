@@ -7,6 +7,8 @@ import mariadb from "mariadb";
 import { SportpaleisDomainMariaDbStore } from "./sportpaleis-domain-mariadb-store.mjs";
 import { productionDatabaseCredentialsFromEnvironment } from "./workspace-runtime-config.mjs";
 import { encodeLegacyRollbackStateIsolated } from "./workspace-legacy-state-encode.mjs";
+import { decodeSportpaleisRuntimeState } from "./sportpaleis-mariadb-store.mjs";
+import { sha256CanonicalJson, sportpaleisDomainManifest, SPORTPALEIS_DOMAIN_CONTRACT_VERSION } from "./workspace-domain-state.mjs";
 
 const ORGANIZATION_ID = "sport-2000-sportpaleis-bv";
 const ISOLATED_ROLLBACK_TIMEOUT_MS = 60_000;
@@ -87,7 +89,7 @@ export function verifyLegacyRollbackStateIsolated({ database, organizationId = O
 
 // Offline compatibility bridge only. The releasebroker must stop application
 // writes and hold its deployment lock before invoking this operation.
-export async function materializeLegacyRollbackState({ database, expectedGlobalRevision, expectedDomainHash, pool: suppliedPool }) {
+export async function materializeLegacyRollbackState({ database, expectedGlobalRevision, expectedDomainHash, pool: suppliedPool, sourceReconciliation = null }) {
   const pool = suppliedPool ?? mariadb.createPool({ ...database, connectionLimit: 2, multipleStatements: false, timezone: "Z", charset: "utf8mb4" });
   const ownsPool = !suppliedPool;
   const store = new SportpaleisDomainMariaDbStore({ pool });
@@ -104,11 +106,28 @@ export async function materializeLegacyRollbackState({ database, expectedGlobalR
       if (meta.length !== 1 || Number(meta[0].global_revision) !== Number(snapshot.revision)) throw new Error("Rollbackbridge verloor de domeinrevision-lock.");
       const legacy = await connection.query("SELECT revision FROM sp_runtime_state WHERE organization_id = ? FOR UPDATE", [ORGANIZATION_ID]);
       if (legacy.length !== 1) throw new Error("Legacy rollbackdoel ontbreekt.");
+      if (sourceReconciliation) {
+        const { planId, legacyHash, legacyRevision, baselineRevision, baselineHash } = sourceReconciliation;
+        const event = snapshot.audit.find(({ id }) => id === `source-reconciliation-${planId}`);
+        if (!event || sha256CanonicalJson(event.details) !== planId || event.details.legacyHash !== legacyHash || event.details.baselineHash !== baselineHash || event.details.legacyRevision !== legacyRevision || event.details.baselineRevision !== baselineRevision) throw new Error("Source reconciliation mist het gecommitteerde auditbewijs.");
+        const [source] = await connection.query("SELECT state_json FROM sp_runtime_state WHERE organization_id = ?", [ORGANIZATION_ID]);
+        if (Number(legacy[0].revision) !== legacyRevision || sha256CanonicalJson(decodeSportpaleisRuntimeState(source.state_json)) !== legacyHash) throw new Error("Source reconciliation verloor de legacy-hashfence.");
+        const [authority] = await connection.query("SELECT legacy_source_revision, cutover_mode FROM sp_workspace_domain_meta WHERE organization_id = ?", [ORGANIZATION_ID]);
+        const [receipt] = await connection.query("SELECT status, legacy_sha256, composed_sha256 FROM sp_workspace_domain_reconciliation WHERE organization_id = ? AND legacy_revision = ? AND contract_version = ?", [ORGANIZATION_ID, baselineRevision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION]);
+        if (Number(authority?.legacy_source_revision) !== baselineRevision || authority.cutover_mode !== "DOMAIN_READS" || receipt?.status !== "MATCH" || receipt.legacy_sha256 !== baselineHash || receipt.composed_sha256 !== baselineHash) throw new Error("Source reconciliation verloor de historische authority-fence.");
+      }
       const update = await connection.query(
         "UPDATE sp_runtime_state SET schema_version = ?, revision = ?, state_json = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND revision = ?",
         [snapshot.schemaVersion, snapshot.revision, encoded.serialized, ORGANIZATION_ID, Number(legacy[0].revision)],
       );
       if (Number(update.affectedRows) !== 1) throw new Error("Legacy rollbackmaterialisatie verloor concurrencycontrole.");
+      if (sourceReconciliation) {
+        // Seal only the already-audited, hash-fenced domain snapshot. The old
+        // reconciliation receipt remains immutable. This never reimports legacy.
+        await connection.query("INSERT INTO sp_workspace_domain_reconciliation (organization_id, legacy_revision, contract_version, legacy_sha256, composed_sha256, domain_manifest_json, status, compared_at) VALUES (?, ?, ?, ?, ?, ?, 'MATCH', UTC_TIMESTAMP(3))", [ORGANIZATION_ID, snapshot.revision, SPORTPALEIS_DOMAIN_CONTRACT_VERSION, encoded.stateSha256, encoded.stateSha256, JSON.stringify({ ...sportpaleisDomainManifest(snapshot), sourceReconciliation })]);
+        const sealed = await connection.query("UPDATE sp_workspace_domain_meta SET legacy_source_revision = ?, updated_at = UTC_TIMESTAMP(3) WHERE organization_id = ? AND global_revision = ? AND legacy_source_revision = ?", [snapshot.revision, ORGANIZATION_ID, snapshot.revision, sourceReconciliation.baselineRevision]);
+        if (Number(sealed.affectedRows) !== 1) throw new Error("Source reconciliation verloor de checkpoint-fence.");
+      }
       await connection.commit();
       return Object.freeze({
         organizationId: ORGANIZATION_ID,

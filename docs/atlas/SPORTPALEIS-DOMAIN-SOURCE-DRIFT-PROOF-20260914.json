@@ -1,0 +1,1370 @@
+{
+  "status": "ISOLATED_RECONCILIATION_PASS_RELEASE_PENDING",
+  "classification": "C",
+  "threeway": {
+    "classification": "C",
+    "baseline": {
+      "revision": 9655,
+      "hash": "ae778c6082971ef273a8a477c48ae809d2f3d956bf82ebe8ae591f985f22fce6",
+      "counts": {
+        "users": 4,
+        "sessions": 15,
+        "orders": 111,
+        "associations": 22,
+        "articles": 192,
+        "productionProfiles": 126,
+        "foilRolls": 7,
+        "feedback": 0,
+        "extraUserRequests": 0,
+        "audit": 8890,
+        "migrationWarnings": 2,
+        "activationInvites": 1,
+        "mailbatches": 0,
+        "productionElements": 8,
+        "productionFonts": 8,
+        "productionElementRequirements": 0,
+        "productionJobs": 65,
+        "employees": 50,
+        "productionProposals": 52,
+        "productionAssetSources": 7,
+        "quickProductionIntakes": 0,
+        "teamkitProposals": 6,
+        "passwordResetRequests": 0,
+        "visualCompositions": 0,
+        "creativeVectorDrafts": 0
+      }
+    },
+    "receipt": {
+      "legacy_revision": 9655,
+      "legacy_sha256": "ae778c6082971ef273a8a477c48ae809d2f3d956bf82ebe8ae591f985f22fce6",
+      "composed_sha256": "ae778c6082971ef273a8a477c48ae809d2f3d956bf82ebe8ae591f985f22fce6",
+      "domain_manifest_json": {
+        "identity": {
+          "count": 10,
+          "sha256": "ef7e79240db0619ff630d0130f3615f4d31b0001805f2ad7608b59f9a5a297c0"
+        },
+        "audit": {
+          "count": 1,
+          "sha256": "fb9fe24e877f5e0d8a346f8a7f114a73dc799f83d3ae46f0dbfdbc784f4e5387"
+        },
+        "library": {
+          "count": 12,
+          "sha256": "a341e3fadf6eeaba9ccfb71f36bc04fb00ac93c7b8d955202a3b71ed8aae53f9"
+        },
+        "orders": {
+          "count": 1,
+          "sha256": "f63a5a4fae5e1c8a608a108c8905d07b9edef6cd648002df202eed333712083e"
+        },
+        "history": {
+          "count": 1,
+          "sha256": "f01b7737643be510b1d86785dd925bfcbbc3ba6da492b6172a1422ae257e2626"
+        },
+        "production": {
+          "count": 3,
+          "sha256": "0fe2821acdd3c12361023074039a63a983441aebab263f293253c2f89435639e"
+        },
+        "artifacts": {
+          "count": 1,
+          "sha256": "4cd43591d673143008b2621e0733c082dd521195c7a6aab77538a10b15ec1889"
+        },
+        "mailbox": {
+          "count": 4,
+          "sha256": "7dc916250c4b047bfa27308335c85099c587fa22d4fa5524021392780ec22613"
+        },
+        "platform": {
+          "count": 10,
+          "sha256": "ad77309070475749a1ab33f4a3261ffa8c169ec4d3197ea19e3626da53475226"
+        }
+      },
+      "compared_at": "2026-09-07T03:35:01.458Z"
+    },
+    "legacy": {
+      "revision": 9661,
+      "hash": "fad38861608a507e5f75a1cb62f6f01d8599ac8173867e63ec38cc9dd8d0e401"
+    },
+    "domain": {
+      "revision": 9797,
+      "hash": "f52ebc649cdeb4aa764bf209148dd930f9c3d1190ce49dbbd448aa8d2d1593a8"
+    },
+    "changedKeys": [
+      "revision",
+      "articles",
+      "productionProfiles",
+      "audit",
+      "productionElements",
+      "websiteSync"
+    ],
+    "originalAuditUnchanged": true,
+    "extraAudit": [
+      {
+        "id": "audit-website-sync-704dfc5cef48d9a4",
+        "at": "2026-09-14T01:09:35.495Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 369,
+          "autoProjected": 0,
+          "blockedAutoProjection": 6,
+          "attention": 20
+        }
+      },
+      {
+        "id": "audit-website-sync-557a0f2ac0198983",
+        "at": "2026-09-13T01:02:21.209Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 370,
+          "autoProjected": 0,
+          "blockedAutoProjection": 6,
+          "attention": 20
+        }
+      },
+      {
+        "id": "audit-website-sync-22ac147f0aef7d9e",
+        "at": "2026-09-11T01:04:35.390Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 371,
+          "autoProjected": 0,
+          "blockedAutoProjection": 6,
+          "attention": 21
+        }
+      },
+      {
+        "id": "audit-website-sync-f8480f7f9d52b43b",
+        "at": "2026-09-10T01:00:58.486Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 371,
+          "autoProjected": 0,
+          "blockedAutoProjection": 6,
+          "attention": 21
+        }
+      },
+      {
+        "id": "audit-website-sync-1ac0643a3f58062f",
+        "at": "2026-09-09T01:08:30.191Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 371,
+          "autoProjected": 0,
+          "blockedAutoProjection": 6,
+          "attention": 19
+        }
+      },
+      {
+        "id": "audit-website-sync-31ec7e6a86caf4c7",
+        "at": "2026-09-08T01:04:18.687Z",
+        "userId": "system:website-sync",
+        "action": "Website gecontroleerd",
+        "subject": "Verenigingen en artikelen",
+        "details": {
+          "trigger": "scheduled",
+          "mode": "SAFE_AUTO_PROJECT",
+          "associations": 19,
+          "articles": 370,
+          "autoProjected": 0,
+          "blockedAutoProjection": 2,
+          "attention": 16
+        }
+      }
+    ],
+    "websiteSync": {
+      "baselineMode": "SAFE_AUTO_PROJECT",
+      "legacyMode": "SAFE_AUTO_PROJECT",
+      "domainMode": "SAFE_AUTO_PROJECT",
+      "baselineLast": "2026-09-06T01:02:33.260Z",
+      "legacyLast": "2026-09-14T01:09:35.495Z",
+      "domainLast": "2026-09-06T01:02:33.260Z",
+      "differences": [
+        {
+          "key": "lastAttemptAt",
+          "baselineHash": "3ab6194aa6d11bf534f2be0bdd5fd04ef47ee5b7c0908c05732deb07a1a8941b",
+          "legacyHash": "2f09eb0ee02ea7f201d57c2eb1c44f75d3babc263348f8b04ea177bc70c0f7ff",
+          "domainHash": "3ab6194aa6d11bf534f2be0bdd5fd04ef47ee5b7c0908c05732deb07a1a8941b",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "lastSuccessfulSyncAt",
+          "baselineHash": "3ab6194aa6d11bf534f2be0bdd5fd04ef47ee5b7c0908c05732deb07a1a8941b",
+          "legacyHash": "2f09eb0ee02ea7f201d57c2eb1c44f75d3babc263348f8b04ea177bc70c0f7ff",
+          "domainHash": "3ab6194aa6d11bf534f2be0bdd5fd04ef47ee5b7c0908c05732deb07a1a8941b",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "nextRunAt",
+          "baselineHash": "56fb56db297669449919b7d8458d1275d82db03aa1d95689d240a410a8fa5cb9",
+          "legacyHash": "7bc5c41be2c230c129c6c7784cebb853c6c4bf91253ba3f3684d89bda90a51bc",
+          "domainHash": "56fb56db297669449919b7d8458d1275d82db03aa1d95689d240a410a8fa5cb9",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "sourceFingerprint",
+          "baselineHash": "7b9ba64ae56d5bbaf7636fb2beb4153773b7c8bee48bd7a68fd044ff9f1d0037",
+          "legacyHash": "19ece88c64fcb297cdfc4271b28566d7dbcb6cdac8d0fb8c48ea4dba7d15834a",
+          "domainHash": "7b9ba64ae56d5bbaf7636fb2beb4153773b7c8bee48bd7a68fd044ff9f1d0037",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "sourceFingerprintIndex",
+          "baselineHash": "18fdb1bc11622ffeb5c2e5ce5d6f34312cb9fa24be0b12b5f36bd344ba0c0676",
+          "legacyHash": "05ddd8741c6254fd28d0d5c90f7de039918e42a4d269412151cfb466b3a78f90",
+          "domainHash": "18fdb1bc11622ffeb5c2e5ce5d6f34312cb9fa24be0b12b5f36bd344ba0c0676",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "sourceScopeIndex",
+          "baselineHash": "3713491cfd525b15c6b3e926090d146e9ffe805bb565531a0f14744946ad5ecf",
+          "legacyHash": "dd1e196cebcb9b6230b43439ee47e04649ad15c09ca48ecbac89d4472ec9cab1",
+          "domainHash": "3713491cfd525b15c6b3e926090d146e9ffe805bb565531a0f14744946ad5ecf",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "sourceRelevanceIndex",
+          "baselineHash": "377333c8154763a80f6b000994f501e73a8042889052e808335ad7d366be5f68",
+          "legacyHash": "b400a99b2c0e36116835af502274363eb35a85fd2697fc72e0558e15e75c34fe",
+          "domainHash": "377333c8154763a80f6b000994f501e73a8042889052e808335ad7d366be5f68",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "reconciliationHistory",
+          "baselineHash": "7821ada86e98effd479a8605b272c73bfa4d56e94c2d7ae08eee09986d09aa7c",
+          "legacyHash": "488791607f30b3b8ccbc731b9aea1df7a54659a1732bf1f364d1f43ebe95e16a",
+          "domainHash": "7821ada86e98effd479a8605b272c73bfa4d56e94c2d7ae08eee09986d09aa7c",
+          "domainChanged": false,
+          "conflict": false
+        },
+        {
+          "key": "counts",
+          "baselineHash": "9ed9d05b21dadb3606a1a7798042fcf1aca73c75dbe142e1a549f3c235a18e2b",
+          "legacyHash": "5a1cf87b01caaef21d5ab72deb56e2244235f3f3b699353faea1359abc09ff23",
+          "domainHash": "2966361d5f0442bd34174b36238355dfd69f8a68549bcbbd8d8384aa79b8e6e1",
+          "domainChanged": true,
+          "conflict": true
+        },
+        {
+          "key": "changes",
+          "baselineHash": "8c86a1e7ebbcb37d4a753fc42846c72bb5feda5c721c5cfbb50f7f9de7325216",
+          "legacyHash": "4e379553f96ca1da16609c4fbce54759e1158a6053d426f0eccb49ee876fba2b",
+          "domainHash": "1f63689be86e3339a7967cfcc13e59b95f277cc4cf24a506a4b27f8d01b377a7",
+          "domainChanged": true,
+          "conflict": true
+        }
+      ],
+      "legacyChanges": [
+        {
+          "id": "sync-change-3d6a028863fb6196",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-c3ce681a41a4cbe0",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-165d9fc6d32eaf78",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-a7a0bb5a61d0d3d2",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-002ee299dc66d471",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-5b1e5cc9483efa32",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-934af10734687cc7",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-e8be4ef157a2184c",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-076da42862ba07de",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-8ed270154ccb4eb6",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-ddc6247f6cdd4266",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-384e548f1d328956",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-fb150cc27a68e1fb",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-694507257921537c",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-85972f90ac2cabf1",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-0eed09d279bb88a9",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-8e444004ea33b8d7",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-b4d9268f14aae9f5",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-a14106efa404b6c2",
+          "status": "PENDING_REVIEW"
+        },
+        {
+          "id": "sync-change-57c1a2c137213be8",
+          "status": "PENDING_REVIEW"
+        }
+      ],
+      "domainReviewDecisions": {
+        "sync-change-3d6a028863fb6196": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "b46a7bb8dde7b8940e1a0917c283fe268f1e48fc5bfa4a3f89310fee650b50e9",
+          "at": "2026-08-20T20:16:03.659Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-8ed270154ccb4eb6": {
+          "action": "KEEP_WORKSPACE",
+          "sourceFingerprint": "2b7cd5e8e652406e3887c8ce6c5fcf890d8d4b6222f0cc612e6db539441abf26",
+          "at": "2026-08-20T20:16:22.712Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-ddc6247f6cdd4266": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "ba8e5e68a5c1bc68af64cad046a115dd0c5391e0231d260c066ed1367d105d66",
+          "at": "2026-08-20T20:16:31.544Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-a14106efa404b6c2": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "72c69db5938d315376cdf5b7c00239a6eae50a02a6fbc80cdf70bee2c214cd12",
+          "at": "2026-08-20T20:16:41.259Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-c3ce681a41a4cbe0": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "0cf2f9c1ffb196f9ee37aac55eba5602cbb4d364c9229e8d9b1429169d641a40",
+          "at": "2026-08-20T20:16:45.510Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-002ee299dc66d471": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "11ce3fbd1cf5dfbc6d237731af8db05dde2f9ce24a74ad0d6f3b5ba97a0b8670",
+          "at": "2026-08-20T20:16:48.813Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-f7b516ba01a02fae": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "72a8c0bde3e99d4bbff6f6817df5d4a3f95ef48a9987650ad16ab9fbea5a76e4",
+          "at": "2026-08-20T20:16:52.462Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-384e548f1d328956": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "4c7a677bb67139d1209253ba06918247c3da21c2960194430c071aa46e6218d9",
+          "at": "2026-08-20T20:16:55.637Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-75ddbe01480ca14a": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "b0a3f710ff5ecd7be00440b8b91a269fbaa26ab736e1ba88eae481386c60948e",
+          "at": "2026-08-20T20:16:58.501Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-fb150cc27a68e1fb": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "c4cd1d877f5ef3f11a0d2cf76e374c35e48620a508740c5119470d4188ce4e1f",
+          "at": "2026-08-20T20:17:01.707Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-694507257921537c": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "c483684f381ffc9d9a4d5fde45ff7c74548c205a599b9046e646755156bead08",
+          "at": "2026-08-20T20:17:05.909Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-85972f90ac2cabf1": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "216b7a3ccb1e21128a48627d5f95a4846abaf829d9f634c6db6985c62f3caf9b",
+          "at": "2026-08-20T20:17:10.261Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-24c5f1ccbabc1318": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "4b3bedbac50de5a09be020ab5260df6945b8442277b4e4e5f1ea3a28b8efa5eb",
+          "at": "2026-08-20T20:17:13.424Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-0eed09d279bb88a9": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "d3f91648e6158cccfca9707cc3b908eb3eec0ab3341f692f72fcc4f681f0c5a5",
+          "at": "2026-08-20T20:17:16.669Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-8e444004ea33b8d7": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "be76e54451b155bedae05246c769212f3f9bac2b08fbe2e59c93ec239ecaefc3",
+          "at": "2026-08-20T20:17:21.988Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-47a06111f38f876f": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "93fb1acacff75a45c730bea3b3a56f324312158c1a8899ffee4be5485fd32910",
+          "at": "2026-08-20T20:17:24.758Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-4274dd6f8a9f6e6c": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "f622e5f3d0ad1e13bd2065c7dbb77885633246051178c8dc88d80206cf185ae0",
+          "at": "2026-08-20T20:17:27.539Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-0b07591d86f9a67a": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "476ed59bbf0da9801f7a677b3a26d94c180515e697f6335aef61d861a53c71ba",
+          "at": "2026-08-20T20:17:30.706Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-06c91b346f8213a1": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "c96c9871494ea44a3765ec8add305a301426868f2c4a59174cd2ec51477e0efb",
+          "at": "2026-08-20T20:18:47.120Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-5b7e611ed61df4fc": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": "56fca6b8f17b85912e308fb6b99cbb7114107e0a41cc5e84aa3e96c00e786390",
+          "at": "2026-08-20T20:18:49.962Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-e52d8fcccbb70cec": {
+          "action": "ACCEPT_SOURCE",
+          "sourceFingerprint": null,
+          "at": "2026-08-25T11:50:07.854Z",
+          "userId": "user-25812f676558376d"
+        },
+        "sync-change-9b812277db107389": {
+          "action": "KEEP_WORKSPACE",
+          "sourceFingerprint": null,
+          "at": "2026-09-07T07:03:08.433Z",
+          "userId": "user-25812f676558376d"
+        }
+      }
+    }
+  },
+  "truthFieldDelta": [
+    {
+      "path": "articles/sp-live-137294.profileId",
+      "baseline": "profile-source-a-s-c-waterwijk-backNumber",
+      "legacy": "profile-shirt-home",
+      "domain": "profile-source-a-s-c-waterwijk-backNumber",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "articles/sp-live-137295.profileId",
+      "baseline": "profile-source-a-s-c-waterwijk-backNumber",
+      "legacy": "profile-shirt-home",
+      "domain": "profile-source-a-s-c-waterwijk-backNumber",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "articles/sp-live-134826.profileId",
+      "baseline": "profile-source-a-s-c-waterwijk-shortsNumber",
+      "legacy": "profile-shorts-home",
+      "domain": "profile-source-a-s-c-waterwijk-shortsNumber",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.sizeLabel",
+      "baseline": "Junior/Junior/Senior rugnummer 20 cm",
+      "legacy": "Rug Junior 20 cm · Senior 22 cm",
+      "domain": "Junior/Junior/Senior rugnummer 20 cm",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.fontProfile",
+      "baseline": "Schluber (Spain voor thuiswedstrijdshirt)",
+      "legacy": "Spain",
+      "domain": "Schluber (Spain voor thuiswedstrijdshirt)",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.backNumberSizeClasses.SENIOR.physicalHeightMm",
+      "baseline": 200,
+      "legacy": 220,
+      "domain": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.backNumberSizeClasses.SENIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.backNumberSizeClasses.JUNIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.canonicalFontSourceId",
+      "legacy": "font-5d083befacdf98ae",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt.canonicalFontSourceAuthority",
+      "legacy": "AUTHORITATIVE_REGISTRY_PROJECTION",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-keeper.sizeLabel",
+      "baseline": "Junior/Junior/Senior rugnummer 20 cm",
+      "legacy": "Rug Junior 20 cm · Senior 22 cm",
+      "domain": "Junior/Junior/Senior rugnummer 20 cm",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-keeper.backNumberSizeClasses.SENIOR.physicalHeightMm",
+      "baseline": 200,
+      "legacy": 220,
+      "domain": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-keeper.backNumberSizeClasses.SENIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-keeper.backNumberSizeClasses.JUNIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts.fontProfile",
+      "baseline": "Schluber (Spain voor thuiswedstrijdshort)",
+      "legacy": "Spain",
+      "domain": "Schluber (Spain voor thuiswedstrijdshort)",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts.canonicalFontSourceId",
+      "legacy": "font-5d083befacdf98ae",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts.canonicalFontSourceAuthority",
+      "legacy": "AUTHORITATIVE_REGISTRY_PROJECTION",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.sizeLabel",
+      "baseline": "Junior/Senior rugnummer 20 cm",
+      "legacy": "Rug Junior 20 cm · Senior 22 cm",
+      "domain": "Junior/Senior rugnummer 20 cm",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.fontProfile",
+      "baseline": "Schluber (Spain voor thuiswedstrijdshirt)",
+      "legacy": "Spain",
+      "domain": "Schluber (Spain voor thuiswedstrijdshirt)",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.backNumberSizeClasses.SENIOR.physicalHeightMm",
+      "baseline": 200,
+      "legacy": 220,
+      "domain": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.backNumberSizeClasses.SENIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.backNumberSizeClasses.JUNIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.canonicalFontSourceId",
+      "legacy": "font-5d083befacdf98ae",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-home.canonicalFontSourceAuthority",
+      "legacy": "AUTHORITATIVE_REGISTRY_PROJECTION",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-standard.sizeLabel",
+      "baseline": "Junior/Senior rugnummer 20 cm",
+      "legacy": "Rug Junior 20 cm · Senior 22 cm",
+      "domain": "Junior/Senior rugnummer 20 cm",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-standard.backNumberSizeClasses.SENIOR.physicalHeightMm",
+      "baseline": 200,
+      "legacy": 220,
+      "domain": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-standard.backNumberSizeClasses.SENIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shirt-standard.backNumberSizeClasses.JUNIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts-home.fontProfile",
+      "baseline": "Schluber (Spain voor thuiswedstrijdshort)",
+      "legacy": "Spain",
+      "domain": "Schluber (Spain voor thuiswedstrijdshort)",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts-home.canonicalFontSourceId",
+      "legacy": "font-5d083befacdf98ae",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-shorts-home.canonicalFontSourceAuthority",
+      "legacy": "AUTHORITATIVE_REGISTRY_PROJECTION",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-source-a-s-c-waterwijk-backNumber.sizeLabel",
+      "baseline": "Rugnummer 20 cm",
+      "legacy": "Rug Junior 20 cm · Senior 22 cm",
+      "domain": "Rugnummer 20 cm",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-source-a-s-c-waterwijk-backNumber.backNumberSizeClasses.SENIOR.physicalHeightMm",
+      "baseline": 200,
+      "legacy": 220,
+      "domain": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-source-a-s-c-waterwijk-backNumber.backNumberSizeClasses.SENIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionProfiles/profile-source-a-s-c-waterwijk-backNumber.backNumberSizeClasses.JUNIOR.source",
+      "baseline": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "legacy": "Authoritative Product Truth Donovan 2026-09-07: A.S.C. Waterwijk rugnummer Senior 220 mm en Junior 200 mm.",
+      "domain": "Authoritative Product Truth Donovan 2026-09-01: ieder Senior- en Junior-rugnummer wordt proportioneel op exact 20 cm / 200 mm hoogte gematerialiseerd; breedte volgt uit de glyphgeometrie.",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-907ef7665665ece5.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 18,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-junior-160.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 18,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-junior-160.numberComposition.authority",
+      "legacy": "FALLBACK_SPACING_AUTHORITY",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-junior-160.numberComposition.glyphHeightMm",
+      "legacy": 160,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-junior-160.numberComposition.widthMode",
+      "legacy": "DERIVED_FROM_GLYPH_CONTOURS",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-rug-200.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 18,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-rug-200.numberComposition.authority",
+      "legacy": "FALLBACK_SPACING_AUTHORITY",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-rug-200.numberComposition.glyphHeightMm",
+      "legacy": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-rug-200.numberComposition.widthMode",
+      "legacy": "DERIVED_FROM_GLYPH_CONTOURS",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-short-80.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 18,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-short-80.numberComposition.authority",
+      "legacy": "FALLBACK_SPACING_AUTHORITY",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-short-80.numberComposition.glyphHeightMm",
+      "legacy": 80,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-short-80.numberComposition.widthMode",
+      "legacy": "DERIVED_FROM_GLYPH_CONTOURS",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-short-75.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 18,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-short-75.numberComposition.authority",
+      "legacy": "FALLBACK_SPACING_AUTHORITY",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-short-75.numberComposition.glyphHeightMm",
+      "legacy": 75,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-hockey-short-75.numberComposition.widthMode",
+      "legacy": "DERIVED_FROM_GLYPH_CONTOURS",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-senior-200.numberComposition.freeContourSpacingMm",
+      "baseline": 30,
+      "legacy": 5,
+      "domain": 30,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-senior-200.numberComposition.authority",
+      "legacy": "PIONEERS_SPACING_AUTHORITY",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-senior-200.numberComposition.glyphHeightMm",
+      "legacy": 200,
+      "alreadyInDomain": false,
+      "domainChanged": false
+    },
+    {
+      "path": "productionElements/production-asset-verified-pioneers-rug-senior-200.numberComposition.widthMode",
+      "legacy": "DERIVED_FROM_GLYPH_CONTOURS",
+      "alreadyInDomain": false,
+      "domainChanged": false
+    }
+  ],
+  "canary": {
+    "status": "PASS",
+    "classification": "C",
+    "baselineHash": "ae778c6082971ef273a8a477c48ae809d2f3d956bf82ebe8ae591f985f22fce6",
+    "legacyBefore": {
+      "revision": 9660,
+      "hash": "8e3d223873189ffff13c2d5e4d0fc06c838efa98cbf718eaaf5e0f13b514fcd7"
+    },
+    "domainBefore": {
+      "revision": 9793,
+      "hash": "ec8119f0980f2a8e8aaeb75c4267b1f768a95854fc0c4312a13880242533905f"
+    },
+    "after": {
+      "revision": 9794,
+      "hash": "1f847de4797b2d5c28d2966535a73f0e5c7441e074e32ea81ca8f0d70689e14b"
+    },
+    "plan": {
+      "schemaVersion": 1,
+      "kind": "LEGACY_WEBSITE_SYNC_FORWARD_RECONCILIATION",
+      "actorId": "donovan-maintenance",
+      "reason": "GO reconcile DOMAIN_BACKFILL_SOURCE_DRIFT; verified website-sync legacy writer",
+      "baselineRevision": 9655,
+      "baselineHash": "ae778c6082971ef273a8a477c48ae809d2f3d956bf82ebe8ae591f985f22fce6",
+      "legacyRevision": 9660,
+      "legacyHash": "8e3d223873189ffff13c2d5e4d0fc06c838efa98cbf718eaaf5e0f13b514fcd7",
+      "domainRevision": 9793,
+      "domainHash": "ec8119f0980f2a8e8aaeb75c4267b1f768a95854fc0c4312a13880242533905f",
+      "patchHash": "c8bc42d23d8b830369cef94851306119176c60f623003ac9abd12bf64fb656b8",
+      "auditHash": "973f44fbe2f933c3ad5eeb2e1fb6367d4bd0175b251b1966d014b32dfcdc2a3e",
+      "importedAuditIds": [
+        "audit-website-sync-557a0f2ac0198983",
+        "audit-website-sync-22ac147f0aef7d9e",
+        "audit-website-sync-f8480f7f9d52b43b",
+        "audit-website-sync-1ac0643a3f58062f",
+        "audit-website-sync-31ec7e6a86caf4c7"
+      ],
+      "truthChanges": [
+        {
+          "collection": "articles",
+          "id": "sp-live-137294",
+          "path": "/profileId",
+          "beforeHash": "b5700441a1068806b170362dc68bddbeb31332ddd6a0f861b0fa60d84134dd44",
+          "afterHash": "e8b6f47c7d43e05df0ebcac4ed33987dd13e5c66baa16929d0125b5e99ff5f35"
+        },
+        {
+          "collection": "articles",
+          "id": "sp-live-137295",
+          "path": "/profileId",
+          "beforeHash": "b5700441a1068806b170362dc68bddbeb31332ddd6a0f861b0fa60d84134dd44",
+          "afterHash": "e8b6f47c7d43e05df0ebcac4ed33987dd13e5c66baa16929d0125b5e99ff5f35"
+        },
+        {
+          "collection": "articles",
+          "id": "sp-live-134826",
+          "path": "/profileId",
+          "beforeHash": "71ccc6e1d2f430526af990d2c5f7ef855ec9453e3eae23cf381748dd15666100",
+          "afterHash": "6219959bc41adfe06e0727e5d20046cfd5adf9eb49544995dff09838c59e41f5"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/sizeLabel",
+          "beforeHash": "eb3061e78bd1b90d79e7daf81e3c5907185a650387795d443fe01feac8b22732",
+          "afterHash": "c9d1b1d37786b94d79feb76fa6f7ac55f34f0781aa893903b952b2eb4b74c68f"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/fontProfile",
+          "beforeHash": "0665371c9872fef132171c62433c9a4753932cb8f4591c0b7aadb3dd560c72f9",
+          "afterHash": "b8c3e5de9ae1f3bb7a8be5ff9e9e4b45c26b68e58fbeffb7d0d2129f0710fa78"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/backNumberSizeClasses/SENIOR/physicalHeightMm",
+          "beforeHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "afterHash": "36790ecd55c2030dc553685bef719df653f413a20cdad1bfd1dc934c76686ddd"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/backNumberSizeClasses/SENIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/backNumberSizeClasses/JUNIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/canonicalFontSourceId",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "d571fc0a2e4c8f557af5819111db295958f3a57f08814f010ac06a1fa16c60fa"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt",
+          "path": "/canonicalFontSourceAuthority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "b46a927a4361170b184dbf7bd91db1ba4fa89eaa5d9c1e255358630b508fd94a"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-keeper",
+          "path": "/sizeLabel",
+          "beforeHash": "eb3061e78bd1b90d79e7daf81e3c5907185a650387795d443fe01feac8b22732",
+          "afterHash": "c9d1b1d37786b94d79feb76fa6f7ac55f34f0781aa893903b952b2eb4b74c68f"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-keeper",
+          "path": "/backNumberSizeClasses/SENIOR/physicalHeightMm",
+          "beforeHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "afterHash": "36790ecd55c2030dc553685bef719df653f413a20cdad1bfd1dc934c76686ddd"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-keeper",
+          "path": "/backNumberSizeClasses/SENIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-keeper",
+          "path": "/backNumberSizeClasses/JUNIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts",
+          "path": "/fontProfile",
+          "beforeHash": "4ccec67c80889249c36c51673aabd73fcdadbd4fad86a13a410960faefcda26b",
+          "afterHash": "b8c3e5de9ae1f3bb7a8be5ff9e9e4b45c26b68e58fbeffb7d0d2129f0710fa78"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts",
+          "path": "/canonicalFontSourceId",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "d571fc0a2e4c8f557af5819111db295958f3a57f08814f010ac06a1fa16c60fa"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts",
+          "path": "/canonicalFontSourceAuthority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "b46a927a4361170b184dbf7bd91db1ba4fa89eaa5d9c1e255358630b508fd94a"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/sizeLabel",
+          "beforeHash": "e09e0348dcf7e14058e653bf29fe9f1af2e51e26c374c412a818a62fba497c5d",
+          "afterHash": "c9d1b1d37786b94d79feb76fa6f7ac55f34f0781aa893903b952b2eb4b74c68f"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/fontProfile",
+          "beforeHash": "0665371c9872fef132171c62433c9a4753932cb8f4591c0b7aadb3dd560c72f9",
+          "afterHash": "b8c3e5de9ae1f3bb7a8be5ff9e9e4b45c26b68e58fbeffb7d0d2129f0710fa78"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/backNumberSizeClasses/SENIOR/physicalHeightMm",
+          "beforeHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "afterHash": "36790ecd55c2030dc553685bef719df653f413a20cdad1bfd1dc934c76686ddd"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/backNumberSizeClasses/SENIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/backNumberSizeClasses/JUNIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/canonicalFontSourceId",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "d571fc0a2e4c8f557af5819111db295958f3a57f08814f010ac06a1fa16c60fa"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-home",
+          "path": "/canonicalFontSourceAuthority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "b46a927a4361170b184dbf7bd91db1ba4fa89eaa5d9c1e255358630b508fd94a"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-standard",
+          "path": "/sizeLabel",
+          "beforeHash": "e09e0348dcf7e14058e653bf29fe9f1af2e51e26c374c412a818a62fba497c5d",
+          "afterHash": "c9d1b1d37786b94d79feb76fa6f7ac55f34f0781aa893903b952b2eb4b74c68f"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-standard",
+          "path": "/backNumberSizeClasses/SENIOR/physicalHeightMm",
+          "beforeHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "afterHash": "36790ecd55c2030dc553685bef719df653f413a20cdad1bfd1dc934c76686ddd"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-standard",
+          "path": "/backNumberSizeClasses/SENIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shirt-standard",
+          "path": "/backNumberSizeClasses/JUNIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts-home",
+          "path": "/fontProfile",
+          "beforeHash": "4ccec67c80889249c36c51673aabd73fcdadbd4fad86a13a410960faefcda26b",
+          "afterHash": "b8c3e5de9ae1f3bb7a8be5ff9e9e4b45c26b68e58fbeffb7d0d2129f0710fa78"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts-home",
+          "path": "/canonicalFontSourceId",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "d571fc0a2e4c8f557af5819111db295958f3a57f08814f010ac06a1fa16c60fa"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-shorts-home",
+          "path": "/canonicalFontSourceAuthority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "b46a927a4361170b184dbf7bd91db1ba4fa89eaa5d9c1e255358630b508fd94a"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-source-a-s-c-waterwijk-backNumber",
+          "path": "/sizeLabel",
+          "beforeHash": "c19ca98321f48786288731c2dfdac938f117ea7c62c9190dd946bfad7d023f54",
+          "afterHash": "c9d1b1d37786b94d79feb76fa6f7ac55f34f0781aa893903b952b2eb4b74c68f"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-source-a-s-c-waterwijk-backNumber",
+          "path": "/backNumberSizeClasses/SENIOR/physicalHeightMm",
+          "beforeHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "afterHash": "36790ecd55c2030dc553685bef719df653f413a20cdad1bfd1dc934c76686ddd"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-source-a-s-c-waterwijk-backNumber",
+          "path": "/backNumberSizeClasses/SENIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionProfiles",
+          "id": "profile-source-a-s-c-waterwijk-backNumber",
+          "path": "/backNumberSizeClasses/JUNIOR/source",
+          "beforeHash": "9f7608ca2cd7c8e01f872d321872f1fd7f592850fa086cb9b1988963d0958d7d",
+          "afterHash": "397bf41dc2f61cc550210774b79c3b3cd5bd1b1d95a0b036913d5a6e8f0e3972"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-907ef7665665ece5",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-junior-160",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-junior-160",
+          "path": "/numberComposition/authority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "c1c527436b6a90a624802ef4c98577143cc46860f485e064390827bc0a904084"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-junior-160",
+          "path": "/numberComposition/glyphHeightMm",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "a512db2741cd20693e4b16f19891e72b9ff12cead72761fc5e92d2aaf34740c1"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-junior-160",
+          "path": "/numberComposition/widthMode",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "7a653cda3cef7a9d798690887cebc6c83efefe0c0756335f7a852b89a54c9791"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-rug-200",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-rug-200",
+          "path": "/numberComposition/authority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "c1c527436b6a90a624802ef4c98577143cc46860f485e064390827bc0a904084"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-rug-200",
+          "path": "/numberComposition/glyphHeightMm",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-rug-200",
+          "path": "/numberComposition/widthMode",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "7a653cda3cef7a9d798690887cebc6c83efefe0c0756335f7a852b89a54c9791"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-short-80",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-short-80",
+          "path": "/numberComposition/authority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "c1c527436b6a90a624802ef4c98577143cc46860f485e064390827bc0a904084"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-short-80",
+          "path": "/numberComposition/glyphHeightMm",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "48449a14a4ff7d79bb7a1b6f3d488eba397c36ef25634c111b49baf362511afc"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-short-80",
+          "path": "/numberComposition/widthMode",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "7a653cda3cef7a9d798690887cebc6c83efefe0c0756335f7a852b89a54c9791"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-short-75",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-short-75",
+          "path": "/numberComposition/authority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "c1c527436b6a90a624802ef4c98577143cc46860f485e064390827bc0a904084"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-short-75",
+          "path": "/numberComposition/glyphHeightMm",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "f369cb89fc627e668987007d121ed1eacdc01db9e28f8bb26f358b7d8c4f08ac"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-hockey-short-75",
+          "path": "/numberComposition/widthMode",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "7a653cda3cef7a9d798690887cebc6c83efefe0c0756335f7a852b89a54c9791"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-senior-200",
+          "path": "/numberComposition/freeContourSpacingMm",
+          "beforeHash": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4",
+          "afterHash": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-senior-200",
+          "path": "/numberComposition/authority",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "1a3fc88403ca6942266ade77fd81302d60b4cfd9715b7f2b5c3fcb122c7c8c65"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-senior-200",
+          "path": "/numberComposition/glyphHeightMm",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf"
+        },
+        {
+          "collection": "productionElements",
+          "id": "production-asset-verified-pioneers-rug-senior-200",
+          "path": "/numberComposition/widthMode",
+          "beforeHash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "afterHash": "7a653cda3cef7a9d798690887cebc6c83efefe0c0756335f7a852b89a54c9791"
+        }
+      ]
+    },
+    "planId": "e9119f7dc072280ab70f2fab465374d0747e87fd51a4d492cb39351a7786581a",
+    "seal": {
+      "organizationId": "sport-2000-sportpaleis-bv",
+      "revision": 9794,
+      "stateSha256": "1f847de4797b2d5c28d2966535a73f0e5c7441e074e32ea81ca8f0d70689e14b",
+      "encodedSha256": "68288a10f284583b235d847b64a164683414333a7004e133564d54447e697440",
+      "encoding": "WBD_GZIP_BASE64_V1",
+      "rollbackConsumer": "R2.26.38_COMPATIBLE"
+    },
+    "backfill": {
+      "status": "ALREADY_BACKFILLED",
+      "organizationId": "sport-2000-sportpaleis-bv",
+      "globalRevision": 9794,
+      "contractVersion": 1,
+      "legacySha256": "1f847de4797b2d5c28d2966535a73f0e5c7441e074e32ea81ca8f0d70689e14b",
+      "composedSha256": "1f847de4797b2d5c28d2966535a73f0e5c7441e074e32ea81ca8f0d70689e14b"
+    },
+    "counts": {
+      "orders": 150,
+      "jobs": 86,
+      "proposals": 66
+    },
+    "retry": true,
+    "badSealRejected": true,
+    "restart": true,
+    "historyPreserved": true
+  },
+  "tests": {
+    "regression": 135,
+    "e2e": 15
+  },
+  "liveMutations": 0
+}
