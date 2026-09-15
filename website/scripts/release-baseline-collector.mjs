@@ -80,6 +80,7 @@ try{
    const finishedAt=new Date().toISOString();
    await writeFile(path.join(runRoot,scope+'.stdout'),result.stdout??'');await writeFile(path.join(runRoot,scope+'.stderr'),result.stderr??'');
    check([0,1].includes(result.status),'incomplete assurance process');
+   check(result.stdout?.trim().startsWith('{'),'assurance produced no JSON; inspect retained stderr');
    const evidence=JSON.parse(result.stdout);check(['PASS','FAIL'].includes(evidence.status),'incomplete assurance evidence');
    runs[scope].push({role,runId:randomBytes(16).toString('hex'),startedAt,finishedAt,methodSha256:methods[scope],inputSha256:inputs[scope],host:os.hostname(),nodeVersion:process.version,runtimeTreeSha256:digest((role==='baseline'?currentManifest:candidateManifest).files),evidenceSha256:digest(evidence),evidence});
    await writeFile(path.join(config.outputRoot,scope+'-runs.json'),JSON.stringify(runs[scope],null,2));

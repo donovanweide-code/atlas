@@ -18,6 +18,8 @@ Volledige assurance-entrypoint en contract zijn identiek, evenals Node-versie, h
 
 De diagnostische deelmetingen van de voorafgaande run zijn geen releaseassurance. De bronstatus PASS/FAIL blijft ongewijzigd. `baselineEligibility.nonEventLoopThresholdsPassed` splitst alleen de bestaande niet-event-loopvoorwaarden af; geen voorwaarde wordt verwijderd. Het brokerbesluit behoudt alle bestaande identiteits-, functie-, opslag-, payload-, geheugen-, latency-, pool-, productie-, rollback- en migratiechecks.
 
+De store-, canonical-hash- en rollbackprobes van de assurance blijven op beide versies identiek uit de candidate afkomstig. De oude LIVE-bundle bevatte bijvoorbeeld de inactieve Owner-domainstore niet. De loader heeft hiervoor een expliciete lijst van infrastructuurimports; dit is geen fallback voor ontbrekende productmodules. Service, request handler en productafhankelijkheden worden wel uit de gekozen immutable runtime geladen. De vergelijking bewijst daarmee runtimegedrag bij dezelfde domain-assurance-infrastructuur, niet een loadtest van de actieve Owner legacy-store. De afzonderlijke bestaande functionaliteits-/migratiegates blijven onverkort verplicht.
+
 ## Owner scope
 
 De gedeelde `workspace-runtime.mjs` importeert en initialiseert Owner-services en gebruikt dezelfde releasebundle, Node-runtime en migratierunner. De externe release-manifesten vereisen daarom ook Owner-assurance. Deze controle wordt niet verwijderd wanneer alleen Sportpaleis-UX wijzigt. De Owner-domainassurance bewijst bovendien de bestaande meegeleverde migratie-/rollbackcontracten; dit autoriseert geen aparte LIVE Owner-domaincutover.
