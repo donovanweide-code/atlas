@@ -36,6 +36,10 @@ function evaluateBaselinePolicy({ evidence, contract, scope, currentManifest, ca
   requireThat(comparison.scope === scope && comparison.liveManifestSha256 === digest(currentManifest), "LIVE manifest drift");
   requireThat(comparison.liveReleaseId === currentManifest.releaseId && comparison.liveCommit === currentManifest.commit, "LIVE identity drift");
   requireThat(Array.isArray(currentManifest.files) && currentManifest.files.length > 0 && Array.isArray(candidateManifest?.files) && candidateManifest.files.length > 0 && candidateManifest.commit === evidence.identity.candidateCommit, "runtime manifests absent");
+  if (scope === "owner") {
+    const probes = candidateManifest.baselineAssuranceProbes;
+    requireThat(probes?.baselineCommit === currentManifest.commit && probes.compatible === true && probes.files?.length > 0 && probes.files.every(file => sha.test(file.baselineSha256 ?? "") && file.baselineSha256 === file.candidateSha256 && candidateManifest.files.some(entry => entry.path === file.path && entry.sha256 === file.candidateSha256)), "shared Owner probe code changed from LIVE source");
+  }
   requireThat(sha.test(comparison.methodSha256 ?? "") && sha.test(comparison.inputSha256 ?? ""), "method/input binding absent");
   requireThat(Array.isArray(comparison.runs) && comparison.runs.length === 4, "two paired repeats required");
   const baselines = [], candidates = [], ids = new Set();

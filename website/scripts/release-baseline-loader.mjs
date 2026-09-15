@@ -7,7 +7,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 // bundles did not package the inactive Owner domain-store probe at all. Keep
 // these exact candidate probe dependencies identical for both measurements;
 // never silently fall back for a missing product module.
-const assuranceImports=new Set(['./sportpaleis-domain-mariadb-store.mjs','./wbd-owner-domain-mariadb-store.mjs','./workspace-domain-state.mjs','./wbd-owner-domain-state.mjs','./sportpaleis-domain-rollback-bridge.mjs']);
+const assuranceImports=new Set(['./wbd-owner-domain-mariadb-store.mjs','./wbd-owner-domain-state.mjs']);
 export async function resolve(specifier, context, nextResolve) {
   const parent=context.parentURL?.startsWith('file:')?fileURLToPath(context.parentURL):'';
   const entry=process.env.BASELINE_ASSURANCE_ENTRY;

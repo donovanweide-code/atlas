@@ -183,6 +183,14 @@ async function main() {
   const trackedPaths = new Set(gitBytes("ls-files", "-z").toString("utf8").split("\0").filter(Boolean));
   const releaseBytes = (file) => committedOrGeneratedBytes(file, { commit, trackedPaths });
 
+  const probeGraph = await collectRuntimeDependencyGraph({ websiteRoot, entrypoints: [path.join(websiteRoot, "scripts", "wbd-owner-domain-mariadb-store.mjs"), path.join(websiteRoot, "scripts", "wbd-owner-domain-state.mjs")], allowedRoots: [path.join(websiteRoot, "scripts"), path.join(websiteRoot, "src"), path.join(websiteRoot, "config")] });
+  const probeFiles = await Promise.all(probeGraph.map(async ({ absolute, archive }) => {
+    let baselineSha256 = null;
+    try { baselineSha256 = sha256(gitBytes("show", baseFreezeCommit + ":website/" + archive.slice(4))); } catch { /* not eligible for shared baseline measurement */ }
+    return { path: archive, baselineSha256, candidateSha256: sha256(await releaseBytes(absolute)) };
+  }));
+  const baselineAssuranceProbes = { baselineCommit: baseFreezeCommit, compatible: probeFiles.every(file => file.baselineSha256 === file.candidateSha256), files: probeFiles };
+
   const runtimeDependencies = await collectRuntimeDependencyGraph({
     websiteRoot,
     entrypoints: [
@@ -281,6 +289,7 @@ async function main() {
     baseFreeze: { tag: baseFreezeTag, commit: baseFreezeCommit },
     sourceDate: "2026-08-12",
     files: entries,
+    baselineAssuranceProbes,
     persistentProductionArtifacts: productionArtifacts.references,
     authoritativeProductionAssets,
     artifactValidation: {
@@ -356,6 +365,7 @@ async function main() {
   const externalManifest = {
     releaseId, commit, tag, artifact: artifactName, artifactBytes: artifact.length, artifactSha256: sha256(artifact),
     baseFreezeTag, baseFreezeCommit,
+    baselineAssuranceProbes,
     buildTimestamp: sourceCommitTimestamp,
     assetManifestFingerprint: sha256(Buffer.from(`${JSON.stringify(entries.filter(({ path: entryPath }) => entryPath.startsWith("app/dist-workspace/")))}\n`, "utf8")),
     sourceProvenance: { remote: sourceRemote, tag, commit: remoteTagCommit, tree: sourceTree, verifiedAtBuild: true },

@@ -5,6 +5,7 @@ const {evaluateBaselinePolicy:evaluate,baselineEvidenceDigest:digest}=policy;
 const now=Date.parse('2026-09-15T12:00:00Z');
 const currentManifest={releaseId:'LIVE',commit:'a'.repeat(40),files:[{path:'app/runtime.mjs',sha256:'4'.repeat(64)}]};
 const candidateManifest={releaseId:'CANDIDATE',commit:'b'.repeat(40),files:[{path:'app/runtime.mjs',sha256:'5'.repeat(64)}]};
+candidateManifest.baselineAssuranceProbes={baselineCommit:currentManifest.commit,compatible:true,files:[{path:'app/runtime.mjs',baselineSha256:'5'.repeat(64),candidateSha256:'5'.repeat(64)}]};
 const contract={limits:{eventLoopP95Ms:75,eventLoopMaxMs:750},requiredInvariants:['authenticatedRoutes','idempotency']};
 const baseMetric=(value,role)=>({status:value>75?'FAIL':'PASS',identity:{candidateCommit:(role==='baseline'?'a':'b').repeat(40),candidateArtifactSha256:'c'.repeat(64),assuranceEntrypointSha256:'d'.repeat(64),assuranceContractSha256:'e'.repeat(64),restoreBackupSha256:'f'.repeat(64)},baselineEligibility:{nonEventLoopThresholdsPassed:true},metrics:{eventLoopP95Ms:value,eventLoopMaxMs:120,httpErrors:0,serverErrors:0},invariants:{authenticatedRoutes:true,idempotency:true}});
 function fixture(baseline=90,candidate=80){
@@ -32,6 +33,7 @@ test('candidate repeat and exact primary evidence binding prevent cherry-picking
 test('wrong runtime tree, host, source manifest and overlapping runs fail closed',()=>{
  for(const alter of [f=>f.evidence.baselineComparison.runs[0].runtimeTreeSha256='0'.repeat(64),f=>f.evidence.baselineComparison.runs[1].host='different-host',f=>f.currentManifest={...f.currentManifest,commit:'f'.repeat(40)},f=>f.evidence.baselineComparison.runs[1].startedAt=f.evidence.baselineComparison.runs[0].startedAt]){const f=fixture();alter(f);assert.throws(()=>evaluate(f));}
 });
+test('shared measurement infrastructure cannot hide changed Owner code',()=>{const f=fixture();f.candidateManifest=structuredClone(candidateManifest);f.candidateManifest.baselineAssuranceProbes.compatible=false;assert.throws(()=>evaluate(f),/shared Owner/);});
 test('Sportpaleis soak exception only covers latency, never missing workload/errors',()=>{
  const f=fixture(1200,1100);f.scope='sportpaleis';f.contract={limits:{eventLoopP95Ms:100,eventLoopMaxMs:1000},minimumLoad:{soakCycles:1,soakRevisionPollsPerCycle:1,soakLibraryPreviewsPerCycle:1,soakBootstrapsPerCycle:1},requiredInvariants:['idempotency','multiCycleSoakCompleted']};
  const convert=row=>{const max=row.metrics.eventLoopP95Ms;row.runtime={eventLoopP95Ms:20,eventLoopMaxMs:max,soakCycles:[{cycle:1,count:3,httpErrors:0,serverErrors:0,eventLoopMaxMs:max}]};row.load={httpErrors:0,serverErrors:0};delete row.metrics;row.invariants.multiCycleSoakCompleted=false;};

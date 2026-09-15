@@ -33,6 +33,7 @@ const livePlan=JSON.parse(await readFile('/srv/wbd/shared/deploy-plans/'+current
 const baselineArtifactSha256=livePlan.artifactSha256;
 check(/^[a-f0-9]{64}$/u.test(baselineArtifactSha256??''),'LIVE artifact provenance absent');
 check(candidateManifest.commit===external.commit,'candidate manifest mismatch');
+check(candidateManifest.baselineAssuranceProbes?.baselineCommit===currentManifest.commit && candidateManifest.baselineAssuranceProbes?.compatible===true,'shared Owner assurance dependency graph differs from LIVE source');
 for(const [root,manifest] of [[candidateRoot,candidateManifest],[liveRoot,currentManifest]]){
  for(const file of manifest.files.filter(file=>file.path.startsWith('app/'))){
   const target=path.resolve(root,file.path.slice(4));check(target.startsWith(root+'/'),'manifest path escape');
