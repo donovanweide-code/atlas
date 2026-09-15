@@ -187,7 +187,7 @@ async function main() {
   const probeFiles = await Promise.all(probeGraph.map(async ({ absolute, archive }) => {
     let baselineSha256 = null;
     try { baselineSha256 = sha256(gitBytes("show", baseFreezeCommit + ":website/" + archive.slice(4))); } catch { /* not eligible for shared baseline measurement */ }
-    return { path: archive, baselineSha256, candidateSha256: sha256(await releaseBytes(absolute)) };
+    return { path: archive, baselineSha256, candidateSha256: sha256(await releaseBytes({ absolute, archive })) };
   }));
   const baselineAssuranceProbes = { baselineCommit: baseFreezeCommit, compatible: probeFiles.every(file => file.baselineSha256 === file.candidateSha256), files: probeFiles };
 
