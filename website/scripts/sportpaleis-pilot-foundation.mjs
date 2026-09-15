@@ -3300,7 +3300,14 @@ export class SportpaleisPilotService {
       users: reviewDeveloper ? [sessionUser] : admin ? state.users.filter(({ seatType }) => seatType === "customer").map((candidate) => publicAdminUser(candidate, state)) : [publicUser(user)],
       employees: admin || user.role === "store" ? structuredClone(state.employees) : [],
       switchableUsers: reviewDeveloper ? [] : state.users.filter(({ seatType, status }) => seatType === "customer" && status === "Actief").map(publicUser),
-      orders: includeOrders ? structuredClone(bootstrapOrders.map((order) => publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) }))) : [],
+      orders: includeOrders ? structuredClone(bootstrapOrders.map((order) => {
+        const projected = publicOrderWithProductionTruth(state, order, { includeReconciliation: !terminalOrder(order) });
+        if (internalFullBootstrap) return projected;
+        // Frozen execution evidence belongs to the on-demand order detail.
+        // Derive production truth before excluding these duplicate list fields.
+        const { productionExecutionSnapshot: _snapshot, productionExecutionHistory: _history, ...listOrder } = projected;
+        return listOrder;
+      })) : [],
       orderHistory: { total: includeOrders ? sortedOperationalOrders.length : 0, loaded: includeOrders ? bootstrapOrders.length : 0, pageSize: ORDER_HISTORY_PAGE_LIMIT, bounded: true },
       feedback: state.feedback.filter((item) => admin || item.userId === user.id).map((item) => ({ ...item, attachments: (item.attachments ?? []).map(({ dataBase64: _dataBase64, ...attachment }) => attachment) })),
       extraUserRequests: admin ? structuredClone(state.extraUserRequests) : [],

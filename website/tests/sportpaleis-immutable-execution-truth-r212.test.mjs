@@ -121,6 +121,21 @@ test("immutable execution snapshot voorkomt drift en completion evidence faalt g
   current = await service.order(admin.token, current.id);
   assert.equal(current.productionLines[0].heightMm, frozenHeight);
   assert.ok(current.productionExecutionSnapshot.executionHash);
+  await context.test("scoped lists omit duplicate execution evidence but preserve frozen production truth and full detail", async () => {
+    const persistedBefore = JSON.stringify(await store.read());
+    for (const surface of ["overview", "orders", "production"]) {
+      const body = JSON.parse((await service.bootstrapSerialized(admin.token, surface)).toString());
+      const listed = body.orders.find(({ id }) => id === current.id);
+      assert.ok(listed);
+      assert.equal(listed.productionExecutionSnapshot, undefined);
+      assert.equal(listed.productionExecutionHistory, undefined);
+      assert.deepEqual(listed.productionLines, JSON.parse(JSON.stringify(current.productionLines)));
+      assert.deepEqual(listed.items, JSON.parse(JSON.stringify(current.items)));
+    }
+    assert.deepEqual((await service.order(admin.token, current.id)).productionExecutionSnapshot, current.productionExecutionSnapshot);
+    assert.deepEqual((await service.bootstrap(admin.token)).orders.find(({ id }) => id === current.id).productionExecutionSnapshot, current.productionExecutionSnapshot);
+    assert.equal(JSON.stringify(await store.read()), persistedBefore);
+  });
   await service.completeProductionJob(admin.token, admin.csrfToken, prepared.job.id, "r212-drift-produced");
   current = await service.order(admin.token, current.id);
   await service.completeProductionOrders(admin.token, admin.csrfToken, { orders: [{ id: current.id, expectedRevision: current.revision }] }, "r212-drift-done");
