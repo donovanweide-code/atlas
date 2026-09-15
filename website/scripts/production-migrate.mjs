@@ -95,6 +95,24 @@ async function migrationFiles(target) {
   return files;
 }
 
+export function selectDomainMigrationTrack(files, registered) {
+  const legacy = files.find(({ version }) => version === 7);
+  const split = files.filter(({ version }) => version >= 701 && version <= 708);
+  if (!legacy || split.length !== 8) throw new Error("Sportpaleis domain migration alternatives are incomplete.");
+  const statements = (sql) => splitMigrationStatements(sql).map(value => value.replace(/\s+/gu, " ").trim());
+  if (JSON.stringify(statements(legacy.sql)) !== JSON.stringify(split.flatMap(({ sql }) => statements(sql)))) throw new Error("Sportpaleis domain migration alternatives are not equivalent.");
+  for (const row of registered) {
+    const file = files.find(({ version }) => version === Number(row.version));
+    if (file && (file.checksum !== row.checksum || file.name !== row.name)) throw new Error(`workspace migration ${row.version} checksum/name mismatch.`);
+  }
+  const hasLegacy = registered.some(({ version }) => Number(version) === 7);
+  const hasSplit = registered.some(({ version }) => Number(version) >= 701 && Number(version) <= 708);
+  if (hasLegacy && hasSplit) throw new Error("Mixed Sportpaleis domain migration registrations require reconciliation.");
+  // A fresh or legacy installation uses 007; a broker installation retains its
+  // existing split track. Never register both equivalent schema alternatives.
+  return files.filter(({ version }) => hasSplit ? version !== 7 : version < 701 || version > 708);
+}
+
 export async function runProductionMigrations({ target, database, mode = "apply", pool: suppliedPool }) {
   const definition = targetDefinitions[target];
   if (!definition) throw new Error("Migration target moet workspace of atlas zijn.");
@@ -125,7 +143,11 @@ export async function runProductionMigrations({ target, database, mode = "apply"
       applied_at DATETIME(3) NOT NULL,
       PRIMARY KEY (component, version)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
-    for (const migration of await migrationFiles(target)) {
+    const available = await migrationFiles(target);
+    const files = target === "workspace" ? selectDomainMigrationTrack(available, await connection.query(
+      "SELECT version, name, checksum FROM wbd_schema_migrations WHERE component = ?", [definition.component],
+    )) : available;
+    for (const migration of files) {
       const rows = await connection.query(
         "SELECT name, checksum, applied_at FROM wbd_schema_migrations WHERE component = ? AND version = ?",
         [definition.component, migration.version],
