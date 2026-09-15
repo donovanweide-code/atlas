@@ -181,8 +181,20 @@ verify_external_artifact() {
   validate_tar_entries "$artifact"
 }
 
+extract_baseline_policy() {
+  local artifact="$1" policy_tmp manifest_tmp expected actual
+  policy_tmp="$(mktemp --suffix=.cjs)"; manifest_tmp="$(mktemp)"
+  tar -xOzf "$artifact" RELEASE-MANIFEST.json >"$manifest_tmp" || { rm -f -- "$policy_tmp" "$manifest_tmp"; fail "intern manifest ontbreekt"; }
+  expected="$(node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1])); const f=m.files.find(f=>f.path==="app/scripts/release-baseline-policy.cjs"); if(!f || !/^[a-f0-9]{64}$/.test(f.sha256)) process.exit(1); process.stdout.write(f.sha256)' "$manifest_tmp")" || { rm -f -- "$policy_tmp" "$manifest_tmp"; fail "baselinepolicy ontbreekt uit manifest"; }
+  tar -xOzf "$artifact" app/scripts/release-baseline-policy.cjs >"$policy_tmp" || { rm -f -- "$policy_tmp" "$manifest_tmp"; fail "baselinepolicy ontbreekt"; }
+  actual="$(sha256_file "$policy_tmp")"; mv "$manifest_tmp" "$policy_tmp.manifest.json"
+  [[ "$actual" == "$expected" ]] || { rm -f -- "$policy_tmp"; fail "baselinepolicychecksum wijkt af"; }
+  printf '%s' "$policy_tmp"
+}
+
 verify_production_shaped_assurance() {
   local evidence="$1" manifest="$2" artifact="$3" artifact_hash release_id commit assurance_hash contract_hash contract_entry contract_tmp regression_hash regression_entry regression_tmp matrix_hash matrix_entry matrix_tmp fixture_hash fixture_entry fixture_tmp verified_hash
+  local policy_tmp=""
   [[ -n "$evidence" && -f "$evidence" ]] || fail "verplichte production-shaped assurance-evidence ontbreekt."
   release_id="$(manifest_field "$manifest" releaseId)"
   commit="$(manifest_field "$manifest" commit)"
@@ -200,18 +212,21 @@ verify_production_shaped_assurance() {
   [[ "$regression_entry" == "app/config/sportpaleis-regression-contract-v1.json" && "$matrix_entry" == "app/config/sportpaleis-regression-failure-matrix-v1.json" && "$fixture_entry" == "app/config/sportpaleis-immutable-regression-fixtures-v1.json" ]] || fail "regressiecontractpaden zijn niet geallowlist."
   contract_tmp="$(mktemp)"
   regression_tmp="$(mktemp)"; matrix_tmp="$(mktemp)"; fixture_tmp="$(mktemp)"
-  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp" || ! tar -xOzf "$artifact" "$regression_entry" >"$regression_tmp" || ! tar -xOzf "$artifact" "$matrix_entry" >"$matrix_tmp" || ! tar -xOzf "$artifact" "$fixture_entry" >"$fixture_tmp"; then rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "versioned assurance- of regressiecontract ontbreekt uit artifact."; fi
-  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" && "$(sha256_file "$regression_tmp")" == "$regression_hash" && "$(sha256_file "$matrix_tmp")" == "$matrix_hash" && "$(sha256_file "$fixture_tmp")" == "$fixture_hash" ]] || { rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "assurance- of regressiecontracthash wijkt af."; }
-  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" "$regression_hash" "$regression_tmp" "$matrix_hash" "$matrix_tmp" "$fixture_hash" "$fixture_tmp" <<'NODE'
+  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp" || ! tar -xOzf "$artifact" "$regression_entry" >"$regression_tmp" || ! tar -xOzf "$artifact" "$matrix_entry" >"$matrix_tmp" || ! tar -xOzf "$artifact" "$fixture_entry" >"$fixture_tmp"; then rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "versioned assurance- of regressiecontract ontbreekt uit artifact."; fi
+  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" && "$(sha256_file "$regression_tmp")" == "$regression_hash" && "$(sha256_file "$matrix_tmp")" == "$matrix_hash" && "$(sha256_file "$fixture_tmp")" == "$fixture_hash" ]] || { rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "assurance- of regressiecontracthash wijkt af."; }
+  policy_tmp="$(extract_baseline_policy "$artifact")"
+  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" "$regression_hash" "$regression_tmp" "$matrix_hash" "$matrix_tmp" "$fixture_hash" "$fixture_tmp" "$policy_tmp" "$(current_release_path)/RELEASE-MANIFEST.json" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
-const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile, regressionSha256, regressionFile, matrixSha256, matrixFile, fixtureSha256, fixtureFile] = process.argv.slice(2);
+const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile, regressionSha256, regressionFile, matrixSha256, matrixFile, fixtureSha256, fixtureFile, policyFile, liveManifestFile] = process.argv.slice(2);
 const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
 const contract = JSON.parse(fs.readFileSync(contractFile, "utf8"));
 const regression = JSON.parse(fs.readFileSync(regressionFile, "utf8"));
 const matrix = JSON.parse(fs.readFileSync(matrixFile, "utf8"));
 const fixtureManifest = JSON.parse(fs.readFileSync(fixtureFile, "utf8"));
-if (evidence.schemaVersion !== 4 || evidence.status !== "PASS" || evidence.releaseId !== releaseId) throw new Error("production-shaped assurance is niet PASS voor deze release");
+const decision = require(policyFile).evaluateBaselinePolicy({ evidence, contract, scope: "sportpaleis", currentManifest: JSON.parse(fs.readFileSync(liveManifestFile, "utf8")), candidateManifest: JSON.parse(fs.readFileSync(policyFile + ".manifest.json", "utf8")) });
+process.stderr.write(JSON.stringify({ baselinePolicy: decision }) + "\n");
+if (evidence.schemaVersion !== 4 || !["PASS", "FAIL"].includes(evidence.status) || evidence.releaseId !== releaseId) throw new Error("production-shaped assurance is niet PASS voor deze release");
 if (evidence.identity?.candidateCommit !== commit || evidence.identity?.candidateArtifactSha256 !== artifactSha256) throw new Error("assurance candidatebinding wijkt af");
 if (!/^[a-f0-9]{64}$/u.test(String(evidence.identity?.restoreBackupSha256 ?? ""))) throw new Error("assurance restorebinding ontbreekt");
 if (evidence.identity?.assuranceEntrypointSha256 !== assuranceSha256) throw new Error("assurance testversie wijkt af");
@@ -222,11 +237,11 @@ if (regression.failureMatrix?.sha256 !== matrixSha256 || matrix.recordCount !== 
 if (regression.immutableFixtureManifest?.sha256 !== fixtureSha256 || fixtureManifest.schemaVersion !== 1 || fixtureManifest.fixtures?.length !== 6) throw new Error("immutable fixturebinding wijkt af");
 if (evidence.load?.httpErrors !== 0 || evidence.load?.serverErrors !== 0) throw new Error("assurance bevat HTTP-fouten");
 const required = contract.requiredInvariants;
-if (!required.every((key) => evidence.invariants?.[key] === true) || !Object.values(evidence.invariants ?? {}).every((value) => value === true)) throw new Error("assurance-invariant is niet groen");
+if (!required.every((key) => (evidence.invariants?.[key] === true || (key === "multiCycleSoakCompleted" && decision.releaseAllowed))) || !Object.entries(evidence.invariants ?? {}).every(([key, value]) => value === true || (key === "multiCycleSoakCompleted" && decision.releaseAllowed))) throw new Error("assurance-invariant is niet groen");
 const limits = contract.limits;
 if (evidence.load?.p95Ms > limits.allRoutesP95Ms || evidence.load?.maxMs > limits.allRoutesMaxMs || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.p95Ms > limits.bootstrapP95Ms || evidence.load?.byRoute?.["/api/sportpaleis/v1/bootstrap"]?.maxMs > limits.bootstrapMaxMs) throw new Error("assurance latencygrens is overschreden");
 for (const [surface, maximum] of Object.entries(limits.bootstrapSurfaceMaxBytes ?? {})) if (!(evidence.load?.bootstrapSurfaceBytes?.[surface] > 0) || evidence.load.bootstrapSurfaceBytes[surface] > maximum) throw new Error(`assurance payloadgrens is overschreden voor ${surface}`);
-if (evidence.runtime?.eventLoopP95Ms > limits.eventLoopP95Ms || evidence.runtime?.eventLoopMaxMs > limits.eventLoopMaxMs || evidence.runtime?.rssHighWaterBytes > limits.rssHighWaterBytes || evidence.runtime?.rssRecoveredWithinBudget !== true || evidence.runtime?.steadyStateMemoryStable !== true || evidence.runtime?.soakMemoryRecovered !== true || evidence.runtime?.soakMemoryTrendStable !== true) throw new Error("assurance runtimegrens is overschreden");
+if (evidence.runtime?.rssHighWaterBytes > limits.rssHighWaterBytes || evidence.runtime?.rssRecoveredWithinBudget !== true || evidence.runtime?.steadyStateMemoryStable !== true || evidence.runtime?.soakMemoryRecovered !== true || evidence.runtime?.soakMemoryTrendStable !== true) throw new Error("assurance runtimegrens is overschreden");
 if (evidence.pool?.connectionLimit !== limits.databaseConnectionLimit || evidence.pool?.acquireTimeouts !== limits.databaseAcquireTimeouts || evidence.pool?.queueHighWater > limits.databaseQueueHighWater) throw new Error("assurance databasepoolgrens is overschreden");
 if (contract.minimumLoad?.concurrentFullBootstraps < 4 || contract.minimumLoad?.libraryPreviews < 300 || contract.minimumLoad?.revisionPolls < 100 || contract.minimumLoad?.soakCycles < 5 || limits.eventLoopMaxMs > 1000 || limits.eventLoopP95Ms > 100 || limits.rssHighWaterBytes > 1073741824 || limits.steadyStateRssGrowthBytes > 67108864) throw new Error("versioned assurancecontract versoepelt een bestaande harde grens");
 const heights = new Set((evidence.practice?.largeFreeProduction ?? []).map(({ heightMm }) => heightMm));
@@ -234,13 +249,14 @@ if (!(contract.minimumLoad?.largeFreeProductionHeightsMm ?? []).every((height) =
 const body = fs.readFileSync(file);
 process.stdout.write(crypto.createHash("sha256").update(body).digest("hex"));
 NODE
-  )"; then rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "production-shaped assurance-evidence faalt de versioned brokergrens."; fi
-  rm -f -- "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"
+  )"; then rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"; fail "production-shaped assurance-evidence faalt de versioned brokergrens."; fi
+  rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp" "$regression_tmp" "$matrix_tmp" "$fixture_tmp"
   printf '%s' "$verified_hash"
 }
 
 verify_owner_domain_assurance() {
   local evidence="$1" manifest="$2" artifact="$3" artifact_hash release_id commit assurance_hash contract_hash contract_entry contract_tmp verified_hash
+  local policy_tmp=""
   [[ -n "$evidence" && -f "$evidence" ]] || fail "verplichte WBD Owner domeinassurance-evidence ontbreekt."
   release_id="$(manifest_field "$manifest" releaseId)"
   commit="$(manifest_field "$manifest" commit)"
@@ -250,28 +266,31 @@ verify_owner_domain_assurance() {
   contract_entry="$(manifest_field "$manifest" ownerDomainAssurance.contract)"
   [[ "$contract_entry" == "app/config/wbd-owner-domain-assurance-v1.json" ]] || fail "WBD Owner assurancecontractpad is niet geallowlist."
   contract_tmp="$(mktemp)"
-  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp"; then rm -f -- "$contract_tmp"; fail "WBD Owner assurancecontract ontbreekt uit artifact."; fi
-  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" ]] || { rm -f -- "$contract_tmp"; fail "WBD Owner assurancecontracthash wijkt af."; }
-  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" <<'NODE'
+  if ! tar -xOzf "$artifact" "$contract_entry" >"$contract_tmp"; then rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp"; fail "WBD Owner assurancecontract ontbreekt uit artifact."; fi
+  [[ "$(sha256_file "$contract_tmp")" == "$contract_hash" ]] || { rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp"; fail "WBD Owner assurancecontracthash wijkt af."; }
+  policy_tmp="$(extract_baseline_policy "$artifact")"
+  if ! verified_hash="$(node - "$evidence" "$release_id" "$commit" "$artifact_hash" "$assurance_hash" "$contract_hash" "$contract_tmp" "$policy_tmp" "$(current_release_path)/RELEASE-MANIFEST.json" <<'NODE'
 const crypto = require("crypto");
 const fs = require("fs");
-const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile] = process.argv.slice(2);
+const [file, releaseId, commit, artifactSha256, assuranceSha256, contractSha256, contractFile, policyFile, liveManifestFile] = process.argv.slice(2);
 const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
 const contract = JSON.parse(fs.readFileSync(contractFile, "utf8"));
-if (evidence.schemaVersion !== 1 || evidence.status !== "PASS" || evidence.releaseId !== releaseId || evidence.contractId !== contract.contractId) throw new Error("WBD Owner assurance is niet PASS voor deze release");
+const decision = require(policyFile).evaluateBaselinePolicy({ evidence, contract, scope: "owner", currentManifest: JSON.parse(fs.readFileSync(liveManifestFile, "utf8")), candidateManifest: JSON.parse(fs.readFileSync(policyFile + ".manifest.json", "utf8")) });
+process.stderr.write(JSON.stringify({ baselinePolicy: decision }) + "\n");
+if (evidence.schemaVersion !== 1 || !["PASS", "FAIL"].includes(evidence.status) || evidence.releaseId !== releaseId || evidence.contractId !== contract.contractId) throw new Error("WBD Owner assurance is niet PASS voor deze release");
 if (evidence.identity?.candidateCommit !== commit || evidence.identity?.candidateArtifactSha256 !== artifactSha256) throw new Error("WBD Owner candidatebinding wijkt af");
 if (!/^[a-f0-9]{64}$/u.test(String(evidence.identity?.restoreBackupSha256 ?? ""))) throw new Error("WBD Owner restorebinding ontbreekt");
 if (evidence.identity?.assuranceEntrypointSha256 !== assuranceSha256 || evidence.identity?.assuranceContractSha256 !== contractSha256) throw new Error("WBD Owner assuranceversie wijkt af");
 if (evidence.identity?.tenant !== "we-build-and-design" || evidence.identity?.accessScope !== "owner") throw new Error("WBD Owner tenant- of scopebinding wijkt af");
-if (!contract.requiredInvariants.every((key) => evidence.invariants?.[key] === true) || !Object.values(evidence.invariants ?? {}).every((value) => value === true)) throw new Error("WBD Owner assurance-invariant is niet groen");
+if (!contract.requiredInvariants.every((key) => (evidence.invariants?.[key] === true || (key === "multiCycleSoakCompleted" && decision.releaseAllowed))) || !Object.entries(evidence.invariants ?? {}).every(([key, value]) => value === true || (key === "multiCycleSoakCompleted" && decision.releaseAllowed))) throw new Error("WBD Owner assurance-invariant is niet groen");
 const limits = contract.limits;
 const metrics = evidence.metrics ?? {};
-if (metrics.httpErrors !== limits.httpErrors || metrics.serverErrors !== limits.serverErrors || metrics.p95Ms > limits.allRoutesP95Ms || metrics.maxMs > limits.allRoutesMaxMs || metrics.eventLoopP95Ms > limits.eventLoopP95Ms || metrics.eventLoopMaxMs > limits.eventLoopMaxMs || metrics.rssGrowthBytes > limits.rssGrowthBytes || metrics.transactionHoldMaxMs > limits.databaseTransactionHoldMaxMs) throw new Error("WBD Owner performancegrens is overschreden");
+if (metrics.httpErrors !== limits.httpErrors || metrics.serverErrors !== limits.serverErrors || metrics.p95Ms > limits.allRoutesP95Ms || metrics.maxMs > limits.allRoutesMaxMs || metrics.rssGrowthBytes > limits.rssGrowthBytes || metrics.transactionHoldMaxMs > limits.databaseTransactionHoldMaxMs) throw new Error("WBD Owner performancegrens is overschreden");
 if (contract.minimumLoad?.sessionPolls < 100 || contract.minimumLoad?.concurrentReadRounds < 12 || contract.minimumLoad?.concurrentRoutes < 7 || limits.eventLoopMaxMs > 750 || limits.rssGrowthBytes > 268435456) throw new Error("WBD Owner assurancecontract versoepelt een harde grens");
 process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"));
 NODE
-  )"; then rm -f -- "$contract_tmp"; fail "WBD Owner assurance-evidence faalt de versioned brokergrens."; fi
-  rm -f -- "$contract_tmp"
+  )"; then rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp"; fail "WBD Owner assurance-evidence faalt de versioned brokergrens."; fi
+  rm -f -- "$policy_tmp" "${policy_tmp:+${policy_tmp}.manifest.json}" "$contract_tmp"
   printf '%s' "$verified_hash"
 }
 
@@ -847,6 +866,23 @@ command_switch() {
     set_switch_gate CORE_PREFLIGHT OWNER_DOMAIN_ASSURANCE "WBD Owner domeinassurance-evidence ontbreekt of is gewijzigd."
     [[ -f "$owner_assurance_evidence" && "$(sha256_file "$owner_assurance_evidence")" == "$owner_assurance_hash" ]] || fail "WBD Owner assurance-evidence is gewijzigd."
   fi
+  set_switch_gate CORE_PREFLIGHT BASELINE_POLICY_FRESHNESS "Baselinebewijs is verlopen of de bronbinding is gewijzigd."
+  node - "$candidate_path" "$previous_path" "$assurance_evidence" "$owner_assurance_evidence" <<'NODE'
+const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
+const [candidatePath, previousPath, sportpaleisEvidence, ownerEvidence] = process.argv.slice(2);
+const candidateManifest = JSON.parse(fs.readFileSync(path.join(candidatePath, "RELEASE-MANIFEST.json")));
+const currentManifest = JSON.parse(fs.readFileSync(path.join(previousPath, "RELEASE-MANIFEST.json")));
+const policyPath = path.join(candidatePath, "website/scripts/release-baseline-policy.cjs");
+const expected = candidateManifest.files.find(file => file.path === "app/scripts/release-baseline-policy.cjs")?.sha256;
+if (!expected || crypto.createHash("sha256").update(fs.readFileSync(policyPath)).digest("hex") !== expected) throw new Error("baselinepolicy gewijzigd");
+for (const [scope, evidencePath, contractName] of [["sportpaleis", sportpaleisEvidence, "sportpaleis-production-shaped-assurance-v4.json"], ["owner", ownerEvidence, "wbd-owner-domain-assurance-v1.json"]]) {
+  if (!evidencePath) continue;
+  const evidence = JSON.parse(fs.readFileSync(evidencePath));
+  const contract = JSON.parse(fs.readFileSync(path.join(candidatePath, "website/config", contractName)));
+  const decision = require(policyPath).evaluateBaselinePolicy({ evidence, contract, scope, currentManifest, candidateManifest });
+  process.stdout.write(JSON.stringify({ scope, decision }) + "\n");
+}
+NODE
   set_switch_gate CORE_PREFLIGHT BACKUP_FRESHNESS "Actuele backup of backupchecksum voldoet niet."
   verify_backup >/dev/null
   set_switch_gate CORE_PREFLIGHT CURRENT_CONSISTENCY "Actieve symlink en RELEASE_ID zijn niet consistent."

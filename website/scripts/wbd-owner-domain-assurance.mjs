@@ -117,9 +117,11 @@ try {
   };
   const limits = contract.limits;
   const withinLimits = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && metrics.eventLoopP95Ms <= limits.eventLoopP95Ms && metrics.eventLoopMaxMs <= limits.eventLoopMaxMs && metrics.rssGrowthBytes <= limits.rssGrowthBytes && metrics.transactionHoldMaxMs <= limits.databaseTransactionHoldMaxMs && httpErrors === limits.httpErrors && serverErrors === limits.serverErrors;
+  const nonEventLoopThresholdsPassed = metrics.p95Ms <= limits.allRoutesP95Ms && metrics.maxMs <= limits.allRoutesMaxMs && metrics.rssGrowthBytes <= limits.rssGrowthBytes && metrics.transactionHoldMaxMs <= limits.databaseTransactionHoldMaxMs && httpErrors === limits.httpErrors && serverErrors === limits.serverErrors;
   const status = withinLimits && contract.requiredInvariants.every((key) => invariants[key] === true) ? "PASS" : "FAIL";
   process.stdout.write(`${JSON.stringify({
     schemaVersion: 1,
+    baselineEligibility: { nonEventLoopThresholdsPassed },
     status,
     contractId: contract.contractId,
     releaseId: process.env.CANARY_RELEASE_ID ?? null,
